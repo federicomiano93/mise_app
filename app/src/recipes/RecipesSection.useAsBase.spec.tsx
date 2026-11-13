@@ -96,7 +96,7 @@ describe('«Use as base recipe»', () => {
     const button = useAsBase()!;
     expect(button).toBeInTheDocument();
     // Right after Clear in the page's order, nothing between them.
-    expect(clear.nextElementSibling).toBe(button);
+    expect(clear.nextElementSibling).toBe(button.parentElement);
     await user.click(clear);
     expect(useAsBase()).not.toBeInTheDocument();
   });
@@ -200,6 +200,49 @@ describe('«Use as base recipe»', () => {
     });
     await waitFor(() => { expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument(); });
     expect(source.recipeWrites).toEqual([]);
+  });
+
+  it('⚠️ refuses a batch so small that a row with an amount would be saved as 0, and names it', async () => {
+    // 2 g of yeast in a 400 g batch of a 1722 g recipe reads 0 g: saved, it would be gone from every later batch.
+    const SMALL = recipe('y', { name: 'Test', ingredients: [
+      { label: 'Flour', grams: 1000, unit: 'g' }, { label: 'Water', grams: 700, unit: 'g' }, { label: 'Salt', grams: 20, unit: 'g' },
+      { label: 'Yeast', grams: 2, unit: 'g' },
+    ] });
+    scaled('y', 400);
+    const { user, source } = await open([SMALL], 'y');
+    expect(rowsOf()[3]).toEqual(['Yeast', '0', 'g']);
+    await user.click(useAsBase()!);
+    const notice = within(screen.getByRole('alertdialog'));
+    expect(notice.getByText('This batch can’t become the base recipe: the amount of Yeast would go down to 0. Calculate a bigger batch first.'))
+      .toBeInTheDocument();
+    await user.click(notice.getByRole('button', { name: 'OK' }));
+    expect(source.recipeWrites).toEqual([]);
+    // The batch is still there.
+    expect(rowsOf().at(-1)).toEqual(['Total', '400', 'g']);
+    expect(useAsBase()).toBeInTheDocument();
+  });
+
+  it('refuses a recipe with no name (the database would), and asks for one', async () => {
+    const NAMELESS = recipe('n', { name: '' });
+    scaled('n', 3440);
+    const { user, source } = await open([NAMELESS], 'n');
+    await user.click(useAsBase()!);
+    expect(within(screen.getByRole('alertdialog')).getByText('This recipe has no name. Give it one with Edit first.')).toBeInTheDocument();
+    expect(source.recipeWrites).toEqual([]);
+  });
+
+  it('a save of ANOTHER recipe in the venue does not close the question', async () => {
+    scaled('f', 4500);
+    const { user, source } = await open([FOCACCIA, MIXED], 'f');
+    await user.click(useAsBase()!);
+    act(() => {
+      source.recipes.set('m', { ...MIXED, name: 'Mixed 2' });
+      source.push();
+    });
+    await new Promise(resolve => { setTimeout(resolve, 50); });
+    expect(screen.getByRole('alertdialog')).toBeInTheDocument();
+    await user.click(question().getByRole('button', { name: 'Use as base' }));
+    await waitFor(() => { expect(source.recipeWrites).toHaveLength(1); });
   });
 
   it('says it all in Italian', async () => {

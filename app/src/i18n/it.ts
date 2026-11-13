@@ -1118,6 +1118,8 @@ export const it: Messages = {
   'cat.base.title': 'Usare come ricetta base?',
   'cat.base.message': 'Le quantità di questa ricetta diventano quelle calcolate: totale {new} (prima {old}). Non si può annullare. Continuare?',
   'cat.base.ok': 'Usa come base',
+  'cat.base.wouldLose': 'Questa dose non può diventare la ricetta base: la quantità di {rows} andrebbe a 0. Calcola prima una dose più grande.',
+  'cat.base.noName': 'Questa ricetta non ha un nome. Dagliene uno prima con Modifica.',
   'cat.thatIsAVery': 'È un’infornata molto grande',
   'cat.calculateRecipe': 'Vuoi calcolare la ricetta?',
   'cat.calculate': 'Calcola',

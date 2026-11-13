@@ -1039,6 +1039,22 @@ describe('rebaseAmounts: the batch shown becomes the recipe (Mise 2 only)', () =
     for (const odd of [null, undefined, 5, 'x', {}, { ingredients: 'x' }]) expect(ported.rebaseAmounts(odd, 1000), String(odd)).toBe(null);
   });
 
+  test('⚠️ rowsLostByRebase: a row with an amount that a small batch rounds to 0 (or below) is named; «to taste» and 0 rows are not', () => {
+    const FOCACCIA = { ingredients: [{ label: 'Flour', grams: 1000 }, { label: 'Water', grams: 700 }, { label: 'Salt', grams: 20 }, { label: 'Yeast', grams: 2 }] };
+    // 400 g of a 1720 g recipe: 0.47 g of yeast reads 0 g.
+    expect(ported.rowsLostByRebase(FOCACCIA, ported.rebaseAmounts(FOCACCIA, 400))).toStrictEqual([3]);
+    expect(ported.rowsLostByRebase(FOCACCIA, ported.rebaseAmounts(FOCACCIA, 30))).toStrictEqual([2, 3]);
+    expect(ported.rowsLostByRebase(FOCACCIA, ported.rebaseAmounts(FOCACCIA, 4500))).toStrictEqual([]);
+    // Five rows of 200 g at 3 g: 1, 1, 1, 1, 1 and the −2 residual on the first row makes it −1.
+    const FIVE = { ingredients: [1, 2, 3, 4, 5].map(n => ({ label: `R${n}`, grams: 200 })) };
+    expect(ported.rebaseAmounts(FIVE, 3)![0]).toBeLessThan(0);
+    expect(ported.rowsLostByRebase(FIVE, ported.rebaseAmounts(FIVE, 3))).toContain(0);
+    // A pieces row going to 0, a «to taste» row and a row that had no amount are not «lost».
+    const MIX = { ingredients: [{ label: 'Flour', grams: 1000 }, { label: 'Egg', grams: 1, unit: 'pcs' }, { label: 'Salt', grams: 0, unit: 'to taste' }, { label: 'Water', grams: 0 }] };
+    expect(ported.rowsLostByRebase(MIX, ported.rebaseAmounts(MIX, 400))).toStrictEqual([1]);
+    expect(ported.rowsLostByRebase(MIX, null)).toStrictEqual([]);
+  });
+
   test('it answers amounts only and never touches the recipe it is handed', () => {
     const copy = JSON.parse(JSON.stringify(MIXED)) as typeof MIXED;
     ported.rebaseAmounts(MIXED, 2000);
@@ -1406,8 +1422,9 @@ describe('the port against the original', () => {
   // `supplierLabel` is js/supplier-label.js's, copied into the model and exported (step 3d-6 A2) for the link line.
   // `nameTaken` is not an export of catalogue-model.js: its original is in ingredient-suggest.js (tested above).
   // `calculatorImportKind` is new in Mise 2 with the linked import (18 Oct 2026).
-  // `rebaseAmounts` is new in Mise 2 with «Use as base recipe» (14 Nov 2026).
-  const ADDED = ['unitTextKey', 'nameTaken', 'supplierLabel', 'calculatorImportKind', 'calculatorRefusal', 'rebaseAmounts'];
+  // `rebaseAmounts` and `rowsLostByRebase` are new in Mise 2 with «Use as base recipe» (14 Nov 2026).
+  const ADDED = ['unitTextKey', 'nameTaken', 'supplierLabel', 'calculatorImportKind', 'calculatorRefusal', 'rebaseAmounts',
+    'rowsLostByRebase'];
   // One more parameter each: batchWarning's translator; mergeImportedRecipe's catalogue rows, so a linked copy keeps its
   // yeast knob (Mise 2 only, 18 Oct 2026).
   const ARITY_DIFFERS = ['batchWarning', 'mergeImportedRecipe'];

@@ -43,7 +43,8 @@
 // extra key in the output), which the both-files tests still pin.
 //
 // ADDED (Mise 2 only, 14 Nov 2026, «Use as base recipe»): `rebaseAmounts`, the amounts to store so the recipe as written
-// reads what the screen showed at a batch. No original: the current app has no such action.
+// reads what the screen showed at a batch, and `rowsLostByRebase`, the rows such a save would empty (the screen refuses then).
+// No original: the current app has no such action.
 //
 // PRIVATE, ported only because something above calls them and not exported: `normalizeIngredient(s)` (the
 // row normaliser), `fixRounding`, `matchRank`, `bestRank`, and a copy of `supplierLabel` of
@@ -985,6 +986,21 @@ export function rebaseAmounts(recipe: unknown, targetGrams: unknown): number[] |
     const value = shown[index];
     return value === null || value === undefined ? gramsOfRow(row) : value;
   });
+}
+
+// ⚠️ THE ROWS A REBASE WOULD EMPTY: a row with an amount (not «to taste») whose number at this batch rounds to 0 — 2 g of yeast in
+// a 400 g test batch of a 1720 g recipe reads «0 g» — or below (the all-grams exact-sum rounding can push the largest row under 0
+// for an absurdly small batch). Saved, it would be gone from every batch made afterwards, so the screen refuses and names them.
+// Their places in recipe.ingredients, in order; [] when nothing is lost.
+export function rowsLostByRebase(recipe: unknown, amounts: readonly (number | null)[] | null): number[] {
+  if (amounts === null) return [];
+  const lost: number[] = [];
+  rowsOf(recipe).forEach((row, index) => {
+    if (unitOf(row) === 'to taste' || !(gramsOfRow(row) > 0)) return;
+    const value = amounts[index];
+    if (typeof value === 'number' && !(value > 0)) lost.push(index);
+  });
+  return lost;
 }
 
 // ── Batch size: a readable weight, and a guard against a mistyped total ──────
