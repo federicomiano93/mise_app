@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { checkInstallHint } from '@mise/shared/install-hint';
 import { useT } from '../i18n/useT';
+import { focusMain } from '../session/focusMain';
 import { guidePage, runsInstalled } from '../session/installGuide';
 import { useConfirm } from '../ui/useConfirm';
 
@@ -19,6 +20,8 @@ import { useConfirm } from '../ui/useConfirm';
 
 // The Home's own first moments (its list, the holiday band) come first; a short wait, cleared if the Home goes away.
 const SETTLE_MS = 600;
+// The dialog's own unmounting and React Aria's focus restore both finish within this.
+const FOCUS_BACK_MS = 50;
 
 export function InstallHint() {
   const { t } = useT();
@@ -26,6 +29,7 @@ export function InstallHint() {
 
   useEffect(() => {
     let hint: ReturnType<typeof checkInstallHint>;
+    let focusTimer: number | undefined;
     try {
       hint = checkInstallHint({ storage: window.localStorage, standalone: runsInstalled() });
     } catch {
@@ -41,10 +45,16 @@ export function InstallHint() {
         okLabel: t('install.hint.ok'),
         cancelLabel: t('install.hint.later'),
       }).then(show => {
-        if (show) guidePage.open();
+        if (show) { guidePage.open(); return; }
+        // ⚠️ ON A FRESHLY RELOADED HOME NOTHING HAD THE FOCUS BEFORE THE DIALOG, so there is nothing to give it back to and it
+        // falls to the page itself, where a keyboard is lost and a screen reader says nothing: the page's heading takes it.
+        focusTimer = window.setTimeout(() => {
+          const active = document.activeElement;
+          if (!active || active === document.body) focusMain();
+        }, FOCUS_BACK_MS);
       });
     }, SETTLE_MS);
-    return () => { window.clearTimeout(timer); };
+    return () => { window.clearTimeout(timer); window.clearTimeout(focusTimer); };
     // Asked once per Home: the words and the hook's confirm are read when it is asked.
   }, []);
 

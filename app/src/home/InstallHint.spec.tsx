@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
-import { act, screen } from '@testing-library/react';
+import { act, screen, waitFor } from '@testing-library/react';
 import { renderWithSession } from '../testing/renderWithSession';
 import { guidePage } from '../session/installGuide';
 import { InstallHint } from './InstallHint';
@@ -82,6 +82,14 @@ describe('InstallHint', () => {
     act(() => { vi.advanceTimersByTime(5_000); });
     expect(window.localStorage.getItem(KEY)).toBe('1');
     vi.useRealTimers();
+  });
+
+  // A freshly reloaded Home: nothing had the focus before the dialog, so closing it must not leave the focus on the page itself.
+  test('«Not now» puts the focus on the page heading, not on the page itself', async () => {
+    window.localStorage.setItem(KEY, '1');
+    const { user } = renderWithSession(<main><h1 tabIndex={-1}>Home</h1><InstallHint /></main>);
+    await user.click(await screen.findByRole('button', { name: 'Not now' }));
+    await waitFor(() => { expect(screen.getByRole('heading', { name: 'Home' })).toHaveFocus(); });
   });
 
   test('in Italian', async () => {

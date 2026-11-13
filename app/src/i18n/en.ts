@@ -642,7 +642,7 @@ export const en = {
   // ⚠️ Not «sign in» only: the way forward is the button under it, «Sign in with that email».
   'auth.err.emailTaken': 'That email already has an account. Sign in with it instead.',
   // Firebase's own floor; the app's check (10 characters, shared/src/credentials.ts) refuses a short one before it is sent.
-  'auth.err.weakPassword': 'Pick a longer password — at least 6 characters.',
+  'auth.err.weakPassword': 'Pick a longer password — at least 10 characters.',
   'join.title.new': 'Join with a code',
   'join.sub.prefillNew': 'Your code is already filled in. Add your name and choose a password.',
   'join.sub.new': 'Create your account, then type the code you were given.',
