@@ -241,7 +241,7 @@ describe('App language', () => {
     });
 
     it('sends any other address under Settings back to the page', async () => {
-      const { router } = renderApp('/settings/people');
+      const { router } = renderApp('/settings/nonsense');
       await waitFor(() => { expect(router.state.location.pathname).toBe('/settings'); });
     });
   });

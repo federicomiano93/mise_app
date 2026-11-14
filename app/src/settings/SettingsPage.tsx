@@ -11,7 +11,7 @@ import { StatusMessageProvider } from '../ui/StatusMessage';
 import { AwayRow } from './AwayRow';
 import { SettingsRow } from './SettingsRow';
 import { FROM_SETTINGS, isHandBack, usePendingDoor } from './settingsHandBack';
-import { LANGUAGE_PATH, SECTIONS_PATH } from './settingsPath';
+import { LANGUAGE_PATH, PEOPLE_PATH, SECTIONS_PATH } from './settingsPath';
 import styles from './SettingsPage.module.css';
 
 // A card of Settings, named by WHO its rows are about: «You», «The venue», «Account». A card with no rows is not drawn by its caller.
@@ -27,7 +27,8 @@ function Card({ title, children }: { title: string; children: ReactNode }) {
 
 // Settings, in cards by who a row is about:
 //   You        — the holiday (everybody);
-//   The venue  — the app language and the sections for employees (an owner, a manager or a head chef — `canManageVenue`, which a partial owner does not have);
+//   The venue  — the app language and the sections for employees (an owner, a manager or a head chef — `canManageVenue`, which a partial owner does not have),
+//                and «Who can get in» (the full owner only — `isOwner`);
 //   Account    — who is signed in, which venue, the way to another.
 // There is no «This device» card yet: the app's version waits for the service worker (step 5) and the kiosk for its own slice.
 // The way out, «Log out», is a small quiet button at the far right of the title line (the owner's choice, 15 Oct 2026).
@@ -36,12 +37,13 @@ function Card({ title, children }: { title: string; children: ReactNode }) {
 // here, but the Cloud Functions behind them refuse a non-manager as well.
 export function SettingsPage() {
   const { t } = useT();
-  const { user, name, options, canManageVenue } = useSession();
+  const { user, name, options, canManageVenue, isOwner } = useSession();
   const pending = usePendingDoor();
   const arrival = useNavigationType();
   const { state } = useLocation();
   const language = useRef<HTMLAnchorElement>(null);
   const sections = useRef<HTMLAnchorElement>(null);
+  const people = useRef<HTMLAnchorElement>(null);
   // The email, or the account's id for the rare account that has none.
   const account = user?.email || user?.uid || '';
 
@@ -54,6 +56,7 @@ export function SettingsPage() {
     if (arrival !== 'POP' && !isHandBack(state)) return;
     if (door === 'language') language.current?.focus();
     if (door === 'sections') sections.current?.focus();
+    if (door === 'people') people.current?.focus();
   }, [pending, arrival, state]);
 
   return (
@@ -72,6 +75,9 @@ export function SettingsPage() {
                 <div className={styles.rows}>
                   <SettingsRow ref={language} to={LANGUAGE_PATH} state={FROM_SETTINGS} onOpen={() => { pending.current = 'language'; }} title={t('lang.title')} sub={t('lang.intro')} />
                   <SettingsRow ref={sections} to={SECTIONS_PATH} state={FROM_SETTINGS} onOpen={() => { pending.current = 'sections'; }} title={t('staffSections.title')} sub={t('staffSections.intro')} />
+                  {isOwner ? (
+                    <SettingsRow ref={people} to={PEOPLE_PATH} state={FROM_SETTINGS} onOpen={() => { pending.current = 'people'; }} title={t('people.title')} sub={t('people.row.sub')} />
+                  ) : null}
                 </div>
               </PartBoundary>
             </Card>

@@ -3,7 +3,7 @@
 // shared/ and the js/ file the live app uses today. Ported from tests/roles.test.mjs.
 //
 // membership.ts is the PURE half of js/roles.js only (ROLES, DEFAULT_ROLE, isValidRole, roleOf,
-// canManage, isOwner). The other half turns a role into words through the current app's
+// canManage, isOwner, and ROLE_CHOICES without its dictionary keys). The other half turns a role into words through the current app's
 // dictionary, which Mise 2 does not share, so the label tests are not ported and this module is
 // NOT paired in parity.spec.ts (js/roles.js exports more than the port does).
 //
@@ -290,5 +290,36 @@ describe.each([
       expect(m.canManage(doc, 'bakery'), JSON.stringify(value)).toBe(role !== 'staff');
       expect(m.canManageVenue(doc, 'bakery'), JSON.stringify(value)).toBe(role === 'owner' || role === 'manager');
     }
+  });
+});
+
+// ⚠️ THE SIX CHOICES OF «WHO CAN GET IN» ARE THE CURRENT APP'S, in its order, each granting what it
+// grants there. The current app's entries also carry a dictionary key (`labelKey`), which Mise 2 does
+// not share: only the key, the role and the title are compared.
+describe('the role choices of «Who can get in»', () => {
+  const legacyChoices = (legacyRolesJs as unknown as {
+    ROLE_CHOICES: readonly { key: string; role: string; title: string | null }[];
+  }).ROLE_CHOICES;
+
+  test('are the current app’s six, in its order, with the same role and title', () => {
+    expect(ported.ROLE_CHOICES.map(c => ({ key: c.key, role: c.role, title: c.title })))
+      .toEqual(legacyChoices.map(c => ({ key: c.key, role: c.role, title: c.title })));
+  });
+
+  test('every choice grants one of the five roles, and only the head chef shares one', () => {
+    for (const choice of ported.ROLE_CHOICES) expect(ported.isValidRole(choice.role)).toBe(true);
+    expect(new Set(ported.ROLE_CHOICES.map(c => c.role)).size).toBe(5);
+    expect(ported.ROLE_CHOICES.find(c => c.key === 'head-chef')?.role).toBe('manager');
+  });
+
+  test('a title only ever rides on the manager level', () => {
+    for (const choice of ported.ROLE_CHOICES) {
+      expect(choice.title !== null, choice.key).toBe(choice.role === 'manager');
+    }
+  });
+
+  test('cannot be changed at run time', () => {
+    expect(Object.isFrozen(ported.ROLE_CHOICES)).toBe(true);
+    for (const choice of ported.ROLE_CHOICES) expect(Object.isFrozen(choice)).toBe(true);
   });
 });

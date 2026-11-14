@@ -325,3 +325,48 @@ Branch `feature/mise2-next-staff-2`, one PR into `feature/mise2-next`. No server
 - **`just-joined` survives a wipe that cannot run** (`unavailable`, the «could not check your access» screen): «Try again» still asks the install question. A wipe that works does not hand a stale flag to the next person.
 - **The install question's «Not now»** puts the focus on the page's heading when nothing had it (a freshly reloaded Home), instead of leaving it on the page.
 - Texts: the weak-password refusal says 10 characters; Italian «Accedi e aggiungiamo…» has no comma.
+
+---
+
+## Staff slice 3 as built (14 Nov 2026)
+
+Branch `feature/mise2-next-staff-3`, one PR into `feature/mise2-next`. No server, rules or current-app change: Mise 2 calls the live `createJoinCode`.
+
+**⚠️ Decisions D1–D4 were taken as the plan recommends; the owner's explicit OK is not recorded.** Each is his to reverse.
+
+**What a person sees**
+
+- **Settings → «The venue»** gains a third row, **«Who can get in»** («Invite someone who works here, with the role you choose.»), under «App language» and «Sections for employees». Only the **full owner** sees it (`isOwner`, the value exactly `'owner'`). A manager, a head chef, the sales owner and the kitchen owner do not; an employee has no «The venue» card at all.
+- **Its address, `/settings/people`**, typed by anybody else is replaced by the Settings page, as the other two screens are. The server refuses them as well.
+- **The screen**: Back and «Who can get in» (an h2 under the page's «Settings»), the current app's intro, then **«Role»** and the **six choices as a list**: Owner, Sales owner, Kitchen owner, Manager, Head chef, Employee, each with the current app's sentence of what it can do. **None is chosen** at the start, and none after Done.
+- **«Send a link»** (primary) and **«Read out a code»** (secondary). With no role, both show; tapping either says «Choose the role first, then send the link or read out the code.» in red, outlines the list and puts the keyboard on its first choice. Nothing is sent.
+- **Six digits for an employee only**: any other role hides «Read out a code» and says why («A manager, a head chef or an owner is invited with a link…»).
+- **While the server makes it**: «Making the invitation…», both buttons and the six choices off. One call per tap.
+- **The link, shown once**: «Send this link to them…», the link as text (it breaks anywhere on a narrow phone), «Joins as head chef · 24 hours left», then **Send**, **Copy the link**, **Done**. Send opens the app's own «How do you want to send it?» sheet (WhatsApp or email) with the current app's message, which names the venue. Copy says «The link is copied…», or, when the phone's clipboard refuses, shows the link again to copy by hand.
+- **The six digits, shown once**: «Read this out to them:», the digits large, «Joins as employee · 24 hours left · they open the app, tap “I have a join code”, create their account and type it.», **Done**.
+- **Done** forgets the result and starts again with no role, the keyboard on the list. Leaving the screen forgets it too.
+- **A result nobody closed** reads the time left again every minute and when the device comes back to the foreground, and says «expired» once the code is dead.
+- **Refusals, in the app's own words** (`settings/inviteRefusal.ts`): not the owner → «Only the owner can invite people.»; six digits for anybody but an employee → the «invited with a link» sentence; no signal (a phone that knows it is offline, whatever the code), or a timeout → «Could not make a code. Check your connection and try again.»; anything else, or an answer that is not a whole invitation → «Could not make the invitation. Try again in a moment.» The role stays chosen and the keyboard goes back to the button pressed.
+
+**Security, as built**
+
+- **What is shown is the server's answer**: the role, the title and the shape come back from `createJoinCode` and are checked (`invitationOf`): a code of the wrong shape, an unknown role, no expiry, or six digits for anybody but an employee is a failure, never half a screen.
+- **The code lives in the screen's state only**: no storage, no console line (a failure logs the error's code only), the usage line counts `join-code-made` by name. A spec watches every console method through a code, a link and a refusal.
+- **One call per tap** (a ref, as slices 1–2): a double tap must not mint two keys.
+
+**Choices made (not fixed by the plan)**
+
+- **Send uses the app's own send sheet, not the phone's share sheet.** The plan and the brief say «the phone's share sheet»; the current app's invite card uses its own sheet (`chooseHowToSend`), by the owner's decision of 24 Aug 2026 («one mechanism, wa.me, everywhere»; reversed only for the order picture). Mise 2 keeps his decision.
+- **The list is in the current app's order**, owner first. An arrow key in a list of radios does choose (D2's list removes the iPhone picker, not every stray key): the choice is on screen, tinted and in bold, with its sentence. **The result names the role only AFTER the invitation is made**, and one made for the wrong role cannot be cancelled (D5); it still has to be handed over to be used, and dies in 24 hours. To keep a stray key off Owner, the keyboard is put on the LIST, not on its first choice, after Done and when a role is missing (code review).
+- **Each role shows its sentence all the time** (the current app showed only the chosen one's), so the owner reads what a role grants before choosing.
+- **The time left is the current app's words** («24 hours left»), not a clock time.
+- **`markBusy()` is held while the invitation is being made and while its result is on screen, until the code expires** (an update must not reload the page under a code half read out, and a result left on the lab tablet must not keep it off every update for good); a role chosen is not held.
+- **Back stays on** while the invitation is made: a cold function can take a minute, and leaving costs only a code that dies by itself in 24 hours.
+- **The row is the third** of «The venue».
+- **One Italian sentence is reworded**: `people.readOut` is «Leggilo ad alta voce alla persona:», not the current app's «Leggilo a voce a loro:» (a plural for one person; the card's other sentences say «alla persona»).
+
+**New texts (EN / IT)**: four are new — `people.row.sub` «Invite someone who works here, with the role you choose.» / «Invita chi lavora qui, con il ruolo che scegli tu.»; `people.making` «Making the invitation…» / «Sto creando l’invito…»; `people.err.notOwner` «Only the owner can invite people.» / «Solo il titolare può invitare persone.»; `people.err.failed` «Could not make the invitation. Try again in a moment.» / «Non è stato possibile creare l’invito. Riprova tra un momento.». `people.link.manual` is the current app's sentence without the link (shown as its own line), and `people.link.copy` is its `help.copyTheLink`. Every other word is the current app's, key for key (`people.*`, `role.*`, `role.*.inSentence`, `role.means.*`, `join.expires.*`).
+
+**Ported to shared**: `ROLE_CHOICES` (key, role, title) into `membership.ts`; `membership.spec.ts` compares it with `js/roles.js`.
+
+**Not done here**: driving it on the emulator and on the tablet and the phone (Federico, before merge), in particular a real `createJoinCode` on the Functions emulator, the send sheet on a phone, and a person joining with the code through slice 1 or 2. D5 (a list of invitations sent, cancelling one) stays out, as today.
