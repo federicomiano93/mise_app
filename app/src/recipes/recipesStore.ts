@@ -138,6 +138,22 @@ export type RecipesMessage =
 export interface ScaledEntry {
   readonly target: number;
   readonly ts: number;
+  // Present only for a batch worked out from one row's amount («Calculate from this ingredient», Mise 2 only, 14 Nov 2026).
+  readonly by?: ScaledBy;
+}
+
+// The row a batch was worked out from: its key (shared/row-actions-model `rowKeysOf`: the linked record or the typed name, so a live
+// change that adds a row above it still finds it) and the amount typed for it, in the row's own unit.
+// ⚠️ THE SAME KEY AND SHAPE AS THE CURRENT APP'S (`catalogue-scaled`, `{ target, ts }`), WITH ONE EXTRA FIELD: the current app reads
+// `target` and `ts` only and keeps the entry whole, so it shows such a batch by its total; a batch it calculates itself replaces
+// the entry, without `by`.
+// ⚠️ THE UNIT IS PART OF THE AMOUNT: «1000» means nothing without it. When the row's unit has changed since (a colleague tidied
+// Sugar 800 g into 0.8 kg), the typed number would be read in the new unit and the batch would jump a thousandfold; the screen then
+// falls back to the total remembered (recipeScale `resolveScale`). An entry written without a unit is dropped for the same reason.
+export interface ScaledBy {
+  readonly key: string;
+  readonly amount: number;
+  readonly unit: string;
 }
 
 export interface RecipesSnapshot {
@@ -204,8 +220,11 @@ export interface RecipesStore {
   bumpUsage(id: string): void;
   // The batch remembered for a recipe on this device, in grams, or null (none, or older than 12 h).
   scaledTarget(id: string): number | null;
-  // Remembers a calculated batch (grams > 0), stamped now. Anything else is ignored.
-  setScaledTarget(id: string, grams: number): void;
+  // The row the remembered batch was worked out from, or null (a batch typed in grams, none, or older than 12 h).
+  scaledBy(id: string): ScaledBy | null;
+  // Remembers a calculated batch (grams > 0), stamped now, and — for «Calculate from this ingredient» — the row it came from.
+  // Anything else is ignored; a batch set without `by` forgets the row.
+  setScaledTarget(id: string, grams: number, by?: ScaledBy): void;
   // Forgets it (Clear).
   clearScaledTarget(id: string): void;
   // Puts a label job in the shop computer's queue. ⚠️ NOT LOCAL-FIRST: it rejects when the write cannot be made,
@@ -300,11 +319,21 @@ function asLabelConfig(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value) ? { ...(value as Record<string, unknown>) } : null;
 }
 
+// A row a batch came from as stored, or null: a key, a positive, finite amount and the unit it was typed in, nothing else.
+function asScaledBy(value: unknown): ScaledBy | null {
+  const by = asMap(value);
+  return typeof by.key === 'string' && by.key !== '' && typeof by.amount === 'number' && Number.isFinite(by.amount) && by.amount > 0
+    && typeof by.unit === 'string' && by.unit !== ''
+    ? { key: by.key, amount: by.amount, unit: by.unit } : null;
+}
+
 function asScaled(value: unknown): Record<string, ScaledEntry> {
   const out: Record<string, ScaledEntry> = {};
   for (const [id, entry] of Object.entries(asMap(value))) {
     const e = asMap(entry);
-    if (typeof e.target === 'number' && typeof e.ts === 'number') out[id] = { target: e.target, ts: e.ts };
+    if (typeof e.target !== 'number' || typeof e.ts !== 'number') continue;
+    const by = asScaledBy(e.by);
+    out[id] = by === null ? { target: e.target, ts: e.ts } : { target: e.target, ts: e.ts, by };
   }
   return out;
 }
@@ -620,9 +649,15 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
       return entry && isScaledEntryFresh(entry, deps.now()) ? entry.target : null;
     },
 
-    setScaledTarget(id, grams) {
+    scaledBy(id) {
+      const entry = scaled[id];
+      return entry && isScaledEntryFresh(entry, deps.now()) ? entry.by ?? null : null;
+    },
+
+    setScaledTarget(id, grams, by) {
       if (!id || !(grams > 0) || !Number.isFinite(grams)) return;
-      scaled = { ...scaled, [id]: { target: grams, ts: deps.now() } };
+      const row = by === undefined ? null : asScaledBy(by);
+      scaled = { ...scaled, [id]: row === null ? { target: grams, ts: deps.now() } : { target: grams, ts: deps.now(), by: row } };
       writeJson(SCALED_KEY, scaled);
       changed();
     },

@@ -1,9 +1,9 @@
 import { Fragment, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import type { Ref } from 'react';
 import { useLocation, useNavigate } from 'react-router';
-import { Archive, ArchiveRestore, ChartPie, Copy, Download, Import, Maximize2, Pencil, Trash2 } from 'lucide-react';
-import { calculatorRefusal, hasDividerAfter, importFailureKey, unitOf, weighableTotalGrams } from '@mise/shared/catalogue-model';
-import type { CatalogueRecipe } from '@mise/shared/catalogue-model';
+import { Archive, ArchiveRestore, ChartPie, Copy, Download, Import, Maximize2, Pencil, Trash2, Undo2 } from 'lucide-react';
+import { batchWarning, calculatorRefusal, formatWeight, hasDividerAfter, importFailureKey, scaleFromRow, unitOf, weighableTotalGrams } from '@mise/shared/catalogue-model';
+import type { CatalogueRecipe, RowScaleResult } from '@mise/shared/catalogue-model';
 import { FROM_RECIPE_LINK, foodCostForRecipePath, mayOpenFoodCost, mayOpenOrders, ordersForIngredientPath } from '@mise/shared/recipe-link';
 import { orderTargetOf, rowKeysOf, splitAmount, splitBlockReason } from '@mise/shared/row-actions-model';
 import { isArchivedRecipe } from '@mise/shared/recipe-shelf';
@@ -24,8 +24,11 @@ import { BatchCard } from './BatchCard';
 import { DeclarationCard } from './DeclarationCard';
 import { ProcedureCard } from './ProcedureCard';
 import { useRecipes, useRecipesStore } from './RecipesContext';
-import { amountNumber, amountText, recipeAmounts } from './recipeAmounts';
+import { amountNumber, amountText, recipeAmounts, unitWord, wholeNumber } from './recipeAmounts';
 import { recipeExportModel } from './recipeExportModel';
+import { resolveScale } from './recipeScale';
+import type { RecipeScale } from './recipeScale';
+import { FromRowDialog } from './FromRowDialog';
 import { useRecipeReturn } from './recipeReturn';
 import { duplicateWorking } from './editorModel';
 import { RowMenu } from './RowMenu';
@@ -61,7 +64,11 @@ export function RecipeView({ recipe, titleRef, onBack }: Props) {
   // Read for its side effect: a batch set or cleared changes the snapshot, and this redraws.
   useRecipes();
   const titleId = useId();
-  const target = store.scaledTarget(recipe.id);
+  // The batch the recipe is shown at: a total typed in the batch box, or one worked out from an ingredient (that row named, and
+  // shown exactly as typed). Every card below reads this ONE answer, so the table, the box, the export and «Use as base recipe» agree.
+  const scale = resolveScale(recipe, store.scaledTarget(recipe.id), store.scaledBy(recipe.id));
+  const target = scale?.target ?? null;
+  const row = scale?.row ?? null;
   const hasWeight = weighableTotalGrams(recipe) > 0;
   const { canManage, location, role } = useSession();
   // Who may change this recipe: everybody who sees the section (employees write recipes too, step 3d-6), so the pencil is drawn
@@ -154,9 +161,9 @@ export function RecipeView({ recipe, titleRef, onBack }: Props) {
       />
       <div className={styles.body}>
         {archived ? <ArchivedBanner canManage={canManage} restoreRef={restoreButton} onRestore={restore} /> : null}
-        <IngredientsCard recipe={recipe} target={target} />
+        <IngredientsCard recipe={recipe} scale={scale} />
         {/* A recipe of pieces and «to taste» has nothing to scale by weight: the whole card goes. */}
-        {hasWeight ? <BatchCard recipe={recipe} target={target} canEdit={canEdit} /> : null}
+        {hasWeight ? <BatchCard recipe={recipe} target={target} row={row} canEdit={canEdit} /> : null}
         {/* ⚠️ A DOOR: drawn only for whoever Food cost lets in — the very question its own gate asks (shared recipe-link), asked on
             every draw, so a session that arrives late or changes venue redraws it. Absent, not disabled, for anyone else. */}
         {mayOpenFoodCost(location, canManage, role) ? <FoodCostCard recipe={recipe} /> : null}
@@ -164,7 +171,7 @@ export function RecipeView({ recipe, titleRef, onBack }: Props) {
         <DeclarationCard recipe={recipe} />
         {/* The mixing procedure (step 3d-8): after the declaration and before Export, the current app's order. */}
         <ProcedureCard recipe={recipe} target={target} />
-        <ExportAction recipe={recipe} target={target} />
+        <ExportAction recipe={recipe} scale={scale} />
         {/* A WRITE, NOT A DOOR: judged by the venue's section only (the Calculator card being hidden from staff does not matter). */}
         {/* ⚠️ NOT ON AN ARCHIVED RECIPE: importing makes a NEW link, and an archived recipe is left out of those. */}
         {isSectionAllowed(location, 'calculator') && !archived ? <ImportAction recipe={recipe} /> : null}
@@ -234,13 +241,15 @@ function ArchiveAction({ onArchive }: { onArchive: () => void }) {
 // by Federico's choice (14 Oct 2026, «non è un'azione che si fa tutti i giorni»). Under the ingredient table it pushed the
 // batch box — what this screen is opened for — further down. The file is made by recipeAmounts() from the same recipe, batch target and locale the table is drawn with, so
 // it holds the very amounts on screen. Nothing to export without ingredients.
-function ExportAction({ recipe, target }: { recipe: CatalogueRecipe; target: number | null }) {
+function ExportAction({ recipe, scale }: { recipe: CatalogueRecipe; scale: RecipeScale | null }) {
+  const target = scale?.target ?? null;
+  const row = scale?.row ?? null;
   const { t, locale } = useT();
   const [openExport, exportSheet, closeExport] = useExportSheet();
 
   // ⚠️ THE EXPORT SHEET HOLDS A COPY of the amounts drawn when Export was tapped: a recipe that changes under it
   // (a live update) or a batch target that is applied or cleared closes it, so no stale file is downloaded.
-  useEffect(() => { closeExport(); }, [recipe, target, closeExport]);
+  useEffect(() => { closeExport(); }, [recipe, target, row?.index, row?.amount, closeExport]);
 
   if (recipe.ingredients.length === 0) return null;
   return (
@@ -249,7 +258,7 @@ function ExportAction({ recipe, target }: { recipe: CatalogueRecipe; target: num
         type="button"
         className={styles.export}
         onClick={() => {
-          openExport({ model: recipeExportModel(recipe, recipeAmounts(recipe, target, t, locale)), totalLabel: t('cat.total') });
+          openExport({ model: recipeExportModel(recipe, recipeAmounts(recipe, target, t, locale, row)), totalLabel: t('cat.total') });
         }}
       >
         <Download aria-hidden="true" />
@@ -439,10 +448,26 @@ function DuplicateAction({ recipe }: { recipe: CatalogueRecipe }) {
 // their row key (shared/row-actions-model), so a live change that adds a row above one leaves it split.
 // «Order» opens Orders on that ingredient's supplier (the Orders section, with the recipe in the address), and Back there returns
 // here with the same row focused, the scroll where it was and the splits still shown (recipeReturn.ts, origin 'order').
-function IngredientsCard({ recipe, target }: { recipe: CatalogueRecipe; target: number | null }) {
+// «Calculate from this ingredient» (Mise 2 only, 14 Nov 2026) asks «Amount of {name}?» (FromRowDialog) and scales the
+// whole recipe by (typed ÷ the row's amount): the row shows exactly what was typed, the batch box the new total, and a line under the
+// table says which ingredient the batch was worked out from, with Undo back to the base recipe. The batch is remembered on this
+// device like the box's (the store's `catalogue-scaled`, with the row's key), so the full screen, the export and «Use as base
+// recipe» all read it. Offered for everybody (it only changes what is shown), and only on a row it can work from: a row with an
+// amount (not 0, not «to taste») in a recipe that has something to weigh.
+function IngredientsCard({ recipe, scale }: { recipe: CatalogueRecipe; scale: RecipeScale | null }) {
   const { t, locale } = useT();
   const { canManage, location, role } = useSession();
   const { ingredients, suppliers } = useRecipes();
+  const store = useRecipesStore();
+  const target = scale?.target ?? null;
+  const fromRow = scale?.row ?? null;
+  // The row whose «Amount of …?» is open, by its KEY and the unit it had when it opened — never by its place: a row added above it
+  // on another phone would otherwise turn the question onto a different ingredient (review of 14 Nov 2026). Its place is looked up
+  // again on every draw (`askingIndex`), and the dialog closes when the row is gone, can no longer be scaled from, or changed unit.
+  const [asking, setAsking] = useState<{ key: string; unit: string } | null>(null);
+  const [confirm, confirmDialog] = useConfirm();
+  // The row button owed the focus once the dialog (or the louder question) has closed: the menu item that opened it is gone.
+  const focusRow = useRef<string | null>(null);
   const navigate = useNavigate();
   const recipeReturn = useRecipeReturn();
   const headingId = useId();
@@ -452,9 +477,19 @@ function IngredientsCard({ recipe, target }: { recipe: CatalogueRecipe; target: 
   const [back] = useState(() => recipeReturn.pendingOrder(recipe.id));
   const [splitKeys, setSplitKeys] = useState<ReadonlySet<string>>(() => new Set(back?.split ?? []));
   const buttons = useRef(new Map<string, HTMLButtonElement>());
-  const amounts = recipeAmounts(recipe, target, t, locale);
+  const amounts = recipeAmounts(recipe, target, t, locale, fromRow);
   const { rows, total } = amounts;
   const keys = rowKeysOf(recipe.ingredients);
+  const askingIndex = asking === null ? -1 : keys.indexOf(asking.key);
+  const askingStale = asking !== null
+    && (askingIndex < 0 || unitOf(recipe.ingredients[askingIndex]) !== asking.unit || scaleFromRow(recipe, askingIndex, 1) === null);
+  // The row changed under the open question (deleted, emptied, made «to taste», another unit): the question is closed, nothing is
+  // calculated, and the focus goes back to the row's button — or, when the row is gone, to the card's own first button (below).
+  useEffect(() => {
+    if (!askingStale || asking === null) return;
+    focusRow.current = asking.key;
+    setAsking(null);
+  }, [askingStale, asking]);
   // ⚠️ Asked on every draw (the venue and the role can arrive late), the very question Orders' own gate asks.
   const mayOrder = mayOpenOrders(location, canManage, role);
 
@@ -499,6 +534,9 @@ function IngredientsCard({ recipe, target }: { recipe: CatalogueRecipe; target: 
       disabled: !canToggle,
       ...(canToggle ? {} : { why: t(blocked === 'toTaste' ? 'cat.split.toTaste' : 'cat.split.tooSmall') }),
     }];
+    // ⚠️ ABSENT, NOT DISABLED, on a row with nothing to work from (no amount, 0, «to taste», or nothing weighable in the recipe):
+    // the very question the calculation asks, with the row's own amount.
+    if (scaleFromRow(recipe, index, ing?.grams) !== null) items.push({ id: 'fromRow', text: t('cat.fromRow.do'), disabled: false });
     if (mayOrder) {
       const order = orderTargetOf(ing, ingredients, suppliers);
       items.push({
@@ -513,6 +551,10 @@ function IngredientsCard({ recipe, target }: { recipe: CatalogueRecipe; target: 
 
   function act(index: number, id: string) {
     const key = keys[index] ?? '';
+    if (id === 'fromRow') {
+      setAsking({ key, unit: unitOf(recipe.ingredients[index]) });
+      return;
+    }
     if (id === 'split') {
       setSplitKeys(prev => {
         const next = new Set(prev);
@@ -529,6 +571,47 @@ function IngredientsCard({ recipe, target }: { recipe: CatalogueRecipe; target: 
     recipeReturn.remember(recipe.id, 'order', { row: key, split: [...splitKeys] });
     // KEEP_FOCUS: Orders puts the focus on the quantity box itself, once its lists are in; the page must not take it to its title.
     void navigate(path, { state: { ...FROM_RECIPE_LINK, ...KEEP_FOCUS } });
+  }
+
+  // The focus goes back to the row's button once nothing modal is open any more (a modal makes the page behind it inert).
+  useEffect(() => {
+    if (asking !== null || confirmDialog !== null) return;
+    const key = focusRow.current;
+    if (key === null) return;
+    focusRow.current = null;
+    // ⚠️ THE ROW MAY BE GONE (deleted on another phone while its question, or the louder one, was open): the focus must not fall to
+    // <body>, nor onto whichever row now sits in its place, so it goes to the card's full-screen button, the first thing in the card.
+    const own = buttons.current.get(key);
+    const button = own !== undefined && own.isConnected ? own : opener.current;
+    if (button === null || !button.isConnected) return;
+    button.focus({ preventScroll: true });
+    // Once more after React Aria's modal has handed the focus back to what had it before it opened (the menu item, gone).
+    requestAnimationFrame(() => { if (button.isConnected && document.activeElement !== button) button.focus({ preventScroll: true }); });
+  });
+
+  // A valid amount typed: the same louder question as the batch box for a batch past 100 kg or 50 times the recipe (never a block),
+  // then the batch is remembered with the row it came from.
+  async function calculateFrom(key: string, unit: string, result: RowScaleResult) {
+    focusRow.current = key;
+    setAsking(null);
+    const warning = batchWarning(result.target, weighableTotalGrams(recipe), t);
+    if (warning !== null) {
+      const ok = await confirm({
+        title: t('cat.thatIsAVery'),
+        message: [warning, t('cat.calculateFor', { recipe: recipe.name, amount: `${wholeNumber(result.target)} g (${formatWeight(result.target)})` })],
+        okLabel: t('cat.calculate'),
+        cancelLabel: t('common.cancel'),
+      });
+      if (!ok) return;
+    }
+    store.setScaledTarget(recipe.id, result.target, { key, amount: result.amount, unit });
+  }
+
+  function undoFromRow() {
+    if (fromRow === null) return;
+    // The line and its button go: the focus goes to the ingredient the batch was worked out from.
+    focusRow.current = fromRow.key;
+    store.clearScaledTarget(recipe.id);
   }
 
   const setButton = (key: string) => (node: HTMLButtonElement | null) => {
@@ -613,6 +696,39 @@ function IngredientsCard({ recipe, target }: { recipe: CatalogueRecipe; target: 
           </tr>
         </tfoot>
       </table>
+
+      {fromRow === null ? null : (() => {
+        const ing = recipe.ingredients[fromRow.index];
+        const unit = unitOf(ing);
+        const name = !ing || ing.label === '' ? t('cat.noName') : ing.label;
+        const amount = amountText({ num: amountNumber(fromRow.amount, unit, locale), unit: unitWord(t, unit) });
+        return (
+          <div className={styles.fromRow}>
+            <p className={styles.fromRowText}>{t('cat.fromRow.line', { name, amount })}</p>
+            <Button variant="quiet" className={styles.fromRowUndo} onPress={undoFromRow}>
+              <Undo2 aria-hidden="true" />
+              {t('cat.fromRow.undo')}
+            </Button>
+          </div>
+        );
+      })()}
+
+      {asking === null || askingStale ? null : (() => {
+        const ing = recipe.ingredients[askingIndex];
+        const unit = unitOf(ing);
+        return (
+          <FromRowDialog
+            recipe={recipe}
+            index={askingIndex}
+            name={!ing || ing.label === '' ? t('cat.noName') : ing.label}
+            unit={unit}
+            unitWord={unitWord(t, unit)}
+            onCancel={() => { focusRow.current = asking.key; setAsking(null); }}
+            onCalculate={result => { void calculateFrom(asking.key, asking.unit, result); }}
+          />
+        );
+      })()}
+      {confirmDialog}
 
       {fullScreen ? (
         <RecipeFullScreen

@@ -2015,3 +2015,64 @@ totals and Cancel, the saved rows equal to the rows read for every unit and a su
 batch cleared and «Recipe saved.» with the focus on the box, the all-grams sum, a refused save, a change under the open question and
 another recipe's save that leaves it open, the refusal of a row going to 0 and of a nameless recipe, Italian, an employee, and the card
 with `canEdit` false); `rowsLostByRebase` in the shared spec. Not driven on the emulator or a device yet.
+
+## Scale by ingredient as built (14 Nov 2026) — NEW IN MISE 2, no original in the current app
+
+The owner (14 Nov 2026): calculate the whole recipe from the amount of ONE ingredient (sugar 800 g → «I want 1000 g of sugar»).
+
+**What it does.**
+- **The row menu** (`RowMenu.tsx`) gains «Calculate from this ingredient» / «Calcola da questo ingrediente», after «Split into 2 parts»
+  and before «Order». It is ABSENT (not disabled) on a row it cannot work from: no amount or 0, «to taste», or a recipe with nothing
+  weighable (the batch is remembered as grams, like the batch box's, which is also absent then). Offered to everybody: it only changes
+  what is shown.
+- **The dialog** (`FromRowDialog.tsx`, `ui/Dialog`): «Amount of {name}?» / «Quantità di {name}?» (the owner's wording, 14 Nov 2026:
+  «Quanto {name} vuoi?» read «Quanto farina», «Quanto uova»), one number box labelled
+  «Amount ({unit})» / «Quantità ({unit})» in the row's OWN unit (g, pcs, ml, kg…), focused at opening, the unit after it; «Calculate» /
+  «Cancel». Enter calculates, exactly as the button does (the form is `noValidate`: the browser's own check would stop 2.5 g or 3.5
+  eggs with a bubble in the browser's language, while the button rounds them). An empty box, 0 or an amount that rounds to 0 in its unit says «Enter an amount greater than 0.»; a batch
+  over 10 tonnes (`MAX_FROM_ROW_TARGET_G`, the database's bound on a weighing) says «That would be more than 10 tonnes of dough. Check
+  the amount.» (so does an amount so large it overflows) — both under the box, in a live region present empty, tied by `aria-describedby`, the box `aria-invalid`. Past 100 kg or
+  50 times the recipe the batch box's own louder question follows (`batchWarning`, never a block). Cancel, and a calculation, give the
+  focus back to the row's name button.
+- **The calculation** (`scaleFromRow` of `shared/src/catalogue-model.ts`, Mise 2 only): factor = typed ÷ the row's amount. ⚠️ THE CHOSEN
+  ROW SHOWS EXACTLY THE AMOUNT TYPED (rounded only to what its unit shows: whole g / pcs / ml, kg and l to the gram); the others are
+  rounded as `scaleCatalogue` rounds them today — each in its own unit, and for an all-grams recipe the exact-sum rounding with the
+  residual on the largest OTHER row, so the rows still add up to the total. The owner's example: sugar 800 → 1000 g gives butter 1000 g,
+  flour 2500 g, total 5469 g. `scaledAmounts` is the ONE rule the table, the full screen, the export and «Use as base recipe» draw a batch
+  with.
+- **Remembered** in the batch's own place (`catalogue-scaled`, 12 h, this device), with one more field: `{ target, ts, by: { key,
+  amount, unit } }`, `key` being the row's `rowKeysOf` key (the linked record or the typed name), so a row added above it elsewhere does not
+  lose it. ⚠️ The current app reads `target` and `ts` only and keeps the entry whole: it shows such a batch by its total. On every draw the
+  batch is worked out again from the row's CURRENT amount (`recipeScale.ts`, `resolveScale`): the row still reads what was typed and the
+  total follows; a row gone or no longer usable falls back to the remembered total, with no row named. ⚠️ So does a row whose UNIT has changed
+  since (Sugar 800 g tidied into 0.8 kg would otherwise read the typed 1000 as kg, a thousandfold batch), a batch worked out again past
+  ten tonnes (`MAX_WEIGHT_G`), and an entry written without a unit: the dialog's ceiling and the louder question run only when the amount
+  is typed, so the resolver checks again. While the dialog is open it follows the row by its KEY, never its place: a row added above it
+  elsewhere leaves the question on the same ingredient, and the dialog closes (nothing calculated) when the row is deleted, emptied or
+  changes unit; the focus then goes back to the row's button, or to the card's full-screen button when the row is gone.
+- **On screen** the batch box shows the new total (the box now follows a batch set elsewhere; a redraw that leaves the batch where it was
+  keeps what is being typed), and a line under the ingredient table says «Calculated from {name}: {amount}» / «Calcolata su {name}:
+  {amount}» with a quiet «Undo» / «Annulla» back to the base recipe (the focus then goes to that ingredient). A total typed in the box
+  afterwards replaces it (the line goes). «Use as base recipe» works on it and saves the typed row exactly.
+
+**Deliberate limits.**
+- The row menu is still not in the full-screen view (its rows are read-only text, as decided with item 32); the full screen SHOWS the batch
+  worked out from a row, the chosen row exact.
+- A guided mix started from such a batch takes its total (`targetGrams`, the current app's session shape), so in an all-grams recipe the
+  chosen row can read a gram off inside the mix.
+
+**Specs.** `shared/src/catalogue-model.spec.ts` («scaleFromRow: the whole recipe from one ingredient’s amount»: the owner's example, the
+chosen row exact even when largest, proportional others, pieces, ml, l and sub-recipe rows, rounding the typed amount, odd inputs → null,
+`scaledAmounts`, `rebaseAmounts` on top); `app/src/recipes/recipesStore.spec.ts` (the row remembered, forgotten by a typed total, junk
+ignored, the current app's plain entry); `app/src/recipes/RecipesSection.fromRow.spec.tsx` (the owner's example with the box and the line,
+the labelled focused box, the refusals, the louder question, Cancel, absent on 0 and «to taste», pieces, ml and a sub-recipe row, Undo,
+remembered, replaced by a typed total, the full screen, «Use as base recipe» on top, Italian); `RecipesSection.rowMenu.spec.tsx` (the
+third item); `app/src/recipes/recipeScale.spec.ts` and the «review of 14 Nov 2026» block of the fromRow spec (unit changed, past ten
+tonnes, a row added above or deleted while the dialog is open, Enter, overflow).
+
+**Driven** on the emulator (14 Nov 2026, Linux, Chromium; not the SM-T550), before AND after the review fixes: Italian and English,
+owner and employee, 1024, 360 and 296 px — axe-core, sideways scroll, clipped text, targets of at least 44px (the 44px floor was
+measured, not the 48px design size), one main and one h1, console; one real «Use as base recipe» read back from the emulator (the chosen
+row exact). After the fixes, also in the browser: the row's unit changed by another client (the batch stays 3180 g, was 3,180,000 g), a
+row added above while the question is open (it still asks about Sugar), and Enter on 239.6 g (calculates 240 g). ⚠️ Pre-existing on the stack base, not from this slice: with ANY modal open on the Recipes screen
+(the old «Calculate recipe?» included) axe flags `scrollable-region-focusable` on `#main`.

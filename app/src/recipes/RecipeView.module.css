@@ -303,6 +303,26 @@
   margin-top: var(--s3);
 }
 
+/* «Calculated from Sugar: 1000 g» under the ingredient table, with its quiet Undo: one wrapping line, the button still 48px. */
+.fromRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 var(--s2);
+  margin-top: var(--s3);
+}
+
+.fromRowText {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  overflow-wrap: anywhere;
+}
+
+.fromRowUndo {
+  flex: none;
+}
+
 /* «Use as base recipe», right under Clear: a quiet, link-like button (it changes the recipe, so it does not compete with
    Calculate), still the full touch height. Wrapped in a block of its own, so it is always on its own line, left-aligned like
    Clear and only as wide as its words. */
