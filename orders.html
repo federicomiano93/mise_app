@@ -260,6 +260,12 @@
          work got done, this one only because somebody ANSWERED. It is what makes a
          strict week window safe: without it an order that never arrived would vanish,
          unanswered, on the day the week turned. -->
+    <!-- ⚠️⚠️ «ORDINE A X INVIATO ALLE 10:42: È PARTITO?» (14 Nov 2026). An order handed to
+         WhatsApp from ANY device waits here, on every device, until somebody answers: «Sì»
+         records what went, «No» keeps the quantities. First of all, and never moved into the
+         tablet's bell (js/orders/tablet-layout.js): the iPad has no WhatsApp, so the question
+         sent from a phone must be in plain sight on it. -->
+    <div id="orders-awaiting"></div>
     <div id="orders-owed" hidden></div>
     <!-- ⚠️⚠️ WHAT NOBODY HAS BEEN TOLD ABOUT. The shared order is live on every
          phone here, and both the sent list and the recorded order are only

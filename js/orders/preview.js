@@ -8,10 +8,8 @@
 // The screen itself is supplier-picker.js and the text is order-text.js, both shared
 // with the bulk "Order placed" flow and with re-sending an order from History. What
 // is left here is the one thing specific to sending a DRAFT: reporting which
-// suppliers went out, so the caller can offer to mark exactly those as placed.
-//
-// Sending is the moment the order actually leaves, so it is the moment to ask —
-// forgetting to record it afterwards was the whole problem.
+// suppliers went out, with the quantities that went, so the caller can ask — on every
+// device (awaiting-sent.js) — whether they really left, and record exactly those.
 
 import { t } from '../i18n.js';
 import { supplierLabel } from '../supplier-label.js';
@@ -20,9 +18,10 @@ import { chooseAndSend } from './send-chooser.js';
 import { currentSession } from '../firebase.js';
 import { orderedItems } from './order-text.js';
 import { outputLanguage } from '../market.js';
+import { draftQuantities } from './awaiting-sent.js';
 
 // suppliers: array; ingredientsBySupplier: { supplierId: [ingredient] };
-// entries: { ingredientId: { qty, stock } }; callbacks: { onBack, onSent, beforeSend };
+// entries: { ingredientId: { qty, stock } }; callbacks: { onBack, onSent(ids, { handOff, rows }), beforeSend };
 // format: { grouped, onChange } — the remembered message-format choice, owned by
 // orders-main so every send path reads the same one.
 export function buildSendScreen(suppliers, ingredientsBySupplier, entries, callbacks, format) {
@@ -30,10 +29,15 @@ export function buildSendScreen(suppliers, ingredientsBySupplier, entries, callb
   // is the ONE selection this app uses for "what is in this supplier's order
   // right now" — js/orders/order-summary.js (the tablet summary sheet) calls
   // the exact same function, so the two can never quietly disagree.
+  //
+  // Each row also carries the quantities its message is built from (awaiting-sent.js
+  // draftQuantities, the same lens at the same moment): once the order is handed over, those are
+  // what «did it go?» records — never the draft as it may read by the time somebody answers.
   const rows = suppliers.map(supplier => ({
     id: supplier.id,
     name: supplierLabel(supplier),
     items: orderedItems(ingredientsBySupplier[supplier.id] || [], entries),
+    ...draftQuantities(ingredientsBySupplier[supplier.id] || [], entries),
   })).filter(row => row.items.length);
 
   return buildSupplierPicker(rows, {
@@ -68,7 +72,8 @@ export function buildSendScreen(suppliers, ingredientsBySupplier, entries, callb
         language: outputLanguage(currentSession().location),
         grouped,
         onSendToManager: callbacks.onSendToManager,
-        onSent: callbacks.onSent,
+        // The rows that went, with their quantities: callbacks.onSent(ids, { handOff, rows }).
+        onSent: (ids, info) => callbacks.onSent(ids, { ...info, rows: selected.filter(r => ids.includes(r.id)) }),
       });
     },
   });

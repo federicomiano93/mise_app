@@ -116,3 +116,40 @@ export function renderPending(container, list, {
     ]));
   });
 }
+
+// «Ordine a Bruno inviato alle 10:42: è partito?» — one banner per supplier whose order was handed
+// to WhatsApp (or the mail app) and not answered yet (js/orders/awaiting-sent.js). On EVERY
+// device, until somebody answers: «Sì» records what went, «No» leaves the quantities in the order.
+// Persistent on purpose — nothing to dismiss: an order handed over and never answered is exactly
+// the order that used to go unrecorded.
+//
+// list: [{ supplier, at, … }] from awaitingList; question(supplier, entry) → the sentence;
+// busy(supplierId) → true while this device is answering (both buttons wait).
+let awaitingSeq = 0;
+export function renderAwaiting(container, list, { question, onYes, onNo, busy } = {}) {
+  if (!container) return;
+  container.textContent = '';
+  if (!list.length) return;
+
+  list.forEach(entry => {
+    const { supplier } = entry;
+    const id = `awaiting-q-${++awaitingSeq}`;
+    const waiting = Boolean(busy?.(supplier.id));
+    // The two answers are named by their own word AND described by the question, so a screen
+    // reader moving from button to button hears which order «Sì» is about.
+    const answer = (label, cls, fn) => el('button', {
+      type: 'button', class: `pending-btn${cls}`, 'aria-describedby': id,
+      onClick: () => fn?.(supplier.id),
+    }, label);
+    const yes = answer(t('orders.awaiting.yes'), ' primary', onYes);
+    const no = answer(t('orders.awaiting.no'), '', onNo);
+    yes.disabled = waiting;
+    no.disabled = waiting;
+    container.appendChild(el('div', { class: 'pending-banner awaiting-banner' }, [
+      el('div', { class: 'pending-main' }, [
+        el('span', { class: 'pending-title', id, text: question ? question(supplier, entry) : supplierLabel(supplier) }),
+      ]),
+      el('div', { class: 'pending-actions' }, [yes, no]),
+    ]));
+  });
+}

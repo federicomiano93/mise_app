@@ -11,8 +11,10 @@ const count = (src, re) => (src.match(re) || []).length;
 
 test('orders-main passes the venue language when it builds a message and a record row', () => {
   const src = read('js/orders/orders-main.js');
-  assert.equal(count(src, /language: outputLanguage\(currentSession\(\)\.location\)/g), 1,
-    'sendMessageFor passes language to buildOrderMessage');
+  assert.equal(count(src, /language: outputLanguage\(currentSession\(\)\.location\)/g), 2,
+    'sendMessageFor passes language to buildOrderMessage, and sendOneSupplier (the supplier screen\'s «Invia») to the chooser');
+  const one = src.slice(src.indexOf('function sendOneSupplier'), src.indexOf('// ── «Ordine a X inviato'));
+  assert.match(one, /language: outputLanguage\(currentSession\(\)\.location\),/);
   assert.equal(count(src, /const language = outputLanguage\(currentSession\(\)\.location\);/g), 1,
     'recordToRow reads the language');
   assert.match(src, /fallbackSupplierName\(language\)/);

@@ -9,7 +9,8 @@ import {
   shouldAskSent, sentCheckPhrases, outcomeOf, suppliersToRecord, confirmedRows,
 } from '../js/orders/sent-check.js';
 import { sentCheckDialog } from '../js/orders/sent-check-dialog.js';
-import { sendOffers, sendTexts } from '../js/orders/send-chooser.js';
+import { sendOffers } from '../js/orders/send-chooser.js';
+import { runSendBatch } from '../js/orders/send-editor.js';
 import { orderedItems, buildOrderMessage } from '../js/orders/order-text.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -72,8 +73,10 @@ test('wiring: both recording paths ask, before archiving, and the send carries t
   assert.match(ask, /supplierRoadsOnly: true/);
   assert.match(ask, /beforeSend: sendRows => refuseOnUnitConflict\(/);
   assert.doesNotMatch(ask, /sendListToManagers|onSendToManager/);
-  // Backing out of the chooser records nothing; what was not reached is said.
+  // Backing out of the chooser records nothing; what was not reached is said. What WAS handed
+  // over waits for «did it go?» on every device (14 Nov 2026, tests/awaiting-sent.test.mjs).
   assert.match(ask, /suppliersToRecord\(ids, sent\)/);
+  assert.match(ask, /waitForAnswer\(handed\.map\(/);
   assert.match(ask, /sentCheck\.notReached/);
 });
 
@@ -133,14 +136,21 @@ test('«Send it now» is offered only when a road to a SUPPLIER is open for this
   assert.match(src, /sendNowLabel: canSendNow \? t\(phrases\.sendNowKey\) : ''/);
 });
 
-// «Send it now» records only the suppliers it reached. Since the photo road (PR #310) every
-// WhatsApp chat — per supplier included — goes through sendTexts / runPhotoBatch, which count a
-// chat only when its window really opened; e-mail is trusted (a mailto: may answer null).
-test('a per-supplier road records only a window that really opened (a blocked pop-up does not)', () => {
-  const jobs = [{ ids: ['a'], url: 'url-a' }, { ids: ['b'], url: 'url-b' }];
-  assert.deepEqual(sendTexts(jobs, u => (u === 'url-b' ? null : {})), ['a']);
+// «Send it now» asks only about the suppliers it reached. Since the send editor (14 Nov 2026)
+// every road goes through runSendBatch, which counts a chat only when its window really opened
+// (the editor answers «blocked» otherwise); e-mail is trusted (a mailto: may answer null).
+test('a per-supplier road counts only a window that really opened (a blocked pop-up does not)', async () => {
+  const jobs = [{ ids: ['a'], name: 'A' }, { ids: ['b'], name: 'B' }];
+  const said = [];
+  const sent = await runSendBatch({
+    jobs, ask: async ({ i }) => ({ outcome: i === 1 ? 'blocked' : 'opened', text: 't' }),
+    notify: async m => { said.push(m); }, confirmText: async () => true,
+  });
+  assert.deepEqual(sent, ['a']);
+  assert.match(said[0], /B/);
   const src = read('js/orders/send-chooser.js');
-  assert.match(src, /if \(offer\.route !== 'email'\) return viaWhatsapp\(jobs\);/);
+  assert.match(src, /return viaEditor\(jobs, \{ photo: offer\.route !== 'email' \}\);/);
+  assert.match(src, /openTab\(mailto\([^\n]*\);\n\s*return true;/, 'the mail link counts whatever window.open answers');
   assert.doesNotMatch(src, /window\.open\([^)]*noopener/);
 });
 

@@ -1979,7 +1979,7 @@ body[data-section="orders"] .ing-filter .view-switch-btn:not(.active) { color: v
    supplier chips, not a numbered list. A supplier still to order is a button
    (tap → its card opens); one already placed is a quiet, ticked-off span.
    The containers collapse when empty so a day with nothing to order leaves no gap. */
-#orders-today:empty, #orders-pending:empty { display: none; }
+#orders-today:empty, #orders-pending:empty, #orders-awaiting:empty { display: none; }
 
 .today-banner {
   display: flex;
@@ -2055,6 +2055,11 @@ body[data-section="orders"] .ing-filter .view-switch-btn:not(.active) { color: v
   color: var(--warn);
 }
 .pending-main { display: flex; flex-direction: column; gap: 2px; margin-bottom: 10px; }
+/* «Ordine a X inviato alle 10:42: è partito?» (js/orders/awaiting-sent.js): the same banner — it
+   asks for a decision too — with two answers a full 44px tall, side by side. While this device is
+   answering both are disabled and say so by fading. */
+.awaiting-banner .pending-btn { min-height: 44px; }
+.awaiting-banner .pending-btn:disabled { opacity: .55; cursor: default; }
 .pending-title { font-size: 14px; font-weight: 700; }
 /* Full --warn, no opacity: faded to .85 it read 4.22:1 on --warn-bg, under 4.5. */
 .pending-sub { font-size: 12px; font-family: 'DM Mono', monospace; }
