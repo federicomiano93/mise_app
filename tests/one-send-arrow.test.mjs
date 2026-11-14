@@ -180,10 +180,12 @@ test('⚠️ canShare and .share( are used only by the two file-sharing modules 
   assert.deepEqual(offenders, []);
 });
 
-test('⚠️ only the send chooser imports the order picture module', () => {
+// The send editor (14 Nov 2026) draws the picture from the edited text and hands it to
+// sharePhoto inside the tap; the chooser decides when the picture road is open at all.
+test('⚠️ only the send chooser and its editor import the order picture module', () => {
   const importers = APP_FILES.filter(([rel, src]) => rel.endsWith('.js')
     && /from\s+['"][^'"]*order-image\.js['"]/.test(codeOf(src))).map(([rel]) => rel);
-  assert.deepEqual(importers, ['js/orders/send-chooser.js']);
+  assert.deepEqual(importers.sort(), ['js/orders/send-chooser.js', 'js/orders/send-editor.js']);
 });
 
 test('⚠️ every clipboard write is raced against a clock, in ONE place', () => {

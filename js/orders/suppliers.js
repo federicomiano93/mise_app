@@ -96,6 +96,9 @@ export function refreshSupplierDerived(supplier, ingredients, entries, forDay = 
 
   const placeBtn = document.getElementById(`place-btn-${supplier.id}`);
   if (placeBtn) placeBtn.disabled = filled === 0;
+  // The supplier screen's «Invia» in the header: the same rule, nothing typed = nothing to send.
+  const sendBtn = document.getElementById(`send-btn-${supplier.id}`);
+  if (sendBtn) sendBtn.disabled = filled === 0;
 
   // "Clear quantities" is HIDDEN rather than disabled: with nothing typed there is
   // nothing to start again, and a permanently dead red button under the green one is

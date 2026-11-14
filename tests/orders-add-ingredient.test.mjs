@@ -20,8 +20,8 @@ const I18N = read('js/i18n.js');
 test('the button is a round icon button in the HEADER, on the right, built once and never inside the body', () => {
   const header = DETAIL.slice(DETAIL.indexOf("el('header'"), DETAIL.indexOf('body,\n  ]);'));
   const slots = header.split("el('span', { class: 'app-header-slot' }");
-  assert.equal(slots.length, 3, 'two slots in the header: Back on the left, the add button on the right');
-  assert.match(slots[2], /\[addBtn\]/, 'the right slot holds the add button');
+  assert.equal(slots.length, 3, 'two slots in the header: Back on the left, «Invia» and the add button on the right');
+  assert.match(slots[2], /\[sendBtn, addBtn\]/, 'the right slot holds the add button, after «Invia» (14 Nov 2026)');
   assert.match(DETAIL, /class: 'app-icon-btn orders-icon-btn'/);
   assert.match(DETAIL, /'aria-label': t\('orders\.addIngredientToListAria', \{ supplier: supplierLabel\(supplier\) \}\)/);
   assert.match(DETAIL, /icon: PLUS_SVG, onClick: \(\) => addIngredient\?\.\(\)/);

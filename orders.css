@@ -433,11 +433,26 @@
   display: flex;
   flex-direction: column;
 }
-/* One button left (Back), none right: both sides reserve the Back button's width (36px on a
-   phone; the tablet block re-declares it for its bigger button), so a
-   long supplier name that wraps stays centred instead of drifting half a button to the
-   right (18px at 296px, measured 30 Sep 2026). At 296 that still leaves the title 176px. */
-.supplier-detail > .app-header { --app-header-side: 36px; }
+/* One button left (Back), two right («Invia», then «+»): both sides reserve the right side's
+   width — two 36px buttons and the slot's 12px between them on a phone; the tablet block re-declares it
+   for its bigger buttons — so a long supplier name that wraps stays centred instead of drifting
+   (measured 30 Sep 2026 with one button; the second came on 14 Nov 2026). With «+» hidden the
+   reserve stays, and so does the centre.
+   ⚠️ NOT BELOW 360px: at 296 two reserved 84px sides would leave the name 80px, a word per line.
+   There each side is what it HOLDS (`auto`, never a fixed minimum the buttons could overflow —
+   tokens.css) and the name sits a little off centre: the lesser evil, as on every header. */
+.supplier-detail > .app-header { --app-header-side: 84px; }
+@media (max-width: 359px) {
+  .supplier-detail > .app-header { --app-header-side: auto; }
+}
+/* «Invia» with nothing typed: still in its place, visibly off (the dim white of a Save with
+   nothing to save), and no press feedback. */
+.supplier-send-btn:disabled {
+  background: transparent;
+  border-color: var(--on-brand-dim);
+  color: var(--on-brand-dim);
+  cursor: default;
+}
 /* The screen's own status line (a save error, «Salvo la quantità…»): between the header and the
    rows, never scrolled away, at the page's usual gutter. */
 .supplier-detail > .supplier-detail-status { flex: none; margin: 8px max(16px, var(--app-gutter)) 0; }
@@ -1055,9 +1070,9 @@ input.ing-stock {
   /* Header, tabs and footer: every tap target grows to the same floor. */
   body[data-section="orders"] .orders-icon-btn,
   body[data-section="orders"] .orders-header .help-btn { width: var(--tap-min); height: var(--tap-min); }
-  /* The Back button grew with the rule above: both sides of the supplier screen's header
-     reserve its new width, so the name stays centred (the phone rule is 36px). */
-  body[data-section="orders"] .supplier-detail > .app-header { --app-header-side: var(--tap-min); }
+  /* The buttons grew with the rule above: both sides of the supplier screen's header reserve
+     the right side's new width («Invia» + «+»), so the name stays centred (phone rule: 84px). */
+  body[data-section="orders"] .supplier-detail > .app-header { --app-header-side: calc(var(--tap-min) * 2 + 12px); }
   body[data-section="orders"] .tab-bar .tab,
   body[data-section="orders"] .view-switch-btn { min-height: var(--tap-min); font-size: 15px; }
   body[data-section="orders"] .recipe-footer-btn { min-height: var(--tap-min); }
@@ -1964,7 +1979,7 @@ body[data-section="orders"] .ing-filter .view-switch-btn:not(.active) { color: v
    supplier chips, not a numbered list. A supplier still to order is a button
    (tap → its card opens); one already placed is a quiet, ticked-off span.
    The containers collapse when empty so a day with nothing to order leaves no gap. */
-#orders-today:empty, #orders-pending:empty { display: none; }
+#orders-today:empty, #orders-pending:empty, #orders-awaiting:empty { display: none; }
 
 .today-banner {
   display: flex;
@@ -2040,6 +2055,11 @@ body[data-section="orders"] .ing-filter .view-switch-btn:not(.active) { color: v
   color: var(--warn);
 }
 .pending-main { display: flex; flex-direction: column; gap: 2px; margin-bottom: 10px; }
+/* «Ordine a X inviato alle 10:42: è partito?» (js/orders/awaiting-sent.js): the same banner — it
+   asks for a decision too — with two answers a full 44px tall, side by side. While this device is
+   answering both are disabled and say so by fading. */
+.awaiting-banner .pending-btn { min-height: 44px; }
+.awaiting-banner .pending-btn:disabled { opacity: .55; cursor: default; }
 .pending-title { font-size: 14px; font-weight: 700; }
 /* Full --warn, no opacity: faded to .85 it read 4.22:1 on --warn-bg, under 4.5. */
 .pending-sub { font-size: 12px; font-family: 'DM Mono', monospace; }
@@ -3732,6 +3752,55 @@ body:not([data-orders-tab="deliveries"]) #orders-owed { display: none; }
    each label has the whole width — the Italian ones are long. Reuses .app-dialog-*. */
 .sent-check-actions { flex-direction: column; }
 .sent-check-actions .app-dialog-btn { flex: none; min-height: 44px; }
+
+/* ── The send editor (js/orders/send-editor.js, 14 Nov 2026) ─────────────────────────
+   «What they will receive», drawn as WhatsApp draws it, then the box to change it, then Skip /
+   Cancel and Send. Wider than a confirmation (a message is read, not glanced at), capped by the
+   same --vh100 rule as every dialog; the title and the buttons hold their size and the BODY is
+   the part that scrolls, so Send never leaves the screen on a long order or a short phone. */
+.send-editor { max-width: 520px; }
+.send-editor-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 0 14px;
+}
+.send-editor-label { margin: 6px 0 0; font-size: 14px; font-weight: 700; color: var(--text); }
+.send-editor-hint { margin: 0; font-size: 13px; line-height: 1.4; color: var(--text-2); }
+.send-editor-preview {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.send-editor-line { white-space: pre-wrap; min-height: 1.45em; }
+.send-editor-line strong { font-weight: 800; }
+/* 16px: below it iOS zooms the page when the box takes the focus. */
+.send-editor-text {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 120px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 16px;
+  line-height: 1.45;
+  resize: vertical;
+}
+.send-editor-text:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
+.send-editor .app-dialog-actions .app-dialog-btn { min-height: 44px; }
+/* Still drawing the picture of the text just typed: Send waits, visibly. */
+.send-editor .app-dialog-btn:disabled { opacity: .55; cursor: default; }
 
 /* Kiosk mode on the Home (js/home-kiosk-band.js). «Rest» is the round moon button in the green
    header (.home-rest-btn shares .home-header .home-up-btn above). «Exit» is a red, raised bar

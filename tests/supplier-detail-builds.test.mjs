@@ -279,3 +279,72 @@ test('the item count says «articolo / articoli» in Italian', () => {
   assert.match(dict, /'orders\.itemsCount': \{ one: '\{n\} articolo', other: '\{n\} articoli' \}/);
   assert.match(dict, /'orders\.itemsCount': \{ one: '\{n\} item', other: '\{n\} items' \}/);
 });
+
+// ── «Invia» in the header, for this supplier only (owner, 14 Nov 2026) ───────────────────
+const sendOf = view => find(view.overlay, n => n.getAttribute?.('id') === 'send-btn-S1');
+const headerRight = view => find(view.overlay, n => n.tagName === 'HEADER').children[2];
+const sendRows = [
+  { id: 'a', name: 'A', supplierId: 'S1' },
+  { id: 'c', name: 'C', supplierId: 'S1', elsewhereId: 'S2' },
+];
+const sendCtx = (entries, over = {}) => ({ ...ctx(() => null), ingredients: sendRows, entries, ...over });
+
+test('the send button sits in the header, LEFT of «+», named «Send» and drawn with the header glyph', () => {
+  const view = buildSupplierDetail(supplier, sendCtx({}, { onAddIngredient() {} }));
+  const right = headerRight(view);
+  const send = sendOf(view);
+  assert.ok(send, 'built');
+  assert.equal(right.children.indexOf(send), 0, 'first in the right slot');
+  assert.equal(right.children.length, 2, '«Invia» then «+»');
+  assert.equal(send.getAttribute('aria-label'), 'Send');
+  assert.equal(send.getAttribute('type'), 'button');
+  const header = read('orders.html').match(/id="orders-wa-btn"[^>]*>(<svg[\s\S]*?<\/svg>)/)[1];
+  assert.equal(send._html, header, 'the very same send icon as the Orders header');
+});
+
+test('⚠️ disabled with no quantity — a row ordered elsewhere does not count — enabled with one', () => {
+  const view = buildSupplierDetail(supplier, sendCtx({ c: { qty: 4 } }));
+  assert.equal(sendOf(view).disabled, true, 'nothing of THIS supplier is typed');
+  view.repaint(sendCtx({ a: { qty: 2 } }));
+  assert.equal(sendOf(view).disabled, false);
+  view.repaint(sendCtx({}));
+  assert.equal(sendOf(view).disabled, true, 'back off once cleared');
+});
+
+test('a supplier with no products: the button is there, and off', () => {
+  const view = buildSupplierDetail(supplier, ctx(() => null));
+  assert.equal(sendOf(view).disabled, true);
+});
+
+test('tapping it sends THIS supplier', () => {
+  const seen = [];
+  const view = buildSupplierDetail(supplier, sendCtx({ a: { qty: 2 } }, { onSend: id => seen.push(id) }));
+  sendOf(view).fire('click');
+  assert.deepEqual(seen, ['S1']);
+});
+
+test('the keystroke path keeps it in step, like «Ordine fatto»', () => {
+  const src = read('js/orders/suppliers.js');
+  const fn = src.slice(src.indexOf('export function refreshSupplierDerived'));
+  assert.match(fn, /getElementById\(`send-btn-\$\{supplier\.id\}`\)/);
+  assert.match(fn, /sendBtn\.disabled = filled === 0/);
+});
+
+test('orders-main hands the screen its send: one supplier, through the unchanged road chooser', () => {
+  const main = read('js/orders/orders-main.js');
+  assert.match(main, /onSend: sendOneSupplier,/);
+  const fn = main.slice(main.indexOf('function sendOneSupplier'), main.indexOf('// ── «Ordine a X inviato'));
+  assert.match(fn, /chooseAndSend\(\{/);
+  assert.match(fn, /rows: \[row\]/, 'this supplier only — no picker');
+  assert.match(fn, /suppliers: \[supplier\]/);
+  assert.match(fn, /waitForAnswer\(/, 'and «did it go?» on every device afterwards');
+  assert.ok(!/buildSupplierPicker/.test(fn));
+});
+
+test('⚠️ the header fits: both sides reserve two buttons on a phone, the title takes the rest at 296', () => {
+  const css = read('orders.css');
+  assert.match(css, /^\.supplier-detail > \.app-header \{ --app-header-side: 84px; \}/m);
+  assert.match(css, /@media \(max-width: 359px\) \{\s*\.supplier-detail > \.app-header \{ --app-header-side: auto; \}/);
+  assert.match(css, /body\[data-section="orders"\] \.supplier-detail > \.app-header \{ --app-header-side: calc\(var\(--tap-min\) \* 2 \+ 12px\); \}/);
+  assert.match(css, /\.supplier-send-btn:disabled \{/);
+});
