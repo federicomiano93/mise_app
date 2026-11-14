@@ -18,7 +18,7 @@ import type { SectionId } from './sections';
 describe('the section list', () => {
   it('is in the order the rail shows it', () => {
     expect(SECTIONS.map(section => section.id)).toEqual([
-      'home', 'orders', 'suppliers', 'recipes', 'calculator', 'clients', 'pastries', 'stocktake', 'foodcost', 'settings',
+      'home', 'orders', 'suppliers', 'recipes', 'labels', 'calculator', 'clients', 'pastries', 'stocktake', 'foodcost', 'settings',
     ]);
   });
 
@@ -35,12 +35,12 @@ describe('the section list', () => {
   it('splits the sections between the rail, the tabs and «More»', () => {
     const arranged = arrangeSections(new Set(SECTIONS.map(section => section.id)));
     expect(arranged.railTop.map(section => section.id)).toEqual([
-      'home', 'orders', 'suppliers', 'recipes', 'calculator', 'clients', 'pastries', 'stocktake', 'foodcost',
+      'home', 'orders', 'suppliers', 'recipes', 'labels', 'calculator', 'clients', 'pastries', 'stocktake', 'foodcost',
     ]);
     expect(arranged.railBottom.map(section => section.id)).toEqual(['settings']);
     // Nobody is shown both the Calculator and Clients (session/visibility.ts), so no real tab bar holds five.
     expect(arranged.tabs.map(section => section.id)).toEqual(['home', 'orders', 'recipes', 'calculator', 'clients']);
-    expect(arranged.more.map(section => section.id)).toEqual(['suppliers', 'pastries', 'stocktake', 'foodcost', 'settings']);
+    expect(arranged.more.map(section => section.id)).toEqual(['suppliers', 'labels', 'pastries', 'stocktake', 'foodcost', 'settings']);
     expect(arranged.first.id).toBe('home');
   });
 

@@ -22,6 +22,11 @@ const GATES: ReadonlyArray<{ id: SectionId; section: SectionName; card: CardId |
   { id: 'orders', section: 'orders', card: 'orders' },
   { id: 'suppliers', section: 'orders', card: 'suppliers' },
   { id: 'recipes', section: 'catalogue', card: 'catalogue' },
+  // «Labels» opens the Recipe catalogue's own label screens, so it is behind the catalogue's very gate: the same section and
+  // the same card, hidden from employees exactly when the venue hides Recipes from them, and from a partial owner exactly
+  // when their side has no Recipes (ROLE_CARDS). ⚠️ NO CARD ID OF ITS OWN on purpose: STAFF_CARDS is the current app's list
+  // and the server's, and a new id there would need a server change for a switch nobody asked for.
+  { id: 'labels', section: 'catalogue', card: 'catalogue' },
   { id: 'calculator', section: 'calculator', card: 'calculator' },
   // The sales owner's page lives in config/calculator, so it is the Calculator's SECTION (a venue without the Calculator has
   // no clients to run) behind a card of its own that only that role is shown (ROLE_ONLY_CARDS).

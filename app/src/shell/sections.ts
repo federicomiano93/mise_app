@@ -7,6 +7,7 @@ import {
   LayoutGrid,
   Settings,
   ShoppingCart,
+  Tags,
   Truck,
   Users,
   Warehouse,
@@ -16,6 +17,7 @@ import { isMonthId } from '@mise/shared/inventory-model';
 import { isWeekday } from '@mise/shared/pastries-model';
 import { clientsScreenName } from '../clients/clientsPath';
 import type { MessageKey } from '../i18n/en';
+import { labelsScreenName } from '../labels/labelsPath';
 import { ordersScreenName } from '../orders/ordersPath';
 import { parseRecipesPath } from '../recipes/recipesPath';
 import { settingsScreenName } from '../settings/settingsPath';
@@ -26,6 +28,7 @@ export type SectionId =
   | 'orders'
   | 'suppliers'
   | 'recipes'
+  | 'labels'
   | 'calculator'
   | 'clients'
   | 'pastries'
@@ -54,6 +57,12 @@ export const SECTIONS: readonly Section[] = [
   { id: 'orders', path: '/orders', label: 'section.orders', icon: ShoppingCart, inRail: 'top', inTabs: true },
   { id: 'suppliers', path: '/suppliers', label: 'section.suppliers', icon: Truck, inRail: 'top', inTabs: false },
   { id: 'recipes', path: '/recipes', label: 'section.recipes', icon: BookOpen, inRail: 'top', inTabs: true },
+  // «Labels» (the owner, 13 Nov 2026: one way in to the product label and the HACCP label): a COMPANION of the Recipe
+  // catalogue, not a section of its own. It is shown to exactly whoever is shown Recipes (session/visibility.ts gives it
+  // the catalogue's own gate, no card id of its own), and it sits right after Recipes because this list IS the order:
+  // Mise 2 has no per-venue order of sections (docs/parity/home.md, D1), so nothing can ever move it away from Recipes.
+  // No tab: the phone's five tabs are fixed (Home, Orders, Recipes, Calculator, More), so on a phone it is under «More».
+  { id: 'labels', path: '/labels', label: 'section.labels', icon: Tags, inRail: 'top', inTabs: false },
   { id: 'calculator', path: '/calculator', label: 'section.calculator', icon: Calculator, inRail: 'top', inTabs: true },
   // The sales owner's page (Titolare vendita): the address book, the orders clients sent and their deadline. Shown to nobody
   // else (session/visibility.ts), so no other person's tab bar or rail ever holds it. A tab, because with no Calculator
@@ -138,6 +147,8 @@ export function screenNameFor(pathname: string): string | null {
   if (section.id === 'calculator') return calculatorScreenName(pathname, section.path);
   if (section.id === 'clients') return clientsScreenName(pathname.slice(section.path.length));
   if (section.id === 'recipes') return recipesScreenName(pathname, section.path);
+  // Labels: the two choices, and the list of recipes for each kind of label (the label itself is the Recipe catalogue's).
+  if (section.id === 'labels') return labelsScreenName(pathname.slice(section.path.length));
   // «Ingredients & suppliers» (step 3e): the names of docs/parity/suppliers.md, decision T1.
   if (section.id === 'suppliers') return suppliersScreenName(pathname.slice(section.path.length));
   // Orders (step 3f-1): the list, a supplier's order and its «What they sell».

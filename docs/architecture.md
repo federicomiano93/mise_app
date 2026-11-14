@@ -410,10 +410,11 @@ queue and the other roads arrive in 3d-4. The usage record names the screen `rec
   `'order'`, carried in the module like Food cost's, so Back brings the recipe with the same row focused, the scroll and the splits.
   The ingredient book (part 2 of the owner's plan, 14 Nov 2026; `docs/parity/catalogue.md`, «Ingredient book as built»): `IngredientBook.tsx`
   at `/recipes/ingredients` (view `ingredients`, usage screen `recipes-ingredients`, a reserved word), drawn like the HACCP list and
-  reached from a door at the foot of the list for everybody — NOT a section of the app's menu: the rail holds nine items at most on
-  the lab tablet (`shell/railHeight.spec.ts`). Read-only, from the store's recipes and ingredients (no listener of its own), through
+  reached from a door at the foot of the list for everybody — NOT a section of the app's menu: the rail holds ten items at most on
+  the lab tablet, and has ten since «Labels» (`shell/railHeight.spec.ts`). Read-only, from the store's recipes and ingredients (no listener of its own), through
   `shared/src/ingredient-usage.ts`. A recipe opened from it carries `fromIngredients` (`recipesNav.ts`): its Back is the browser's,
   the focus is owed to the link (`ingredientUseOpener`), and the editor's two-step return does not count it as «from the list».
+- `labels/` — «Labels» (section id `labels`, 13 Nov 2026; `docs/parity/home.md`, «Labels card as built»): the owner's one way in to the product label and the HACCP label. A COMPANION of Recipes: right after it in `SECTIONS`, behind the catalogue's very gate in `session/visibility.ts` (no card id of its own, nothing in `STAFF_CARDS`). `/labels` is the two choices, `/labels/product` and `/labels/haccp` the recipes with a search box (the Recipe catalogue's store, `RecipesProvider`); a tap opens the catalogue's OWN label screen at `/recipes/<id>/label` or `/recipes/<id>/haccp` with `FROM_LABELS_PRODUCT` / `FROM_LABELS_HACCP` (`recipes/recipesNav.ts`), so its Back is the browser's Back to the list. Back is one level at a time up to the Home; the focus owed on each return is promised when the next screen opens.
 - `ui/` — the shared controls: `HelpToggle` (`HelpHead`: a section title with its «?», a bare 44px button that opens the explanation under it, closed at mount, never stored), `Button`, `Dialog` and `useConfirm` (a question that waits for an
   answer; never the browser's `confirm()`; an optional third value, `dismiss`, closes a question the world made pointless), `StatusMessage` (one short message at a time, in a
   live region that exists before it speaks), `FormBar` (Back, title, the one primary action: the

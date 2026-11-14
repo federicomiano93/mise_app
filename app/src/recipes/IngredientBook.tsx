@@ -33,7 +33,7 @@ export function forgetOpenIngredients(): void {
 // The ingredient book (part 2 of the owner's plan, 14 Nov 2026; NEW IN MISE 2, no original): every ingredient, and under each the
 // recipes that use it with how much is in each, as written. Read-only. Drawn like the HACCP list — the right-hand pane on the
 // split, a screen of its own on a phone, one level below the recipe list — and reached from a door at the foot of that list
-// (not from the app's menu: the tablet's rail is full).
+// (not from the app's menu: the tablet's rail is full, shell/railHeight.spec.ts).
 //
 // ⚠️ IT READS WHAT THE SECTION ALREADY HOLDS (the store's recipes and ingredients; the ingredients carry no price), so it starts no
 // listener of its own. What counts is shared/src/ingredient-usage.ts: only rows LINKED to the ingredient, and only DIRECT uses.

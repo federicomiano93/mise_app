@@ -214,7 +214,7 @@ export function RecipesList({ openRecipeId, split, onOpenRecipe, sheetOpen, onOp
 
       {/* The ingredient book (part 2 of the owner's plan, 14 Nov 2026): where each ingredient is used. For everybody who sees the
           section (it only reads what the section already reads). A door here, not an item of the app's menu: the tablet's rail
-          holds nine items at most on the lab tablet's 648px (shell/railHeight.spec.ts), and it is full. */}
+          holds ten items at most on the lab tablet's 648px (shell/railHeight.spec.ts), and with «Labels» it holds ten. */}
       <Button
         ref={ingredientsDoor}
         variant="secondary"

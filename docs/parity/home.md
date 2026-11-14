@@ -355,3 +355,77 @@ Plan: `piano-ruoli-mise2.md` (slice 1 of 4). Branch `feature/mise2-next-roles-1`
 **Not in this slice (the plan's slices 2-4, all done since):** the kitchen owner's ingredient merge (the server-side count of products using an ingredient, `productsUsingIngredient`); the narrow clients save; the Clients section and its notification landing for the sales owner. The warning that nobody should hold `owner-sales` before slice 4 is lifted: the Clients section exists (`docs/parity/calculator.md`, «Clients page for the sales owner as built»).
 
 **Tests:** `shared/` `sections`, `membership`, `records`, `recipe-link` and `odd-inputs` specs (five values enter, near misses such as `'owner-sales '` and `'Owner-sales'` are refused, the odd-input product with and without a role); `app/` `visibility.spec.ts` (every role, `readsPurchasePrices`), `session.spec.ts` (`canManageVenue`, a partial owner enters), the specs of Orders (the kitchen owner sees the money), Food cost (the sales owner's boxes), Settings, the ingredient card, the photo switch, and a new `CalculatorSettings.kitchen.spec.tsx`; the root `tests/partial-owner-roles.test.mjs` names `shared/src/sections.ts` as the fourth `ACCESS_VALUES` and walks `shared/src` and `app/src` for every card-gate call that forgets the role. Driven on the emulator: `algprobe/mise-drive/drive-mise2-partial-owners.mjs`.
+
+## Labels card as built (13 Nov 2026) — NEW IN MISE 2, no original in the current app
+
+Federico, 13 Nov 2026: ONE way in «Etichette» / «Labels», right after Recipes, to the product label and the HACCP label that
+were reached only from inside the Recipe catalogue (the product label from a recipe's allergen card, «Make a label»; the HACCP
+label from the «HACCP labels» door at the foot of the recipe list). Shown to exactly whoever is shown Recipes; no new setting.
+Branch `feature/mise2-next-labels-card`, PR into `feature/mise2-next`. No rule, function or `js/` file touched.
+
+**The «Home card» is a section entry, because Mise 2 has no Home cards.** The current app's Home is a grid of cards; Mise 2's
+Home is the «Da fare» card, and the cards' job (reaching a section) is done by the rail, the phone's tab bar and «More» (this
+file, «What the current app has»; the employee screen is named «Sezioni per i dipendenti» for the same reason). So «Labels» is
+an entry of `SECTIONS` (`shell/sections.ts`, id `labels`, `/labels`, Lucide `Tags`), placed right after Recipes: in the rail it
+is the item under Recipes, drawn by the same `RailLink` as every other item; on a phone it is under «More» (the five tabs are
+H2's and stay fixed), between Suppliers and Pastries. Mise 2's order is fixed (D1 (a)), so the venue's `homeCardOrder` cannot
+move it away from Recipes.
+
+**Who sees it — a companion, not a card.** `session/visibility.ts` gives `labels` the Recipe catalogue's very gate (section
+`catalogue`, card `catalogue`): hidden from employees exactly when «Sections for employees» hides Recipes, from a partial owner
+exactly when their side has no Recipes (`ROLE_CARDS`: the kitchen owner has it, the sales owner does not), absent where the
+venue did not buy the catalogue. ⚠️ No id was added to `shared/src/home-cards.ts` `STAFF_CARDS` (the port pinned against
+`js/home-cards.js` and its copy in `functions/`): a new id would need a server change, and it would make a switch nobody asked for.
+
+**The screens** (`app/src/labels/`; addresses in `labelsPath.ts`; usage names `labels`, `labels-product`, `labels-haccp`):
+1. `/labels` — the h1 «Labels», a card «Which label?» with Back and two big tiles, «Product label» (Lucide `Tag`) and «HACCP
+   label» (`ShieldCheck`), each with one sentence under it. Back REPLACES the screen with the Home (it is reached from the rail
+   and «More» as often as from the Home, and a pushed Home would leave the phone's back gesture bouncing between the two).
+2. `/labels/product` and `/labels/haccp` — a card with Back and the kind's name (h2, focused on arrival), a labelled search box
+   (`cat.searchARecipeBy`, placeholder «Cerca una ricetta…»), the recipes alphabetically in the interface's language, archived
+   recipes left out. The HACCP list also keeps to the category chosen in the label Settings and says so, exactly as the
+   catalogue's own HACCP list (it waits for the label settings, so rows never vanish under the finger). The data is the Recipe
+   catalogue's own store (`RecipesProvider`), listened to only while a list is on screen.
+3. A tap opens the Recipe catalogue's OWN label screen at its own address, `/recipes/<id>/label` or `/recipes/<id>/haccp`, never
+   a copy. The move carries `FROM_LABELS_PRODUCT` / `FROM_LABELS_HACCP` (`recipes/recipesNav.ts`), which spread the markers those
+   screens already obey (`FROM_RECIPE`, `FROM_HACCP`): Back there is the browser's Back, i.e. this list, and the screen focuses
+   its title. So the refusals (allergens off, no country, not fully declared, nothing weighed, too long…), the print roads and
+   the queue are untouched. While the label is on screen the rail shows Recipes as current and the h1 is «Recipes», as for any
+   door into another section (the recipe's Food cost card, the Orders doors).
+
+**Back, one level at a time:** label → list (the search as it was, the focus on the row that opened it) → choices (the focus on
+the choice) → Home. The focus owed is promised when the next screen OPENS (a module variable in `LabelsSection.tsx`), because the
+phone's back gesture runs no code of the screen it leaves. A list opened by its address replaces itself with the choices.
+
+**The rail now holds ten items for an owner**, which no longer fitted the lab tablet's 648px at 48px an item (676 needed). The
+steps (`shell/AppShell.module.css`, added up by `shell/railHeight.spec.ts`) are now 64px above 835px of height, 56px up to 835,
+48px up to 755, and up to 675px the same 48px items WITHOUT the brand letter at the top of the rail (decoration, `aria-hidden`):
+616px, so the lab tablet fits and no target goes under 48px.
+
+**Words (new):** `section.labels` Labels / Etichette; `labels.choose` Which label? / Quale etichetta?; `labels.product` Product
+label / Etichetta prodotto; `labels.product.sub` Ingredients and allergens, for what you sell. / Ingredienti e allergeni, per quello
+che vendi.; `labels.haccp.sub` Date, use-by date and lot, for what the lab prepares and keeps. / Data, scadenza e lotto, per quello
+che il laboratorio prepara e conserva. Reused: `haccp.label.title`, `cat.searchARecipe(By)`, `cat.noRecipesYet`,
+`cat.noRecipeMatchesYour`, `haccp.list.*`, `ui.back`.
+
+**Tests:** `labels/LabelsSection.visibility.spec.tsx` (every role × eleven venues: shown exactly when Recipes is, hidden-for-staff,
+the two partial owners, «not available» at the address, right after Recipes in the rail whatever `homeCardOrder` says, under «More»
+on a phone, current in the rail, the usage names, `STAFF_CARDS` unchanged); `labels/LabelsSection.spec.tsx` (the choices, Italian,
+the search, the HACCP category, each kind opening its own screen, a refused label refused the same way, Back at every level with
+the focus, the browser's Back, the keyboard, a list opened by address); `shell/railHeight.spec.ts` (ten items, the new steps).
+**Not driven yet:** the emulator at 1024 / 360 / 296 with axe-core, and the real tablet (SM-T550) and phone — on Federico's PC.
+
+### Labels card — review fixes (13 Nov 2026)
+
+- **A list opened by its address** (a bookmark, a reload): its Back replaces it with the choices and now marks the move
+  (`BACK_TO_CHOICES`), so the choices give the focus to the choice instead of leaving it on the page's body.
+- **Back from a label keeps the list's place.** Coming back is a change of section, so the shell puts its scroll area at the top
+  in its own effect, which runs after the list's: the list writes its scroll position down at the tap and, a frame later, puts it
+  back and focuses the row without scrolling.
+- **A broken recipes feed is said** («Live sync interrupted — recipes may be out of date.»), as the Recipe catalogue says it,
+  instead of passing for «No recipes yet».
+- Left as they are, for Federico: the label's «Allergens / Nutrition / Both» choice is kept only while the Recipe catalogue stays
+  open, so from «Labels» each label starts on the default again; «Product label» lists every recipe that is not archived, also
+  those whose label can only be refused (allergens off, ingredients not declared), which the label screen then explains; the
+  «Recipes» switch in «Sections for employees» now hides «Labels» too, and its name does not say so; the choices' Back replaces
+  the screen with the Home, so the history holds the Home twice after a visit from the rail.

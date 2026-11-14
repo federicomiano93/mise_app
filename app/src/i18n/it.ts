@@ -23,6 +23,7 @@ export const it: Messages = {
   'section.more': 'Altro',
   'section.home': 'Home',
   'section.clients': 'Clienti',
+  'section.labels': 'Etichette',
   'clients.received.sub': 'Cosa hanno chiesto i clienti, da leggere',
   'clients.couldNotLoad': 'Non è stato possibile caricare i clienti. Controlla la connessione e riapri questa pagina.',
   'clients.noConfigYet': 'Non ancora pronto: chiedi al titolare di salvare una volta un’impostazione del Calcolatore.',
@@ -2812,4 +2813,9 @@ export const it: Messages = {
   'lab.saved.body': 'Calo, costi e tempo sono nella scheda di {name}.',
   'lab.saved.again': 'Nuova produzione',
   'lab.saved.back': 'Torna alla scheda',
+
+  'labels.choose': 'Quale etichetta?',
+  'labels.product': 'Etichetta prodotto',
+  'labels.product.sub': 'Ingredienti e allergeni, per quello che vendi.',
+  'labels.haccp.sub': 'Data, scadenza e lotto, per quello che il laboratorio prepara e conserva.',
 };

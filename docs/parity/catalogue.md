@@ -2086,8 +2086,9 @@ turned out to be full, **a door in the Recipe book** rather than an item of the 
 - **Where.** «Ingredients in recipes» / «Ingredienti nelle ricette» (Lucide `Egg`), a door at the foot of the recipe list after the
   HACCP labels' and before Settings, for everybody who sees the section. It opens `/recipes/ingredients`, drawn like the HACCP list
   (the right-hand pane on the split, its own screen on a phone, Back up to the list with the focus on the door). ⚠️ NOT A SECTION OF
-  THE MENU: the tablet's rail holds nine items at most on the lab tablet's 648px at 48px an item (`shell/railHeight.spec.ts`), and a
-  tenth would cut the account off; the Labels entry being built in another session needs that room too.
+  THE MENU: when this was decided the tablet's rail held nine items, the most that fit the lab tablet's 648px at 48px an item. The
+  «Labels» entry (#547) has since taken a tenth place by hiding the brand letter on short windows (`shell/railHeight.spec.ts`); an
+  eleventh would need 668px, so the rail is full.
 - **What it shows** (`shared/src/ingredient-usage.ts`, `ingredientBook` / `searchBook`): every FOOD ingredient (packaging never goes
   in a recipe) by its display name (short name, else name), alphabetical in the interface language. The ones used in a recipe are a
   list of disclosure buttons («Butter · 3 recipes», `aria-expanded`); opened, each shows the recipes that use it with the amount of
