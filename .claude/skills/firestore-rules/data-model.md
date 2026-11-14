@@ -87,6 +87,13 @@ both halves.
   closed as «non ordinato» from the order summary (nothing needed); it counts only on that day
   (`reminders.js skippedOn`) for the Orders strip, the Home badge and the kiosk. Written on its own,
   never through the autosave, and never with `updatedAt`. Once production carries it, it stays listed.
+  `awaitingSent` (14 Nov 2026, optional map ≤ 200) — `{ supplierId: { at: ISO, date: 'YYYY-MM-DD',
+  quantities: { ingId: n }, units: { ingId: unit } } }`: an order the send editor handed to WhatsApp
+  (or the mail app), waiting for «è partito?» on ANY device (`js/orders/awaiting-sent.js`). Written
+  whole per supplier (`saveFields`, a mergeFields write — never a deep merge), removed by «No» or by
+  the «Sì» claim (a transaction that deletes the key only if `at` still matches, so two devices record
+  once). «Sì» records the STORED quantities, then clears only the lines still reading what went.
+  Values not judged by the rules. Once production carries it, it stays listed.
 - `orders-history/{YYYY-MM-DD}_{supplierId}` — one record per day per supplier; `names` freezes each
   item's label; `deliveredAt`/`missing` optional. Since `v1.109.1` Orders reads only the last 2 months live (`date >=`,
   `js/orders/history-window.js`); older pages on demand from History; the legacy `2026-W28` record (no

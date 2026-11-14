@@ -163,6 +163,15 @@ function clearWrite(path, patch, deletePaths, headers = asUser()) {
   });
 }
 
+// setDoc(ref, data, { mergeFields: [...] })  →  saveFields(): only the named DOTTED paths are
+// written, each one whole — the mask names them, the body carries them nested.
+function pathWrite(path, data, maskPaths, headers = asUser()) {
+  const mask = maskPaths.map(k => `updateMask.fieldPaths=${encodeURIComponent(k)}`).join('&');
+  return fetch(`${FS}/${path}?${mask}`, {
+    method: 'PATCH', headers, body: JSON.stringify({ fields: toFields(data) }),
+  });
+}
+
 // addDoc()  →  createDoc()
 function createWrite(collection, data, headers = asUser()) {
   return fetch(`${FS}/${collection}`, {
@@ -807,6 +816,56 @@ async function drafts() {
   await expectDenied('a member of ANOTHER venue closing a supplier here',
     () => mergeWrite('locations/main/drafts/current', { skipped: { SUP_LEGACY: '2026-11-06' }, bakery: 'main' },
       asAccount(BOB)));
+
+  // «Ordine a X inviato alle 10:42: è partito?» (14 Nov 2026, js/orders/awaiting-sent.js). The
+  // send editor writes ONE supplier's question whole (saveFields → a dotted mask), from an
+  // EMPLOYEE's phone too — sending the order is daily work; «No» and the «Sì» claim both remove
+  // the one key (the claim is a transaction whose update carries the bakery stamp).
+  const waiting = {
+    at: '2026-11-14T10:42:00.000Z', date: '2026-11-14',
+    quantities: { ING_LEGACY: 3 }, units: { ING_LEGACY: 'cartone' },
+  };
+  await expectAllowed('an employee asks «did it go?» for one supplier (awaitingSent.<id>, written whole)', () =>
+    pathWrite('locations/main/drafts/current',
+      { bakery: 'main', awaitingSent: { SUP_LEGACY: waiting } },
+      ['bakery', 'awaitingSent.SUP_LEGACY'], asAccount(SAM)));
+  await expectAllowed('…the autosave still writes onto a draft that carries the question', () =>
+    mergeWrite('locations/main/drafts/current', {
+      entries: { ING_LEGACY: { qty: 5, stock: 0 } },
+      updatedAt: new Date().toISOString(),
+      bakery: 'main',
+    }, asAccount(SAM)));
+  const asked = await readDoc('locations/main/drafts/current');
+  check('the question is stored with its quantities',
+    asked?.fields?.awaitingSent?.mapValue?.fields?.SUP_LEGACY?.mapValue?.fields?.quantities
+      ?.mapValue?.fields?.ING_LEGACY?.integerValue === '3');
+  await expectAllowed('…«Sì» on another device: the claim removes the key (transaction update)', () =>
+    clearWrite('locations/main/drafts/current', { bakery: 'main' }, ['awaitingSent.SUP_LEGACY'], asAccount(MAYA)));
+  await expectAllowed('…a newer send asks again, and «No» removes it', async () => {
+    const res = await pathWrite('locations/main/drafts/current',
+      { bakery: 'main', awaitingSent: { SUP_LEGACY: waiting } },
+      ['bakery', 'awaitingSent.SUP_LEGACY'], asAccount(SAM));
+    if (!res.ok) return res;
+    return clearWrite('locations/main/drafts/current', { bakery: 'main' }, ['awaitingSent.SUP_LEGACY'], asAccount(SAM));
+  });
+  await expectDenied('awaitingSent sent as a string instead of a map',
+    () => mergeWrite('locations/main/drafts/current', { awaitingSent: 'SUP_LEGACY', bakery: 'main' }));
+  const manyWaiting = {};
+  for (let i = 0; i < 201; i++) manyWaiting[`S${i}`] = waiting;
+  await expectDenied('a draft stuffed with 201 suppliers waiting for an answer',
+    () => mergeWrite('locations/main/drafts/current', { awaitingSent: manyWaiting, bakery: 'main' }));
+  await expectDenied('a member of ANOTHER venue asking «did it go?» here',
+    () => pathWrite('locations/main/drafts/current',
+      { bakery: 'main', awaitingSent: { SUP_LEGACY: waiting } },
+      ['bakery', 'awaitingSent.SUP_LEGACY'], asAccount(BOB)));
+  await expectDenied('signed out, asking «did it go?»',
+    () => pathWrite('locations/main/drafts/current',
+      { bakery: 'main', awaitingSent: { SUP_LEGACY: waiting } },
+      ['bakery', 'awaitingSent.SUP_LEGACY'], noAuth()));
+  await expectDenied('a question stamped for another venue',
+    () => pathWrite('locations/main/drafts/current',
+      { bakery: 'trattoria-x', awaitingSent: { SUP_LEGACY: waiting } },
+      ['bakery', 'awaitingSent.SUP_LEGACY'], asAccount(SAM)));
 
   await expectDenied('an unknown key on the draft',
     () => mergeWrite('locations/main/drafts/current', { evil: 'x', bakery: 'main' }));
