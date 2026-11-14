@@ -71,3 +71,29 @@ export function worksOnClients(role: unknown): boolean {
 export function isOwner(userDoc: unknown, locationId: unknown): boolean {
   return accessValue(userDoc, locationId) === OWNER;
 }
+
+// ── The six choices of «Who can get in» ──────────────────────────────────────
+//
+// A port of ROLE_CHOICES in js/roles.js, without its `labelKey`: the words are the app's (Mise 2's
+// dictionary), the choices and what each one grants are data. SIX words, FIVE levels of power: a head
+// chef holds the manager value and differs only by the title, which no rule reads.
+//
+// ⚠️ THE TITLE TRAVELS WITH THE CODE (functions/onboarding.js createJoinCode), so somebody invited as a
+// head chef joins as one; the server turns any title it does not know into 'manager', never a refusal.
+export type RoleChoiceKey = typeof OWNER | typeof OWNER_SALES | typeof OWNER_KITCHEN | typeof MANAGER | 'head-chef' | 'staff';
+export type ManagerTitle = 'manager' | 'head-chef';
+
+export interface RoleChoice {
+  readonly key: RoleChoiceKey;
+  readonly role: Role;
+  readonly title: ManagerTitle | null;
+}
+
+export const ROLE_CHOICES: readonly RoleChoice[] = Object.freeze([
+  Object.freeze({ key: OWNER, role: OWNER, title: null }),
+  Object.freeze({ key: OWNER_SALES, role: OWNER_SALES, title: null }),
+  Object.freeze({ key: OWNER_KITCHEN, role: OWNER_KITCHEN, title: null }),
+  Object.freeze({ key: MANAGER, role: MANAGER, title: 'manager' }),
+  Object.freeze({ key: 'head-chef', role: MANAGER, title: 'head-chef' }),
+  Object.freeze({ key: 'staff', role: 'staff', title: null }),
+] as const);

@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from 'vitest';
 import type { FirestoreKit } from '../session/firebaseBackend';
-import { FUNCTION_TIMEOUT_MS, createFirestoreSettingsSource } from './settingsSource';
+import { FUNCTION_TIMEOUT_MS, createFirestoreSettingsSource, invitationOf } from './settingsSource';
 
 // The ONLY code in Mise 2 that writes the holiday and calls the language and sections functions, against a recording fake of the
 // Firestore SDK. firestore.rules (`match /away/{uid}`) accept exactly { bakery, uid, until, updatedAt }, so a slip here — a stray key,
@@ -165,5 +165,64 @@ describe('the settings source, as firestore.rules and the Cloud Functions expect
   test('a venue id that could point somewhere else is refused when the source is made', () => {
     const k = fakeKit();
     expect(() => createFirestoreSettingsSource(() => Promise.resolve(k.kit), vi.fn(), '../x')).toThrow();
+  });
+});
+
+describe('an invitation, as functions/onboarding.js createJoinCode makes it', () => {
+  const DIGITS = { code: '482913', kind: 'digits', role: 'staff', title: '', expiresAt: 1_800_000_000_000 };
+  const LINK = { code: 'Q7xk2mP9vR4tY8wZ1nB6cD3fG5hJ0sLa', kind: 'link', role: 'manager', title: 'head-chef', expiresAt: 1_800_000_000_000 };
+
+  test('asks the function for this venue, the role, the title and the shape, with the long timeout', async () => {
+    const { source, callFunction } = make();
+    callFunction.mockResolvedValueOnce(LINK);
+    await source.createInvitation('manager', 'head-chef', 'link');
+    expect(callFunction).toHaveBeenCalledExactlyOnceWith('createJoinCode',
+      { locationId: 'panificio-miano', role: 'manager', title: 'head-chef', kind: 'link' }, FUNCTION_TIMEOUT_MS);
+  });
+
+  test('answers with the invitation the server made', async () => {
+    const { source, callFunction } = make();
+    callFunction.mockResolvedValueOnce(LINK);
+    await expect(source.createInvitation('manager', 'head-chef', 'link')).resolves.toEqual(LINK);
+    callFunction.mockResolvedValueOnce(DIGITS);
+    // The server answers '' for a title on any level but the manager's: no title is kept for an employee.
+    await expect(source.createInvitation('staff', null, 'digits')).resolves.toEqual({ ...DIGITS, title: null });
+  });
+
+  test('rejects with the refusal, untouched, for the screen to say in its own words', async () => {
+    const { source, callFunction } = make();
+    callFunction.mockRejectedValueOnce(Object.assign(new Error('Only the owner can do that.'), { code: 'functions/permission-denied' }));
+    await expect(source.createInvitation('staff', null, 'link')).rejects.toMatchObject({ code: 'functions/permission-denied' });
+  });
+
+  test('rejects an answer that is not a whole invitation', async () => {
+    const { source, callFunction } = make();
+    callFunction.mockResolvedValueOnce({ ...LINK, code: '' });
+    await expect(source.createInvitation('staff', null, 'link')).rejects.toThrow();
+  });
+
+  test.each([
+    ['nothing', null],
+    ['a string', 'ok'],
+    ['no code', { ...DIGITS, code: undefined }],
+    ['digits of the wrong length', { ...DIGITS, code: '48291' }],
+    ['digits that are not digits', { ...DIGITS, code: '48291a' }],
+    ['a link too short', { ...LINK, code: 'abc' }],
+    ['a link with a character no link has', { ...LINK, code: `${LINK.code.slice(0, 31)}/` }],
+    ['an unknown shape', { ...DIGITS, kind: 'qr' }],
+    ['an unknown role', { ...LINK, role: 'admin' }],
+    ['no expiry', { ...LINK, expiresAt: undefined }],
+    ['an expiry that is not a number', { ...LINK, expiresAt: '2026-11-15' }],
+    // ⚠️ Six digits only ever make an employee: an answer that says otherwise is not believed.
+    ['six digits for a manager', { ...DIGITS, role: 'manager' }],
+    ['six digits for an owner', { ...DIGITS, role: 'owner' }],
+  ])('%s is not an invitation', (_what, answer) => {
+    expect(invitationOf(answer)).toBeNull();
+  });
+
+  test('a title is kept on the manager level only, and an unknown one reads as manager', () => {
+    expect(invitationOf({ ...LINK, role: 'manager', title: 'head-chef' })?.title).toBe('head-chef');
+    expect(invitationOf({ ...LINK, role: 'manager', title: 'boss' })?.title).toBe('manager');
+    expect(invitationOf({ ...LINK, role: 'owner', title: 'head-chef' })?.title).toBeNull();
   });
 });

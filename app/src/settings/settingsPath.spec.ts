@@ -9,7 +9,10 @@ describe('the addresses of Settings', () => {
     ['/settings/language', 'language'],
     ['/settings/language/', 'language'],
     ['/settings/sections', 'sections'],
-    ['/settings/people', 'unknown'],
+    ['/settings/people', 'people'],
+    ['/settings/people/', 'people'],
+    ['/settings/People', 'unknown'],
+    ['/settings/invite', 'unknown'],
     ['/settings/language/more', 'unknown'],
     ['/settings/Language', 'unknown'],
   ])('%s is %s', (pathname, expected) => {
@@ -20,6 +23,7 @@ describe('the addresses of Settings', () => {
     ['/settings', 'settings'],
     ['/settings/language', 'settings-language'],
     ['/settings/sections', 'settings-sections'],
+    ['/settings/people', 'settings-people'],
     ['/settings/nonsense', 'settings'],
   ])('%s is called %s in the usage record', (pathname, expected) => {
     expect(settingsScreenName(pathname)).toBe(expected);

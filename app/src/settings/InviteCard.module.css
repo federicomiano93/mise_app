@@ -1,0 +1,157 @@
+/* The invite card of «Who can get in»: the intro, the six roles as whole-row radio choices (each with what it can do), the two ways to
+   hand an invitation over, and the result shown once — six big digits, or the link with Send, Copy and Done. */
+
+.card,
+.result {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+}
+
+.intro,
+.lead,
+.legend,
+.note,
+.error,
+.digits,
+.link {
+  margin: 0;
+}
+
+.legend {
+  font-weight: 600;
+}
+
+.note {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.error {
+  color: var(--danger-ink);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.roles {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+}
+
+/* No role chosen when one was needed: the list is outlined as well as described by the red sentence under it. */
+.roles[data-invalid="true"] {
+  border-color: var(--danger);
+}
+
+/* A whole row is the target of a tap: the radio, the role's name and what it can do. */
+.role {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s3);
+  min-height: var(--hit);
+  padding: var(--s2) var(--s4);
+  border-top: 1px solid var(--line);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.role:first-child {
+  border-top: 0;
+}
+
+/* The chosen role is told by its tint and its weight as well as by the radio. */
+.role[data-checked="true"] {
+  background: var(--accent-tint);
+}
+
+/* The native radio, at a size a finger can see, level with the role's name; the label around it is the touch target. */
+.radio {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin: 2px 0 0;
+  accent-color: var(--accent);
+}
+
+.roleText {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.roleName {
+  overflow-wrap: break-word;
+}
+
+.role[data-checked="true"] .roleName {
+  font-weight: 600;
+}
+
+/* ink-2 is above 4.5:1 on the surface and on the chosen row's tint. */
+.means {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  overflow-wrap: break-word;
+}
+
+/* Side by side while they fit, one under the other on a narrow phone. */
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+}
+
+.actions > * {
+  flex: 1 1 12rem;
+}
+
+.icon {
+  flex: none;
+  width: 18px;
+  height: 18px;
+}
+
+/* The one place the six digits exist in readable form: large, spaced, and in figures of one width so they are read out one by one. */
+.digits {
+  font-family: var(--mono);
+  font-size: var(--fs-3xl);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.2em;
+  overflow-wrap: anywhere;
+}
+
+/* The link as text, whatever the clipboard does: it breaks anywhere rather than pushing the screen sideways on a phone. */
+.link {
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--sunken);
+  font-family: var(--mono);
+  font-size: var(--fs-sm);
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+/* A sentence that is empty until it speaks stays on the page (so a screen reader announces it) but takes no room. Not `display: none`. */
+.note:empty,
+.status {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.note:empty,
+.status:empty {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  clip-path: inset(50%);
+}

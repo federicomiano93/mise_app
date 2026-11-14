@@ -292,3 +292,34 @@ describe.each([
     }
   });
 });
+
+// ⚠️ THE SIX CHOICES OF «WHO CAN GET IN» ARE THE CURRENT APP'S, in its order, each granting what it
+// grants there. The current app's entries also carry a dictionary key (`labelKey`), which Mise 2 does
+// not share: only the key, the role and the title are compared.
+describe('the role choices of «Who can get in»', () => {
+  const legacyChoices = (legacyRolesJs as unknown as {
+    ROLE_CHOICES: readonly { key: string; role: string; title: string | null }[];
+  }).ROLE_CHOICES;
+
+  test('are the current app’s six, in its order, with the same role and title', () => {
+    expect(ported.ROLE_CHOICES.map(c => ({ key: c.key, role: c.role, title: c.title })))
+      .toEqual(legacyChoices.map(c => ({ key: c.key, role: c.role, title: c.title })));
+  });
+
+  test('every choice grants one of the five roles, and only the head chef shares one', () => {
+    for (const choice of ported.ROLE_CHOICES) expect(ported.isValidRole(choice.role)).toBe(true);
+    expect(new Set(ported.ROLE_CHOICES.map(c => c.role)).size).toBe(5);
+    expect(ported.ROLE_CHOICES.find(c => c.key === 'head-chef')?.role).toBe('manager');
+  });
+
+  test('a title only ever rides on the manager level', () => {
+    for (const choice of ported.ROLE_CHOICES) {
+      expect(choice.title !== null, choice.key).toBe(choice.role === 'manager');
+    }
+  });
+
+  test('cannot be changed at run time', () => {
+    expect(Object.isFrozen(ported.ROLE_CHOICES)).toBe(true);
+    for (const choice of ported.ROLE_CHOICES) expect(Object.isFrozen(choice)).toBe(true);
+  });
+});
