@@ -3733,6 +3733,55 @@ body:not([data-orders-tab="deliveries"]) #orders-owed { display: none; }
 .sent-check-actions { flex-direction: column; }
 .sent-check-actions .app-dialog-btn { flex: none; min-height: 44px; }
 
+/* ── The send editor (js/orders/send-editor.js, 14 Nov 2026) ─────────────────────────
+   «What they will receive», drawn as WhatsApp draws it, then the box to change it, then Skip /
+   Cancel and Send. Wider than a confirmation (a message is read, not glanced at), capped by the
+   same --vh100 rule as every dialog; the title and the buttons hold their size and the BODY is
+   the part that scrolls, so Send never leaves the screen on a long order or a short phone. */
+.send-editor { max-width: 520px; }
+.send-editor-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 0 14px;
+}
+.send-editor-label { margin: 6px 0 0; font-size: 14px; font-weight: 700; color: var(--text); }
+.send-editor-hint { margin: 0; font-size: 13px; line-height: 1.4; color: var(--text-2); }
+.send-editor-preview {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.send-editor-line { white-space: pre-wrap; min-height: 1.45em; }
+.send-editor-line strong { font-weight: 800; }
+/* 16px: below it iOS zooms the page when the box takes the focus. */
+.send-editor-text {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 120px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 16px;
+  line-height: 1.45;
+  resize: vertical;
+}
+.send-editor-text:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
+.send-editor .app-dialog-actions .app-dialog-btn { min-height: 44px; }
+/* Still drawing the picture of the text just typed: Send waits, visibly. */
+.send-editor .app-dialog-btn:disabled { opacity: .55; cursor: default; }
+
 /* Kiosk mode on the Home (js/home-kiosk-band.js). «Rest» is the round moon button in the green
    header (.home-rest-btn shares .home-header .home-up-btn above). «Exit» is a red, raised bar
    under the scroll area: a sibling of it in the body's flex column, so it never covers a card. */
