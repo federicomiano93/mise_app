@@ -42,6 +42,10 @@
 // pickers show it LAST. Without the option every function answers exactly as js/ does (inactive left out, and no
 // extra key in the output), which the both-files tests still pin.
 //
+// ADDED (Mise 2 only, 14 Nov 2026, «Use as base recipe»): `rebaseAmounts`, the amounts to store so the recipe as written
+// reads what the screen showed at a batch, and `rowsLostByRebase`, the rows such a save would empty (the screen refuses then).
+// No original: the current app has no such action.
+//
 // PRIVATE, ported only because something above calls them and not exported: `normalizeIngredient(s)` (the
 // row normaliser), `fixRounding`, `matchRank`, `bestRank`, and a copy of `supplierLabel` of
 // js/supplier-label.js (pure, three lines; there is no shared port of that file yet).
@@ -963,6 +967,40 @@ export function baseAmounts(recipe: unknown): (number | null)[] {
     return fixRounding(raw, raw.reduce((a, b) => a + b, 0));
   }
   return ings.map(i => unitOf(i) === 'to taste' ? null : roundInUnit(gramsOfRow(i), unitOf(i)));
+}
+
+// ── «Use as base recipe» (NEW IN MISE 2, 14 Nov 2026: no original in js/) ──────
+// The owner: «I calculate 4500 g of a recipe and I want those 4500 g to become the default recipe». The amounts to STORE so that
+// the recipe as written reads exactly what the screen showed at that batch: each row's number as scaleCatalogue gives it to the
+// screen (already rounded in the row's own unit — whole grams, pieces and spoons, kg and l to the gram — and, for an all-grams
+// recipe, the exact-sum rounding that makes the rows add up to the total shown). ⚠️ THE SAME FUNCTION THE SCREEN DRAWS FROM, so
+// what is saved cannot drift from what was read: no second rounding rule here.
+// A «to taste» row has no number on screen and keeps the amount it has. Only the amounts are answered: the caller changes
+// `grams` and nothing else on each row. null when there is nothing to make a base of (no positive target, or nothing
+// weighable to scale by): the screen offers no button then.
+export function rebaseAmounts(recipe: unknown, targetGrams: unknown): number[] | null {
+  const target = Number(targetGrams);
+  if (!Number.isFinite(target) || target <= 0 || !(weighableTotalGrams(recipe) > 0)) return null;
+  const shown = scaleCatalogue(recipe, target);
+  return rowsOf(recipe).map((row, index) => {
+    const value = shown[index];
+    return value === null || value === undefined ? gramsOfRow(row) : value;
+  });
+}
+
+// ⚠️ THE ROWS A REBASE WOULD EMPTY: a row with an amount (not «to taste») whose number at this batch rounds to 0 — 2 g of yeast in
+// a 400 g test batch of a 1720 g recipe reads «0 g» — or below (the all-grams exact-sum rounding can push the largest row under 0
+// for an absurdly small batch). Saved, it would be gone from every batch made afterwards, so the screen refuses and names them.
+// Their places in recipe.ingredients, in order; [] when nothing is lost.
+export function rowsLostByRebase(recipe: unknown, amounts: readonly (number | null)[] | null): number[] {
+  if (amounts === null) return [];
+  const lost: number[] = [];
+  rowsOf(recipe).forEach((row, index) => {
+    if (unitOf(row) === 'to taste' || !(gramsOfRow(row) > 0)) return;
+    const value = amounts[index];
+    if (typeof value === 'number' && !(value > 0)) lost.push(index);
+  });
+  return lost;
 }
 
 // ── Batch size: a readable weight, and a guard against a mistyped total ──────
