@@ -987,6 +987,158 @@ describe.each([
   });
 });
 
+// ── «Use as base recipe» (Mise 2 only, 14 Nov 2026): no original in js/ ──────────────────────────────────────────
+//
+// The amounts saved must be the very numbers the screen showed at that batch, row by row and unit by unit. The screen draws
+// from scaleCatalogue, so every expectation below is checked against scaleCatalogue's own answer as well as against the
+// numbers a baker would read.
+
+describe('rebaseAmounts: the batch shown becomes the recipe (Mise 2 only)', () => {
+  const ALL_GRAMS = { id: 'b', name: 'Brioche', ingredients: [
+    { label: 'Flour', grams: 2000, unit: 'g' }, { label: 'Butter', grams: 800, unit: 'g' }, { label: 'Sugar', grams: 800, unit: 'g' },
+    { label: 'Eggs', grams: 775, unit: 'g' },
+  ] };
+  const MIXED = { id: 'm', name: 'Mixed', ingredients: [
+    { label: 'Flour', grams: 250, unit: 'g' }, { label: 'Eggs', grams: 3, unit: 'pcs' }, { label: 'Milk', grams: 0.5, unit: 'l' },
+    { label: 'Cream', grams: 120, unit: 'ml' }, { label: 'Butter', grams: 0.2, unit: 'kg' }, { label: 'Sugar', grams: 2, unit: 'tbsp' },
+    { label: 'Salt', grams: 3, unit: 'to taste' }, { label: 'Base', grams: 330, unit: 'g', kind: 'recipe', refId: 'r9', rid: 'x1' },
+  ] };
+
+  test('all in grams: whole grams equal to the screen, adding up exactly to the batch', () => {
+    const out = ported.rebaseAmounts(ALL_GRAMS, 4500)!;
+    expect(out).toStrictEqual(ported.scaleCatalogue(ALL_GRAMS, 4500));
+    expect(out.every(Number.isInteger)).toBe(true);
+    expect(out.reduce((a, b) => a + b, 0)).toBe(4500);
+  });
+
+  test('mixed units: each row in its own unit as shown — pieces, ml, kg and litre decimals, a sub-recipe row', () => {
+    const out = ported.rebaseAmounts(MIXED, 2000)!;
+    const shown = ported.scaleCatalogue(MIXED, 2000);
+    // 250 g + 0.5 l + 120 ml + 0.2 kg + 330 g = 1400 g, so ×(2000 / 1400).
+    expect(out).toStrictEqual([357, 4, 0.714, 171, 0.286, 3, 3, 471]);
+    out.forEach((value, i) => { if (shown[i] !== null) expect(value, String(i)).toBe(shown[i]); });
+    expect(ported.unitDecimals('kg')).toBe(3);
+  });
+
+  test('a «to taste» row has no number on screen, so it keeps the amount it has', () => {
+    expect(ported.rebaseAmounts(MIXED, 2000)![6]).toBe(3);
+    expect(ported.scaleCatalogue(MIXED, 2000)[6]).toBe(null);
+  });
+
+  test('saving the result and drawing it at base reads the same numbers again (the round trip)', () => {
+    const out = ported.rebaseAmounts(MIXED, 2000)!;
+    const saved = { ...MIXED, ingredients: MIXED.ingredients.map((row, i) => ({ ...row, grams: out[i]! })) };
+    const before = ported.scaleCatalogue(MIXED, 2000);
+    const after = ported.baseAmounts(saved);
+    expect(after).toStrictEqual(before);
+  });
+
+  test('nothing to make a base of: no target, a junk target, nothing weighable — null, never NaN', () => {
+    for (const target of [0, -5, NaN, Infinity, 'abc', null, undefined]) expect(ported.rebaseAmounts(ALL_GRAMS, target), String(target)).toBe(null);
+    expect(ported.rebaseAmounts({ ingredients: [{ label: 'Eggs', grams: 6, unit: 'pcs' }] }, 1000)).toBe(null);
+    for (const odd of [null, undefined, 5, 'x', {}, { ingredients: 'x' }]) expect(ported.rebaseAmounts(odd, 1000), String(odd)).toBe(null);
+  });
+
+  test('⚠️ rowsLostByRebase: a row with an amount that a small batch rounds to 0 (or below) is named; «to taste» and 0 rows are not', () => {
+    const FOCACCIA = { ingredients: [{ label: 'Flour', grams: 1000 }, { label: 'Water', grams: 700 }, { label: 'Salt', grams: 20 }, { label: 'Yeast', grams: 2 }] };
+    // 400 g of a 1720 g recipe: 0.47 g of yeast reads 0 g.
+    expect(ported.rowsLostByRebase(FOCACCIA, ported.rebaseAmounts(FOCACCIA, 400))).toStrictEqual([3]);
+    expect(ported.rowsLostByRebase(FOCACCIA, ported.rebaseAmounts(FOCACCIA, 30))).toStrictEqual([2, 3]);
+    expect(ported.rowsLostByRebase(FOCACCIA, ported.rebaseAmounts(FOCACCIA, 4500))).toStrictEqual([]);
+    // Five rows of 200 g at 3 g: 1, 1, 1, 1, 1 and the −2 residual on the first row makes it −1.
+    const FIVE = { ingredients: [1, 2, 3, 4, 5].map(n => ({ label: `R${n}`, grams: 200 })) };
+    expect(ported.rebaseAmounts(FIVE, 3)![0]).toBeLessThan(0);
+    expect(ported.rowsLostByRebase(FIVE, ported.rebaseAmounts(FIVE, 3))).toContain(0);
+    // A pieces row going to 0, a «to taste» row and a row that had no amount are not «lost».
+    const MIX = { ingredients: [{ label: 'Flour', grams: 1000 }, { label: 'Egg', grams: 1, unit: 'pcs' }, { label: 'Salt', grams: 0, unit: 'to taste' }, { label: 'Water', grams: 0 }] };
+    expect(ported.rowsLostByRebase(MIX, ported.rebaseAmounts(MIX, 400))).toStrictEqual([1]);
+    expect(ported.rowsLostByRebase(MIX, null)).toStrictEqual([]);
+  });
+
+  test('it answers amounts only and never touches the recipe it is handed', () => {
+    const copy = JSON.parse(JSON.stringify(MIXED)) as typeof MIXED;
+    ported.rebaseAmounts(MIXED, 2000);
+    expect(MIXED).toStrictEqual(copy);
+  });
+});
+
+// ── «Calculate from this ingredient» (Mise 2 only, 14 Nov 2026): no original in js/ ─────────────────────────────────
+
+describe('scaleFromRow: the whole recipe from one ingredient’s amount (Mise 2 only)', () => {
+  // The owner's recipe: sugar 800 g → 1000 g.
+  const OWNER = { id: 'o', name: 'Brioche', ingredients: [
+    { label: 'Flour', grams: 2000, unit: 'g' }, { label: 'Butter', grams: 800, unit: 'g' }, { label: 'Sugar', grams: 800, unit: 'g' },
+    { label: 'Eggs', grams: 775, unit: 'g' },
+  ] };
+  const MIXED = { id: 'm', name: 'Mixed', ingredients: [
+    { label: 'Flour', grams: 250, unit: 'g' }, { label: 'Eggs', grams: 3, unit: 'pcs' }, { label: 'Milk', grams: 0.5, unit: 'l' },
+    { label: 'Cream', grams: 120, unit: 'ml' }, { label: 'Salt', grams: 0, unit: 'to taste' },
+    { label: 'Base', grams: 330, unit: 'g', kind: 'recipe', refId: 'r9' },
+  ] };
+  const sum = (list: readonly (number | null)[]) => list.reduce<number>((a, b) => a + (b ?? 0), 0);
+
+  test('the owner’s example: sugar 800 g → 1000 g gives butter 1000 g, flour 2500 g, a total of about 5469 g', () => {
+    const out = ported.scaleFromRow(OWNER, 2, 1000)!;
+    expect(out.amounts).toStrictEqual([2500, 1000, 1000, 969]);
+    expect(out.amount).toBe(1000);
+    expect(out.target).toBeCloseTo(5468.75, 9);
+    expect(sum(out.amounts), 'the rows add up to the total shown').toBe(Math.round(out.target));
+  });
+
+  test('⚠️ the chosen row is EXACT even when it is the largest row (the rounding residual never lands on it)', () => {
+    const recipe = { ingredients: [{ label: 'A', grams: 333 }, { label: 'B', grams: 333 }, { label: 'C', grams: 334 }] };
+    for (const wanted of [101, 500, 777, 1001, 12345]) {
+      const out = ported.scaleFromRow(recipe, 2, wanted)!;
+      expect(out.amounts[2], String(wanted)).toBe(wanted);
+      expect(sum(out.amounts), String(wanted)).toBe(Math.round(out.target));
+    }
+  });
+
+  test('the others are proportional, each rounded in its own unit as scaleCatalogue does today', () => {
+    const out = ported.scaleFromRow(MIXED, 0, 500)!; // ×2
+    expect(out.amounts).toStrictEqual([500, 6, 1, 240, null, 660]);
+    expect(out.target).toBe(2400);
+    const byTotal = ported.scaleCatalogue(MIXED, out.target);
+    out.amounts.forEach((value, i) => { if (i !== 0) expect(value, String(i)).toBe(byTotal[i]); });
+  });
+
+  test('from a pieces row, a millilitre row, a litre row and a sub-recipe row', () => {
+    expect(ported.scaleFromRow(MIXED, 1, 4)!.amounts[1]).toBe(4);
+    expect(ported.scaleFromRow(MIXED, 1, 4)!.target).toBeCloseTo(1200 * 4 / 3, 9);
+    expect(ported.scaleFromRow(MIXED, 3, 180)!.amounts).toStrictEqual([375, 5, 0.75, 180, null, 495]);
+    expect(ported.scaleFromRow(MIXED, 2, 0.75)!.amounts[2]).toBe(0.75);
+    expect(ported.scaleFromRow(MIXED, 5, 495)!.amounts).toStrictEqual([375, 5, 0.75, 180, null, 495]);
+  });
+
+  test('the amount typed is rounded only to what its unit shows: 3.6 pieces read 4, 1.23456 l reads 1.235', () => {
+    expect(ported.scaleFromRow(MIXED, 1, 3.6)!.amount).toBe(4);
+    expect(ported.scaleFromRow(MIXED, 2, 1.23456)!.amount).toBe(1.235);
+  });
+
+  test('nothing to scale from: no row there, «to taste», 0, a junk or tiny amount, nothing weighable — null, never NaN', () => {
+    for (const index of [-1, 6, 1.5, '0', null, NaN]) expect(ported.scaleFromRow(MIXED, index, 100), String(index)).toBe(null);
+    expect(ported.scaleFromRow(MIXED, 4, 5), '«to taste»').toBe(null);
+    expect(ported.scaleFromRow({ ingredients: [{ label: 'A', grams: 0 }, { label: 'B', grams: 5 }] }, 0, 10), 'a row with no amount').toBe(null);
+    for (const amount of [0, -3, 0.4, NaN, Infinity, 'abc', null, undefined]) expect(ported.scaleFromRow(OWNER, 2, amount), String(amount)).toBe(null);
+    expect(ported.scaleFromRow({ ingredients: [{ label: 'Eggs', grams: 6, unit: 'pcs' }] }, 0, 12), 'nothing weighable').toBe(null);
+    for (const odd of [null, undefined, 5, 'x', {}, { ingredients: 'x' }, { ingredients: [null] }]) expect(ported.scaleFromRow(odd, 0, 10), String(odd)).toBe(null);
+  });
+
+  test('scaledAmounts: from the row when it can, otherwise by the total as the batch box does', () => {
+    expect(ported.scaledAmounts(OWNER, 5468.75, { index: 2, amount: 1000 })).toStrictEqual([2500, 1000, 1000, 969]);
+    expect(ported.scaledAmounts(OWNER, 4500)).toStrictEqual(ported.scaleCatalogue(OWNER, 4500));
+    expect(ported.scaledAmounts(OWNER, 4500, null)).toStrictEqual(ported.scaleCatalogue(OWNER, 4500));
+    expect(ported.scaledAmounts(OWNER, 4500, { index: 9, amount: 1000 }), 'the row is gone').toStrictEqual(ported.scaleCatalogue(OWNER, 4500));
+  });
+
+  test('«Use as base recipe» on top of it saves the chosen row exactly, and the others as shown', () => {
+    const out = ported.scaleFromRow(OWNER, 2, 1000)!;
+    expect(ported.rebaseAmounts(OWNER, out.target, { index: 2, amount: 1000 })).toStrictEqual([2500, 1000, 1000, 969]);
+    const mixed = ported.scaleFromRow(MIXED, 3, 180)!;
+    expect(ported.rebaseAmounts(MIXED, mixed.target, { index: 3, amount: 180 })).toStrictEqual([375, 5, 0.75, 180, 0, 495]);
+  });
+});
+
 // ── The LINKED import (owner's decision, 18 Oct 2026): the port only, the current app still copies ──────────────────
 //
 // The tests above that run against both files stay true for both. These are what Mise 2 adds: the Calculator tab an
@@ -1347,7 +1499,10 @@ describe('the port against the original', () => {
   // `supplierLabel` is js/supplier-label.js's, copied into the model and exported (step 3d-6 A2) for the link line.
   // `nameTaken` is not an export of catalogue-model.js: its original is in ingredient-suggest.js (tested above).
   // `calculatorImportKind` is new in Mise 2 with the linked import (18 Oct 2026).
-  const ADDED = ['unitTextKey', 'nameTaken', 'supplierLabel', 'calculatorImportKind', 'calculatorRefusal'];
+  // `rebaseAmounts` and `rowsLostByRebase` are new in Mise 2 with «Use as base recipe», `scaleFromRow` and `scaledAmounts` with
+  // «Calculate from this ingredient» (14 Nov 2026).
+  const ADDED = ['unitTextKey', 'nameTaken', 'supplierLabel', 'calculatorImportKind', 'calculatorRefusal', 'rebaseAmounts',
+    'rowsLostByRebase', 'scaleFromRow', 'scaledAmounts'];
   // One more parameter each: batchWarning's translator; mergeImportedRecipe's catalogue rows, so a linked copy keeps its
   // yeast knob (Mise 2 only, 18 Oct 2026).
   const ARITY_DIFFERS = ['batchWarning', 'mergeImportedRecipe'];

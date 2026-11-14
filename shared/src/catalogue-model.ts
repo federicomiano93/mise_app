@@ -42,6 +42,12 @@
 // pickers show it LAST. Without the option every function answers exactly as js/ does (inactive left out, and no
 // extra key in the output), which the both-files tests still pin.
 //
+// ADDED (Mise 2 only, 14 Nov 2026, «Use as base recipe»): `rebaseAmounts`, the amounts to store so the recipe as written
+// reads what the screen showed at a batch, and `rowsLostByRebase`, the rows such a save would empty (the screen refuses then); and
+// («Calculate from this ingredient») `scaleFromRow`, the recipe scaled from one row's amount with that row exact, and
+// `scaledAmounts`, the one rule the screen draws a batch with (with the types `RowScale` and `RowScaleResult`). No original: the
+// current app has neither action.
+//
 // PRIVATE, ported only because something above calls them and not exported: `normalizeIngredient(s)` (the
 // row normaliser), `fixRounding`, `matchRank`, `bestRank`, and a copy of `supplierLabel` of
 // js/supplier-label.js (pure, three lines; there is no shared port of that file yet).
@@ -963,6 +969,106 @@ export function baseAmounts(recipe: unknown): (number | null)[] {
     return fixRounding(raw, raw.reduce((a, b) => a + b, 0));
   }
   return ings.map(i => unitOf(i) === 'to taste' ? null : roundInUnit(gramsOfRow(i), unitOf(i)));
+}
+
+// ── «Calculate from this ingredient» (NEW IN MISE 2, 14 Nov 2026: no original in js/) ─────────────────────────────
+// The owner: sugar 800 g → «I want 1000 g of sugar», and the whole recipe follows (×1.25: butter 1000 g, flour 2500 g, …).
+
+// The row the batch was worked out from, by its place in recipe.ingredients, and the amount typed for it in the row's OWN unit.
+export interface RowScale {
+  readonly index: number;
+  readonly amount: number;
+}
+
+export interface RowScaleResult {
+  // The amount the chosen row shows: what was typed, rounded only to what its unit can show (whole grams, pieces, ml; kg and l to
+  // the gram) — so the box and the row never disagree.
+  readonly amount: number;
+  // The batch, in grams, that this amounts to: the weighable total × (amount ÷ the row's amount). What the batch box shows.
+  readonly target: number;
+  // Every row, aligned with recipe.ingredients, as the screen draws it (null for «to taste»).
+  readonly amounts: (number | null)[];
+}
+
+// The whole recipe scaled by (typed ÷ the row's amount). ⚠️ THE CHOSEN ROW SHOWS EXACTLY THE AMOUNT TYPED; every other row is rounded
+// as scaleCatalogue rounds it today: each in its own unit, and for an all-grams recipe the exact-sum rounding — the residual goes to
+// the largest OTHER row, never to the chosen one — so the rows still add up to the total shown. null when there is nothing to scale
+// from: a row that is not there, a «to taste» row, a row with no amount (0), an amount that is not > 0 once rounded, or a recipe with
+// nothing weighable (the batch is remembered as grams, like the batch box's, so it needs a weight to stand on). Never NaN.
+export function scaleFromRow(recipe: unknown, index: unknown, amount: unknown): RowScaleResult | null {
+  const rows = rowsOf(recipe);
+  if (typeof index !== 'number' || !Number.isInteger(index) || index < 0 || index >= rows.length) return null;
+  if (rows.some(row => !row || typeof row !== 'object')) return null;
+  const chosen = rows[index];
+  const unit = unitOf(chosen);
+  if (unit === 'to taste') return null;
+  const base = gramsOfRow(chosen);
+  if (!Number.isFinite(base) || base <= 0) return null;
+  const wanted = roundInUnit(amount, unit);
+  if (!Number.isFinite(wanted) || wanted <= 0) return null;
+  const weighTotal = weighableTotalGrams(recipe);
+  if (!Number.isFinite(weighTotal) || weighTotal <= 0) return null;
+  const factor = wanted / base;
+  const target = weighTotal * factor;
+  if (!Number.isFinite(target) || target <= 0) return null;
+  let amounts: (number | null)[];
+  if (rows.every(row => unitOf(row) === 'g')) {
+    // The chosen row is a whole number of grams; the others share what is left of the rounded total.
+    const others = fixRounding(rows.filter((_, i) => i !== index).map(row => gramsOfRow(row) * factor), Math.round(target) - wanted);
+    let next = 0;
+    amounts = rows.map((_, i) => (i === index ? wanted : others[next++]!));
+  } else {
+    amounts = rows.map((row, i) => {
+      if (i === index) return wanted;
+      const own = unitOf(row);
+      return own === 'to taste' ? null : roundInUnit(gramsOfRow(row) * factor, own);
+    });
+  }
+  return { amount: wanted, target, amounts };
+}
+
+// What the screen draws at a batch: scaled from a row when the batch was worked out from one (and that row can still be scaled
+// from), otherwise scaled to the total as the batch box does. ⚠️ THE ONE RULE for the table, the export and «Use as base recipe».
+export function scaledAmounts(recipe: unknown, targetGrams: unknown, row?: RowScale | null): (number | null)[] {
+  const fromRow = row ? scaleFromRow(recipe, row.index, row.amount) : null;
+  return fromRow !== null ? fromRow.amounts : scaleCatalogue(recipe, targetGrams);
+}
+
+// ── «Use as base recipe» (NEW IN MISE 2, 14 Nov 2026: no original in js/) ──────
+// The owner: «I calculate 4500 g of a recipe and I want those 4500 g to become the default recipe». The amounts to STORE so that
+// the recipe as written reads exactly what the screen showed at that batch: each row's number as scaleCatalogue gives it to the
+// screen (already rounded in the row's own unit — whole grams, pieces and spoons, kg and l to the gram — and, for an all-grams
+// recipe, the exact-sum rounding that makes the rows add up to the total shown). ⚠️ THE SAME FUNCTION THE SCREEN DRAWS FROM, so
+// what is saved cannot drift from what was read: no second rounding rule here.
+// A «to taste» row has no number on screen and keeps the amount it has. Only the amounts are answered: the caller changes
+// `grams` and nothing else on each row. null when there is nothing to make a base of (no positive target, or nothing
+// weighable to scale by): the screen offers no button then.
+//
+// `row` (since «Calculate from this ingredient», 14 Nov 2026): the batch was worked out from one row's amount, and that row shows
+// EXACTLY what was typed — so it is saved exactly too (scaledAmounts below, the same function the screen draws from).
+export function rebaseAmounts(recipe: unknown, targetGrams: unknown, row?: RowScale | null): number[] | null {
+  const target = Number(targetGrams);
+  if (!Number.isFinite(target) || target <= 0 || !(weighableTotalGrams(recipe) > 0)) return null;
+  const shown = scaledAmounts(recipe, target, row);
+  return rowsOf(recipe).map((row, index) => {
+    const value = shown[index];
+    return value === null || value === undefined ? gramsOfRow(row) : value;
+  });
+}
+
+// ⚠️ THE ROWS A REBASE WOULD EMPTY: a row with an amount (not «to taste») whose number at this batch rounds to 0 — 2 g of yeast in
+// a 400 g test batch of a 1720 g recipe reads «0 g» — or below (the all-grams exact-sum rounding can push the largest row under 0
+// for an absurdly small batch). Saved, it would be gone from every batch made afterwards, so the screen refuses and names them.
+// Their places in recipe.ingredients, in order; [] when nothing is lost.
+export function rowsLostByRebase(recipe: unknown, amounts: readonly (number | null)[] | null): number[] {
+  if (amounts === null) return [];
+  const lost: number[] = [];
+  rowsOf(recipe).forEach((row, index) => {
+    if (unitOf(row) === 'to taste' || !(gramsOfRow(row) > 0)) return;
+    const value = amounts[index];
+    if (typeof value === 'number' && !(value > 0)) lost.push(index);
+  });
+  return lost;
 }
 
 // ── Batch size: a readable weight, and a guard against a mistyped total ──────
