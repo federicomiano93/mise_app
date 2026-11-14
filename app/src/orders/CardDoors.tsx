@@ -30,5 +30,9 @@ export function useCardDoors(): CardDoors {
   return useContext(CardDoorsContext);
 }
 
-// The Suppliers tab a line's card sits on: packaging beside packaging, every other line with the ingredients.
-export const tabOfLine = (ingredient: unknown): RecordsTab => (kindOf(ingredient) === 'packaging' ? 'packaging' : 'ingredients');
+// The Suppliers tab a line's card sits on: the tab of its kind (packaging beside packaging, resale beside resale, other beside other),
+// an ingredient — and an item with no kind — with the ingredients.
+export const tabOfLine = (ingredient: unknown): RecordsTab => {
+  const kind = kindOf(ingredient);
+  return kind === 'ingredient' ? 'ingredients' : kind;
+};

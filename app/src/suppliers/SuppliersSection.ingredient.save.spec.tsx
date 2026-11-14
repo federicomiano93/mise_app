@@ -31,7 +31,7 @@ const drained = Object.fromEntries(INGREDIENT_DRAINED_FIELDS.map(key => [key, nu
 
 async function open(path: string, source = seeded(), options = {}) {
   const view = renderSuppliers(path, { source, ...options });
-  const region = within(await screen.findByRole('region', { name: /^(Edit|New|Modifica|Nuovo) (ingredient|ingrediente|packaging|imballaggio)$/ }, LOAD));
+  const region = within(await screen.findByRole('region', { name: /^(Edit|New|Modifica|Nuovo) (ingredient|ingrediente|packaging|imballaggio|resale item|other item)$/ }, LOAD));
   return { ...view, source, region };
 }
 type Region = Awaited<ReturnType<typeof open>>['region'];
@@ -465,5 +465,55 @@ describe('leaving the card', () => {
     act(() => { view.source.push(); });
     expect(view.region.getByRole('textbox', { name: 'Brand' })).toHaveValue('Caputo!');
     expect(nameBox(view.region)).toHaveValue('Flour 00');
+  });
+});
+
+// Mise 2, 14 Nov 2026: the card's «Type» menu — ingredient, packaging, resale, other — on the working copy, written by Save.
+describe('the «Type» menu', () => {
+  const typeMenu = (region: Region) => region.getByRole('combobox', { name: 'Type' });
+
+  it('offers the four kinds and opens on the item’s own', async () => {
+    const { region } = await open('/suppliers/ingredient/i-flour');
+    expect(within(typeMenu(region)).getAllByRole('option').map(node => node.textContent)).toEqual(['Ingredient', 'Packaging', 'Resale', 'Other']);
+    expect(typeMenu(region)).toHaveValue('ingredient');
+  });
+
+  it('⚠️ a change of type is an unsaved edit: Save asks (with the new kind’s words) and writes it, the allergens untouched', async () => {
+    const view = await open('/suppliers/ingredient/i-flour');
+    expect(view.region.getByRole('button', { name: /^Allergens/ })).toBeInTheDocument();
+    await view.user.selectOptions(typeMenu(view.region), 'resale');
+    expect(isBusy()).toBe(true);
+    // Resale hides what packaging hides: no allergens to declare.
+    expect(view.region.queryByRole('button', { name: /^Allergens/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Edit resale item' })).toBeInTheDocument();
+    // The bin follows the menu too, so the title and the bin never name two different kinds.
+    expect(view.region.getByRole('button', { name: 'Delete resale item' })).toBeInTheDocument();
+    await view.user.click(view.region.getByRole('button', { name: 'Save' }));
+    await view.user.click(within(await dialogOf('Save resale item?')).getByRole('button', { name: 'Save' }));
+    await waitFor(() => { expect(view.source.writes).toHaveLength(1); });
+    expect(view.source.writes[0]).toMatchObject({ op: 'ingredient-save', id: 'i-flour', data: { kind: 'resale' } });
+    const data = (view.source.writes[0] as { data: Record<string, unknown> }).data;
+    for (const key of ['allergens', 'mayContain', 'allergensCheckedAt', 'nutrition', 'packIngredients']) expect(data, key).not.toHaveProperty(key);
+  });
+
+  it('back to the kind it opened as is no edit at all: Back asks nothing', async () => {
+    const view = await open('/suppliers/ingredient/i-box');
+    await view.user.selectOptions(typeMenu(view.region), 'other');
+    expect(isBusy()).toBe(true);
+    await view.user.selectOptions(typeMenu(view.region), 'packaging');
+    expect(isBusy()).toBe(false);
+  });
+
+  it('a packaging item turned into an ingredient shows the allergens again', async () => {
+    const view = await open('/suppliers/ingredient/i-box');
+    expect(view.region.queryByRole('button', { name: /^Allergens/ })).not.toBeInTheDocument();
+    await view.user.selectOptions(typeMenu(view.region), 'ingredient');
+    expect(view.region.getByRole('button', { name: /^Allergens/ })).toBeInTheDocument();
+  });
+
+  it('says the four kinds in Italian', async () => {
+    const { region } = await open('/suppliers/ingredient/i-flour', seeded(), { lang: 'it', session: { language: 'it' } });
+    const menu = region.getByRole('combobox', { name: 'Tipo' });
+    expect(within(menu).getAllByRole('option').map(node => node.textContent)).toEqual(['Ingrediente', 'Imballaggio', 'Rivendita', 'Altro']);
   });
 });

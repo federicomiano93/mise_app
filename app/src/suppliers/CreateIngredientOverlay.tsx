@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react';
 import type { MutableRefObject } from 'react';
 import { ingredientDisplayName } from '@mise/shared/ingredient-name';
+import { isFood } from '@mise/shared/ingredient-kind';
 import { outputLanguage } from '@mise/shared/market';
 import { categoryChoices } from '@mise/shared/record-choices';
 import { packChoicesWithExtras } from '@mise/shared/pack-words';
@@ -74,6 +75,8 @@ export function CreateIngredientOverlay({ name, open, onDone, ingredients, suppl
         presetName={name}
         host={host}
         kind="ingredient"
+        // Only FOOD is made here: no «Type» menu (a recipe row is never linked to packaging, resale or other).
+        kindLocked
         preset={null}
         suppliers={suppliers}
         categories={categories}
@@ -85,8 +88,8 @@ export function CreateIngredientOverlay({ name, open, onDone, ingredients, suppl
         readHistory={async () => []}
         titleRef={title}
         onSave={(payload, options) => {
-          // A recipe row may only be linked to FOOD: a packaging result is refused, nothing is written.
-          if (payload.kind === 'packaging') return;
+          // A recipe row may only be linked to FOOD: a packaging, resale or other result is refused, nothing is written.
+          if (!isFood(payload)) return;
           const saved = store.saveIngredient(null, payload, {
             unitChangedFrom: options.unitChangedFrom,
             ...(mayPrice && options.price ? { price: options.price } : {}),

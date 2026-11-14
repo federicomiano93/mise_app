@@ -16,7 +16,8 @@ const SUPPLIERS = '/suppliers';
 // shared/ is compiled without the DOM types; URLSearchParams exists in every browser and in Node.
 declare const URLSearchParams: new () => { set(name: string, value: string): void; toString(): string };
 
-export type RecordsTab = 'ingredients' | 'packaging' | 'suppliers';
+// Mise 2 (14 Nov 2026): one tab per item kind — 'resale' and 'other' beside packaging.
+export type RecordsTab = 'ingredients' | 'packaging' | 'resale' | 'other' | 'suppliers';
 
 // An ingredient's or packaging item's card.
 export const ingredientCardAddress = (id: string): string => `${SUPPLIERS}/ingredient/${encodeURIComponent(id)}`;

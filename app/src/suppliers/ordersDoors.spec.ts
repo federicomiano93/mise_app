@@ -4,7 +4,8 @@
 import { describe, expect, it } from 'vitest';
 import { fromOrdersList, fromOrdersSupplier, ingredientCardAddress, newIngredientAddress, supplierScreenAddress } from '@mise/shared/records-link';
 import { cameFromList, cameFromListOrSupplierScreen, supplierScreenOf, tabOfState } from './suppliersNav';
-import { ingredientPath, newIngredientPath, supplierPath } from './suppliersPath';
+import { tabOfLine } from '../orders/CardDoors';
+import { TAB_OF_KIND, ingredientPath, newIngredientPath, supplierPath } from './suppliersPath';
 
 const IDS = ['i-flour', 'no-supplier', 'a/b c%', 'Café & Co', 'x?y#z'];
 
@@ -23,7 +24,7 @@ describe('the addresses the doors push', () => {
 
 describe('the states the doors push', () => {
   it('from an Orders list read as «from a list», on the tab the door names', () => {
-    for (const tab of ['ingredients', 'packaging', 'suppliers'] as const) {
+    for (const tab of ['ingredients', 'packaging', 'resale', 'other', 'suppliers'] as const) {
       const state = fromOrdersList(tab);
       expect(cameFromList(state)).toBe(true);
       expect(cameFromListOrSupplierScreen(state)).toBe(true);
@@ -38,5 +39,14 @@ describe('the states the doors push', () => {
     expect(cameFromList(state)).toBe(false);
     expect(cameFromListOrSupplierScreen(state)).toBe(true);
     expect(tabOfState(state)).toBeNull();
+  });
+});
+
+// Mise 2, 14 Nov 2026: a line's card opens beside the list of its kind — the same tab the Suppliers section files it under.
+describe('the tab a line’s card opens beside', () => {
+  it('is the Suppliers section’s own tab of the item’s kind; an item with no kind is an ingredient', () => {
+    for (const kind of ['ingredient', 'packaging', 'resale', 'other'] as const) expect(tabOfLine({ kind })).toBe(TAB_OF_KIND[kind]);
+    expect(tabOfLine({ name: 'Flour' })).toBe('ingredients');
+    expect(tabOfLine({ kind: 'Resale' })).toBe('ingredients');
   });
 });

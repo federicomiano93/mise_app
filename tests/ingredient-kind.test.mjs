@@ -21,10 +21,12 @@ test('only a literal «packaging» is packaging — absent, junk and «ingredien
   assert.deepEqual([...INGREDIENT_KINDS], ['ingredient', 'packaging']);
 });
 
-test('the rules accept exactly the same two values', () => {
+// 14 Nov 2026: the rules also accept Mise 2's two kinds, 'resale' and 'other' (shared/src/ingredient-kind.ts). The current app is
+// frozen and never writes them; its own list stays the two above, and its kindOf reads either as an ingredient.
+test('the rules accept the same two values, plus Mise 2\'s resale and other, and nothing else', () => {
   const rules = read('firestore.rules');
   const block = rules.slice(rules.indexOf('match /ingredients/{id}'), rules.indexOf('allow delete', rules.indexOf('match /ingredients/{id}')));
-  assert.match(block, /request\.resource\.data\.kind in \['ingredient', 'packaging'\]/);
+  assert.match(block, /request\.resource\.data\.kind in \['ingredient', 'packaging', 'resale', 'other'\]\)/);
   assert.match(block, /'category', 'unit', 'active', 'kind',/, 'and `kind` is a known key');
 });
 

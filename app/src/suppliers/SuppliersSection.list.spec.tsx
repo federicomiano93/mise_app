@@ -24,6 +24,14 @@ const ITEMS = [
   item('i-bag', { name: 'Paper bag', kind: 'packaging', supplierId: 's-alp' }),
 ];
 
+// Mise 2 (14 Nov 2026): goods sold as they arrive, and what is neither food nor packaging.
+const WITH_KINDS = [
+  ...ITEMS,
+  item('i-water', { name: 'Acqua naturale', kind: 'resale', supplierId: 's-caf' }),
+  item('i-cola', { name: 'Coca Cola', kind: 'resale', supplierId: 's-caf' }),
+  item('i-soap', { name: 'Detergent', kind: 'other', supplierId: 's-alp' }),
+];
+
 const main = () => within(screen.getByRole('main'));
 const rowNames = () => main().getAllByRole('listitem').map(row => row.textContent);
 const tab = (name: string) => screen.getByRole('tab', { name });
@@ -49,19 +57,21 @@ describe('the frame and the tabs', () => {
     expect(tab('Packaging')).toHaveAttribute('aria-selected', 'false');
   });
 
-  it('has the tabs in the order Ingredients, Suppliers, Packaging, in a list named «Which list to show»', async () => {
+  it('has the tabs in the order Ingredients, Suppliers, Packaging, Resale, Other, in a list named «Which list to show»', async () => {
     await loaded();
     const list = screen.getByRole('tablist', { name: 'Which list to show' });
-    expect(within(list).getAllByRole('tab').map(node => node.textContent)).toEqual(['Ingredients', 'Suppliers', 'Packaging']);
+    expect(within(list).getAllByRole('tab').map(node => node.textContent)).toEqual(['Ingredients', 'Suppliers', 'Packaging', 'Resale', 'Other']);
   });
 
   it.each([
     ['/suppliers', 'Ingredients'],
     ['/suppliers/suppliers', 'Suppliers'],
     ['/suppliers/packaging', 'Packaging'],
+    ['/suppliers/resale', 'Resale'],
+    ['/suppliers/other', 'Other'],
   ])('selects the tab the address %s names', async (path, name) => {
-    await loaded(path);
-    for (const other of ['Ingredients', 'Suppliers', 'Packaging']) {
+    await loaded(path, seeded({ ingredients: WITH_KINDS }));
+    for (const other of ['Ingredients', 'Suppliers', 'Packaging', 'Resale', 'Other']) {
       expect(tab(other)).toHaveAttribute('aria-selected', String(other === name));
     }
   });
@@ -108,12 +118,15 @@ describe('the frame and the tabs', () => {
     expect(router.state.location.pathname).toBe('/suppliers/suppliers');
     expect(tab('Suppliers')).toHaveFocus();
     await user.keyboard('{End}');
-    expect(router.state.location.pathname).toBe('/suppliers/packaging');
-    expect(tab('Packaging')).toHaveFocus();
+    expect(router.state.location.pathname).toBe('/suppliers/other');
+    expect(tab('Other')).toHaveFocus();
     await user.keyboard('{ArrowRight}');
     expect(tab('Ingredients')).toHaveFocus();
     await user.keyboard('{ArrowLeft}');
-    expect(tab('Packaging')).toHaveFocus();
+    expect(tab('Other')).toHaveFocus();
+    await user.keyboard('{ArrowLeft}');
+    expect(router.state.location.pathname).toBe('/suppliers/resale');
+    expect(tab('Resale')).toHaveFocus();
   });
 
   it('puts only the selected tab in the Tab order', async () => {
@@ -128,7 +141,7 @@ describe('the frame and the tabs', () => {
     await screen.findAllByRole('listitem', undefined, LOAD);
     expect(screen.getByRole('heading', { level: 1, name: 'Ingredienti e fornitori' })).toBeInTheDocument();
     expect(within(screen.getByRole('tablist', { name: 'Quale elenco mostrare' })).getAllByRole('tab').map(node => node.textContent))
-      .toEqual(['Ingredienti', 'Fornitori', 'Imballaggi']);
+      .toEqual(['Ingredienti', 'Fornitori', 'Imballaggi', 'Rivendita', 'Altro']);
     expect(search()).toHaveAccessibleName('Cerca un ingrediente…');
   });
 
@@ -152,6 +165,30 @@ describe('the ingredients and packaging lists', () => {
   it('lists packaging A–Z on its own tab', async () => {
     await loaded('/suppliers/packaging');
     expect(rowNames().map(text => text?.slice(0, 4))).toEqual(['Cake', 'Pape']);
+  });
+
+  it('Mise 2: lists resale and other items on tabs of their own, never with the ingredients', async () => {
+    const kinds = () => seeded({ ingredients: WITH_KINDS });
+    await loaded('/suppliers/resale', kinds());
+    expect(rowNames().map(text => text?.slice(0, 4))).toEqual(['Acqu', 'Coca']);
+    expect(search()).toHaveAccessibleName('Search resale items');
+    expect(screen.getByRole('button', { name: 'New resale item' })).toBeInTheDocument();
+    cleanup();
+    await loaded('/suppliers/other', kinds());
+    expect(rowNames().map(text => text?.slice(0, 4))).toEqual(['Dete']);
+    expect(screen.getByRole('button', { name: 'New other item' })).toBeInTheDocument();
+    cleanup();
+    await loaded('/suppliers', kinds());
+    expect(rowNames().join(' ')).not.toMatch(/Acqua|Coca|Detergent/);
+  });
+
+  it('Mise 2: «New resale item» opens a new card filed as resale, with no allergens, and says so in its «Type» menu', async () => {
+    const { router, user } = await loaded('/suppliers/resale', seeded({ ingredients: WITH_KINDS }));
+    await user.click(screen.getByRole('button', { name: 'New resale item' }));
+    expect(router.state.location.pathname + router.state.location.search).toBe('/suppliers/ingredient/new?kind=resale');
+    expect(await screen.findByRole('heading', { name: 'New resale item' }, LOAD)).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'Type' })).toHaveValue('resale');
+    expect(screen.queryByText(/allergen/i)).not.toBeInTheDocument();
   });
 
   it('draws an ingredient row as ONE button (its card opens from it), with no link inside', async () => {

@@ -359,8 +359,27 @@ async function ingredients() {
     () => mergeWrite('locations/main/ingredients/ING_MODERN', { kind: 'ingredient', bakery: 'main' }));
   await expectAllowed('…or with the kind cleared', () =>
     mergeWrite('locations/main/ingredients/ING_MODERN', { kind: null, bakery: 'main' }));
+  // ── Resale and Other are items too (14 Nov 2026, Mise 2) ──
+  await expectAllowed('an item filed as resale (sold as it arrives)',
+    () => mergeWrite('locations/main/ingredients/ING_MODERN', { kind: 'resale', bakery: 'main' }));
+  await expectAllowed('an item filed as other (cleaning, tools)',
+    () => mergeWrite('locations/main/ingredients/ING_MODERN', { kind: 'other', bakery: 'main' }));
+  await expectAllowed('…a new item created as resale by an employee',
+    () => createWrite('locations/main/ingredients', { bakery: 'main', name: 'Acqua naturale', kind: 'resale' }, asAccount(SAM)));
+  await expectAllowed('…a new item created as other by an employee',
+    () => createWrite('locations/main/ingredients', { bakery: 'main', name: 'Sgrassatore', kind: 'other' }, asAccount(SAM)));
+  await expectDenied('…but not by a member of another venue',
+    () => createWrite('locations/main/ingredients', { bakery: 'main', name: 'Acqua', kind: 'resale' }, asAccount(BOB)));
+  await expectAllowed('…a new item created with no kind at all (absent means food)',
+    () => createWrite('locations/main/ingredients', { bakery: 'main', name: 'Farina' }, asAccount(SAM)));
+  await expectAllowed('…and an other item filed back as an ingredient',
+    () => mergeWrite('locations/main/ingredients/ING_MODERN', { kind: 'ingredient', bakery: 'main' }));
   await expectDenied('a kind nobody writes',
     () => mergeWrite('locations/main/ingredients/ING_MODERN', { kind: 'box', bakery: 'main' }));
+  await expectDenied('a kind spelt in capitals',
+    () => mergeWrite('locations/main/ingredients/ING_MODERN', { kind: 'Resale', bakery: 'main' }));
+  await expectDenied('a kind with a space after it',
+    () => mergeWrite('locations/main/ingredients/ING_MODERN', { kind: 'other ', bakery: 'main' }));
   await expectDenied('a kind sent as a number',
     () => mergeWrite('locations/main/ingredients/ING_MODERN', { kind: 1, bakery: 'main' }));
   await expectDenied('an ingredient stamped with the wrong bakery',

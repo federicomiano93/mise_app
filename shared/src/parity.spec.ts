@@ -397,6 +397,17 @@ function frozenTree(value: unknown, seen: WeakSet<object> = new WeakSet()): Froz
 const PORT_OWED = new Set<string>([
 ]);
 
+// ⚠️ DELIBERATE MISE 2 DIFFERENCES, export by export: an addition the original does not have, or a value that differs
+// on purpose. Each entry names why; the module's own spec pins the new behaviour, and runs the old values on both.
+// ingredient-kind (14 Nov 2026, «tutti i prodotti delle fatture in Mise»): the kinds 'resale' and 'other'. The current
+// app is frozen and never writes them; Mise 2 lists four kinds and adds isResale, isOther and isFood.
+const MISE2_ADDITIONS: Readonly<Record<string, readonly string[]>> = {
+  'ingredient-kind': ['isFood', 'isOther', 'isResale'],
+};
+const MISE2_DIFFERENT_VALUES: Readonly<Record<string, readonly string[]>> = {
+  'ingredient-kind': ['INGREDIENT_KINDS'],
+};
+
 describe.each(PAIRS)('parity: %s', (_name, tsModule, jsModule) => {
   const ts = exportsOf(tsModule);
   const js = exportsOf(jsModule);
@@ -404,9 +415,12 @@ describe.each(PAIRS)('parity: %s', (_name, tsModule, jsModule) => {
     (PORT_OWED.has(`${_name} :: ${title}`) ? test.fails : test)(title, body);
   };
   const names = Object.keys(js).sort();
+  const added = MISE2_ADDITIONS[_name] ?? [];
+  const differs = new Set(MISE2_DIFFERENT_VALUES[_name] ?? []);
 
   check('exports exactly the same names', () => {
-    expect(Object.keys(ts).sort()).toStrictEqual(names);
+    expect(Object.keys(ts).filter(name => !added.includes(name)).sort()).toStrictEqual(names);
+    for (const name of added) expect(Object.keys(js), `${name} is listed as a Mise 2 addition`).not.toContain(name);
   });
 
   check('every export is a function in both or a value in both', () => {
@@ -417,7 +431,7 @@ describe.each(PAIRS)('parity: %s', (_name, tsModule, jsModule) => {
 
   check('every non-function export is strictly equal', () => {
     for (const name of names) {
-      if (typeof js[name] === 'function') continue;
+      if (typeof js[name] === 'function' || differs.has(name)) continue;
       expect(ts[name], name).toStrictEqual(js[name]);
     }
   });
@@ -426,6 +440,8 @@ describe.each(PAIRS)('parity: %s', (_name, tsModule, jsModule) => {
     for (const name of names) {
       if (typeof js[name] !== 'object' || js[name] === null) continue;
       expect(Object.isFrozen(ts[name]), name).toBe(Object.isFrozen(js[name]));
+      // A value that differs on purpose may have more entries: its own frozen-ness is still compared just above.
+      if (differs.has(name)) continue;
       expect(frozenTree(ts[name]), name).toStrictEqual(frozenTree(js[name]));
     }
   });

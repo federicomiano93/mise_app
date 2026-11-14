@@ -1,5 +1,6 @@
 import { ingredientDisplayName } from '@mise/shared/ingredient-name';
 import { kindOf } from '@mise/shared/ingredient-kind';
+import type { IngredientKind } from '@mise/shared/ingredient-kind';
 import { cleanUnit, sameUnit } from '@mise/shared/order-unit';
 import { formatOf, formatPatch, formatTouched, isCartonWord, looseUnit, parseCount, usesLegacyCard } from '@mise/shared/pack-format';
 import type { FormatBefore, FormatForm, PackFormat } from '@mise/shared/pack-format';
@@ -23,7 +24,8 @@ import {
 // What a document may hold: it is data, so anything can arrive.
 export type ItemLike = Readonly<Record<string, unknown>>;
 
-export type CardKind = 'ingredient' | 'packaging';
+// The four kinds of item (shared/ingredient-kind.ts): Mise 2 adds 'resale' and 'other' (14 Nov 2026).
+export type CardKind = IngredientKind;
 
 // js/records.js NO_SUPPLIER_ID: what is STORED as `supplierId` for «no supplier» (the supermarket, the cash & carry).
 export const NO_SUPPLIER_ID = 'no-supplier';
@@ -322,7 +324,7 @@ export function orderNow(
 
 export interface SaveInput {
   readonly working: Working;
-  // The item as the card opened (null = new) and the kind it is filed under, which is fixed while the card is open.
+  // The item as the card opened (null = new) and the kind to file it under: the card's «Type» menu as it stands at Save.
   readonly item: ItemLike | null;
   readonly kind: CardKind;
   // The venue's output language.
@@ -424,5 +426,5 @@ function replacedUnit(
 // What the card calls the item in sentences («Save “Flour”?»): the name it shows in lists.
 export const labelOf = (payload: Readonly<Record<string, unknown>>): string => ingredientDisplayName(payload);
 
-// The kind an existing item is filed under, or the one the address asked for.
-export const kindFor = (item: ItemLike | null, packaging: boolean): CardKind => (item ? kindOf(item) : (packaging ? 'packaging' : 'ingredient'));
+// The kind an existing item is filed under, or the one the address asked for (a new item).
+export const kindFor = (item: ItemLike | null, newKind: CardKind): CardKind => (item ? kindOf(item) : newKind);
