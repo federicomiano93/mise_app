@@ -1345,3 +1345,47 @@ defects in the Suppliers lists; this is what was done about each, and what the d
 - **Not in scope:** the card screens opened by address (`IngredientCardScreen.tsx`, `SupplierCardScreen.tsx`) still say «Loading…» with no signal.
 - **Differences left for him to decide (not built):** no per-row «Disattiva» / «Riattiva» (the switch is only on the card); no hand-made
   pencil (Mise 2 shows the inverse «Da fattura» tag); a reactivated row leaves the «Non in uso» group at once.
+
+## Item kinds Resale/Other — as built (14 Nov 2026)
+
+Mise 2 only. His invoice zip from a drinks supplier (CERERE: water, Coca Cola, beer, juices) imported almost nothing, because
+an item could only be an ingredient (food) or packaging. He wants EVERY product of his invoices in Mise («Sì, procedi»), so an
+item now has one of four kinds. The current app is frozen and gets none of it (it never writes the new values; its `kindOf`
+reads them as an ingredient).
+
+| `kind` | Italian / English | What it is | Where it is offered |
+|---|---|---|---|
+| absent, `null`, `'ingredient'` | Ingrediente / Ingredient | food (every old item) | everywhere |
+| `'packaging'` | Imballaggio / Packaging | boxes, bags, labels | lists, card, Orders, stocktake, Food cost's packaging chooser |
+| `'resale'` | Rivendita / Resale | sold as it arrives (drinks) | lists, card, Orders, stocktake |
+| `'other'` | Altro / Other | cleaning, tools, clothing | lists, card, Orders, stocktake |
+
+- **Rules** (`firestore.rules`, `ingredients/{id}`): the closed list is `['ingredient', 'packaging', 'resale', 'other']`; any
+  other string is refused, absent and `null` still accepted. ⚠️ Deploy before the first Mise 2 import in production (switch
+  checklist, `docs/mise2-port-owed.md`).
+- **`shared/src/ingredient-kind.ts`**: `isPackaging` unchanged; `isResale`, `isOther`, `isFood` added; `kindOf` keeps
+  `'resale'` and `'other'` (only absent or unknown values read as `'ingredient'`); `INGREDIENT_KINDS` lists four. `isFood` is
+  exactly «`kindOf` says ingredient», so the two never disagree. These are deliberate parity differences, listed in
+  `parity.spec.ts` (`MISE2_ADDITIONS`, `MISE2_DIFFERENT_VALUES`); the old values are still run against both files.
+- **Food only** (never resale or other, as packaging never is): a recipe row's link suggestions and chooser and the «name
+  already taken» check (`catalogue-model` `linkOptions` / `nameTaken`, asked as «not one of the three non-food kinds» so odd
+  inputs agree with the original), Food cost's ingredient chooser (`PickDialog`, `isFood`), the Recipe catalogue's
+  «+ Add … as an ingredient» (refuses a non-food result, and draws no «Type» menu), the merge (`MergeScreen` sends a non-food
+  item's typed address to its card; `mergeCandidates` offers only `kindOf === 'ingredient'`), the card's allergens and
+  nutrition (`AllergenSections` drawn, `allergenPayload` written only for an ingredient), the «not declared» tag on a row.
+  Food cost's packaging chooser is unchanged: packaging only.
+- **Purchasable lists show all four**: Ingredients & suppliers has one tab per kind — Ingredients, Suppliers, Packaging,
+  Resale (`/suppliers/resale`), Other (`/suppliers/other`) — each with its search words, «No … yet», «New …» (the card opens
+  as that kind: `?kind=resale|other`) and the split's prompt. A supplier's own screen lists every kind together; packaging,
+  resale and other carry a tag («Imballaggio», «Rivendita», «Altro»). Orders and the stocktake list every item as before; a
+  door from Orders opens the card beside the tab of its kind (`tabOfLine`, `RecordsTab`).
+- **The card's «Type» menu (NEW: neither app had one — the kind was fixed by the tab it was made from)**: a native menu
+  under «Name in lists» with the four kinds, on the working copy (an edit like any other: `markBusy`, «Discard changes?»,
+  Save asks with the new kind's words and writes `kind`). Choosing resale, other or packaging hides the allergens and the
+  nutrition at once and nothing of them is written; choosing ingredient again shows them as they were. The title, the Save
+  question, the bin and «… saved.» follow the kind (`records/kindWords.ts`). A new packaging item still opens priced by the
+  piece; resale and other open priced like an ingredient.
+- **Specs**: `ingredient-kind.spec.ts`, `parity.spec.ts`, `odd-inputs.spec.ts` (shared); `itemKinds.spec.tsx` (one resale and
+  one other item across Suppliers, Food cost's chooser and a recipe row's suggestions), `SuppliersSection.list.spec.tsx`
+  (tabs, addresses, keys, Italian), `SuppliersSection.ingredient.save.spec.tsx` («Type»), `SuppliersSection.merge.spec.tsx`,
+  `suppliersPath.spec.ts`, `ordersDoors.spec.ts`, `ingredientCardModel.spec.ts`; the rules suite. Not driven in a browser.
