@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useNavigationType } from 'react-router';
 import { itemWithPrice } from '@mise/shared/ingredient-edit-model';
+import { kindOf } from '@mise/shared/ingredient-kind';
 import { ingredientDisplayName } from '@mise/shared/ingredient-name';
 import { outputLanguage } from '@mise/shared/market';
 import { unitChoices } from '@mise/shared/record-choices';
@@ -10,6 +11,7 @@ import { useMoney } from '../session/useMoney';
 import { IngredientCard } from '../records/IngredientCard';
 import { kindFor } from '../records/ingredientCardModel';
 import type { CardKind } from '../records/ingredientCardModel';
+import { KIND_WORDS } from '../records/kindWords';
 import { useSession } from '../session/SessionContext';
 import { KEEP_FOCUS } from '../shell/Page';
 import { announceAction } from '../telemetry/usage';
@@ -21,7 +23,7 @@ import { useIngredientDeletions } from './ingredientDeletions';
 import { SupplierCard } from './SupplierCard';
 import { useSuppliers, useSuppliersStore } from './SuppliersContext';
 import { cameFromList, cameFromListOrSupplierScreen, fromCard, supplierScreenOf, tabOfState, useLeave } from './suppliersNav';
-import { ingredientMergePath, tabPath } from './suppliersPath';
+import { TAB_OF_KIND, ingredientMergePath, tabPath } from './suppliersPath';
 import { useDeleteIngredient } from './useDeleteIngredient';
 import { useMayWritePrices } from './useMayWritePrices';
 import styles from './SupplierCard.module.css';
@@ -40,13 +42,13 @@ import styles from './SupplierCard.module.css';
 // person's typing, and Save puts the item back (as the supplier card does).
 type Props = {
   id: string | null;
-  // A new item opened from the Packaging tab.
-  packaging: boolean;
+  // The kind a NEW item starts as (the tab its «New …» was pressed on); an existing item keeps its own.
+  newKind: CardKind;
   // The supplier a NEW item starts on (opened from that supplier's screen).
   preset: string | null;
 };
 
-export function IngredientCardScreen({ id, packaging, preset }: Props) {
+export function IngredientCardScreen({ id, newKind, preset }: Props) {
   const { t } = useT();
   const { state } = useLocation();
   const navigationType = useNavigationType();
@@ -103,8 +105,8 @@ export function IngredientCardScreen({ id, packaging, preset }: Props) {
   // ⚠️ THE KIND IS TAKEN ONCE, WHEN THE CARD OPENS: a packaging item deleted on another phone while its card is open must not
   // turn into an ingredient (and be saved as one).
   const [kindShown, setKindShown] = useState<{ readonly id: string; readonly kind: CardKind } | null>(null);
-  if (canOpen && id !== null && kindShown?.id !== id) setKindShown({ id, kind: kindFor(item, packaging) });
-  const kind: CardKind = id !== null && kindShown?.id === id ? kindShown.kind : kindFor(item, packaging);
+  if (canOpen && id !== null && kindShown?.id !== id) setKindShown({ id, kind: kindFor(item, newKind) });
+  const kind: CardKind = id !== null && kindShown?.id === id ? kindShown.kind : kindFor(item, newKind);
   const hasForm = canOpen || (id !== null && shownFor === id);
   const broken = !hasForm && (snapshot.suppliersBroken || (id !== null && snapshot.ingredientsBroken));
   const cannotOpen = !hasForm && !broken && priceFailed;
@@ -116,7 +118,7 @@ export function IngredientCardScreen({ id, packaging, preset }: Props) {
   // it was opened from (the row there, or «Add ingredient»). Opened by its address, there is nothing behind it: it replaces
   // itself with the tab it belongs to.
   const supplierOrigin = supplierScreenOf(state);
-  const kindTab = kind === 'packaging' ? 'packaging' : 'ingredients';
+  const kindTab = TAB_OF_KIND[kind];
   const fallback = tabPath(tabOfState(state) ?? kindTab);
   const owed = (afterDelete: boolean) => {
     if (supplierOrigin !== null) {
@@ -203,7 +205,8 @@ export function IngredientCardScreen({ id, packaging, preset }: Props) {
           const saved = store.saveIngredient(id, payload, options);
           announceAction('ingredient-saved');
           if (saved.priceRecorded) announceAction('price-saved');
-          say(t(kind === 'packaging' ? 'sup.packagingSaved' : 'sup.ingredientSaved'));
+          // The kind it was SAVED as: the card's «Type» may have changed it.
+          say(t(KIND_WORDS[kindOf(payload)].saved));
         }}
         onLeave={leave}
         deleting={counting}

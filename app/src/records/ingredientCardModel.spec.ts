@@ -3,13 +3,13 @@ import {
   NEW_CHOICE, NO_SUPPLIER_ID, activePatch, buildSave, firstRefusal, formState, isDirty, kindFor, orderNow, packTypeChoiceOf, packTypeVisible, readChoice, typeGuardOf, weightText, withFormat, withInner, withPackType,
   workingFrom,
 } from './ingredientCardModel';
-import type { ItemLike, Working } from './ingredientCardModel';
+import type { CardKind, ItemLike, Working } from './ingredientCardModel';
 
 // The ingredient card's working copy and its payload (parity C36–C57, C80–C81, C84–C87), with no screen in the way.
 
 const SUPPLIERS = ['s-alp', 's-bru'];
 const open = (item: ItemLike | null, preset: string | null = null) => workingFrom(item, { supplierIds: SUPPLIERS, preset });
-const save = (working: Working, item: ItemLike | null, kind: 'ingredient' | 'packaging' = 'ingredient', lang = 'en') =>
+const save = (working: Working, item: ItemLike | null, kind: CardKind = 'ingredient', lang = 'en') =>
   buildSave({ working, item, kind, lang, startSupplierId: workingFrom(item, { supplierIds: SUPPLIERS, preset: null }).supplierId });
 // A NEW item whose format the person has already picked (Save refuses one that has not chosen).
 const chosen = (item: ItemLike | null, preset: string | null = null) => withFormat(open(item, preset), 'single', 'en');
@@ -258,13 +258,24 @@ describe('the payload, key for key (parity C87)', () => {
     expect(isDirty(typed(base, { notInUse: false }), base)).toBe(false);
   });
 
-  test('the kind is sent, and fixed: an existing packaging item stays packaging whatever the address said', () => {
+  test('the kind is sent: an existing item opens as its own kind whatever the address said, a new one as the address asks', () => {
     const box: ItemLike = { id: 'b', name: 'Box', kind: 'packaging' };
-    expect(kindFor(box, false)).toBe('packaging');
-    expect(kindFor(FLOUR, true)).toBe('ingredient');
-    expect(kindFor(null, true)).toBe('packaging');
-    expect(kindFor(null, false)).toBe('ingredient');
+    expect(kindFor(box, 'ingredient')).toBe('packaging');
+    expect(kindFor(FLOUR, 'packaging')).toBe('ingredient');
+    expect(kindFor(null, 'packaging')).toBe('packaging');
+    expect(kindFor(null, 'ingredient')).toBe('ingredient');
     expect(save(open(box), box, 'packaging').payload.kind).toBe('packaging');
+  });
+
+  test('Mise 2: resale and other open as themselves and are sent as the card says (the «Type» menu may change it)', () => {
+    const water: ItemLike = { id: 'w', name: 'Acqua', kind: 'resale' };
+    const soap: ItemLike = { id: 's', name: 'Sapone', kind: 'other' };
+    expect(kindFor(water, 'ingredient')).toBe('resale');
+    expect(kindFor(soap, 'ingredient')).toBe('other');
+    expect(kindFor(null, 'resale')).toBe('resale');
+    expect(save(open(water), water, 'resale').payload.kind).toBe('resale');
+    expect(save(open(water), water, 'ingredient').payload.kind).toBe('ingredient');
+    expect(save(open(FLOUR), FLOUR, 'other').payload.kind).toBe('other');
   });
 
   test('a NEW ingredient: an empty unit, active, no format keys while it is a Single', () => {
