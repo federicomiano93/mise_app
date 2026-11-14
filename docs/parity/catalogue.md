@@ -2098,16 +2098,26 @@ turned out to be full, **a door in the Recipe book** rather than an item of the 
 - ⚠️ **Only LINKED rows count** (`kind` 'ingredient' and `refId`): a row typed «Butter» and never linked is not matched by its words —
   a guess would put a wrong recipe under an ingredient. ⚠️ **Direct uses only**: butter in a cream that is itself a row of the brioche
   lists the cream, not the brioche.
+- ⚠️ **The amount is the one the recipe screen shows** (`baseAmounts`), not the stored number: an all-grams recipe is rounded so its
+  rows add up to the total (Flour 1000 g, Water 600 g, Yeast 2.5 g, Salt 20.5 g reads «Flour 999 g» on the recipe, and here).
 - **Opening a recipe.** Tapping a recipe line opens it one level down (`fromIngredients` in the state, `recipesNav.ts`): its Back is
-  the browser's Back and lands on the book with the same ingredient open (remembered for as long as the app is open) and the focus on
-  that line (`ingredientUseOpener`, delivered by the section as the sheet's row is). «Edit» from such a recipe does not count it as
+  the browser's Back and lands on the book with the same ingredient open and the same search (both kept while the page is loaded) and
+  the focus on that line (`ingredientUseOpener`, delivered by the section as the sheet's row is; a line inside a closed ingredient is
+  never registered, so a focus that cannot land falls back instead of getting lost). The open counts for «most opened first», as from
+  the Allergen sheet. On the split, the door pressed beside a recipe opened from the book steps BACK to the book (no second copy of it
+  in the history, which would make Back seem to do nothing). «Edit» from such a recipe does not count it as
   opened «from the list» (the editor's two-step return would jump past the book).
 - **Data.** It reads the section's store (its recipes and ingredients, which carry no price): no listener of its own. Until both lists
-  have answered it says «Loading…»; a list that cannot be read is said in a live region present empty before.
+  have answered it says «Loading…». Ingredients that cannot be read are said in a live region drawn empty first (never «No ingredients
+  yet», which would send someone to add what exists); a broken recipe stream is said by the section, once.
+
+**Left as in the rest of the Recipe book** (the Allergen sheet and the HACCP list behave the same): a recipe opened from the book and
+deleted meanwhile hands the focus to the recipe list's search box; the phone's back gesture two levels up does not focus the door.
 
 **Specs.** `shared/src/ingredient-usage.spec.ts` (the order, the uses and their rows, a recipe listing it twice, archived last, linked
 rows only, direct uses only, unused and not in use, the language's order, odd inputs, the search by three names);
 `app/src/recipes/RecipesSection.ingredientBook.spec.tsx` (the door for an employee and its focus, the list and its counts, opening an
 ingredient, kilos in Italian, the fold, the search, Back from a recipe to the same line on a phone and on the split, Back to the door,
-Edit not taken for «from the list», live changes, an empty venue, Italian, the CSS); `recipesPath.spec.ts` (the reserved word) and
+Edit not taken for «from the list», live changes, an empty venue, the amount as the recipe screen rounds it, the search kept across a
+recipe, the open counted, the door beside a recipe on the split, unreadable ingredients, Italian, the CSS); `recipesPath.spec.ts` (the reserved word) and
 `shell/sections.spec.ts` (the screen name). Not driven on the emulator or a device yet.

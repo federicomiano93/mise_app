@@ -1523,7 +1523,6 @@ export const en = {
   'label.image.noCompression': 'This browser cannot compress the label: use Chrome or Edge, version 80 or later.',
   'language.en.inSentence': 'English',
   'language.it.inSentence': 'Italian',
-  // The Allergen sheet (the screen at the counter).
   // The ingredient book (part 2, 14 Nov 2026): where each ingredient is used.
   'ib.title': 'Ingredients in recipes',
   'ib.door': 'Ingredients in recipes',
@@ -1536,6 +1535,7 @@ export const en = {
   'ib.unused': 'Not in any recipe ({n})',
   'ib.notInUse': 'not in use',
   'ib.archived': 'archived',
+  // The Allergen sheet (the screen at the counter).
   'cat.allergenSheet': 'Allergen sheet',
   // A plural so a language whose words agree with {n} can say «1 ricetta … dichiarata»; English reads the same both ways.
   'cat.sheet.declaredCount': { one: '{n} of {total} recipes fully declared', other: '{n} of {total} recipes fully declared' },

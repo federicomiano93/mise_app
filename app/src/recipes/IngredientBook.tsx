@@ -1,4 +1,4 @@
-import { useCallback, useId, useMemo, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useState } from 'react';
 import type { Ref } from 'react';
 import { ChevronDown, ChevronRight, Search } from 'lucide-react';
 import { ingredientBook, searchBook } from '@mise/shared/ingredient-usage';
@@ -7,7 +7,7 @@ import { useT } from '../i18n/useT';
 import { FoldedGroup, useFoldedOpen } from '../ui/FoldedGroup';
 import { FormBar } from '../ui/FormBar';
 import { ingredientUseOpener, useHandBack } from './handBack';
-import { useRecipes } from './RecipesContext';
+import { useRecipes, useRecipesStore } from './RecipesContext';
 import { amountNumber, unitWord } from './recipeAmounts';
 import styles from './IngredientBook.module.css';
 
@@ -18,13 +18,16 @@ type Props = {
   onOpenRecipe: (ingredientId: string, recipeId: string) => void;
 };
 
-// The ingredients a person has open, for as long as the app is open: the book is unmounted while a recipe opened from it is on
-// screen, and Back must find the same ingredient open with its link there to take the focus (handBack.ts).
+// The ingredients a person has open and what they searched for, kept while the page is loaded: the book is unmounted while a
+// recipe opened from it is on screen, and Back must find the same ingredient open, behind the same search, with its line there to
+// take the focus (handBack.ts). Nothing in it names a venue or a person; a page reload starts it again.
 let remembered: ReadonlySet<string> = new Set();
+let rememberedQuery = '';
 
-// For specs, which draw many apps in one page; the app never needs it (a venue switch or a sign-out reloads the page).
+// For specs, which draw many apps in one page.
 export function forgetOpenIngredients(): void {
   remembered = new Set();
+  rememberedQuery = '';
 }
 
 // The ingredient book (part 2 of the owner's plan, 14 Nov 2026; NEW IN MISE 2, no original): every ingredient, and under each the
@@ -38,8 +41,15 @@ export function forgetOpenIngredients(): void {
 export function IngredientBook({ titleRef, onBack, onOpenRecipe }: Props) {
   const { t, locale } = useT();
   const handBack = useHandBack();
-  const { recipes, recipesLoaded, ingredients, ingredientsLoaded, ingredientsUnreadable, streamBroken } = useRecipes();
-  const [query, setQuery] = useState('');
+  const store = useRecipesStore();
+  const { recipes, recipesLoaded, ingredients, ingredientsLoaded, ingredientsUnreadable } = useRecipes();
+  const [query, setQueryState] = useState(rememberedQuery);
+  const setQuery = (text: string) => { rememberedQuery = text; setQueryState(text); };
+  // ⚠️ THE LIVE REGION IS DRAWN EMPTY FIRST and filled once mounted: text already in it when it appears is not announced, and the
+  // ingredients may be known unreadable before the book opens (the store starts with the section). Only that failure is said here:
+  // a broken recipe stream is said by the section itself (recipes-stream-broken), once.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
   const [open, setOpen] = useState<ReadonlySet<string>>(remembered);
   const titleId = useId();
 
@@ -65,7 +75,7 @@ export function IngredientBook({ titleRef, onBack, onOpenRecipe }: Props) {
       <div className={styles.body}>
         <p className={styles.lead}>{t('ib.lead')}</p>
         {/* Present (empty) before it speaks: a list that cannot be read says so here. */}
-        <p role="status" className={styles.status}>{ingredientsUnreadable || streamBroken ? t('ib.error') : ''}</p>
+        <p role="status" className={styles.status}>{mounted && ingredientsUnreadable ? t('ib.error') : ''}</p>
         {!ready ? (
           <p className={styles.nothing} aria-busy="true">{t('session.loading')}</p>
         ) : (
@@ -83,17 +93,22 @@ export function IngredientBook({ titleRef, onBack, onOpenRecipe }: Props) {
               />
             </div>
 
-            {book.length === 0 ? <p className={styles.nothing}>{t('ib.empty')}</p> : null}
+            {/* «No ingredients yet» only when that is the truth: not when they simply could not be read (said above). */}
+            {book.length === 0 && !ingredientsUnreadable ? <p className={styles.nothing}>{t('ib.empty')}</p> : null}
             {book.length > 0 && shown.length === 0 ? <p className={styles.nothing}>{t('ib.noMatch', { query: query.trim() })}</p> : null}
             {used.length > 0 ? (
-              <ul className={styles.list} aria-label={t('ib.title')}>
+              <ul className={styles.list} aria-labelledby={titleId}>
                 {used.map(entry => (
                   <Entry
                     key={entry.id}
                     entry={entry}
                     open={open.has(entry.id)}
                     onToggle={() => { toggle(entry.id); }}
-                    onOpenRecipe={recipeId => { onOpenRecipe(entry.id, recipeId); }}
+                    onOpenRecipe={recipeId => {
+                      // Counted for «most opened first», as a recipe opened from the Allergen sheet is.
+                      store.bumpUsage(recipeId);
+                      onOpenRecipe(entry.id, recipeId);
+                    }}
                     register={handBack.register}
                   />
                 ))}
@@ -139,7 +154,7 @@ function Entry({ entry, open, onToggle, onOpenRecipe, register }: {
       </button>
       <ul id={listId} className={styles.uses} hidden={!open}>
         {entry.uses.map(use => (
-          <Use key={use.recipeId} ingredientId={entry.id} use={use} onOpen={onOpenRecipe} register={register} />
+          <Use key={use.recipeId} ingredientId={entry.id} use={use} visible={open} onOpen={onOpenRecipe} register={register} />
         ))}
       </ul>
     </li>
@@ -148,15 +163,19 @@ function Entry({ entry, open, onToggle, onOpenRecipe, register }: {
 
 // One recipe under an ingredient: its name (and «archived»), the amounts, a chevron; the whole line a button that opens the recipe.
 // Back from that recipe hands the focus back to it.
-function Use({ ingredientId, use, onOpen, register }: {
+function Use({ ingredientId, use, visible, onOpen, register }: {
   ingredientId: string;
   use: IngredientUse;
+  // ⚠️ A LINE INSIDE A CLOSED INGREDIENT IS NOT REGISTERED for the hand-back: a hidden button cannot take the focus, and a
+  // registered one would stop the hand-back from falling back to something that can.
+  visible: boolean;
   onOpen: (recipeId: string) => void;
   register: (name: string, node: HTMLElement | null) => void;
 }) {
   const { t, locale } = useT();
-  const opener = useCallback((node: HTMLButtonElement | null) => { register(ingredientUseOpener(ingredientId, use.recipeId), node); },
-    [register, ingredientId, use.recipeId]);
+  const opener = useCallback((node: HTMLButtonElement | null) => {
+    register(ingredientUseOpener(ingredientId, use.recipeId), visible ? node : null);
+  }, [register, ingredientId, use.recipeId, visible]);
   // «800 g», «0,8 kg», «200 g + 20 g», «to taste»: each row as the recipe writes it, with the Recipe book's own number rule.
   const amounts = use.rows.map(row => (row.unit === 'to taste' ? unitWord(t, row.unit) : `${amountNumber(row.amount, row.unit, locale)} ${unitWord(t, row.unit)}`))
     .join(' + ');

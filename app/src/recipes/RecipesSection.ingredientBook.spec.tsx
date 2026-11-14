@@ -175,6 +175,59 @@ describe('the ingredient book', () => {
     expect(await screen.findByText('No ingredients yet. They are added in Suppliers.', undefined, LOAD)).toBeInTheDocument();
   });
 
+  it('⚠️ shows the amount the recipe screen shows: half-grams rounded so the rows add up (Flour 999 g, not 1000 g)', async () => {
+    const source = fakeRecipesSource({ ingredients: [{ id: 'flour', name: 'Flour' }], recipes: [{ id: 'bread', name: 'Bread', ingredients: [
+      { label: 'Flour', grams: 1000, unit: 'g', kind: 'ingredient', refId: 'flour' }, { label: 'Water', grams: 600, unit: 'g' },
+      { label: 'Yeast', grams: 2.5, unit: 'g' }, { label: 'Salt', grams: 20.5, unit: 'g' },
+    ] }] });
+    const { user } = await openBook({ source });
+    await user.click(head(/^Flour/));
+    expect(within(book()).getByRole('button', { name: /^Bread/ })).toHaveTextContent('999 g');
+  });
+
+  it('remembers the search across a recipe and Back', async () => {
+    const { user, router } = await openBook();
+    await user.type(main().getByRole('searchbox', { name: 'Search an ingredient' }), 'sug');
+    await user.click(head(/^Sugar/));
+    await user.click(within(book()).getByRole('button', { name: /^Brioche/ }));
+    await waitFor(() => { expect(router.state.location.pathname).toBe('/recipes/brioche'); });
+    await user.click(await screen.findByRole('button', { name: 'Back' }, LOAD));
+    await waitFor(() => { expect(router.state.location.pathname).toBe('/recipes/ingredients'); });
+    expect(main().getByRole('searchbox', { name: 'Search an ingredient' })).toHaveValue('sug');
+    expect(within(book()).getAllByRole('button', { expanded: true }).map(b => b.textContent)).toEqual(['Sugar1 recipe']);
+  });
+
+  it('counts a recipe opened from it for «most opened first»', async () => {
+    const { user } = await openBook();
+    await user.click(head(/^Flour/));
+    await user.click(within(book()).getByRole('button', { name: /^Brioche/ }));
+    await waitFor(() => { expect(JSON.parse(window.localStorage.getItem('catalogue-usage') ?? '{}')).toEqual({ brioche: 1 }); });
+  });
+
+  it('⚠️ on the split, its door pressed beside a recipe opened from it steps back to the book: no second copy of it in the history', async () => {
+    split();
+    const view = renderRecipes('/recipes', { source: fakeRecipesSource({ recipes: RECIPES, ingredients: INGREDIENTS }) });
+    await view.user.click(await screen.findByRole('button', { name: 'Ingredients in recipes' }, LOAD));
+    await waitFor(() => { expect(main().getByRole('list', { name: 'Ingredients in recipes' })).toBeInTheDocument(); }, LOAD);
+    await view.user.click(head(/^Flour/));
+    await view.user.click(within(book()).getByRole('button', { name: /^Brioche/ }));
+    await waitFor(() => { expect(view.router.state.location.pathname).toBe('/recipes/brioche'); });
+    await view.user.click(screen.getByRole('button', { name: 'Ingredients in recipes' }));
+    await waitFor(() => { expect(view.router.state.location.pathname).toBe('/recipes/ingredients'); });
+    // One Back from the book reaches the list.
+    await view.user.click(await screen.findByRole('button', { name: 'Back' }, LOAD));
+    await waitFor(() => { expect(view.router.state.location.pathname).toBe('/recipes'); });
+  });
+
+  it('says the ingredients could not be read — and NOT «no ingredients yet» — when their stream fails with nothing held', async () => {
+    const source = fakeRecipesSource({ recipes: RECIPES, ingredients: INGREDIENTS });
+    source.refuse.ingredients = true;
+    renderRecipes('/recipes/ingredients', { source });
+    const said = await screen.findByText('The recipes or the ingredients could not be read: what is shown may be incomplete.', undefined, LOAD);
+    expect(said.closest('[role="status"]')).not.toBeNull();
+    expect(screen.queryByText('No ingredients yet. They are added in Suppliers.')).not.toBeInTheDocument();
+  });
+
   it('is in Italian', async () => {
     await openBook({ lang: 'it', session: { language: 'it' } });
     expect(head(/^Butter/)).toHaveTextContent('3 ricette');

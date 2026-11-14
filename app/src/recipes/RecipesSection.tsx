@@ -21,7 +21,7 @@ import { recipePhotoOn } from './photoGate';
 import { messageText } from './recipesMessages';
 import { RecipeReturnProvider, carriedPlace, carryPlace, forgetCarriedPlace } from './recipeReturn';
 import type { Place, RecipeReturn } from './recipeReturn';
-import { FROM_HACCP, FROM_LIST, FROM_SHEET, cameFromList, fromIngredients } from './recipesNav';
+import { FROM_HACCP, FROM_LIST, FROM_SHEET, cameFromIngredients, cameFromList, fromIngredients } from './recipesNav';
 import { ALLERGENS_PATH, HACCP_PATH, INGREDIENTS_PATH, NEW_PATH, RECIPES_PATH, SETTINGS_PATH, haccpPath, recipePath, resolveRecipesPath } from './recipesPath';
 import type { ShownView } from './recipesPath';
 import styles from './RecipesSection.module.css';
@@ -213,6 +213,12 @@ function RecipesLayout({ view }: { view: ShownView }) {
   const openIngredients = () => {
     if (view.kind === 'ingredients') return;
     handBack.expect(INGREDIENTS_OPENER);
+    // ⚠️ A RECIPE OPENED FROM THE BOOK is one entry above the book: the door steps back to it rather than replacing the recipe with a
+    // second copy of the book, which would leave [list, book, book] and a Back that seems to do nothing.
+    if (view.kind === 'recipe' && cameFromIngredients(state)) {
+      void navigate(-1);
+      return;
+    }
     if (split && view.kind !== 'list') {
       void navigate(INGREDIENTS_PATH, { replace: true, state: cameFromList(state) ? FROM_LIST : KEEP_FOCUS });
     } else {

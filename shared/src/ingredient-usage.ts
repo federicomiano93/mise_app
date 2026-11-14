@@ -12,7 +12,7 @@
 // ⚠️ DIRECT USES ONLY. Butter in a cream that is itself a row of the brioche lists the cream, not the brioche: the amount of
 // butter in the brioche depends on how much cream it takes, which is the cream's own page.
 
-import { linkOf, normalizeCatalogueRecipe, normalizeSearchText, unitOf } from './catalogue-model';
+import { baseAmounts, linkOf, normalizeCatalogueRecipe, normalizeSearchText, unitOf } from './catalogue-model';
 import type { CatalogueUnit } from './catalogue-model';
 import { ingredientDisplayName, ingredientNameMatches } from './ingredient-name';
 import { isPackaging } from './ingredient-kind';
@@ -20,6 +20,10 @@ import { isArchivedRecipe } from './recipe-shelf';
 
 // One recipe that uses an ingredient, and the rows that do (a recipe can list the same ingredient twice, e.g. water in two
 // stages), each in the row's own unit, as written in the recipe (the base recipe, never a batch).
+// ⚠️ THE AMOUNT IS THE ONE THE RECIPE SCREEN SHOWS (baseAmounts, the function it draws the recipe as written with), not the stored
+// number: in an all-grams recipe the rows are rounded so they add up to the total, and the difference goes on the largest row —
+// Flour 1000 g, Water 600 g, Yeast 2.5 g, Salt 20.5 g reads «Flour 999 g» there, and must read the same here. A «to taste» row
+// keeps its stored number (it shows none).
 export interface IngredientUse {
   readonly recipeId: string;
   readonly recipeName: string;
@@ -55,13 +59,14 @@ export function ingredientBook(recipes: readonly unknown[], ingredients: readonl
     const id = raw && typeof raw === 'object' ? (raw as { id?: unknown }).id : undefined;
     if (recipe === null || typeof id !== 'string' || id === '') continue;
     const rowsByIngredient = new Map<string, { amount: number; unit: CatalogueUnit }[]>();
-    for (const row of recipe.ingredients) {
+    const shown = baseAmounts(recipe);
+    recipe.ingredients.forEach((row, index) => {
       const link = linkOf(row);
-      if (link === null || link.kind !== 'ingredient') continue;
+      if (link === null || link.kind !== 'ingredient') return;
       const list = rowsByIngredient.get(link.refId) ?? [];
-      list.push({ amount: row.grams, unit: unitOf(row) });
+      list.push({ amount: shown[index] ?? row.grams, unit: unitOf(row) });
       rowsByIngredient.set(link.refId, list);
-    }
+    });
     for (const [ingredientId, rows] of rowsByIngredient) {
       const list = usesOf.get(ingredientId) ?? [];
       list.push({ recipeId: id, recipeName: recipe.name, archived: isArchivedRecipe(raw), rows });

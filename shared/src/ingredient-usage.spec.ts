@@ -1,6 +1,7 @@
 // The ingredient book (Mise 2 only, 14 Nov 2026): where each ingredient is used. No original in js/, so this runs against the
 // TypeScript file alone (see the header of ingredient-usage.ts).
 import { describe, expect, test } from 'vitest';
+import { baseAmounts } from './catalogue-model';
 import { ingredientBook, searchBook } from './ingredient-usage';
 
 const INGREDIENTS = [
@@ -43,6 +44,23 @@ describe('ingredientBook', () => {
       { recipeId: 'brioche', recipeName: 'Brioche', archived: false, rows: [{ amount: 0.8, unit: 'kg' }] },
       { recipeId: 'cream', recipeName: 'Cream', archived: false, rows: [{ amount: 100, unit: 'g' }] },
     ]);
+  });
+
+  test('⚠️ the amounts are the ones the recipe screen shows (baseAmounts), not the stored numbers', () => {
+    // 1623 g in all: rounded one by one the rows make 1624, so the recipe screen puts the difference on the flour.
+    const recipe = { id: 'r', name: 'Bread', ingredients: [
+      { label: 'Flour', grams: 1000, unit: 'g', kind: 'ingredient', refId: 'flour' },
+      { label: 'Water', grams: 600, unit: 'g' },
+      { label: 'Yeast', grams: 2.5, unit: 'g', kind: 'ingredient', refId: 'yeast' },
+      { label: 'Salt', grams: 20.5, unit: 'g', kind: 'ingredient', refId: 'salt' },
+    ] };
+    const shown = baseAmounts(recipe);
+    expect(shown).toStrictEqual([999, 600, 3, 21]);
+    const out = ingredientBook([recipe], [{ id: 'flour', name: 'Flour' }, { id: 'yeast', name: 'Yeast' }, { id: 'salt', name: 'Salt' }]);
+    expect(out.map(e => [e.name, e.uses[0]!.rows[0]!.amount])).toStrictEqual([['Flour', 999], ['Salt', 21], ['Yeast', 3]]);
+    // A «to taste» row keeps its stored number (the screen shows none) and its unit.
+    const taste = ingredientBook([{ id: 't', name: 'T', ingredients: [{ label: 'Salt', grams: 0, unit: 'to taste', kind: 'ingredient', refId: 's' }] }], [{ id: 's', name: 'Salt' }]);
+    expect(taste[0]!.uses[0]!.rows).toStrictEqual([{ amount: 0, unit: 'to taste' }]);
   });
 
   test('a recipe listing the ingredient twice is one recipe with two rows', () => {
