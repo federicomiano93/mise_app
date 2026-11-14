@@ -22,6 +22,13 @@ export const FROM_RECIPE = { ...KEEP_FOCUS, fromRecipe: true } as const;
 // Back, and the focus is owed to the row. Deliberately NOT `fromList`: the label is not a recipe opened from the list.
 export const FROM_HACCP = { ...KEEP_FOCUS, fromHaccp: true } as const;
 
+// The same two moves, made from the «Labels» section's list of recipes (app/src/labels, 13 Nov 2026) into this section's own
+// label screens. Each carries the marker its screen already reads, so the screen is the very one the recipe and the HACCP list
+// open, with no branch of its own: Back is the browser's Back, which is the Labels list one step behind it, and the screen puts
+// the focus on its title when it opens. `fromLabels` only says where the move started, for whoever needs to tell it apart.
+export const FROM_LABELS_PRODUCT = { ...FROM_RECIPE, fromLabels: true } as const;
+export const FROM_LABELS_HACCP = { ...FROM_HACCP, fromLabels: true } as const;
+
 export function cameFromHaccp(state: unknown): boolean {
   return typeof state === 'object' && state !== null && 'fromHaccp' in state;
 }

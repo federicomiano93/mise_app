@@ -46,7 +46,7 @@ describe('AppShell: navigation', () => {
   it('lists the sections in the rail in order, Settings last', () => {
     renderApp('/orders');
     expect(linkNames(rail())).toEqual([
-      'Home', 'Orders', 'Suppliers', 'Recipes', 'Calculator', 'Pastries', 'Stocktake', 'Food cost', 'Settings',
+      'Home', 'Orders', 'Suppliers', 'Recipes', 'Labels', 'Calculator', 'Pastries', 'Stocktake', 'Food cost', 'Settings',
     ]);
   });
 
@@ -98,7 +98,7 @@ describe('AppShell: navigation', () => {
 
     const list = within(screen.getByRole('list'));
     expect(list.getAllByRole('link').map(link => link.textContent)).toEqual([
-      'Suppliers', 'Pastries', 'Stocktake', 'Food cost', 'Settings',
+      'Suppliers', 'Labels', 'Pastries', 'Stocktake', 'Food cost', 'Settings',
     ]);
 
     await user.click(list.getByRole('link', { name: 'Pastries' }));
@@ -112,7 +112,7 @@ describe('AppShell: navigation', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'Page not found' })).toBeInTheDocument();
     expect(screen.getByText('This address doesn’t lead to any section.')).toBeInTheDocument();
     // The navigation is still around it.
-    expect(rail().getAllByRole('link')).toHaveLength(9);
+    expect(rail().getAllByRole('link')).toHaveLength(10);
 
     await user.click(screen.getByRole('link', { name: 'Go to the start' }));
 
@@ -306,7 +306,7 @@ describe('AppShell: Italian', () => {
 
       expect(await screen.findByRole('heading', { level: 1, name: 'Home' })).toBeInTheDocument();
       expect(linkNames(rail('Tutte le sezioni'))).toEqual([
-        'Home', 'Ordini', 'Fornitori', 'Ricette', 'Calcolatore', 'Paste', 'Magazzino', 'Food cost', 'Impostazioni',
+        'Home', 'Ordini', 'Fornitori', 'Ricette', 'Etichette', 'Calcolatore', 'Paste', 'Magazzino', 'Food cost', 'Impostazioni',
       ]);
       expect(linkNames(tabs('Sezioni principali'))).toEqual([
         'Home', 'Ordini', 'Ricette', 'Calcolatore', 'Altro',
@@ -362,7 +362,7 @@ describe('AppShell: a section that fails', () => {
     expect(main.getByRole('button', { name: 'Reload' })).toBeInTheDocument();
     // The whole-app error screen is NOT what is showing.
     expect(screen.queryByRole('heading', { name: 'Mise stopped working.' })).not.toBeInTheDocument();
-    expect(rail().getAllByRole('link')).toHaveLength(9);
+    expect(rail().getAllByRole('link')).toHaveLength(10);
 
     await user.click(rail().getByRole('link', { name: 'Orders' }));
 

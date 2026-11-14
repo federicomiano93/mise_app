@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readsPurchasePrices, visibleSectionIds } from './visibility';
 
-const ALL = ['home', 'orders', 'suppliers', 'recipes', 'calculator', 'pastries', 'stocktake', 'foodcost', 'settings'];
+const ALL = ['home', 'orders', 'suppliers', 'recipes', 'labels', 'calculator', 'pastries', 'stocktake', 'foodcost', 'settings'];
 const ids = (location: Record<string, unknown> | null, canManage: boolean, role: string = canManage ? 'owner' : 'staff') =>
   [...visibleSectionIds(location, canManage, role)].sort();
 const sorted = (list: string[]) => [...list].sort();
@@ -12,9 +12,9 @@ describe('visibleSectionIds', () => {
   });
 
   it('shows an employee the everyday sections, not the money ones, when the venue has said nothing', () => {
-    expect(ids(null, false)).toEqual(sorted(['home', 'orders', 'suppliers', 'recipes', 'calculator', 'pastries', 'settings']));
+    expect(ids(null, false)).toEqual(sorted(['home', 'orders', 'suppliers', 'recipes', 'labels', 'calculator', 'pastries', 'settings']));
     expect(ids({ name: 'A place' }, false)).toEqual(
-      sorted(['home', 'orders', 'suppliers', 'recipes', 'calculator', 'pastries', 'settings']),
+      sorted(['home', 'orders', 'suppliers', 'recipes', 'labels', 'calculator', 'pastries', 'settings']),
     );
   });
 
@@ -108,7 +108,7 @@ describe('visibleSectionIds for the partial owners', () => {
 
   it('shows the kitchen owner everything but Food cost, Stocktake kept', () => {
     expect(ids({}, true, 'owner-kitchen')).toEqual(
-      sorted(['home', 'orders', 'suppliers', 'recipes', 'calculator', 'pastries', 'stocktake', 'settings']));
+      sorted(['home', 'orders', 'suppliers', 'recipes', 'labels', 'calculator', 'pastries', 'stocktake', 'settings']));
   });
 
   it('never shows a partial owner what the venue switched off', () => {
