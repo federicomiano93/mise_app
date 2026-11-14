@@ -62,6 +62,12 @@
 
 import { isWeighable as isWeighableRow, resolveRecipe } from './calculator-recipe-source';
 import { ridOf } from './guided-model';
+import { isOther, isPackaging, isResale } from './ingredient-kind';
+
+// ⚠️ MISE 2 (14 Nov 2026): only FOOD may be linked to a recipe row — never packaging, resale or other. Asked as «not one of the
+// three non-food kinds» rather than isFood so that something that is not an item at all (an odd input: a string, a number)
+// gets the original's answer, which odd-inputs.spec.ts holds both files to; for every item it is exactly isFood.
+const notFood = (ing: unknown): boolean => isPackaging(ing) || isResale(ing) || isOther(ing);
 import { ingredientDisplayName } from './ingredient-name';
 
 export type CatalogueUnit = 'g' | 'kg' | 'mg' | 'ml' | 'cl' | 'dl' | 'l' | 'pcs' | 'tsp' | 'tbsp' | 'pinch' | 'to taste';
@@ -251,7 +257,9 @@ export function linkOptions({ ingredients, recipes, suppliers, query, excludeRec
   const foodCards = (Object.values(ingredients || {}) as Card[])
     // ⚠️ PACKAGING IS NOT AN INGREDIENT (13 Sep 2026): a box filed under «Imballaggi» in Fornitori e
     // ingredienti has no allergens to declare and no place in a recipe.
-    .filter(ing => ing && ing.kind !== 'packaging');
+    // ⚠️ MISE 2 (14 Nov 2026): nor has resale (a bottle of water) or other (a detergent): only FOOD is offered —
+    // never «not packaging» alone, or those two leak in (notFood above). The original asks `kind !== 'packaging'`.
+    .filter(ing => ing && !notFood(ing));
   const optionsOf = (cards: readonly Card[]): LinkOption[] => cards
     .map((ing): LinkOption => ({
       id: ing.id,
@@ -554,7 +562,7 @@ export function withoutTrailingDivider<T>(rows: readonly T[] | null | undefined)
 }
 
 // Is there already an ingredient called exactly this (ignoring case and spaces at the ends) among the ones a
-// recipe row can be LINKED to — active, and food rather than packaging?
+// recipe row can be LINKED to — active, and food (never packaging, resale or other)?
 //
 // NOT AN EXPORT OF catalogue-model.js: its original is `nameTaken` at the bottom of
 // js/catalogue/ingredient-suggest.js (that file draws the screen, so it is not ported). It lives here because it
@@ -567,7 +575,7 @@ export function withoutTrailingDivider<T>(rows: readonly T[] | null | undefined)
 export function nameTaken(ingredients: unknown, name: unknown, { inactiveLast = false }: { inactiveLast?: boolean } = {}): boolean {
   const wanted = String(name ?? '').trim().toLowerCase();
   return (Object.values(ingredients || {}) as ({ name?: unknown; shortName?: unknown; active?: unknown; kind?: unknown } | null)[])
-    .some(ing => ing && (inactiveLast || ing.active !== false) && ing.kind !== 'packaging'
+    .some(ing => ing && (inactiveLast || ing.active !== false) && !notFood(ing)
       && [ing.name, ing.shortName].some(v => String(v ?? '').trim().toLowerCase() === wanted));
 }
 

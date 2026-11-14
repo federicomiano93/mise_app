@@ -32,8 +32,54 @@ describe.each([
     expect(m.kindOf({})).toBe('ingredient');
   });
 
-  test('the list of kinds is closed and frozen', () => {
-    expect([...m.INGREDIENT_KINDS]).toStrictEqual(['ingredient', 'packaging']);
+  test('the list of kinds is frozen and starts with the original two', () => {
+    expect([...m.INGREDIENT_KINDS].slice(0, 2)).toStrictEqual(['ingredient', 'packaging']);
     expect(Object.isFrozen(m.INGREDIENT_KINDS)).toBe(true);
+  });
+});
+
+// ⚠️ A DELIBERATE MISE 2 DIFFERENCE (14 Nov 2026): 'resale' and 'other'. The current app is frozen and never writes
+// them; its kindOf reads them as 'ingredient'. These run against the port only, and one test pins the original's
+// answer so the difference is seen, not assumed.
+describe('Mise 2 only: resale and other', () => {
+  test('the list of kinds is closed: the four the rules allow', () => {
+    expect([...ported.INGREDIENT_KINDS]).toStrictEqual(['ingredient', 'packaging', 'resale', 'other']);
+  });
+
+  test('kindOf keeps resale and other (the original turns them into ingredient)', () => {
+    expect(ported.kindOf({ kind: 'resale' })).toBe('resale');
+    expect(ported.kindOf({ kind: 'other' })).toBe('other');
+    expect(legacy.kindOf({ kind: 'resale' })).toBe('ingredient');
+    expect(legacy.kindOf({ kind: 'other' })).toBe('ingredient');
+    expect(ported.kindOf({ kind: 'Resale' })).toBe('ingredient');
+    expect(ported.kindOf({ kind: 'other ' })).toBe('ingredient');
+  });
+
+  test('isResale and isOther answer only for their literal value', () => {
+    expect(ported.isResale({ kind: 'resale' })).toBe(true);
+    expect(ported.isResale({ kind: 'other' })).toBe(false);
+    expect(ported.isOther({ kind: 'other' })).toBe(true);
+    expect(ported.isOther({ kind: 'resale' })).toBe(false);
+    for (const odd of [null, undefined, 0, '', 'resale', 'other', {}, { kind: null }]) {
+      expect(ported.isResale(odd), String(odd)).toBe(false);
+      expect(ported.isOther(odd), String(odd)).toBe(false);
+    }
+  });
+
+  test('⚠️ isFood: absent, null and «ingredient» are food; packaging, resale and other are not', () => {
+    expect(ported.isFood({ name: 'Flour' })).toBe(true);
+    expect(ported.isFood({ kind: null })).toBe(true);
+    expect(ported.isFood({ kind: undefined })).toBe(true);
+    expect(ported.isFood({ kind: 'ingredient' })).toBe(true);
+    expect(ported.isFood({ kind: 'packaging' })).toBe(false);
+    expect(ported.isFood({ kind: 'resale' })).toBe(false);
+    expect(ported.isFood({ kind: 'other' })).toBe(false);
+  });
+
+  test('isFood agrees with kindOf on every item, and something that is not an item is not food', () => {
+    for (const item of [{}, { kind: 'whatever' }, { kind: 1 }, { kind: 'packaging' }, { kind: 'resale' }, { kind: 'other' }, { kind: 'ingredient' }]) {
+      expect(ported.isFood(item), JSON.stringify(item)).toBe(ported.kindOf(item) === 'ingredient');
+    }
+    for (const odd of [null, undefined, 0, '', 'ingredient', true]) expect(ported.isFood(odd), String(odd)).toBe(false);
   });
 });
