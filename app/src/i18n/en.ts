@@ -1524,6 +1524,18 @@ export const en = {
   'label.image.noCompression': 'This browser cannot compress the label: use Chrome or Edge, version 80 or later.',
   'language.en.inSentence': 'English',
   'language.it.inSentence': 'Italian',
+  // The ingredient book (part 2, 14 Nov 2026): where each ingredient is used.
+  'ib.title': 'Ingredients in recipes',
+  'ib.door': 'Ingredients in recipes',
+  'ib.lead': 'Where each ingredient is used, and how much of it each recipe takes as written. Only rows linked to the ingredient count. Tap a recipe to open it.',
+  'ib.search': 'Search an ingredient',
+  'ib.error': 'The recipes or the ingredients could not be read: what is shown may be incomplete.',
+  'ib.empty': 'No ingredients yet. They are added in Suppliers.',
+  'ib.noMatch': 'No ingredient matches “{query}”.',
+  'ib.recipeCount': { one: '{n} recipe', other: '{n} recipes' },
+  'ib.unused': 'Not in any recipe ({n})',
+  'ib.notInUse': 'not in use',
+  'ib.archived': 'archived',
   // The Allergen sheet (the screen at the counter).
   'cat.allergenSheet': 'Allergen sheet',
   // A plural so a language whose words agree with {n} can say «1 ricetta … dichiarata»; English reads the same both ways.

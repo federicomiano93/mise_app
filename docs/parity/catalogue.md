@@ -2076,3 +2076,49 @@ measured, not the 48px design size), one main and one h1, console; one real «Us
 row exact). After the fixes, also in the browser: the row's unit changed by another client (the batch stays 3180 g, was 3,180,000 g), a
 row added above while the question is open (it still asks about Sugar), and Enter on 239.6 g (calculates 240 g). ⚠️ Pre-existing on the stack base, not from this slice: with ANY modal open on the Recipes screen
 (the old «Calculate recipe?» included) axe flags `scrollable-region-focusable` on `#main`.
+
+## Ingredient book as built (14 Nov 2026) — NEW IN MISE 2, no original in the current app
+
+Part 2 of the plan the owner approved on 14 Nov 2026. His choices: **where each ingredient is used** (read-only), and, once the rail
+turned out to be full, **a door in the Recipe book** rather than an item of the app's menu.
+
+**What it does.**
+- **Where.** «Ingredients in recipes» / «Ingredienti nelle ricette» (Lucide `Egg`), a door at the foot of the recipe list after the
+  HACCP labels' and before Settings, for everybody who sees the section. It opens `/recipes/ingredients`, drawn like the HACCP list
+  (the right-hand pane on the split, its own screen on a phone, Back up to the list with the focus on the door). ⚠️ NOT A SECTION OF
+  THE MENU: when this was decided the tablet's rail held nine items, the most that fit the lab tablet's 648px at 48px an item. The
+  «Labels» entry (#547) has since taken a tenth place by hiding the brand letter on short windows (`shell/railHeight.spec.ts`); an
+  eleventh would need 668px, so the rail is full.
+- **What it shows** (`shared/src/ingredient-usage.ts`, `ingredientBook` / `searchBook`): every FOOD ingredient (packaging never goes
+  in a recipe) by its display name (short name, else name), alphabetical in the interface language. The ones used in a recipe are a
+  list of disclosure buttons («Butter · 3 recipes», `aria-expanded`); opened, each shows the recipes that use it with the amount of
+  every row as written (the base recipe, never a batch; the Recipe book's own number rule, `amountNumber`: «0,8 kg», «200 g + 20 g»
+  for a recipe listing it twice), archived recipes last and marked «archived». The ones no recipe uses are folded into «Not in any
+  recipe (N)» (`ui/FoldedGroup`), an ingredient switched off in Suppliers marked «not in use». A search box finds an ingredient by
+  any of its three names (name, short name, the invoice's), and opens the fold when only folded ones match.
+- ⚠️ **Only LINKED rows count** (`kind` 'ingredient' and `refId`): a row typed «Butter» and never linked is not matched by its words —
+  a guess would put a wrong recipe under an ingredient. ⚠️ **Direct uses only**: butter in a cream that is itself a row of the brioche
+  lists the cream, not the brioche.
+- ⚠️ **The amount is the one the recipe screen shows** (`baseAmounts`), not the stored number: an all-grams recipe is rounded so its
+  rows add up to the total (Flour 1000 g, Water 600 g, Yeast 2.5 g, Salt 20.5 g reads «Flour 999 g» on the recipe, and here).
+- **Opening a recipe.** Tapping a recipe line opens it one level down (`fromIngredients` in the state, `recipesNav.ts`): its Back is
+  the browser's Back and lands on the book with the same ingredient open and the same search (both kept while the page is loaded) and
+  the focus on that line (`ingredientUseOpener`, delivered by the section as the sheet's row is; a line inside a closed ingredient is
+  never registered, so a focus that cannot land falls back instead of getting lost). The open counts for «most opened first», as from
+  the Allergen sheet. On the split, the door pressed beside a recipe opened from the book steps BACK to the book (no second copy of it
+  in the history, which would make Back seem to do nothing). «Edit» from such a recipe does not count it as
+  opened «from the list» (the editor's two-step return would jump past the book).
+- **Data.** It reads the section's store (its recipes and ingredients, which carry no price): no listener of its own. Until both lists
+  have answered it says «Loading…». Ingredients that cannot be read are said in a live region drawn empty first (never «No ingredients
+  yet», which would send someone to add what exists); a broken recipe stream is said by the section, once.
+
+**Left as in the rest of the Recipe book** (the Allergen sheet and the HACCP list behave the same): a recipe opened from the book and
+deleted meanwhile hands the focus to the recipe list's search box; the phone's back gesture two levels up does not focus the door.
+
+**Specs.** `shared/src/ingredient-usage.spec.ts` (the order, the uses and their rows, a recipe listing it twice, archived last, linked
+rows only, direct uses only, unused and not in use, the language's order, odd inputs, the search by three names);
+`app/src/recipes/RecipesSection.ingredientBook.spec.tsx` (the door for an employee and its focus, the list and its counts, opening an
+ingredient, kilos in Italian, the fold, the search, Back from a recipe to the same line on a phone and on the split, Back to the door,
+Edit not taken for «from the list», live changes, an empty venue, the amount as the recipe screen rounds it, the search kept across a
+recipe, the open counted, the door beside a recipe on the split, unreadable ingredients, Italian, the CSS); `recipesPath.spec.ts` (the reserved word) and
+`shell/sections.spec.ts` (the screen name). Not driven on the emulator or a device yet.

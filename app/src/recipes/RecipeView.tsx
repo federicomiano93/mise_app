@@ -34,7 +34,7 @@ import { duplicateWorking } from './editorModel';
 import { RowMenu } from './RowMenu';
 import type { RowMenuItem } from './RowMenu';
 import { FROM_DUPLICATE, carryOwner, handOver } from './photoCarry';
-import { FROM_RECIPE, cameFromList, cameFromSheet } from './recipesNav';
+import { FROM_RECIPE, cameFromIngredients, cameFromList, cameFromSheet } from './recipesNav';
 import { NEW_PATH, editPath } from './recipesPath';
 import { useDeleteRecipe } from './useDeleteRecipe';
 import styles from './RecipeView.module.css';
@@ -151,7 +151,7 @@ export function RecipeView({ recipe, titleRef, onBack }: Props) {
             variant="secondary"
             onPress={() => {
               recipeReturn.remember(recipe.id, 'edit');
-              void navigate(editPath(recipe.id), { state: { ...FROM_RECIPE, recipeFromList: cameFromList(state) && !cameFromSheet(state) } });
+              void navigate(editPath(recipe.id), { state: { ...FROM_RECIPE, recipeFromList: cameFromList(state) && !cameFromSheet(state) && !cameFromIngredients(state) } });
             }}
           >
             <Pencil aria-hidden="true" />

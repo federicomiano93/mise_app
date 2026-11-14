@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ChevronRight, Plus, Search, Settings, Tags, Wheat } from 'lucide-react';
+import { ChevronRight, Egg, Plus, Search, Settings, Tags, Wheat } from 'lucide-react';
 import { filterByName, sortByUsage } from '@mise/shared/catalogue-model';
 import { isArchivedRecipe, shelveRecipes, sortedCategories } from '@mise/shared/recipe-shelf';
 import { allergensOn } from '@mise/shared/venue-features';
@@ -8,7 +8,7 @@ import { useSession } from '../session/SessionContext';
 import { Button } from '../ui/Button';
 import { FoldedGroup, useFoldedOpen } from '../ui/FoldedGroup';
 import { useRecipes, useRecipesStore } from './RecipesContext';
-import { ALLERGENS_OPENER, HACCP_OPENER, NEW_OPENER, SEARCH_OPENER, SETTINGS_OPENER, recipeOpener, useHandBack } from './handBack';
+import { ALLERGENS_OPENER, HACCP_OPENER, INGREDIENTS_OPENER, NEW_OPENER, SEARCH_OPENER, SETTINGS_OPENER, recipeOpener, useHandBack } from './handBack';
 import styles from './RecipesList.module.css';
 
 // The current app's debounce: the box tells the list what is typed on every keystroke, and the cards
@@ -31,6 +31,9 @@ type Props = {
   // The HACCP list is the screen shown, and the door to it at the foot of the list (after the Allergen sheet's).
   haccpOpen: boolean;
   onOpenHaccp: () => void;
+  // The ingredient book is the screen shown, and the door to it at the foot of the list (after the HACCP list's).
+  ingredientsOpen: boolean;
+  onOpenIngredients: () => void;
   // A new recipe's editor is the screen shown, and the button above the list that opens it (step 3d-6).
   newOpen: boolean;
   onNew: () => void;
@@ -47,13 +50,14 @@ type Props = {
 // another is the worst moment for it. The counts that were current when the recipe opened (or when
 // the split began) stay in charge of the order until the list is shown alone again or the split is
 // left; the fresh ones apply then.
-export function RecipesList({ openRecipeId, split, onOpenRecipe, sheetOpen, onOpenSheet, settingsOpen, onOpenSettings, haccpOpen, onOpenHaccp, newOpen, onNew }: Props) {
+export function RecipesList({ openRecipeId, split, onOpenRecipe, sheetOpen, onOpenSheet, settingsOpen, onOpenSettings, haccpOpen, onOpenHaccp, ingredientsOpen, onOpenIngredients, newOpen, onNew }: Props) {
   const { t, locale } = useT();
   const { location, canManage } = useSession();
   const store = useRecipesStore();
   const handBack = useHandBack();
   const doorOpener = useCallback((node: HTMLButtonElement | null) => { handBack.register(ALLERGENS_OPENER, node); }, [handBack]);
   const haccpDoor = useCallback((node: HTMLButtonElement | null) => { handBack.register(HACCP_OPENER, node); }, [handBack]);
+  const ingredientsDoor = useCallback((node: HTMLButtonElement | null) => { handBack.register(INGREDIENTS_OPENER, node); }, [handBack]);
   const settingsDoor = useCallback((node: HTMLButtonElement | null) => { handBack.register(SETTINGS_OPENER, node); }, [handBack]);
   const newDoor = useCallback((node: HTMLButtonElement | null) => { handBack.register(NEW_OPENER, node); }, [handBack]);
   const searchOpener = useCallback((node: HTMLInputElement | null) => { handBack.register(SEARCH_OPENER, node); }, [handBack]);
@@ -206,6 +210,20 @@ export function RecipesList({ openRecipeId, split, onOpenRecipe, sheetOpen, onOp
       >
         <Tags aria-hidden="true" />
         <span>{t('haccp.door')}</span>
+      </Button>
+
+      {/* The ingredient book (part 2 of the owner's plan, 14 Nov 2026): where each ingredient is used. For everybody who sees the
+          section (it only reads what the section already reads). A door here, not an item of the app's menu: the tablet's rail
+          holds ten items at most on the lab tablet's 648px (shell/railHeight.spec.ts), and with «Labels» it holds ten. */}
+      <Button
+        ref={ingredientsDoor}
+        variant="secondary"
+        className={styles.door}
+        aria-current={ingredientsOpen ? 'true' : undefined}
+        onPress={onOpenIngredients}
+      >
+        <Egg aria-hidden="true" />
+        <span>{t('ib.door')}</span>
       </Button>
 
       {/* ⚠️ THE DOOR TO THE LABEL SETTINGS EXISTS ONLY FOR WHOEVER RUNS THE PLACE (owner or manager): a screen of switches
