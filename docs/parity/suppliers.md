@@ -1385,6 +1385,17 @@ reads them as an ingredient).
   nutrition at once and nothing of them is written; choosing ingredient again shows them as they were. The title, the Save
   question, the bin and «… saved.» follow the kind (`records/kindWords.ts`). A new packaging item still opens priced by the
   piece; resale and other open priced like an ingredient.
+- **Open for him (review of 14 Nov 2026, not built):** the «Type» menu lets an item that recipes already use leave Ingredient
+  with no warning. Its recipe rows keep the link; its allergen sections disappear from the card (a label blocked by «not
+  declared» then has no visible fix but switching the type back). A warning or refusal through the usage count the delete
+  already makes (`useDeleteIngredient`) is the obvious next step if he wants one.
+- **Accepted risk beside the current app:** the current app's card saves `kind: kindOf(item)`, and its `kindOf` reads
+  'resale' and 'other' as 'ingredient'. A phone still on the current app (before it takes the update, or after a rollback)
+  that SAVES a resale or other item files it back as food. `js/` is frozen, so this is written down, not fixed.
+- **Rules deploy:** what needs the new list is any Mise 2 write of 'resale' or 'other' — the «New …» buttons, the «Type» menu
+  and (next PR) the import — so the rules go live before Mise 2 does (the switch checklist). `main`'s `firestore.rules` still has
+  the two-value list until this reaches it: a rules deploy from a branch without this change would undo it (`firestore-rules`
+  skill, deploy only from a branch with the latest rules).
 - **Specs**: `ingredient-kind.spec.ts`, `parity.spec.ts`, `odd-inputs.spec.ts` (shared); `itemKinds.spec.tsx` (one resale and
   one other item across Suppliers, Food cost's chooser and a recipe row's suggestions), `SuppliersSection.list.spec.tsx`
   (tabs, addresses, keys, Italian), `SuppliersSection.ingredient.save.spec.tsx` («Type»), `SuppliersSection.merge.spec.tsx`,
