@@ -37,6 +37,11 @@ let saveTimer = null;
 let waiting = false;       // a change is waiting for the debounce, so it can be flushed
 let leaveWaiters = [];     // sendBeforeLeaving's checks, run whenever a write is answered
 let reportSaveResult = null;   // (ok: boolean) => void — injected by orders-main.js
+// Who is told whether everything typed here has reached the server (onDraftSaveState), the last
+// thing they were told, and whether the first snapshot of the draft has arrived yet.
+const saveStateWatchers = new Set();
+let lastSaveState = '';
+let draftSeen = false;
 
 // The draft as this device last agreed on it with the server: what a snapshot
 // reported, plus what we have since sent and had accepted. What this phone claims
@@ -351,6 +356,7 @@ async function settleRestored() {
     Object.entries(days).forEach(([id, day]) => { if (!(id in pending.days)) pending.days[id] = day; });
   }
   saveJournal();
+  announceSaveState();
   return anyLine;
 }
 
@@ -403,6 +409,7 @@ function armSave() {
   saveTimer = setTimeout(() => {
     if (waiting) autosave();
   }, SAVE_DELAY_MS);
+  announceSaveState();
 }
 
 // Autosave the draft a short moment after the last change.
@@ -455,7 +462,10 @@ function sendPending() {
 
   // Nothing this device changed — so nothing to say. Staying quiet here also stops
   // an incoming snapshot from bouncing straight back as a write.
-  if (isEmpty(sent.entries) && isEmpty(sent.days)) return Promise.resolve();
+  if (isEmpty(sent.entries) && isEmpty(sent.days)) {
+    announceSaveState();
+    return Promise.resolve();
+  }
 
   const payload = { updatedAt: new Date().toISOString() };
   if (!isEmpty(sent.entries)) payload.entries = sent.entries;
@@ -465,6 +475,7 @@ function sendPending() {
   // A leaver waiting for the server (sendBeforeLeaving) asks again once this write's answer has
   // been fully handled, so after the baseline and the claims below, never before.
   const land = () => { flights.splice(flights.indexOf(sent), 1); queueMicrotask(wakeLeavers); };
+  announceSaveState();
 
   // setDoc(merge) with a PARTIAL map: Firestore merges key by key, so the rows and
   // fields not mentioned here keep whatever anyone else has put there. It also still
@@ -504,6 +515,7 @@ function sendPending() {
       if (!dayInAir(id) && pending.days[id] === day) delete pending.days[id];
     });
     saveJournal();
+    announceSaveState();
     return result;
   }, err => {
     land();
@@ -535,6 +547,7 @@ function sendPending() {
     known = { entries, days };
     refused.push(sent);
     saveJournal();
+    announceSaveState();
     throw err;
   });
 }
@@ -590,6 +603,47 @@ export function sendBeforeLeaving(ms = 8000) {
     const poll = setInterval(check, 200);
     leaveWaiters.push(check);
   });
+}
+
+// ── Sent at once, and saying so (the order typed on the iPad, 14 Nov 2026) ─────────────────────────
+//
+// ⚠️ A QUANTITY CAN SIT IN THE 800 ms PAUSE WHEN THE PAGE STOPS. The owner typed an order on an iPad and
+// placed it from his phone a moment later: one product never reached the supplier. iOS freezes a hidden
+// page, and `flushDraftWhenHidden` is not always given the time to send, so the last change stayed on
+// the iPad, and neither screen said so. Two answers, both agreed with the owner:
+//   • leaving a quantity or stock box (and closing a supplier's screen, switching the list) sends what is
+//     waiting AT ONCE: at most one write per box left, never one per keystroke — the pause stays for typing;
+//   • every screen where an order is typed says whether everything typed HERE has reached the server.
+// Through autosave, so a refusal shows the same save error as every other one.
+export function sendWaitingDraft() {
+  if (!waiting) return Promise.resolve();
+  return autosave();
+}
+
+// «Saved» only when nothing typed here is waiting for the pause, in the air, or still claimed (a refused
+// write hands its fields back to `pending`, so it stays «not sent»). A snapshot can never make it «saved»
+// while a write is in the air: it may be Firestore showing this phone's own write before the server
+// answers. `ready` stays false until the first snapshot of the draft has arrived.
+function currentSaveState() {
+  return { ready: draftSeen, saved: settled() && !unsent() };
+}
+
+function announceSaveState() {
+  const state = currentSaveState();
+  const key = `${state.ready}/${state.saved}`;
+  if (key === lastSaveState) return;
+  lastSaveState = key;
+  // ⚠️ A watcher's mistake must never reach the save: this runs inside the write's own answer.
+  saveStateWatchers.forEach(watcher => {
+    try { watcher({ ...state }); } catch (err) { console.error('The save state could not be shown:', err); }
+  });
+}
+
+// Tell `cb` the save state now and on every change ({ ready, saved }). Returns a way to stop.
+export function onDraftSaveState(cb) {
+  saveStateWatchers.add(cb);
+  cb(currentSaveState());
+  return () => { saveStateWatchers.delete(cb); };
 }
 
 // ⚠️ THE PAGE GOING OUT OF SIGHT IS THE MOMENT TO SEND WHAT IS WAITING. Switching app or locking the
@@ -663,6 +717,8 @@ export function watchDraft(onChange, onError) {
     exists = Boolean(doc);
     saveJournal();
     show(doc);
+    draftSeen = true;
+    announceSaveState();
   }, onError);
 }
 
@@ -768,6 +824,7 @@ function forgetKnown(paths) {
     }
   });
   saveJournal();
+  announceSaveState();
 }
 
 // ⚠️ WHEN A CLEAR STARTS, NOT WHEN IT LANDS: on a weak connection the server's first answer can come
