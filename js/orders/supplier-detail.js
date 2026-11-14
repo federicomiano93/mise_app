@@ -100,6 +100,9 @@ export function buildSupplierDetail(supplier, ctx) {
       titleWrap,
       el('span', { class: 'app-header-slot' }, [addBtn]),
     ]),
+    // Whether everything typed here has reached the server (orders-main paintDraftSaveState). Outside
+    // the body, so a repaint never rebuilds it; a fixed height, so it never moves the rows.
+    el('p', { class: 'draft-save-state', role: 'status', 'aria-live': 'polite' }),
     // This screen's own status line (orders-main statusElement): it covers the page, so a save
     // error or «Salvo la quantità…» written to the page's line underneath was never seen.
     el('p', { class: 'orders-status supplier-detail-status', role: 'status', hidden: true }),
