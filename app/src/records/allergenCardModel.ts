@@ -268,7 +268,8 @@ export function allergenPayload(
   working: AllergenWorking, item: ItemLike | null, kind: CardKind, now: string,
   shown: PanelsShown,
 ): Partial<AllergenFields> {
-  if (kind === 'packaging') return {};
+  // Only FOOD declares allergens: packaging, resale and other never write a key of them (the card does not draw them).
+  if (kind !== 'ingredient') return {};
   const draft = allergenDraft(working, item, now);
   if (!item) return draft;
   const stored = buildAllergenFields({

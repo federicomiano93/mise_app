@@ -6,6 +6,7 @@ import { useBlocker } from 'react-router';
 import type { BlockerFunction } from 'react-router';
 import type { NutrientKey } from '@mise/shared/allergen-model';
 import { FALLBACK_MONEY } from '@mise/shared/currency';
+import { INGREDIENT_KINDS } from '@mise/shared/ingredient-kind';
 import { allergensOn, nutritionOn } from '@mise/shared/venue-features';
 import type { Money } from '@mise/shared/currency';
 import { formatSummary, usesLegacyCard } from '@mise/shared/pack-format';
@@ -37,6 +38,7 @@ import { AllergenSections } from './AllergenSections';
 import type { AllergenControls, NutrientBoxes } from './AllergenSections';
 import { allergenDirty, allergenPayload, allergenWorkingFrom, nutritionRefusal } from './allergenCardModel';
 import type { AllergenWorking, NutritionRefusal } from './allergenCardModel';
+import { KIND_WORDS } from './kindWords';
 import { PriceHistory } from './PriceHistory';
 import { PriceSection } from './PriceSection';
 import type { PriceBox } from './PriceSection';
@@ -77,8 +79,12 @@ type Props = {
   presetName?: string;
   // Hosted above another screen: the card then registers no router blocker (see LeaveBlocker) and reports through this.
   host?: IngredientCardHost;
-  // The kind it is filed under: fixed while the card is open, and sent as `kind`.
+  // The kind it opens as: an existing item's own, a new one's from the tab its «New …» was pressed on. Sent as `kind`.
+  // Mise 2 (14 Nov 2026): the card's «Type» menu changes it on the working copy, saved by Save like every other field.
   kind: CardKind;
+  // The «Type» menu is not drawn and the kind stays the one given: the Recipe catalogue's «+ Add … as an ingredient», where only
+  // food may be made (a recipe row is never linked to anything else).
+  kindLocked?: boolean;
   // A supplier to start a NEW item on; never applied to an existing one.
   preset: string | null;
   suppliers: readonly ItemLike[];
@@ -138,7 +144,7 @@ type Refused = RefusedField | PriceBox | LegacyBox | 'priceWeight' | 'legacyPack
 //
 // ⚠️ THE FOOD WORDS (the categories, the package words, the carton word) COME FROM THE VENUE'S COUNTRY, never from `t()`.
 export function IngredientCard({
-  item, presetName, host, kind, preset, suppliers, categories, packs, orderUnits = [], language, titleRef, onSave, onLeave, onDelete, deleting = false, onMerge, mergeDoorRef, renderNewSupplier, watchRefusedSupplier,
+  item, presetName, host, kind, kindLocked = false, preset, suppliers, categories, packs, orderUnits = [], language, titleRef, onSave, onLeave, onDelete, deleting = false, onMerge, mergeDoorRef, renderNewSupplier, watchRefusedSupplier,
   mayPrice = false, country, money = FALLBACK_MONEY, readHistory,
 }: Props) {
   const { t, locale } = useT();
@@ -195,6 +201,10 @@ export function IngredientCard({
 
   // ── The pack list, allergens and nutrition's working copy (step 3e-4) ──
   // ⚠️ MADE ONCE, WHEN THE CARD OPENS, like the rest: the model's header says what a save writes from it.
+  // ── The kind (Mise 2, 14 Nov 2026): on the working copy like the rest, kept in a ref for the same reason as `dirtyRef` ──
+  const [kindNow, setKindNow] = useState<CardKind>(kind);
+  const kindRef = useRef<CardKind>(kind);
+
   const [allergenBaseline] = useState<AllergenWorking>(() => allergenWorkingFrom(opened, money));
   const [allergenWork, setAllergenWork] = useState<AllergenWorking>(allergenBaseline);
   const allergenRef = useRef(allergenWork);
@@ -206,6 +216,7 @@ export function IngredientCard({
     legacyNow: LegacyPriceState = legacyRef.current, menusNow: LegacyProduct = productRef.current,
   ) =>
     isDirty(current, baseline, state ? isPriceEdited(state, ctxOf(current, state)) : false)
+    || kindRef.current !== kind
     || allergenDirty(allergenCopy, allergenBaseline)
     || (legacyCard && (isLegacyEdited(legacyNow, legacyOpened) || isLegacyProductEdited(menusNow, productOpened)));
 
@@ -409,7 +420,9 @@ export function IngredientCard({
     // Then the nutrition's: text that is not a number, or a negative one (a new rule of Mise 2, the model's header says why). Only
     // the boxes somebody changed, and only while the venue shows the nutrition (read now, like the sections do).
     const allergenCopy = allergenRef.current;
-    const wrongNutrient = kind === 'ingredient' && nutritionOn(location) ? nutritionRefusal(allergenCopy, allergenBaseline) : null;
+    // The kind as the menu stands now: only an ingredient has (and checks, and writes) the allergens and the nutrition.
+    const kindToSave = kindRef.current;
+    const wrongNutrient = kindToSave === 'ingredient' && nutritionOn(location) ? nutritionRefusal(allergenCopy, allergenBaseline) : null;
     if (wrongNutrient) {
       showNutrient(wrongNutrient);
       return;
@@ -422,20 +435,20 @@ export function IngredientCard({
         : null)
       : (state && ctx ? pricePatchOf(readPrice(state, ctx), new Date().toISOString(), weightText(current)) : null);
     const built = legacyNow && opened
-      ? { payload: buildLegacySave({ working: current, product: menus, item: opened, kind, startSupplierId: baseline.supplierId }), unitChangedFrom: '', typeReplacedFrom: '' }
+      ? { payload: buildLegacySave({ working: current, product: menus, item: opened, kind: kindToSave, startSupplierId: baseline.supplierId }), unitChangedFrom: '', typeReplacedFrom: '' }
       : buildSave({
-        working: current, item: opened, kind, lang: language, startSupplierId: baseline.supplierId,
+        working: current, item: opened, kind: kindToSave, lang: language, startSupplierId: baseline.supplierId,
         mayPrice: priceActive, priceDirty, pricePatch: patch,
       });
     // ⚠️ ONLY THE GROUPS THAT CHANGED are added, and `now` is taken once, here (the model's header).
     const payload = { ...built.payload, ...allergenPayload(
-      allergenCopy, opened, kind, new Date().toISOString(), { allergens: allergensOn(location), nutrition: nutritionOn(location) },
+      allergenCopy, opened, kindToSave, new Date().toISOString(), { allergens: allergensOn(location), nutrition: nutritionOn(location) },
     ) };
     busy.current = true;
     let ok = false;
     try {
       ok = await confirm({
-        title: t(kind === 'packaging' ? 'sup.pack.save.title' : 'sup.ing.save.title'),
+        title: t(KIND_WORDS[kindToSave].saveTitle),
         message: t('sup.save.question', { name: labelOf(built.payload) }),
         okLabel: t('ui.save'),
         cancelLabel: t('common.cancel'),
@@ -522,9 +535,7 @@ export function IngredientCard({
 
   // ── What is drawn ────────────────────────────────────────────────────────────────────────────────────────────
   const invoiceName = typeof opened?.invoiceName === 'string' ? opened.invoiceName.trim() : '';
-  const titleKey: MessageKey = kind === 'packaging'
-    ? (opened ? 'sup.editPackaging' : 'sup.newPackaging')
-    : (opened ? 'sup.editIngredient' : 'sup.newIngredient');
+  const titleKey: MessageKey = opened ? KIND_WORDS[kindNow].editTitle : KIND_WORDS[kindNow].newTitle;
   const carton = working.format === 'carton' && !legacyCard;
   const typeRefused = refused === 'packType' || refused === 'packTypeWord';
   const weightRefused = refused === 'weight' || refused === 'priceWeight' || refused === 'legacyPackWeight';
@@ -612,6 +623,14 @@ export function IngredientCard({
     );
   };
 
+  function changeKind(value: string) {
+    const next = INGREDIENT_KINDS.find(one => one === value);
+    if (next === undefined || next === kindRef.current) return;
+    kindRef.current = next;
+    setKindNow(next);
+    dirtyRef.current = dirtyOf(workingRef.current, priceRef.current);
+  }
+
   const aria = (field: Refused, errorId: string, ...more: string[]) => ({
     'aria-invalid': refused === field ? true : undefined,
     'aria-describedby': [...more, refused === field ? errorId : ''].filter(Boolean).join(' ') || undefined,
@@ -680,6 +699,24 @@ export function IngredientCard({
           />
           <p id={id('short-hint')} className={styles.hint}>{t('sup.ing.listNameHint')}</p>
         </div>
+
+        {/* «Type» (Mise 2, 14 Nov 2026): ingredient, packaging, resale or other, on the working copy and written by Save (asked
+            first, like every field). Only an ingredient can go into a recipe; the allergens follow the choice as it stands. */}
+        {kindLocked ? null : (
+          <div className={styles.field}>
+            <label htmlFor={id('kind')} className={styles.label}>{t('sup.ing.type')}</label>
+            <select
+              id={id('kind')}
+              className={styles.box}
+              aria-describedby={id('kind-hint')}
+              value={kindNow}
+              onChange={event => { changeKind(event.target.value); }}
+            >
+              {INGREDIENT_KINDS.map(one => <option key={one} value={one}>{t(KIND_WORDS[one].option)}</option>)}
+            </select>
+            <p id={id('kind-hint')} className={styles.hint}>{t('sup.ing.typeHint')}</p>
+          </div>
+        )}
 
         <div className={styles.field}>
           <label htmlFor={id('supplier')} className={styles.label}>{t('sup.ing.supplier')}</label>
@@ -984,8 +1021,9 @@ export function IngredientCard({
           />
         ) : null}
 
-        {/* Packaging has none of it (parity C80). Each panel is read live from the venue's switches inside. */}
-        {kind === 'ingredient' ? (
+        {/* Packaging has none of it (parity C80), nor have resale and other (14 Nov 2026): it follows the «Type» menu as it stands.
+            Each panel is read live from the venue's switches inside. */}
+        {kindNow === 'ingredient' ? (
           <AllergenSections
             working={allergenWork}
             opened={opened}
@@ -1040,8 +1078,8 @@ export function IngredientCard({
             type="button"
             className={styles.deleteIcon}
             ref={bin}
-            aria-label={t(kind === 'packaging' ? 'sup.pack.delete' : 'sup.ing.delete')}
-            title={t(kind === 'packaging' ? 'sup.pack.delete' : 'sup.ing.delete')}
+            aria-label={t(KIND_WORDS[kind].delete)}
+            title={t(KIND_WORDS[kind].delete)}
             aria-disabled={deleting ? 'true' : undefined}
             aria-busy={deleting}
             onClick={remove}
