@@ -3022,6 +3022,36 @@ a.home-reminder {
    lines up with the content column on a tablet. The box already answers for that. */
 .order-box-head .tab-bar { padding: 10px 8px 8px; padding-inline: 8px; }
 .order-box-head .view-switch { margin: 0 8px 10px; }
+
+/* ── The save-status line (the iPad order of 14 Nov 2026) ─────────────────────
+   «Saved ✓» / «Not sent yet» — whether everything typed on THIS device has reached the server
+   (js/orders/save-state-view.js). In the Orders head and under a supplier screen's header.
+   Quiet on purpose: muted text, the success green of .set-saved, no box, no icon.
+   ⚠️ A FIXED HEIGHT AND ONE LINE, WHATEVER IT SAYS: the head is sticky and the supplier screen is a
+   flex column, so a line that grew, shrank or appeared would move every row under the thumb (296 px
+   phone and tablet alike). Before the first snapshot it is invisible but keeps its room. */
+.draft-save-state {
+  box-sizing: border-box;
+  height: 24px;
+  margin: 0;
+  padding: 0 12px 8px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 16px;
+  text-align: end;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-2);
+}
+.draft-save-state:not([data-state]),
+.draft-save-state[data-state=""] { visibility: hidden; }
+.draft-save-state[data-state="saved"] { color: var(--brand); }
+.supplier-detail > .draft-save-state {
+  flex: none;
+  height: 28px;
+  padding: 8px max(16px, var(--app-gutter)) 4px;
+}
 /* The two tabs are what the operator reads first, so they are the biggest type in the
    head (Federico, 29 Sep 2026). A flex row at EVERY size — the Incoming badge sits
    centred on the word, never on its baseline. `--tap-min` exists only inside the tablet
