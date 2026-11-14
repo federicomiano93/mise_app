@@ -324,7 +324,7 @@ export function orderNow(
 
 export interface SaveInput {
   readonly working: Working;
-  // The item as the card opened (null = new) and the kind it is filed under, which is fixed while the card is open.
+  // The item as the card opened (null = new) and the kind to file it under: the card's «Type» menu as it stands at Save.
   readonly item: ItemLike | null;
   readonly kind: CardKind;
   // The venue's output language.
