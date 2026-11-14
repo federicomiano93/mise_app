@@ -197,6 +197,25 @@ test('picturePrep: drawn at once, redrawn after the pause, never ready for a tex
   assert.equal(prep.ready('a'), null, 'typed back: drawn again, never the stale one by luck');
 });
 
+test('⚠️ picturePrep: a typo deleted while its picture is being drawn leaves «Invia» ready (review, 14 Nov 2026)', async () => {
+  const c = clock();
+  const finish = {};
+  const states = [];
+  const prep = picturePrep({
+    render: t => new Promise(r => { finish[t] = () => r(`file:${t}`); }),
+    onChange: st => states.push(st), setTimer: c.setTimer, clearTimer: c.clearTimer,
+  });
+  prep.update('A', { now: true });
+  await wait(0); finish.A(); await wait(0);
+  prep.update('AB');
+  c.run();                       // «AB» starts drawing…
+  await wait(0);
+  prep.update('A');              // …and the typo is deleted before it lands
+  finish.AB(); await wait(0);
+  assert.equal(prep.ready('A'), 'file:A');
+  assert.deepEqual(states.at(-1), { ready: true, busy: false, failed: false });
+});
+
 test('picturePrep: an older drawing that finishes late is ignored', async () => {
   const c = clock();
   const finish = {};
@@ -220,6 +239,14 @@ test('picturePrep: a failed drawing is reported for that text only', async () =>
   assert.equal(prep.failed('good'), false);
   assert.equal(prep.ready('good'), 'good');
   prep.stop();
+});
+
+test('the email road previews the text as the mail app shows it: asterisks and all', async () => {
+  sendEditorDialog({ job: { text: '*Ordine*\n- Farina: 2', plain: true, open: () => true }, photo: false });
+  assert.equal(walk(preview()).filter(n => n.tagName === 'STRONG').length, 0);
+  assert.match(preview().textContent, /\*Ordine\*/);
+  click(otherButton());
+  assert.match(chooser, /jobs\.push\(\{ ids: \[supplier\.id\], name, text, plain: true, open: edited => \{/);
 });
 
 test('previewLines and the title', () => {

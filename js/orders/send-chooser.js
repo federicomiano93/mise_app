@@ -142,7 +142,7 @@ export function chooseAndSend({ rows, settings, canManage, suppliers, locationNa
       if (offer.route === 'email') {
         // ⚠️ COUNTED AS OPENED WHATEVER window.open ANSWERS: a mailto link hands over to the mail
         // app and many browsers answer null for it even when it worked (as before the editor).
-        jobs.push({ ids: [supplier.id], name, text, open: edited => {
+        jobs.push({ ids: [supplier.id], name, text, plain: true, open: edited => {
           openTab(mailto(supplier.email, emailSubject(locationName, language), edited));
           return true;
         } });

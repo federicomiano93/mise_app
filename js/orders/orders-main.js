@@ -1943,8 +1943,8 @@ function sendOneSupplier(supplierId) {
 // (the page is about to leave: the dialog waits for it to come back).
 function waitForAnswer(sent, { handOff = 'text' } = {}) {
   const at = new Date().toISOString();
-  sent.forEach(({ supplierId, quantities, units, date }) => {
-    const entry = awaitingEntry({ at, date: date || dayForSupplier(supplierId), quantities, units });
+  sent.forEach(({ supplierId, quantities, units, date, draft }) => {
+    const entry = awaitingEntry({ at, date: date || dayForSupplier(supplierId), quantities, units, draft });
     if (!entry) return;
     askHere.set(supplierId, { at: entry.at, seen: false });
     localAwaiting.delete(supplierId);
@@ -1999,6 +1999,10 @@ function noteAwaitingSnapshot() {
 // after the other. Escape leaves it to the banner.
 async function maybeAskHere() {
   if (!askHereWanted || askingHere || globalThis.document?.visibilityState !== 'visible') return;
+  // Never over another dialog (a send editor still going through its suppliers, a confirmation):
+  // two stacked dialogs share one Escape. The next snapshot or the page coming back asks again,
+  // and the banner asks meanwhile.
+  if (globalThis.document?.querySelector('.app-dialog-backdrop')) return;
   const all = currentAwaiting();
   const next = [...askHere].find(([id, mine]) => mine.seen && isAwaiting(all[id]) && all[id].at === mine.at);
   if (!next) { if (![...askHere.values()].some(m => !m.seen)) askHereWanted = false; return; }
@@ -2014,19 +2018,25 @@ async function maybeAskHere() {
       sendNowLabel: t('orders.awaiting.no'),
       cancelLabel: '',
     });
-    if (answer === 'yes') await answerAwaitingSent(supplierId, 'yes');
-    else if (answer === 'sendNow') await answerAwaitingSent(supplierId, 'no');
+    if (answer === 'yes') await answerAwaitingSent(supplierId, 'yes', all[supplierId].at);
+    else if (answer === 'sendNow') await answerAwaitingSent(supplierId, 'no', all[supplierId].at);
   } finally {
     askingHere = false;
   }
   maybeAskHere();
 }
 
-// «Sì» / «No», from the banner or the dialog, on any device.
-async function answerAwaitingSent(supplierId, answer) {
+// «Sì» / «No», from the banner or the dialog, on any device. `at` is the send the question was
+// ABOUT: if another device has sent this supplier again since, this answer is not about that
+// newer send, and nothing is recorded or removed.
+async function answerAwaitingSent(supplierId, answer, at) {
   const local = localAwaiting.get(supplierId) || null;
   const entry = local || state.awaiting?.[supplierId];
-  if (!isAwaiting(entry)) return;
+  if (!isAwaiting(entry) || (at && entry.at !== at)) {
+    setStatus(t('orders.awaiting.elsewhere'), 'ok', 4000);
+    scheduleRender('reminders');
+    return;
+  }
   const supplier = findOrderSupplier(supplierId);
   // A transaction and an archive both need the network (placeOrder says the same).
   if (answer === 'yes' && !navigator.onLine) {
@@ -2041,7 +2051,7 @@ async function answerAwaitingSent(supplierId, answer) {
     // this IS that answer. Only the lines that went are cleared (placeOrder sentOnly).
     record: (id, e) => placeOrder(id, {
       confirm: false, alreadySent: true, sentOnly: true,
-      date: e.date || undefined, quantities: e.quantities, units: e.units,
+      date: e.date || undefined, quantities: e.quantities, units: e.units, sentDraft: e.draft || null,
     }),
     // Not awaited: a write Firestore queues offline must not hold the answer open.
     restore: (id, e) => { setAwaitingSent(id, e).catch(err => console.error('Putting the question back failed:', err)); },
@@ -2499,8 +2509,12 @@ async function askSentCheck(suppliers, confirmed) {
     onSent: (sentIds, info = {}) => { sent = sentIds; handOff = info.handOff || 'text'; },
   });
   const handed = suppliersToRecord(ids, sent);
+  // `draft`: what the draft said for each one right now — the review screen may have corrected
+  // it, and «Sì» must clear those lines too (awaiting-sent.js awaitingEntry).
+  const bySupplier = ingredientsBySupplier();
   waitForAnswer(handed.map(id => ({
     supplierId: id, quantities: confirmed.quantities[id], units: confirmed.units[id],
+    draft: draftQuantities(bySupplier[id] || [], state.entries),
   })), { handOff });
   const notReached = suppliers.filter(s => !handed.includes(s.id)).map(s => supplierLabel(s));
   return { ids: [], notReached };
@@ -2723,6 +2737,16 @@ function unitConflictText(day, list, conflicts) {
 // Drop a supplier's rows from the in-memory draft immediately, so the screen
 // clears without waiting for the write to come back. What the autosave sends is
 // draft.js's claims, not this map: clearSupplier is what releases those.
+// A supplier's order was just recorded without going through «did it go?»: its waiting question,
+// if any, is answered — removed here and on every device.
+function forgetAwaitingAfterRecording(supplierId) {
+  askHere.delete(supplierId);
+  localAwaiting.delete(supplierId);
+  if (!isAwaiting(state.awaiting?.[supplierId])) return;
+  delete state.awaiting[supplierId];
+  clearAwaitingSent(supplierId).catch(err => console.error('Removing the answered question failed:', err));
+}
+
 // The lens for recording what WENT (placeOrder sentOnly): every line that was sent is filed
 // under this supplier, even one another phone has since moved elsewhere «this time» — it went
 // to this one.
@@ -2751,7 +2775,7 @@ function forgetSupplierLocally(supplierId) {
 // stored when it was handed over, and they are recorded whatever the draft says now — a line
 // cleared or moved to another supplier since still went to THIS one. Afterwards only the lines
 // still reading what went are cleared (awaiting-sent.js linesToClear): typing done since stays.
-async function placeOrder(supplierId, { confirm = true, date: pinnedDate, quantities = null, units = null, alreadySent = false, sentOnly = false } = {}) {
+async function placeOrder(supplierId, { confirm = true, date: pinnedDate, quantities = null, units = null, alreadySent = false, sentOnly = false, sentDraft = null } = {}) {
   const supplier = findOrderSupplier(supplierId);
   if (!supplier) return false;
   const ingredients = sentOnly ? withSentLines(supplierId, quantities) : orderIngredients();
@@ -2846,26 +2870,36 @@ async function placeOrder(supplierId, { confirm = true, date: pinnedDate, quanti
   // rows during the archive above is dropped with them: clearSupplier releases every
   // claim on those lines when it lands.
   const heldLines = heldLinesOf([supplierId]);
-  // «Sì» to «did it go?»: only the lines that went and still read what went; the day stamp only
-  // when nothing of this supplier is left (awaiting-sent.js).
-  let sentLines = null;
+  // «Sì» to «did it go?»: only the lines that went and still read what the draft said when they
+  // went; the day stamp only when nothing of this supplier is left (awaiting-sent.js).
+  let sentLines = [];
   let clearDay = true;
-  if (sentOnly) {
-    sentLines = linesToClear(state.entries, id => lensById()[id] || null, { quantities, units });
-    clearDay = !supplierKeepsLines(ingredientsOf(supplierId, orderIngredients(), { activeOnly: false }),
-      state.entries, sentLines);
-    sentLines.forEach(id => { delete state.entries[id]; });
-    if (clearDay) delete state.days[supplierId];
-  } else {
-    forgetSupplierLocally(supplierId);
+  // ⚠️ NOTHING BELOW MAY THROW OUT OF placeOrder: the order is recorded, and «did it go?» reads a
+  // rejection as «not recorded» and asks again — a second «Sì» would record it twice.
+  try {
+    if (sentOnly) {
+      sentLines = linesToClear(state.entries, id => lensById()[id] || null, { quantities, units, draft: sentDraft });
+      clearDay = !supplierKeepsLines(ingredientsOf(supplierId, orderIngredients(), { activeOnly: false }),
+        state.entries, sentLines);
+      sentLines.forEach(id => { delete state.entries[id]; });
+      if (clearDay) delete state.days[supplierId];
+    } else {
+      forgetSupplierLocally(supplierId);
+      // ⚠️⚠️ RECORDED ANOTHER WAY («Ordine fatto», «Sì, inviato», «Placed yesterday»): a «did it
+      // go?» still waiting for this supplier is answered by this very recording. Left in place,
+      // a later «Sì» on any device would record the same order a second time (mergeArchives adds).
+      forgetAwaitingAfterRecording(supplierId);
+    }
+    globalThis.window?.dispatchEvent(new CustomEvent('mise:action', { detail: 'order-sent' }));
+    // Recorded, so there is nothing left on that supplier's screen — back to the list
+    // (P20: a successful save returns you to where you came from). Not while lines typed after
+    // the send are still there: that screen is the next order.
+    if (state.openSupplier === supplierId && clearDay) closeSupplier();
+    syncInputsFromState();            // also re-derives every button's enabled state
+    renderReminders();
+  } catch (err) {
+    console.error('Tidying up after recording the order failed:', err);
   }
-  globalThis.window?.dispatchEvent(new CustomEvent('mise:action', { detail: 'order-sent' }));
-  // Recorded, so there is nothing left on that supplier's screen — back to the list
-  // (P20: a successful save returns you to where you came from). Not while lines typed after
-  // the send are still there: that screen is the next order.
-  if (state.openSupplier === supplierId && clearDay) closeSupplier();
-  syncInputsFromState();            // also re-derives every button's enabled state
-  renderReminders();
 
   try {
     // ⚠️ THE LENS AS IT IS NOW, not the list taken before the confirmation screen opened: a line
@@ -3143,10 +3177,12 @@ function renderReminders() {
   remindersDay = todayISO();
 
   // «Ordine a X inviato alle 10:42: è partito?» — on every device, until somebody answers.
-  renderAwaiting(document.getElementById('orders-awaiting'), awaitingList(currentAwaiting(), state.suppliers), {
+  // The suppliers Orders can record for — the «No supplier» group included, a switched-off one not
+  // (findOrderSupplier's list): a banner whose «Sì» could never record is not drawn.
+  renderAwaiting(document.getElementById('orders-awaiting'), awaitingList(currentAwaiting(), orderSupplierList()), {
     question: awaitingQuestion,
-    onYes: supplierId => answerAwaitingSent(supplierId, 'yes'),
-    onNo: supplierId => answerAwaitingSent(supplierId, 'no'),
+    onYes: (supplierId, at) => answerAwaitingSent(supplierId, 'yes', at),
+    onNo: (supplierId, at) => answerAwaitingSent(supplierId, 'no', at),
     busy: supplierId => answeringAwaiting.has(supplierId),
   });
 

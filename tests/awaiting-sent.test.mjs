@@ -235,8 +235,9 @@ test('the device that sent it asks at once when the page comes back; Escape leav
   const ask = main.slice(main.indexOf('async function maybeAskHere'), main.indexOf('// «Sì» / «No», from the banner'));
   assert.match(ask, /sentCheckDialog\(\{/);
   assert.match(ask, /cancelLabel: ''/);
-  assert.match(ask, /if \(answer === 'yes'\) await answerAwaitingSent\(supplierId, 'yes'\);/);
-  assert.match(ask, /else if \(answer === 'sendNow'\) await answerAwaitingSent\(supplierId, 'no'\);/);
+  assert.match(ask, /if \(answer === 'yes'\) await answerAwaitingSent\(supplierId, 'yes', all\[supplierId\]\.at\);/);
+  assert.match(ask, /else if \(answer === 'sendNow'\) await answerAwaitingSent\(supplierId, 'no', all\[supplierId\]\.at\);/);
+  assert.match(ask, /querySelector\('\.app-dialog-backdrop'\)\) return;/, 'never stacked over another dialog');
 });
 
 test('a question the rules refuse stays on this device rather than vanishing', () => {
@@ -261,4 +262,47 @@ test('the words, both languages', async () => {
   for (const k of ['questionDay', 'kept', 'elsewhere', 'notShared']) {
     assert.ok(d.en[`orders.awaiting.${k}`] && d.it[`orders.awaiting.${k}`], k);
   }
+});
+
+// ── found in review (14 Nov 2026) ─────────────────────────────────────────────────
+
+test('⚠️⚠️ an order recorded ANOTHER way answers its waiting question, so a later «Sì» cannot record it twice', () => {
+  const place = main.slice(main.indexOf('async function placeOrder'), main.indexOf('// ── Clearing what has been typed'));
+  const plain = place.slice(place.indexOf('} else {\n      forgetSupplierLocally(supplierId);'));
+  assert.match(plain, /forgetAwaitingAfterRecording\(supplierId\);/);
+  const fn = main.slice(main.indexOf('function forgetAwaitingAfterRecording'), main.indexOf('// The lens for recording what WENT'));
+  assert.match(fn, /clearAwaitingSent\(supplierId\)/);
+  assert.match(fn, /localAwaiting\.delete\(supplierId\)/);
+  assert.match(fn, /askHere\.delete\(supplierId\)/);
+});
+
+test('⚠️ nothing after the History write can reject placeOrder (a rejection would ask again, and record twice)', () => {
+  const place = main.slice(main.indexOf('PAST THE POINT OF NO RETURN'), main.indexOf('// ── Clearing what has been typed'));
+  assert.ok(place.indexOf('try {') < place.indexOf('linesToClear('));
+  assert.match(place, /catch \(err\) \{\s*console\.error\('Tidying up after recording the order failed:'/);
+});
+
+test('an answer is about ONE send: a newer send to the same supplier is not recorded by it', () => {
+  const fn = main.slice(main.indexOf('async function answerAwaitingSent'), main.indexOf('// ── Sending the list to whoever'));
+  assert.match(fn, /if \(!isAwaiting\(entry\) \|\| \(at && entry\.at !== at\)\) \{\s*setStatus\(t\('orders\.awaiting\.elsewhere'\)/);
+  assert.match(main, /onYes: \(supplierId, at\) => answerAwaitingSent\(supplierId, 'yes', at\)/);
+});
+
+test('the banner lists the suppliers Orders can record for («No supplier» in, switched-off out)', () => {
+  assert.match(main, /awaitingList\(currentAwaiting\(\), orderSupplierList\(\)\)/);
+});
+
+test('⚠️ «Invialo ora» with numbers corrected on the review screen: «Sì» clears what the DRAFT said, no phantom order', () => {
+  const entry = awaitingEntry({ at: AT, date: '2026-11-14', quantities: { flour: 3 }, units: {},
+    draft: { quantities: { flour: 5, salt: 2 }, units: {} } });
+  assert.deepEqual(entry.quantities, { flour: 3 }, 'what went is what gets recorded');
+  assert.deepEqual(entry.draft, { quantities: { flour: 5, salt: 2 }, units: {} });
+  const cards = { flour: { id: 'flour', unit: 'kg' }, salt: { id: 'salt', unit: 'kg' }, milk: { id: 'milk', unit: 'l' } };
+  const entries = { flour: { qty: 5 }, salt: { qty: 2 }, milk: { qty: 1 } };   // milk typed after the send
+  assert.deepEqual(linesToClear(entries, id => cards[id], entry), ['flour', 'salt']);
+  assert.equal(awaitingEntry({ at: AT, quantities: { a: 1 }, draft: { quantities: { a: 1 } } }).draft, undefined,
+    'no copy when the draft is what went');
+  const check = main.slice(main.indexOf('async function askSentCheck'), main.indexOf('// The line that says which suppliers'));
+  assert.match(check, /draft: draftQuantities\(bySupplier\[id\] \|\| \[\], state\.entries\)/);
+  assert.match(main, /sentDraft: e\.draft \|\| null/);
 });

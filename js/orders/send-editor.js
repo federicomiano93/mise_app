@@ -75,8 +75,11 @@ export function picturePrep({ render, delay = RENDER_DELAY_MS, onChange = () => 
       wanted = text;
       if (timer !== null) clearTimer(timer);
       timer = null;
+      // Back to the text already drawn: that picture is the one, and a drawing still running for
+      // the text typed in between must not replace it when it lands (it would leave «Invia» off
+      // with nothing left to draw — found in review, 14 Nov 2026).
+      if (drawn && drawn.text === text) { seq++; onChange(state()); return; }
       onChange(state());
-      if (drawn && drawn.text === text) return;
       if (now) { draw(text); return; }
       timer = setTimer(() => { timer = null; draw(text); }, delay);
     },
@@ -154,9 +157,12 @@ export function afterShare(result) {
   return result === 'shared' ? 'shared' : result === 'cancelled' ? 'again' : 'failed';
 }
 
-// The preview, drawn with nodes (never innerHTML: the text is whatever was typed).
-function fillPreview(node, text) {
-  node.replaceChildren(...previewLines(text).map(runs => el('div', { class: 'send-editor-line' },
+// The preview, drawn with nodes (never innerHTML: the text is whatever was typed). `plain` is the
+// email road: a mail app shows the asterisks as they are, so the preview does too.
+function fillPreview(node, text, plain = false) {
+  const lines = plain ? String(text || '').split('\n').map(line => (line ? [{ text: line, bold: false }] : []))
+    : previewLines(text);
+  node.replaceChildren(...lines.map(runs => el('div', { class: 'send-editor-line' },
     runs.length ? runs.map(r => (r.bold ? el('strong', { text: r.text }) : document.createTextNode(r.text)))
       : [el('br')])));
 }
@@ -168,7 +174,8 @@ function fillPreview(node, text) {
 //   'failed'    — the picture could not be drawn or shared: the caller offers the text instead
 //   'skipped'   — «Salta» (several in a row): not sent, carry on
 //   'cancelled' — «Annulla», Escape: not sent, and nothing after it either
-// job: { name?, text, open(text) → truthy when it opened }; photo: draw and share a picture.
+// job: { name?, text, open(text) → truthy when it opened, plain? (email: no bold) };
+// photo: draw and share a picture.
 export function sendEditorDialog({ job, i = 0, n = 1, language = null, photo = false, render }) {
   return new Promise(resolve => {
     let shell = null;
@@ -183,7 +190,7 @@ export function sendEditorDialog({ job, i = 0, n = 1, language = null, photo = f
       'aria-describedby': hintId,
     });
     area.value = job.text;
-    fillPreview(preview, job.text);
+    fillPreview(preview, job.text, job.plain === true);
 
     const sendBtn = el('button', { class: 'app-dialog-btn app-dialog-btn-solid', type: 'button',
       text: t('orders.sendEditor.send') });
@@ -216,7 +223,7 @@ export function sendEditorDialog({ job, i = 0, n = 1, language = null, photo = f
     });
 
     area.addEventListener('input', () => {
-      fillPreview(preview, area.value);
+      fillPreview(preview, area.value, job.plain === true);
       if (pictures) pictures.update(area.value);
       else sendBtn.disabled = !area.value.trim();
     });

@@ -125,13 +125,21 @@ export function renderPending(container, list, {
 //
 // list: [{ supplier, at, … }] from awaitingList; question(supplier, entry) → the sentence;
 // busy(supplierId) → true while this device is answering (both buttons wait).
+// onYes / onNo(supplierId, at): `at` names the send the banner was showing.
 let awaitingSeq = 0;
 export function renderAwaiting(container, list, { question, onYes, onNo, busy } = {}) {
   if (!container) return;
+  // ⚠️ REDRAWN ONLY WHEN SOMETHING CHANGED. This runs on every draft snapshot (every keystroke
+  // on any phone); a rebuild each time would throw the keyboard or screen-reader focus off «Sì»
+  // and make the polite live region on the host repeat the question.
+  const sentences = list.map(entry => (question ? question(entry.supplier, entry) : supplierLabel(entry.supplier)));
+  const key = JSON.stringify(list.map((e, i) => [e.supplier.id, e.at, sentences[i], Boolean(busy?.(e.supplier.id))]));
+  if (container.dataset.awaitingKey === key) return;
+  container.dataset.awaitingKey = key;
   container.textContent = '';
   if (!list.length) return;
 
-  list.forEach(entry => {
+  list.forEach((entry, i) => {
     const { supplier } = entry;
     const id = `awaiting-q-${++awaitingSeq}`;
     const waiting = Boolean(busy?.(supplier.id));
@@ -139,7 +147,7 @@ export function renderAwaiting(container, list, { question, onYes, onNo, busy } 
     // reader moving from button to button hears which order «Sì» is about.
     const answer = (label, cls, fn) => el('button', {
       type: 'button', class: `pending-btn${cls}`, 'aria-describedby': id,
-      onClick: () => fn?.(supplier.id),
+      onClick: () => fn?.(supplier.id, entry.at),
     }, label);
     const yes = answer(t('orders.awaiting.yes'), ' primary', onYes);
     const no = answer(t('orders.awaiting.no'), '', onNo);
@@ -147,7 +155,7 @@ export function renderAwaiting(container, list, { question, onYes, onNo, busy } 
     no.disabled = waiting;
     container.appendChild(el('div', { class: 'pending-banner awaiting-banner' }, [
       el('div', { class: 'pending-main' }, [
-        el('span', { class: 'pending-title', id, text: question ? question(supplier, entry) : supplierLabel(supplier) }),
+        el('span', { class: 'pending-title', id, text: sentences[i] }),
       ]),
       el('div', { class: 'pending-actions' }, [yes, no]),
     ]));

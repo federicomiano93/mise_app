@@ -26,9 +26,7 @@ const positive = v => {
   return Number.isFinite(n) && n > 0 ? n : 0;
 };
 
-// The value written under awaitingSent.<supplierId>. Only lines with a quantity; a unit only for
-// a line that has one. Returns null when nothing was sent (there is no question to ask).
-export function awaitingEntry({ at, date, quantities, units } = {}) {
+function cleanLines(quantities, units) {
   const q = {};
   const u = {};
   Object.entries(quantities || {}).forEach(([id, qty]) => {
@@ -38,13 +36,30 @@ export function awaitingEntry({ at, date, quantities, units } = {}) {
     const unit = cleanUnit(units?.[id]);
     if (unit) u[id] = unit;
   });
-  if (!Object.keys(q).length) return null;
-  return {
+  return { quantities: q, units: u };
+}
+
+// The value written under awaitingSent.<supplierId>. Only lines with a quantity; a unit only for
+// a line that has one. Returns null when nothing was sent (there is no question to ask).
+//
+// `draft` ({ quantities, units }) is what the DRAFT said for this supplier at the moment of the
+// send, when it differs from what went: «Ordine fatto» → «Invialo ora» sends the numbers the
+// review screen CONFIRMED, which may be corrected and are never written back to the draft. «Sì»
+// clears the lines still reading what the draft said then (linesToClear), so a corrected «5 → 3»
+// does not stay behind as a phantom order. Left out when it is the same as what went.
+export function awaitingEntry({ at, date, quantities, units, draft = null } = {}) {
+  const sent = cleanLines(quantities, units);
+  if (!Object.keys(sent.quantities).length) return null;
+  const entry = {
     at: typeof at === 'string' ? at : new Date().toISOString(),
     date: typeof date === 'string' && DAY.test(date) ? date : '',
-    quantities: q,
-    units: u,
+    ...sent,
   };
+  if (draft) {
+    const before = cleanLines(draft.quantities, draft.units);
+    if (JSON.stringify(before) !== JSON.stringify(sent)) entry.draft = before;
+  }
+  return entry;
 }
 
 // What one supplier's order holds RIGHT NOW in the draft, in the shape awaitingEntry takes: the
@@ -97,8 +112,10 @@ export function claimDecision(draft, supplierId, at) {
 // in the message, a number corrected — and that typing must survive: it is the next order, not
 // this one. A line whose quantity or unit has changed since is left as it is.
 //   entries: the draft's entries; cardOf(id) → the ingredient (for the card's unit);
-//   sent: { quantities, units } as stored.
-export function linesToClear(entries, cardOf, sent) {
+//   stored: the entry as stored — its `draft` (what the draft said at the send) when there is one,
+//   else what went.
+export function linesToClear(entries, cardOf, stored) {
+  const sent = stored?.draft && typeof stored.draft === 'object' ? stored.draft : stored;
   return Object.keys(sent?.quantities || {}).filter(id => {
     const entry = entries?.[id];
     if (!entry) return false;

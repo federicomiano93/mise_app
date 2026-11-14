@@ -67,7 +67,11 @@ test('wiring: both recording paths ask, before archiving, and the send carries t
   // The message rows are built from the confirmed numbers, not the live draft.
   const ask = src.slice(src.indexOf('async function askSentCheck'), src.indexOf('// ── Order placed for several suppliers at once'));
   assert.match(ask, /confirmedRows\(/);
-  assert.doesNotMatch(ask, /itemsFromQuantities|state\.entries/);
+  assert.doesNotMatch(ask, /itemsFromQuantities/);
+  // The live draft is read for ONE thing only: what it said at the send, so «Sì» can clear those
+  // lines (awaiting-sent.js) — never for the message.
+  assert.deepEqual(ask.match(/state\.entries/g), ['state.entries']);
+  assert.match(ask, /draft: draftQuantities\(bySupplier\[id\] \|\| \[\], state\.entries\)/);
   assert.match(ask, /chooseAndSend\(/);
   // Only supplier roads, with the send screen's own unit-clash check; no manager road.
   assert.match(ask, /supplierRoadsOnly: true/);
