@@ -75,14 +75,20 @@ describe('the first step', () => {
     expect(fileBox()).toBe(input);
   });
 
-  it('⚠️ a zip is read in the app: a summary, groups for what is left out, and NOTHING is written', async () => {
+  // Mise 2 (14 Nov 2026): every product is imported, with its kind — the groups say what goes in, by kind; the cola is resale.
+  it('⚠️ a zip is read in the app: a summary, what goes in by kind, and NOTHING is written', async () => {
     const { user, importing } = await open();
     await chooseFiles(user, invoiceZip());
     expect(screen.getByText('Chosen file: fatture.zip')).toBeInTheDocument();
-    expect(resultLine()).toHaveTextContent('1 invoice read · 1 supplier found · 2 ingredients found');
-    expect(screen.getByText('Packaging and resale (1)')).toBeInTheDocument();
+    expect(resultLine()).toHaveTextContent('1 invoice read · 1 supplier found · 3 products to import');
+    expect(screen.getByText('Ingredients (2)')).toBeInTheDocument();
+    expect(screen.getByText('Resale (1)')).toBeInTheDocument();
+    expect(screen.queryByText(/^Packaging \(/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Other \(/)).not.toBeInTheDocument();
     expect(screen.getByText(/COCA COLA LATTINA 33 CL/)).toBeInTheDocument();
-    expect(screen.getByRole('checkbox', { name: 'Import as an ingredient' })).not.toBeChecked();
+    expect(screen.getByText(/You can change the type later on the item’s card/)).toBeInTheDocument();
+    expect(screen.queryByText(/Packaging and resale/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
     expect(screen.queryByText(/Left out by you/)).not.toBeInTheDocument();
     expect(importing.writes).toEqual([]);
     // The log is read when the screen opens, and again — fresh — before the file is read; then the remembered decisions.
@@ -91,16 +97,36 @@ describe('the first step', () => {
   });
 
   it('the groups stay closed until opened, and the open ones are remembered across a redraw', async () => {
-    const { user } = await open();
+    const importing = fakeImportSource({ decisions: [{ id: decisionId(K_FLOUR), decision: 'skip', label: 'Farina' }] });
+    const { user } = await open({ importing });
     await chooseFiles(user, invoiceZip());
-    const group = screen.getByText('Packaging and resale (1)').closest('details');
+    const group = screen.getByText('Resale (1)').closest('details');
     expect(group).not.toBeNull();
     expect(group).not.toHaveAttribute('open');
-    await user.click(screen.getByText('Packaging and resale (1)'));
+    await user.click(screen.getByText('Resale (1)'));
     await waitFor(() => { expect(group).toHaveAttribute('open'); });
     // A tick redraws the screen; the group stays open.
-    await user.click(screen.getByRole('checkbox', { name: 'Import as an ingredient' }));
-    expect(screen.getByText('Packaging and resale (1)').closest('details')).toHaveAttribute('open');
+    await user.click(screen.getByRole('checkbox', { name: 'Import again' }));
+    expect(screen.getByText('Resale (1)').closest('details')).toHaveAttribute('open');
+  });
+
+  it('says the groups by kind and the hint in Italian', async () => {
+    const { user } = await open({ lang: 'it' });
+    await chooseFiles(user, invoiceZip());
+    expect(screen.getByText('Ingredienti (2)')).toBeInTheDocument();
+    expect(screen.getByText('Rivendita (1)')).toBeInTheDocument();
+    expect(screen.getByText(/Il tipo si può cambiare dopo, nella scheda dell’articolo/)).toBeInTheDocument();
+    expect(screen.getByText(/3 prodotti da importare/)).toBeInTheDocument();
+  });
+
+  it('one line of each kind: four groups, in the order of the kinds', async () => {
+    const { user } = await open();
+    const box = { desc: 'PELLICOLA ALIMENTARE ROTOLO', code: 'PEL', qty: 3, unit: 'KG', total: 15 };
+    const soap = { desc: 'DETERSIVO PAVIMENTI', code: 'DT', qty: 4, unit: 'PZ', total: 12 };
+    await chooseFiles(user, invoiceZip([FLOUR, box, COLA, soap]));
+    const titles = [...document.querySelectorAll('summary')].map(node => node.textContent);
+    expect(titles.slice(0, 4)).toEqual(['Ingredients (1)', 'Packaging (1)', 'Resale (1)', 'Other (1)']);
+    expect(resultLine()).toHaveTextContent('4 products to import');
   });
 
   it('a loose .p7m is accepted, counted and not read; the facts line says so', async () => {
@@ -113,14 +139,12 @@ describe('the first step', () => {
 });
 
 describe('⚠️ ticking changes the selection at once, in memory', () => {
-  it('a product put back is counted, and taken out again; nothing is written', async () => {
+  // Mise 2 (14 Nov 2026): «Import as an ingredient» is gone — there is nothing left out for what it was taken for.
+  it('nothing is offered to be «imported as an ingredient»: every product is already in; nothing is written', async () => {
     const { user, importing } = await open();
     await chooseFiles(user, invoiceZip());
-    await user.click(screen.getByRole('checkbox', { name: 'Import as an ingredient' }));
-    expect(resultLine()).toHaveTextContent('3 ingredients found');
-    expect(screen.getByRole('checkbox', { name: 'Import as an ingredient' })).toBeChecked();
-    await user.click(screen.getByRole('checkbox', { name: 'Import as an ingredient' }));
-    expect(resultLine()).toHaveTextContent('2 ingredients found');
+    expect(screen.queryByRole('checkbox', { name: 'Import as an ingredient' })).not.toBeInTheDocument();
+    expect(resultLine()).toHaveTextContent('3 products to import');
     expect(importing.writes).toEqual([]);
     expect(importing.countOf('loadDecisions')).toBe(1);
   });
@@ -130,9 +154,9 @@ describe('⚠️ ticking changes the selection at once, in memory', () => {
     const { user } = await open({ importing });
     await chooseFiles(user, invoiceZip());
     expect(screen.getByText('Left out by you (1)')).toBeInTheDocument();
-    expect(resultLine()).toHaveTextContent('1 ingredient found');
+    expect(resultLine()).toHaveTextContent('2 products to import');
     await user.click(screen.getByRole('checkbox', { name: 'Import again' }));
-    expect(resultLine()).toHaveTextContent('2 ingredients found');
+    expect(resultLine()).toHaveTextContent('3 products to import');
     expect(importing.writes).toEqual([]);
   });
 
@@ -142,9 +166,9 @@ describe('⚠️ ticking changes the selection at once, in memory', () => {
     await chooseFiles(user, invoiceZip());
     expect(screen.getByText('Suppliers left out by you (1)')).toBeInTheDocument();
     expect(screen.getByText('3 products')).toBeInTheDocument();
-    expect(resultLine()).toHaveTextContent('0 ingredients found');
+    expect(resultLine()).toHaveTextContent('0 products to import');
     await user.click(screen.getByRole('checkbox', { name: 'Import again' }));
-    expect(resultLine()).toHaveTextContent('2 ingredients found');
+    expect(resultLine()).toHaveTextContent('3 products to import');
   });
 
   it('a product that cannot be an ingredient says why, with no tick', async () => {

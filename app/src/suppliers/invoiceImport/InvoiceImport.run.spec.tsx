@@ -448,3 +448,35 @@ describe('a held price', () => {
     expect(importing.prices.get('ing-1')?.pricePerUnit).toBe(0.7125);
   });
 });
+
+// Mise 2, 14 Nov 2026 («tutti i prodotti delle fatture in Mise»): every product is imported with its item kind. Invented invoices only.
+describe('every kind of product', () => {
+  const FILM = { desc: 'PELLICOLA ALIMENTARE ROTOLO', code: 'PEL', qty: 3, unit: 'KG', total: 15 };
+  const WATER = { desc: 'ACQUA SABRINELLA NAT 1/2X12', code: 'AQ', qty: 10, unit: 'CT', total: 30 };
+  const SOAP = { desc: 'DETERSIVO PAVIMENTI', code: 'DT', qty: 4, unit: 'PZ', total: 12 };
+
+  it('⚠️ one line of each kind ends with four NEW items with the right kinds, none with an allergen key', async () => {
+    const { user, importing } = await open({ suppliers: [] });
+    await toIngredients(user, invoiceZip([FLOUR, FILM, WATER, SOAP]));
+    await importAll(user, 'Import 4 ingredients');
+    const kinds = Object.fromEntries(importing.ingredients.map(created => [created.supplierCode, created.kind]));
+    expect(kinds).toEqual({ F00: 'ingredient', PEL: 'packaging', AQ: 'resale', DT: 'other' });
+    for (const created of importing.ingredients) {
+      for (const key of ['allergens', 'mayContain', 'allergensCheckedAt', 'nutrition', 'packIngredients']) expect(created).not.toHaveProperty(key);
+    }
+    // The detergent is priced per piece, with no piece weight (3.00 each); the water per litre (0.50).
+    const idOf = (code: string) => importing.ingredients.find(created => created.supplierCode === code)?.id as string;
+    expect(importing.prices.get(idOf('DT'))).toMatchObject({ priceUnit: 'pcs', pricePerUnit: 3, unitWeightKg: null });
+    expect(importing.prices.get(idOf('AQ'))).toMatchObject({ priceUnit: 'l', pricePerUnit: 0.5 });
+  });
+
+  it('⚠️ an existing RESALE item matched by its article code is never turned into an ingredient', async () => {
+    const water = item('ing-water', { name: 'Acqua naturale', supplierId: 'sup-1', supplierCode: 'AQ', kind: 'resale', weight: '0.5 l' });
+    const { user, importing } = await open({ ingredients: [water] });
+    // This month the line no longer names a drink: the reader takes it for an ingredient. The code still finds the water.
+    await toIngredients(user, invoiceZip([{ ...WATER, desc: 'SABRINELLA NATURALE 1/2 LT X 12' }]));
+    await importAll(user, 'Import 1 ingredient');
+    expect(importing.ingredients).toHaveLength(1);
+    expect(importing.ingredients[0]).toMatchObject({ id: 'ing-water', kind: 'resale', name: 'Acqua naturale' });
+  });
+});
