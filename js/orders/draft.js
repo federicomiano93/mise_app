@@ -319,6 +319,7 @@ async function settleRestored() {
   if (expired || isEmpty(stillOurs(restored, known).entries)) {
     restored = null;
     saveJournal();
+    announceSaveState();
     return false;
   }
   let ordered = null;
@@ -624,8 +625,13 @@ export function sendWaitingDraft() {
 // write hands its fields back to `pending`, so it stays «not sent»). A snapshot can never make it «saved»
 // while a write is in the air: it may be Firestore showing this phone's own write before the server
 // answers. `ready` stays false until the first snapshot of the draft has arrived.
+// ⚠️ AND NOTHING THE LAST PAGE LEFT IS STILL WAITING TO COME BACK (`restored`): a page iOS froze and then
+// discarded leaves its last quantity in this device's note only, and it is sent once settleRestored has
+// the server's word — a second or two, every 30 s on a weak line. «Saved» meanwhile would be the very
+// lie of 14 Nov, on the very device that typed it.
+const noteWaiting = () => Boolean(restored) && (!isEmpty(restored.entries) || !isEmpty(restored.days));
 function currentSaveState() {
-  return { ready: draftSeen, saved: settled() && !unsent() };
+  return { ready: draftSeen, saved: settled() && !unsent() && !noteWaiting() };
 }
 
 function announceSaveState() {
@@ -642,7 +648,8 @@ function announceSaveState() {
 // Tell `cb` the save state now and on every change ({ ready, saved }). Returns a way to stop.
 export function onDraftSaveState(cb) {
   saveStateWatchers.add(cb);
-  cb(currentSaveState());
+  // Guarded like every later call: Orders subscribes in the middle of starting up.
+  try { cb(currentSaveState()); } catch (err) { console.error('The save state could not be shown:', err); }
   return () => { saveStateWatchers.delete(cb); };
 }
 
@@ -695,6 +702,7 @@ export function watchDraft(onChange, onError) {
     if (!note) return;
     journalAt = note.at;
     restored = note;
+    announceSaveState();
     const settle = () => {
       settleRestored().then(cameBack => {
         if (cameBack === null) setTimeout(settle, ORDERS_RETRY_MS);
@@ -838,6 +846,7 @@ function forgetRestoredPaths(paths) {
     if (root === 'days' && id) delete restored.days[id];
   });
   saveJournal();
+  announceSaveState();
 }
 
 // Take ONE ingredient's row out of the shared draft — called when the ingredient is deleted.

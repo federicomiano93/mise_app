@@ -135,6 +135,40 @@ test('a watcher that throws never breaks the save', async () => {
   assert.deepEqual(page.reports, [true], 'reported as saved, not as a failure');
 });
 
+test('a page reopened after iOS threw it away is NOT «saved» while the last page\'s quantity is only in the note', async () => {
+  const first = await openPage();
+  type(first, 'flour', { qty: 3 });
+  // No pause: the page is gone before anything left it. Only this device's note holds the 3.
+
+  const second = await openPage();
+  assert.deepEqual(now(second), { ready: true, saved: false }, 'the note still has to come back');
+  mock.timers.tick(800);
+  await settle();
+  assert.deepEqual(now(second), { ready: true, saved: false }, 'still waiting for the server');
+
+  stub.emit(server());
+  stub.answerFromServer(server());
+  await settle();
+  assert.equal(second.entries.flour.qty, 3, 'back on screen');
+  assert.deepEqual(now(second), { ready: true, saved: false }, 'back, and waiting for the pause');
+  mock.timers.tick(800);
+  await settle();
+  assert.equal(stub.calls.saveDoc.at(-1).data.entries.flour.qty, 3);
+  assert.deepEqual(now(second), { ready: true, saved: true });
+});
+
+test('a note the server already holds settles to «saved» without a write', async () => {
+  const first = await openPage();
+  type(first, 'flour', { qty: 3 });
+  const second = await openPage({ snapshot: false });
+  stub.emit(server({ flour: { qty: 3, stock: 0 } }));
+  assert.deepEqual(now(second), { ready: true, saved: false });
+  stub.answerFromServer(server({ flour: { qty: 3, stock: 0 } }));
+  await settle();
+  assert.deepEqual(now(second), { ready: true, saved: true });
+  assert.equal(stub.calls.saveDoc.length, 0);
+});
+
 // ── Sent at once on leaving a box ────────────────────────────────────────────
 
 test('sendWaitingDraft sends what is waiting AT ONCE, one write, and the pause then sends nothing more', async () => {
