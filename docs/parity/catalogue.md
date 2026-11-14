@@ -1985,14 +1985,22 @@ such action; it is frozen, so it gets none.
   «Annulla»). Both totals are written like the Total line («4500 g»). ⚠️ `{new}` is the total the recipe WILL have — the rows as shown,
   added up. All in grams that is the batch itself (the rows are rounded to add up to it); with kg, litre or ml rows each row is rounded in
   its own unit, so it can be a gram or two off the batch typed (2000 g typed on the spec's mixed recipe saves 1999 g). The question says
-  what is saved. The question has its own `useConfirm` and is CLOSED (answered «no») when the recipe or the batch changes under it.
+  what is saved. The question has its own `useConfirm` and is CLOSED (answered «no») when this recipe's name or rows, or the batch,
+  change under it — compared by content, so a save of another recipe in the venue does not close it.
+- **Refused, with a notice and nothing saved** (`useAlert`): ⚠️ a batch so small that a row WITH an amount would be saved as 0 or below
+  (`rowsLostByRebase`: 2 g of yeast in a 400 g test batch reads «0 g»; saved, it would be gone from every later batch) — «This batch
+  can’t become the base recipe: the amount of {rows} would go down to 0. Calculate a bigger batch first.» / «Questa dose non può
+  diventare la ricetta base: la quantità di {rows} andrebbe a 0. Calcola prima una dose più grande.»; and a recipe with no name, which
+  the rules refuse — «This recipe has no name. Give it one with Edit first.» / «Questa ricetta non ha un nome. Dagliene uno prima con
+  Modifica.». «To taste» rows and rows that already had no amount do not count.
 - **What is saved** (`rebaseAmounts` of `shared/src/catalogue-model.ts`, beside `scaleCatalogue`, Mise 2 only): each row's number from
   the very function the table draws from (`scaleCatalogue`), so pieces, spoons, ml, kg / l (three decimals) and sub-recipe rows are
   saved exactly as read; a «to taste» row keeps its amount. Only `ingredients[].grams` changes: every row is spread, so its name, unit,
   link, row id and divider stay. The save is the editor's own store write (`store.saveRecipe`, local-first): it sends the name, the rows
   and the label weight and shelf life as they were; the oven loss and its weighings, the steps and closing message (`KEPT_FIELDS`), the
   category, the image label's texts and the archived flag are NOT sent, so they stay as stored. A refusal puts the recipe back and the
-  section says the editor's sentence («Couldn’t save “{name}” — check your connection.», `recipe-not-saved`).
+  section says the editor's sentence («Couldn’t save “{name}” — check your connection.», `recipe-not-saved`). Like any editor save it
+  also writes the recipe as this phone normalised it (a row with no id gets one, a trimmed name) and, offline, from this phone's copy.
 - **After.** The batch is cleared (the recipe as written now IS what was on screen), «Recipe saved.» is said, and the focus goes to the
   batch box (the button pressed is gone). ⚠️ A REFUSED save puts the recipe back but NOT the batch: the screen then shows the recipe as
   it was before, at its base, and the batch has to be typed again.
@@ -2004,8 +2012,9 @@ change that mix.
 each unit as shown, «to taste» kept, the round trip through `baseAmounts`, odd inputs → null, the recipe untouched) and the export list;
 `app/src/recipes/RecipesSection.useAsBase.spec.tsx` (absent without a batch and right under Clear with one, the question with both
 totals and Cancel, the saved rows equal to the rows read for every unit and a sub-recipe row with no other field sent or changed, the
-batch cleared and «Recipe saved.» with the focus on the box, the all-grams sum, a refused save, a change under the open question,
-Italian, an employee, and the card with `canEdit` false). Not driven on the emulator or a device yet.
+batch cleared and «Recipe saved.» with the focus on the box, the all-grams sum, a refused save, a change under the open question and
+another recipe's save that leaves it open, the refusal of a row going to 0 and of a nameless recipe, Italian, an employee, and the card
+with `canEdit` false); `rowsLostByRebase` in the shared spec. Not driven on the emulator or a device yet.
 
 ## Scale by ingredient as built (14 Nov 2026) — NEW IN MISE 2, no original in the current app
 

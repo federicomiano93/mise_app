@@ -1,10 +1,11 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { BookCheck } from 'lucide-react';
-import { batchWarning, formatWeight, rebaseAmounts, weighableTotalGrams } from '@mise/shared/catalogue-model';
+import { batchWarning, formatWeight, rebaseAmounts, rowsLostByRebase, weighableTotalGrams } from '@mise/shared/catalogue-model';
 import type { CatalogueRecipe, RowScale } from '@mise/shared/catalogue-model';
 import { useT } from '../i18n/useT';
 import { Button } from '../ui/Button';
 import { useStatusMessage } from '../ui/StatusMessage';
+import { useAlert } from '../ui/useAlert';
 import { useConfirm } from '../ui/useConfirm';
 import { useRecipesStore } from './RecipesContext';
 import { amountText, recipeAmounts, wholeNumber } from './recipeAmounts';
@@ -42,6 +43,7 @@ export function BatchCard({ recipe, target, row = null, canEdit }: Props) {
   const say = useStatusMessage();
   const [confirm, confirmDialog] = useConfirm();
   const [confirmBase, baseDialog, dismissBase] = useConfirm();
+  const [alert, alertDialog] = useAlert();
   const headingId = useId();
   const box = useRef<HTMLInputElement>(null);
   const askingBase = useRef(false);
@@ -56,10 +58,12 @@ export function BatchCard({ recipe, target, row = null, canEdit }: Props) {
     setText(target !== null ? String(Math.round(target)) : '');
   }
 
-  // ⚠️ THE QUESTION NAMES NUMBERS, SO A CHANGE UNDER IT CLOSES IT: the recipe changed on another phone, or the batch was cleared
-  // or changed, while «Use as base?» was open — its totals are no longer what would be saved. Answering «no» saves nothing, and
-  // the person asks again over what the screen shows now (as the Export sheet closes on the same change).
-  useEffect(() => { dismissBase(); }, [recipe, target, row?.index, row?.amount, dismissBase]);
+  // ⚠️ THE QUESTION NAMES NUMBERS, SO A CHANGE UNDER IT CLOSES IT: this recipe's name or rows changed on another phone, or the
+  // batch was cleared or changed, while «Use as base?» was open — its totals are no longer what would be saved. Answering «no»
+  // saves nothing, and the person asks again over what the screen shows now. Compared by CONTENT, not by the object: every
+  // snapshot rebuilds every recipe, and a save of ANOTHER recipe in the venue must not close the question.
+  const asked = JSON.stringify([target, row?.index ?? null, row?.amount ?? null, recipe.name, recipe.ingredients]);
+  useEffect(() => { dismissBase(); }, [asked, dismissBase]);
 
   // ⚠️ THE AMOUNTS SAVED ARE THE AMOUNTS SHOWN: rebaseAmounts answers each row's number from the very function the table draws
   // from (scaleCatalogue), in the row's own unit and with the same rounding — pieces, ml, kg and sub-recipe rows alike; a «to
@@ -67,14 +71,28 @@ export function BatchCard({ recipe, target, row = null, canEdit }: Props) {
   // and the save goes through the editor's own store write: local-first, and a refusal puts the recipe back and is said by the
   // section (recipesMessages.ts, «Couldn’t save …»), as for the editor. What the editor does not own stays as stored: the oven
   // loss and its weighings, the steps, the category, the label texts and the archived flag are not sent at all (recipesStore,
-  // KEPT_FIELDS and the patches), and the label weight and shelf life are sent back as they are.
+  // KEPT_FIELDS and the patches), and the label weight and shelf life are sent back as they are. Like any save of the editor, the
+  // store also gives a row with no id its id and writes the recipe as this phone normalised it (a trimmed name, `label`).
   // Then the batch is cleared — the recipe as written now IS what was on screen — and «Recipe saved.» is said.
-  async function useAsBase() {
+  // ⚠️ REFUSED, with a notice and nothing saved: a batch so small that a row with an amount would be saved as 0 (the yeast of a
+  // test batch: it would be gone from every batch made afterwards), and a recipe with no name (the rules refuse it; the editor
+  // asks for one).
+  async function makeBase() {
     if (askingBase.current || target === null) return;
     const amounts = rebaseAmounts(recipe, target, row);
     if (amounts === null) return;
     askingBase.current = true;
     try {
+      const lost = rowsLostByRebase(recipe, amounts);
+      if (lost.length > 0) {
+        const rows = lost.map(index => recipe.ingredients[index]?.label || t('cat.noName')).join(', ');
+        await alert({ message: t('cat.base.wouldLose', { rows }), okLabel: t('common.ok') });
+        return;
+      }
+      if (recipe.name.trim() === '') {
+        await alert({ message: t('cat.base.noName'), okLabel: t('common.ok') });
+        return;
+      }
       const ingredients = recipe.ingredients.map((row, index) => ({ ...row, grams: amounts[index] ?? row.grams }));
       // {new} is the total the recipe WILL have, as the screen will show it after the save: the rows as shown, added up. All in
       // grams it is the batch itself (the rows were rounded to add up to it); with kg, litres or ml rows each row is rounded in
@@ -161,13 +179,17 @@ export function BatchCard({ recipe, target, row = null, canEdit }: Props) {
         </Button>
       ) : null}
       {target !== null && canEdit ? (
-        <Button variant="quiet" className={styles.useAsBase} onPress={() => { void useAsBase(); }}>
-          <BookCheck aria-hidden="true" />
-          {t('cat.base.button')}
-        </Button>
+        // Its own block, so it is always on a line of its own under Clear, at its own width.
+        <div className={styles.useAsBase}>
+          <Button variant="quiet" onPress={() => { void makeBase(); }}>
+            <BookCheck aria-hidden="true" />
+            {t('cat.base.button')}
+          </Button>
+        </div>
       ) : null}
       {confirmDialog}
       {baseDialog}
+      {alertDialog}
     </section>
   );
 }

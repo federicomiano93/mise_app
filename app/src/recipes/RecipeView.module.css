@@ -324,9 +324,9 @@
 }
 
 /* «Use as base recipe», right under Clear: a quiet, link-like button (it changes the recipe, so it does not compete with
-   Calculate), still the full touch height. Its own line, so on a phone it never sits beside Clear. */
+   Calculate), still the full touch height. Wrapped in a block of its own, so it is always on its own line, left-aligned like
+   Clear and only as wide as its words. */
 .useAsBase {
-  display: flex;
   margin-top: var(--s2);
 }
 
