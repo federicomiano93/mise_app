@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v768';
+const CACHE_NAME = 'theitalianclub-v769';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -154,15 +154,15 @@ const ASSET_HASHES = {
   "./home.html": 'a4401ab28cb28eb9',
   "./calculator.html": 'd4dd314d40bb7822',
   "./clients.html": '2b9ced34e0331c4e',
-  "./orders.html": 'e4f76c1d684b509e',
+  "./orders.html": '21656937de5e021a',
   "./suppliers.html": '0f24580d8d5a1e05',
   "./install-guide.html": '322c79acf63896ef',
   "./reset-password.html": '298724d76511df05',
-  "./dist/i18n.js": '2a704cde63439177',
+  "./dist/i18n.js": '2eb6a36021a84437',
   "./dist/index.js": '45c0ae7dfb53f215',
   "./dist/calculator.js": '8259c9b4d4ad897e',
-  "./dist/orders.js": '2718f11175751b6a',
-  "./dist/suppliers.js": 'f3a0b1b0663e17a6',
+  "./dist/orders.js": '073a0eaf9f159885',
+  "./dist/suppliers.js": 'c288937e774219f2',
   "./dist/install-guide.js": 'beda437b74a9c6f8',
   "./js/allergen-model.js": 'a9ad7592da832a56',
   "./js/calculator-config.js": '5dd726117544e2d4',
@@ -172,7 +172,7 @@ const ASSET_HASHES = {
   "./js/firebase.js": '2acc9652e4f27abf',
   "./js/home-cards.js": '4e0740cfb8b8e092',
   "./js/i18n-dom.js": '24249af4367511e5',
-  "./js/i18n.js": '21eebca74ec15768',
+  "./js/i18n.js": '447d1dd37b998f37',
   "./js/keyboard-done.js": 'de05a6dd1f3aac26',
   "./js/local-data.js": '91aa7f1699c897a1',
   "./js/location.js": '6aaf53615a8739d1',
@@ -196,7 +196,7 @@ const ASSET_HASHES = {
   "./dist/tokens.css": '0b5c4e5f972da711',
   "./dist/auth.css": 'cf2810b6fbcabb0c',
   "./dist/style.css": 'cbba0d3b05f9ad31',
-  "./dist/orders.css": 'e9a4545c954bfa26',
+  "./dist/orders.css": '735763c109718445',
   "./sounds/alarm.wav": '0d1465974f5be95b',
   "./fonts/manrope-latin.woff2": '71eb731d55804619',
   "./fonts/manrope-latin-ext.woff2": 'bd24140af06f1b58',
