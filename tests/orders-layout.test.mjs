@@ -210,9 +210,9 @@ test('the tablet re-paints the money when the width crosses the breakpoint', () 
 });
 
 // ── The full-screen supplier order (30 Sep 2026) ──────────────────────────────
-test('a long supplier name stays centred: both header sides reserve the Back button, phone and tablet', () => {
-  assert.match(CSS, /^\.supplier-detail > \.app-header \{ --app-header-side: 36px; \}/m);
-  assert.match(CSS, /body\[data-section="orders"\] \.supplier-detail > \.app-header \{ --app-header-side: var\(--tap-min\); \}/);
+test('a long supplier name stays centred: both header sides reserve the right side («Invia» + «+»), phone and tablet', () => {
+  assert.match(CSS, /^\.supplier-detail > \.app-header \{ --app-header-side: 84px; \}/m);
+  assert.match(CSS, /body\[data-section="orders"\] \.supplier-detail > \.app-header \{ --app-header-side: calc\(var\(--tap-min\) \* 2 \+ 12px\); \}/);
 });
 
 test('focus goes INTO the full-screen order on open, and back to its row on Back', () => {

@@ -12,9 +12,9 @@
 //
 // A full-screen overlay on a phone AND on a tablet (30 Sep 2026: the tablet's
 // two-pane split was removed — the owner wanted the same screen everywhere). The
-// header is the app's one pattern: Back left, the title centred, «+ Add ingredient» in
-// the slot on the right (an empty-looking slot when hidden, so the three-track grid keeps
-// the title centred either way).
+// header is the app's one pattern: Back left, the title centred, «Invia» and «+ Add
+// ingredient» in the slot on the right (both sides reserve two buttons' width, so the
+// three-track grid keeps the title centred whether «+» shows or not — orders.css).
 
 import { t } from '../i18n.js';
 import { supplierLabel } from '../supplier-label.js';
@@ -26,6 +26,9 @@ const BACK_ICON =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>';
 const CHECK_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>';
+// The Orders header's own send glyph (#orders-wa-btn in orders.html): the same tap, for one supplier.
+const SEND_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M8 7l4-4 4 4"/><path d="M4 15v4a2 2 0 002 2h12a2 2 0 002-2v-4"/></svg>';
 const PLUS_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>';
 
@@ -33,7 +36,8 @@ const PLUS_SVG =
 const SUMMARY_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 2h6v4H9z"/><path d="M9 11h6M9 14h6M9 17h4"/></svg>';
 
-// ctx: { ingredients, entries, suggest, hooks, onBack, onAddIngredient, onSummary(supplierId) }
+// ctx: { ingredients, entries, suggest, hooks, onBack, onAddIngredient, onSummary(supplierId),
+//        onSend(supplierId) }
 // -> { overlay, repaint(ctx) }
 //
 // `repaint` rebuilds only the BODY, never the header — a live snapshot from another
@@ -63,6 +67,19 @@ export function buildSupplierDetail(supplier, ctx) {
     title: t('orders.addIngredientToList'),
     icon: PLUS_SVG, onClick: () => addIngredient?.(),
   });
+
+  // ⚠️ «INVIA» FOR THIS SUPPLIER ONLY (owner, 14 Nov 2026), LEFT of «+»: the send editor for
+  // these rows, with no supplier picker in between — the road chooser is unchanged
+  // (orders-main.js sendOneSupplier). Disabled while nothing is typed; refreshSupplierDerived
+  // (suppliers.js) keeps it in step on every keystroke through its id, like «Ordine fatto».
+  // «Ordine fatto» at the bottom stays as it is.
+  const sendBtn = el('button', {
+    type: 'button', class: 'app-icon-btn orders-icon-btn supplier-send-btn',
+    id: `send-btn-${supplier.id}`,
+    'aria-label': t('orders.supplierSend'), title: t('orders.supplierSend'),
+    icon: SEND_SVG, onClick: () => ctx.onSend?.(supplier.id),
+  });
+  sendBtn.disabled = true;
 
   // A polite live region on this screen: the result of the day select is spoken, not only
   // drawn. Declared BEFORE the overlay that holds it:
@@ -98,7 +115,7 @@ export function buildSupplierDetail(supplier, ctx) {
         }),
       ]),
       titleWrap,
-      el('span', { class: 'app-header-slot' }, [addBtn]),
+      el('span', { class: 'app-header-slot' }, [sendBtn, addBtn]),
     ]),
     // This screen's own status line (orders-main statusElement): it covers the page, so a save
     // error or «Salvo la quantità…» written to the page's line underneath was never seen.
@@ -140,6 +157,7 @@ export function buildSupplierDetail(supplier, ctx) {
       !i.elsewhereId && (entries[i.id]?.qty || 0) > 0 ? { filled: acc.filled + 1 } : acc), { filled: 0 });
     // Before the early return below: the bar shows 0 for a supplier with no products too.
     summaryText.textContent = summaryBarLabel(filled);
+    sendBtn.disabled = filled === 0;
 
     // No products, nothing to record — the empty state inside the list already says so.
     if (!ingredients.length) return;

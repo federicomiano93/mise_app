@@ -433,11 +433,26 @@
   display: flex;
   flex-direction: column;
 }
-/* One button left (Back), none right: both sides reserve the Back button's width (36px on a
-   phone; the tablet block re-declares it for its bigger button), so a
-   long supplier name that wraps stays centred instead of drifting half a button to the
-   right (18px at 296px, measured 30 Sep 2026). At 296 that still leaves the title 176px. */
-.supplier-detail > .app-header { --app-header-side: 36px; }
+/* One button left (Back), two right («Invia», then «+»): both sides reserve the right side's
+   width — two 36px buttons and the slot's 12px between them on a phone; the tablet block re-declares it
+   for its bigger buttons — so a long supplier name that wraps stays centred instead of drifting
+   (measured 30 Sep 2026 with one button; the second came on 14 Nov 2026). With «+» hidden the
+   reserve stays, and so does the centre.
+   ⚠️ NOT BELOW 360px: at 296 two reserved 84px sides would leave the name 80px, a word per line.
+   There each side is what it HOLDS (`auto`, never a fixed minimum the buttons could overflow —
+   tokens.css) and the name sits a little off centre: the lesser evil, as on every header. */
+.supplier-detail > .app-header { --app-header-side: 84px; }
+@media (max-width: 359px) {
+  .supplier-detail > .app-header { --app-header-side: auto; }
+}
+/* «Invia» with nothing typed: still in its place, visibly off (the dim white of a Save with
+   nothing to save), and no press feedback. */
+.supplier-send-btn:disabled {
+  background: transparent;
+  border-color: var(--on-brand-dim);
+  color: var(--on-brand-dim);
+  cursor: default;
+}
 /* The screen's own status line (a save error, «Salvo la quantità…»): between the header and the
    rows, never scrolled away, at the page's usual gutter. */
 .supplier-detail > .supplier-detail-status { flex: none; margin: 8px max(16px, var(--app-gutter)) 0; }
@@ -1055,9 +1070,9 @@ input.ing-stock {
   /* Header, tabs and footer: every tap target grows to the same floor. */
   body[data-section="orders"] .orders-icon-btn,
   body[data-section="orders"] .orders-header .help-btn { width: var(--tap-min); height: var(--tap-min); }
-  /* The Back button grew with the rule above: both sides of the supplier screen's header
-     reserve its new width, so the name stays centred (the phone rule is 36px). */
-  body[data-section="orders"] .supplier-detail > .app-header { --app-header-side: var(--tap-min); }
+  /* The buttons grew with the rule above: both sides of the supplier screen's header reserve
+     the right side's new width («Invia» + «+»), so the name stays centred (phone rule: 84px). */
+  body[data-section="orders"] .supplier-detail > .app-header { --app-header-side: calc(var(--tap-min) * 2 + 12px); }
   body[data-section="orders"] .tab-bar .tab,
   body[data-section="orders"] .view-switch-btn { min-height: var(--tap-min); font-size: 15px; }
   body[data-section="orders"] .recipe-footer-btn { min-height: var(--tap-min); }
