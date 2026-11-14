@@ -95,13 +95,14 @@ describe('the chips', () => {
     await toIngredients(user);
     const group = screen.getByRole('group', { name: 'Show' });
     const chips = within(group).getAllByRole('button').map(chip => chip.textContent);
-    expect(chips).toEqual(['All (2)', 'New (1)', 'To check (1)']);
-    expect(within(group).getByRole('button', { name: 'All (2)' })).toHaveAttribute('aria-pressed', 'true');
-    expect(within(group).getByRole('button', { name: 'New (1)' })).toHaveAttribute('aria-pressed', 'false');
+    // Mise 2 (14 Nov 2026): the cola is imported too (as resale), a second new row.
+    expect(chips).toEqual(['All (3)', 'New (2)', 'To check (1)']);
+    expect(within(group).getByRole('button', { name: 'All (3)' })).toHaveAttribute('aria-pressed', 'true');
+    expect(within(group).getByRole('button', { name: 'New (2)' })).toHaveAttribute('aria-pressed', 'false');
 
-    await user.click(within(group).getByRole('button', { name: 'New (1)' }));
-    expect(within(group).getByRole('button', { name: 'New (1)' })).toHaveAttribute('aria-pressed', 'true');
-    expect(within(group).getByRole('button', { name: 'All (2)' })).toHaveAttribute('aria-pressed', 'false');
+    await user.click(within(group).getByRole('button', { name: 'New (2)' }));
+    expect(within(group).getByRole('button', { name: 'New (2)' })).toHaveAttribute('aria-pressed', 'true');
+    expect(within(group).getByRole('button', { name: 'All (3)' })).toHaveAttribute('aria-pressed', 'false');
     expect(rows().map(li => li.textContent).join('|')).toContain('Farina tipo 00');
     expect(rows().map(li => li.textContent).join('|')).not.toContain('Spezia forte');
 
@@ -109,7 +110,7 @@ describe('the chips', () => {
     expect(rows().map(li => li.textContent).join('|')).toContain('Spezia forte');
     expect(rows().map(li => li.textContent).join('|')).not.toContain('Farina tipo 00');
 
-    await user.click(within(group).getByRole('button', { name: 'All (2)' }));
+    await user.click(within(group).getByRole('button', { name: 'All (3)' }));
     expect(rows().map(li => li.textContent).join('|')).toContain('Farina tipo 00');
   });
 
@@ -138,7 +139,8 @@ describe('a NEW ingredient', () => {
   it('is created by default and never blocks the button; «Do not import (remember)» leaves it out and keeps it under «New»', async () => {
     const { user } = await open({ suppliers: [] });
     await toIngredients(user);
-    expect(primary('Import 2 ingredients')).toBeEnabled();
+    // Mise 2 (14 Nov 2026): the cola is imported too (as resale), so three rows go in.
+    expect(primary('Import 3 ingredients')).toBeEnabled();
     expect(screen.queryByText(/Choose what to do with/)).not.toBeInTheDocument();
     const flour = row('Farina tipo 00');
     const choice = within(flour).getByRole('combobox', { name: 'What should happen?' });
@@ -146,11 +148,11 @@ describe('a NEW ingredient', () => {
     expect(choice).toHaveValue('create');
 
     await user.selectOptions(choice, 'Do not import (remember)');
-    expect(primary('Import 1 ingredient')).toBeEnabled();
-    expect(within(row('Farina tipo 00')).getByText('Skipped')).toHaveAttribute('data-tone', 'quiet');
-    expect(screen.getByRole('button', { name: 'New (1)' })).toBeInTheDocument();
-    await user.selectOptions(within(row('Farina tipo 00')).getByRole('combobox'), 'Create');
     expect(primary('Import 2 ingredients')).toBeEnabled();
+    expect(within(row('Farina tipo 00')).getByText('Skipped')).toHaveAttribute('data-tone', 'quiet');
+    expect(screen.getByRole('button', { name: 'New (2)' })).toBeInTheDocument();
+    await user.selectOptions(within(row('Farina tipo 00')).getByRole('combobox'), 'Create');
+    expect(primary('Import 3 ingredients')).toBeEnabled();
   });
 
   it('11 · a «do not import» answer on a row that waits for a price check keeps the Skipped pill', async () => {
@@ -167,7 +169,7 @@ describe('a NEW ingredient', () => {
   it('with nothing left to import the button says «Done» and the hint says why', async () => {
     const { user } = await open({ suppliers: [] });
     await toIngredients(user);
-    for (const name of ['Farina tipo 00', 'Spezia forte']) {
+    for (const name of ['Farina tipo 00', 'Spezia forte', 'Coca lattina']) {
       await user.selectOptions(within(row(name)).getByRole('combobox'), 'Do not import (remember)');
     }
     expect(primary('Done')).toBeEnabled();

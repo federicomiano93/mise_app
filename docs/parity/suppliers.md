@@ -1400,3 +1400,41 @@ reads them as an ingredient).
   one other item across Suppliers, Food cost's chooser and a recipe row's suggestions), `SuppliersSection.list.spec.tsx`
   (tabs, addresses, keys, Italian), `SuppliersSection.ingredient.save.spec.tsx` («Type»), `SuppliersSection.merge.spec.tsx`,
   `suppliersPath.spec.ts`, `ordersDoors.spec.ts`, `ingredientCardModel.spec.ts`; the rules suite. Not driven in a browser.
+
+## Import of every kind — as built (14 Nov 2026)
+
+Mise 2 only; follows «Item kinds Resale/Other — as built». The invoice import brings in EVERY product it can read, each with
+its item kind. The current app is frozen and unchanged (it still imports ingredients only).
+
+- **Classification** (`shared/src/invoice-zip/keywords.ts`, `classify.ts`): the tools/clothing/cleaning words (plus
+  `pelapatate`, `lavastovigl`, `micronizzator`) leave `PACKAGING_RE` for `NONFOOD_RE`, the new line type `'altro'`, checked right
+  after packaging. `BEVERAGE_RE` gains `limonata`, `tonica`, `gassosa`, `spuma`, `cedrata`, `ginger` (also in
+  `invoice-import/classify.py` and its test; the Python script keeps non-food inside packaging, with a comment).
+  `keywords.spec.ts` compares the port's `PACKAGING_RE` + `NONFOOD_RE` with the Python list, and the port's source with the
+  current app's once the two Mise 2 changes are undone; `classify.spec.ts` and `products.spec.ts` pin both answers.
+- **«1/2X12»**: on a line the beverage words name, a fraction followed by a count is that fraction of a litre, that many
+  bottles («ACQUA SABRINELLA NAT 1/2X12» → 0.5 l × 12; «ACQUA VERA NAT.1/2X24» → 0.5 l × 24). ⚠️ The brief said «LT 1/2X24»
+  already worked: it did not — both apps read it as ONE litre (the «LT 1»). The same rule, run first, now reads it as 0.5 l × 24.
+- **`everyKind`** (Mise-2-only option of `build-import`, `selection` and the plan's context; without it every function is the
+  original's, so the paired specs still compare the two): every readable product is in the import file with `kind`
+  (ingrediente → `'ingredient'`, packaging → `'packaging'`, rivendita → `'resale'`, altro → `'other'`). A resale or other product
+  counted in pieces with no weight is priced per piece (`computeDocument`'s `weightlessPieces`: total ÷ pieces, reliability
+  «alta», no piece weight; the price is written through the card's own `pricePatch`, `unitWeightKg: null`). Food keeps
+  «pieces-need-price-unit-and-weight»; packaging too (the brief named only resale and other).
+- **Decisions** (`invoice-decisions`, rules unchanged): «skip this product» and «skip this supplier» work as before; a stored
+  `'ingredient'` means «import».
+- **Matching** (`invoice-import-model`): a NEW item is created with the file's kind; an item MATCHED by the existing logic
+  (supplier, article code, names) keeps its own kind — no write ever names `kind` on it. With `everyKind` the pool holds the
+  items of every kind (a packaging line must find the packaging item it already is). A file entry's `kind` is read only when it
+  is one of the three non-food kinds; a resale or other entry priced per piece needs no piece weight.
+- **The first screen** (`FileStep.tsx`): «N products to import» on the counts line; the hint «Each product is imported with the
+  type the invoice suggests. You can change the type later on the item's card…»; one closed group per kind with products in it
+  («Ingredienti (n)», «Imballaggi (n)», «Rivendita (n)», «Altro (n)»), rows with name, supplier and description. The
+  «Imballaggi e rivendita» group and its «Importa come ingrediente» tick are gone. «Esclusi da te» with «Importa di nuovo», the
+  skipped suppliers, the unreadable products and the skipped files are unchanged. The «do not import (remember)» choice of each
+  row stays where it is (step 3).
+- **Not changed** (the brief: keep every other step as it is): steps 2 and 3, the confirmation and the summary still say
+  «ingredients» («Import 4 ingredients», «4 ingredients created») when the rows include packaging, resale or other.
+- **Specs**: `shared/src/invoice-zip/every-kind.spec.ts` (the chain, invented invoices), `InvoiceImport.file.spec.tsx`,
+  `InvoiceImport.run.spec.tsx` («every kind of product»: four new items with their kinds; an existing resale item matched by
+  code stays resale), `importRun.spec.ts`, `InvoiceImport.ingredients.spec.tsx`, `importWords.spec.ts`. Not driven in a browser.

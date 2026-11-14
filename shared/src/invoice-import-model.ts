@@ -22,6 +22,13 @@
 // `invoiceName` (the description as on the invoice) when it had none — or a new one the person confirmed.
 // Name, brand, category and weight stay as the owner typed them.
 //
+// ⚠️ MISE 2 ONLY (14 Nov 2026, «tutti i prodotti delle fatture in Mise»): a file entry may carry `kind` — 'packaging', 'resale'
+// or 'other' (absent: an ingredient, as every file before). A NEW item is created with that kind; an item the entry is MATCHED
+// with keeps its own, whatever the file says (the person may have corrected it by hand): nothing here ever writes `kind` on an
+// existing item. A resale or other entry may be priced per piece with no piece weight (it never needs a per-kilo cost). With
+// `ctx.everyKind` the entries are matched against the venue's items of every kind, packaging included. A file without `kind`
+// and a plan without `everyKind` behave exactly as the original.
+//
 // ⚠️ A SECOND IMPORT OF THE SAME FILE WRITES NOTHING. Every price read from an invoice has the id
 // `inv-<invoiceId>-<line>`; the rules refuse an update to the history, and this module drops the points
 // whose id is already there, so a re-run plans no write at all.
@@ -128,7 +135,14 @@ export interface FileIngredient {
   priceCheck?: string;
   latestUnverified?: true;
   invalid?: string;
+  // Mise 2 only: what a NEW item is created as. Absent: an ingredient.
+  kind?: FileKind;
 }
+
+// Mise 2 only: the kinds a file entry may name besides an ingredient (shared/ingredient-kind.ts).
+export type FileKind = 'packaging' | 'resale' | 'other';
+const FILE_KINDS: readonly FileKind[] = ['packaging', 'resale', 'other'];
+const WEIGHTLESS_KINDS: readonly FileKind[] = ['resale', 'other'];
 
 export type ParsedImport =
   | { ok: true; file: { generatedAt: string; suppliers: FileSupplier[]; ingredients: FileIngredient[] } }
@@ -190,6 +204,8 @@ export interface PlanContext {
   ingredients?: readonly ExistingIngredient[] | null;
   pricesById?: Source<Record<string, unknown> | undefined>;
   invoicePointIds?: Source<unknown>;
+  // Mise 2 only: match against the items of every kind, packaging included (the file brings every kind in).
+  everyKind?: boolean;
 }
 
 // One row of the ingredient plan. Every field a status adds is optional.
@@ -418,6 +434,7 @@ function parseIngredient(raw: unknown, seen: Set<string>): FileIngredient {
   parsed.forEach(p => { if (p && !unique.has(`${p.invoiceId}-${p.line}`)) unique.set(`${p.invoiceId}-${p.line}`, p); });
   const prices = [...unique.values()].sort(comparePoints);
 
+  const kind = FILE_KINDS.find(one => one === o.kind);
   // ⚠️ `prices: []` IS LEGAL ONLY WITH A priceCheck CODE: the ingredient is wanted, its price is not.
   const priceCheck = rawPrices.length === 0 && PRICE_CHECK_CODES.includes(o.priceCheck as string) ? (o.priceCheck as string) : '';
   const entry: FileIngredient = {
@@ -439,6 +456,7 @@ function parseIngredient(raw: unknown, seen: Set<string>): FileIngredient {
     prices,
     ...(priceCheck ? { priceCheck } : {}),
     ...(o.latestUnverified === true && prices.length > 0 ? { latestUnverified: true as const } : {}),
+    ...(kind ? { kind } : {}),
   };
 
   let invalid: string | null = null;
@@ -448,7 +466,8 @@ function parseIngredient(raw: unknown, seen: Set<string>): FileIngredient {
   else if (!entry.supplierKey) invalid = 'supplier-key-missing';
   else if (!entry.name) invalid = 'name-missing';
   else if (!priceUnit) invalid = 'price-unit';
-  else if (priceUnit === 'pcs' && unitWeightKg === null) invalid = 'unit-weight-missing';
+  // MISE 2: a resale or other item priced per piece needs no weight (nobody asks its cost per kilo).
+  else if (priceUnit === 'pcs' && unitWeightKg === null && !(kind && WEIGHTLESS_KINDS.includes(kind))) invalid = 'unit-weight-missing';
   else if (countGiven && packCount === null) invalid = 'pack-count';
   else if (rawPrices.length === 0 && !priceCheck) invalid = 'no-prices';
   else if (parsed.some(p => p === null)) invalid = 'price-invalid';
@@ -589,9 +608,10 @@ const candidateOf = (ing: ExistingIngredient): Candidate => ({ id: ing.id as str
 
 // The existing ingredients a file line may be matched with: the same supplier, never packaging,
 // inactive ones included (an ingredient taken off the order list is still THE ingredient).
-function poolFor(ingredients: readonly ExistingIngredient[] | null | undefined, supplierId: unknown): ExistingIngredient[] {
+// MISE 2 (`everyKind`): every kind, packaging included — a packaging line of the file must find the packaging item it already is.
+function poolFor(ingredients: readonly ExistingIngredient[] | null | undefined, supplierId: unknown, everyKind = false): ExistingIngredient[] {
   return (ingredients || [])
-    .filter(i => i && typeof i.id === 'string' && i.id && i.supplierId === supplierId && i.kind !== 'packaging')
+    .filter(i => i && typeof i.id === 'string' && i.id && i.supplierId === supplierId && (everyKind || i.kind !== 'packaging'))
     .sort((a, b) => (a.id as string).localeCompare(b.id as string));
 }
 
@@ -920,7 +940,7 @@ export function planIngredients(fileIngredients?: readonly Partial<FileIngredien
       return { ...base, reason: 'supplier-missing' };
     }
     const row: BaseRow = { ...base, supplierId };
-    const pool = poolFor(context.ingredients, supplierId);
+    const pool = poolFor(context.ingredients, supplierId, context.everyKind === true);
 
     // a. «unisci con …»: the owner named the ingredient it belongs to.
     if (row.mergeWith) {
@@ -1002,7 +1022,7 @@ export function resolveRow<R extends RowLike | null | undefined>(row: R, decisio
     return newRow({ ...base, patchSupplierCode: null, setSupplierCodes: null, patchInvoiceName: null });
   }
   if (typeof decision.sameAs === 'string') {
-    const target = poolFor(context.ingredients, row.supplierId).find(i => i.id === decision.sameAs);
+    const target = poolFor(context.ingredients, row.supplierId, context.everyKind === true).find(i => i.id === decision.sameAs);
     if (!target) return { ...base, status: 'error', newPoints: [], updateCurrent: false, reason: 'target-not-found' };
     return matchedRow(base, target, context);
   }
@@ -1055,7 +1075,8 @@ function newIngredientData(file: Partial<FileIngredient>, supplierId: unknown, l
     ...(file.supplierCode ? { supplierCode: file.supplierCode } : {}),
     ...(file.invoiceName ? { invoiceName: file.invoiceName } : {}),
     active: true,
-    kind: 'ingredient',
+    // MISE 2: the kind the file names (only ever on a NEW item); an ingredient otherwise, as in the original.
+    kind: file.kind && FILE_KINDS.includes(file.kind) ? file.kind : 'ingredient',
   };
   // The ingredient keeps the retired price keys at null — what splitPriceFields does on every save.
   INGREDIENT_DRAINED_FIELDS.forEach(key => { data[key] = null; });

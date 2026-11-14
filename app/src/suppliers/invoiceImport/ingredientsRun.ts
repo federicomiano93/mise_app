@@ -82,6 +82,8 @@ export async function planIngredientStep(
     ingredients: venue.ingredients as unknown as ExistingIngredient[],
     pricesById: { ...venue.pricesById } as PlanContext['pricesById'],
     invoicePointIds,
+    // Mise 2 (14 Nov 2026): the file brings every kind, so it is matched against the items of every kind, packaging included.
+    everyKind: true,
   });
   const ids = idsToCheck(planIngredients(active, ctxFor({})));
   const known: Record<string, PointIds> = {};

@@ -1,4 +1,4 @@
-// keywords.ts — the seven keyword patterns that classify an invoice line's description. They are the
+// keywords.ts — the eight keyword patterns (seven of the original; Mise 2 splits NONFOOD_RE out of packaging) that classify an invoice line's description. They are the
 // ones part of classify that the original (js/orders/invoice-zip/classify.js) keeps private; they live
 // in a module of their own here so that keywords.spec.ts can read them and compare each, word for word,
 // with its twin in invoice-import/classify.py. NOT paired in parity.spec.ts: the original exports none of
@@ -34,11 +34,14 @@ export const READY_RE = new RegExp(
 export const PACKAGING_RE = new RegExp(
   'sh\\. ml|b\\.sch|grattugia|flacone|posate|asciugamano|vasch\\.caldo|rotolo|buste|carta |carta$'
   + '|sacch|cont\\. plastica|fogli pol|pellicola|stagnola|vaschette|box +pizza|velina|bicch|tappo'
-  + '|bobina|laccetti|black nitro|carta forno|staccante'
-  // Not food at all — tools, clothing, cleaning, shop bags (5 Oct 2026, from the first real
-  // import). Never imported, like packaging. Food words are checked first, so «olio … ml10»
-  // or «zucchero … bustina» never land here.
-  + `|alluminio|grembiul|palett|coprivassoi|carte pizzo|shopper|${B_START}borsa${B_END}|${B_START}bags${B_END}|caraffa`
+  + '|bobina|laccetti|black nitro|carta forno|staccante', 'iu');
+// ⚠️ MISE 2 ONLY (14 Nov 2026): what is not food at all — tools, clothing, cleaning, shop bags — is no longer packaging but a
+// line type of its own, «altro», imported as an item of kind 'other'. In invoice-import/classify.py (and the frozen current
+// app) these words are still the tail of PACKAGING_RE: keywords.spec.ts compares PACKAGING_RE + «|» + NONFOOD_RE with it.
+// Not food at all — tools, clothing, cleaning, shop bags (5 Oct 2026, from the first real
+// import). Food words are checked first, so «olio … ml10» or «zucchero … bustina» never land here.
+export const NONFOOD_RE = new RegExp(
+  `alluminio|grembiul|palett|coprivassoi|carte pizzo|shopper|${B_START}borsa${B_END}|${B_START}bags${B_END}|caraffa`
   + `|coppetta|anticalcare|detersiv|sgrassa|igienizz|candeggin|pennello|asciugaman|organza`
   + `|spolett|pentol|padell|${B_START}padel${B_END}|guanti`
   // A potato peeler (the word «patate» no longer catches it as resale).
@@ -48,4 +51,8 @@ export const PACKAGING_RE = new RegExp(
 // Beverages are bought to be sold: resale, whatever the liquid.
 export const BEVERAGE_RE = new RegExp(
   ['coca cola', `${B_START}acqua${B_END}`, 'birra', 'redbull', 'succo', `${B_START}the${B_END}`, 'fanta', 'sprite',
-    'lemonsoda', 'aranciata', 'chinotto', 'prosecco', `${B_START}vino${B_END}`].join('|'), 'iu');
+    'lemonsoda', 'aranciata', 'chinotto',
+    // Soft drinks proposed as ingredients on a real invoice (14 Nov 2026: «LIMONATA TOM LATTINA CL 33X24», «TONICA SCHWEPPES
+    // LEMON CL 18X24»), and their kin. Also in invoice-import/classify.py; NOT in the frozen current app.
+    'limonata', 'tonica', 'gassosa', 'spuma', 'cedrata', 'ginger',
+    'prosecco', `${B_START}vino${B_END}`].join('|'), 'iu');

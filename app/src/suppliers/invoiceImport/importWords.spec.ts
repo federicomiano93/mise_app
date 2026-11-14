@@ -234,10 +234,13 @@ describe('the words the owner agreed', () => {
     expect(italian['sup.imp.file.label']).toBe('Scegli il file');
     expect(italian['sup.imp.file.reading']).toBe('Sto leggendo le fatture…');
     expect(italian['sup.imp.file.explain']).toMatch(/zip delle fatture .*Agenzia delle Entrate/);
-    expect(italian['sup.imp.zip.group.notImported']).toBe('Imballaggi e rivendita ({n})');
+    // Mise 2 (14 Nov 2026): every product is imported, grouped by kind; «Imballaggi e rivendita» and «Importa come ingrediente» are gone.
+    expect(italian['sup.imp.zip.kind.ingredient']).toBe('Ingredienti ({n})');
+    expect(italian['sup.imp.zip.kind.packaging']).toBe('Imballaggi ({n})');
+    expect(italian['sup.imp.zip.kind.resale']).toBe('Rivendita ({n})');
+    expect(italian['sup.imp.zip.kind.other']).toBe('Altro ({n})');
     expect(italian['sup.imp.zip.group.skippedByYou']).toBe('Esclusi da te ({n})');
     expect(italian['sup.imp.zip.group.skippedSuppliers']).toBe('Fornitori esclusi da te ({n})');
-    expect(italian['sup.imp.zip.importAsIngredient']).toBe('Importa come ingrediente');
     expect(italian['sup.imp.zip.importAgain']).toBe('Importa di nuovo');
     expect(italian['sup.imp.stop.offline']).toMatch(/^Non c’è connessione\./);
   });
