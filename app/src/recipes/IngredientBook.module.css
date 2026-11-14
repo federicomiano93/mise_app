@@ -1,0 +1,234 @@
+/* The ingredient book: drawn like the HACCP list (the right-hand pane on the split, a screen of its own on a phone).
+
+   ⚠️ NOTHING ON THE OUTER CARD MAY CLIP (no `overflow`): the form bar sticks to the top of the shell's scrolling area, and a
+   clipping ancestor would turn it into an ordinary row. */
+
+.screen {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+  padding: var(--s4);
+}
+
+@media (min-width: 1000px) {
+  .body {
+    padding: var(--s6);
+  }
+}
+
+.lead {
+  margin: 0;
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+}
+
+/* The live region: empty, and taking no room, until a list cannot be read. Not `display: none`, which would take it out of the
+   accessibility tree. */
+.status {
+  margin: 0;
+  color: var(--warn-ink);
+  font-size: var(--fs-sm);
+}
+
+.status:empty {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  clip-path: inset(50%);
+}
+
+.nothing {
+  margin: 0;
+  color: var(--ink-2);
+}
+
+/* The search: the icon and the box on one line, as the recipe list's. */
+.search {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  min-height: var(--hit);
+  padding: 0 var(--s3);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink-3);
+}
+
+.search:focus-within {
+  border-color: var(--accent);
+}
+
+.search svg {
+  flex: none;
+  width: 18px;
+  height: 18px;
+}
+
+.input {
+  flex: 1;
+  min-width: 0;
+  min-height: var(--hit);
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: none;
+  color: var(--ink);
+  font: var(--fs-md)/1.2 var(--font);
+}
+
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--line);
+}
+
+.entry {
+  border-bottom: 1px solid var(--line);
+}
+
+/* An ingredient: the whole row is the button (48px and more) — the chevron, the name, «not in use», how many recipes at the end. */
+.head {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  width: 100%;
+  min-height: var(--hit-lg);
+  padding: var(--s2) 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.head:focus-visible,
+.use:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
+}
+
+@media (hover: hover) {
+  .head:hover,
+  .use:hover {
+    background: var(--sunken);
+  }
+}
+
+.chevron {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  color: var(--ink-3);
+}
+
+.head[aria-expanded='true'] .chevron {
+  transform: rotate(180deg);
+}
+
+.name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: var(--fs-lg);
+  font-weight: 600;
+}
+
+.count {
+  flex: none;
+  margin-left: auto;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  white-space: nowrap;
+}
+
+.tag {
+  flex: none;
+  padding: 0 var(--s2);
+  border-radius: var(--r-pill);
+  background: var(--sunken);
+  color: var(--ink-2);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+}
+
+/* The recipes under an open ingredient, indented under its name. */
+.uses {
+  margin: 0;
+  padding: 0 0 var(--s2);
+  list-style: none;
+}
+
+/* A recipe: the whole line is the button (48px): the name, the amounts at the right, a chevron. On a narrow phone the amounts go
+   under the name rather than squeezing it. */
+.use {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 var(--s3);
+  width: 100%;
+  min-height: var(--hit);
+  padding: var(--s1) 0 var(--s1) calc(18px + var(--s2));
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.recipe {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+  min-width: 0;
+}
+
+.recipeName {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-weight: 600;
+}
+
+.amount {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+/* «Not in any recipe»: just the names, one per line. */
+.unusedList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.unusedRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+  min-height: var(--hit);
+  padding: var(--s1) 0;
+  border-bottom: 1px solid var(--line);
+  overflow-wrap: anywhere;
+}
+
+.unusedRow:last-child {
+  border-bottom: 0;
+}

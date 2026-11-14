@@ -22,6 +22,22 @@ export const FROM_RECIPE = { ...KEEP_FOCUS, fromRecipe: true } as const;
 // Back, and the focus is owed to the row. Deliberately NOT `fromList`: the label is not a recipe opened from the list.
 export const FROM_HACCP = { ...KEEP_FOCUS, fromHaccp: true } as const;
 
+// The same, from a recipe link of the ingredient book (14 Nov 2026): Back from the recipe is the browser's Back and returns to the
+// book, and the focus is owed to the link that was followed (`ingredientRow`, its hand-back name). Like the sheet's, NOT a recipe
+// «from the list» for the editor's two-step return (RecipeView), though it carries `fromList` for the recipe's own Back.
+export const fromIngredients = (ingredientRow: string) => ({ ...FROM_LIST, fromIngredients: true, ingredientRow }) as const;
+
+export function cameFromIngredients(state: unknown): boolean {
+  return typeof state === 'object' && state !== null && 'fromIngredients' in state;
+}
+
+// The hand-back name of the ingredient book's link that opened this recipe, or null.
+export function ingredientRowOf(state: unknown): string | null {
+  if (!cameFromIngredients(state)) return null;
+  const row = (state as { ingredientRow?: unknown }).ingredientRow;
+  return typeof row === 'string' && row !== '' ? row : null;
+}
+
 export function cameFromHaccp(state: unknown): boolean {
   return typeof state === 'object' && state !== null && 'fromHaccp' in state;
 }

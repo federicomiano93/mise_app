@@ -8,6 +8,7 @@
 //   /recipes/haccp      the HACCP list (image labels step 2), drawn like the Allergen sheet
 //   /recipes/<id>/haccp the HACCP label of one recipe, one level below the HACCP list
 //   /recipes/settings   the label Settings (step 3d-5), for whoever runs the place
+//   /recipes/ingredients the ingredient book (14 Nov 2026): where each ingredient is used, drawn like the HACCP list
 //   /recipes/new        a new recipe (step 3d-6), the editor on an empty copy
 //   /recipes/photo      reading a recipe from photographs (step 3d-9), for a venue that has the reader on
 //   /recipes/<id>/edit  one recipe's editor (step 3d-6), one level below the recipe
@@ -16,7 +17,7 @@
 //   anything else     unknown: the section goes back to /recipes
 //
 // ⚠️ THE WORDS A LATER STEP WILL TAKE AS ITS OWN ARE NEVER A RECIPE'S ID (`new`, `allergens`,
-// `settings`, `photo`, `haccp`): a Firestore auto id is 20 characters, so none of them can be one, and a recipe
+// `settings`, `photo`, `haccp`, `ingredients`): a Firestore auto id is 20 characters, so none of them can be one, and a recipe
 // address that happens to be one of them must not be taken for a recipe that does not exist.
 // recipesPath.spec.ts pins the list.
 export const RECIPES_PATH = '/recipes';
@@ -25,8 +26,9 @@ export const SETTINGS_PATH = '/recipes/settings';
 export const NEW_PATH = '/recipes/new';
 export const PHOTO_PATH = '/recipes/photo';
 export const HACCP_PATH = '/recipes/haccp';
+export const INGREDIENTS_PATH = '/recipes/ingredients';
 
-const RESERVED = ['new', 'allergens', 'settings', 'photo', 'haccp'] as const;
+const RESERVED = ['new', 'allergens', 'settings', 'photo', 'haccp', 'ingredients'] as const;
 
 export type RecipesView =
   | { readonly kind: 'list' }
@@ -37,6 +39,7 @@ export type RecipesView =
   | { readonly kind: 'new' }
   | { readonly kind: 'photo' }
   | { readonly kind: 'haccp' }
+  | { readonly kind: 'ingredients' }
   | { readonly kind: 'haccpLabel'; readonly id: string }
   | { readonly kind: 'edit'; readonly id: string }
   | { readonly kind: 'steps'; readonly id: string }
@@ -82,6 +85,8 @@ export function parseRecipesPath(rest: string | undefined): RecipesView {
     if (id === 'photo') return { kind: 'photo' };
     // The HACCP list (image labels step 2) likewise: open to everybody the section is open to.
     if (id === 'haccp') return { kind: 'haccp' };
+    // The ingredient book (14 Nov 2026) likewise: open to everybody the section is open to.
+    if (id === 'ingredients') return { kind: 'ingredients' };
     // An empty id is not a recipe (and not a Firestore document id either).
     if (isRecipeId(id)) return { kind: 'recipe', id };
   }

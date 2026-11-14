@@ -166,6 +166,8 @@ function recipesScreenName(pathname: string, base: string): string {
   // The HACCP list and a recipe's HACCP label (image labels step 2) are two screens in the statistics.
   if (kind === 'haccp') return 'recipes-haccp';
   if (kind === 'haccpLabel') return 'recipes-haccp-label';
+  // The ingredient book (14 Nov 2026).
+  if (kind === 'ingredients') return 'recipes-ingredients';
   return kind === 'label' ? 'recipes-label' : 'recipes';
 }
 

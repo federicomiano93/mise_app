@@ -14,15 +14,15 @@ import { RecipesProvider, useRecipesStore } from './RecipesContext';
 import { RecipesDetail } from './RecipesDetail';
 import { RecipesList } from './RecipesList';
 import { ResumeOffer } from './ResumeOffer';
-import { ALLERGENS_OPENER, HACCP_OPENER, HandBackProvider, NEW_OPENER, SETTINGS_OPENER, haccpRowOpener, recipeOpener, useHandBackState } from './handBack';
+import { ALLERGENS_OPENER, HACCP_OPENER, HandBackProvider, INGREDIENTS_OPENER, NEW_OPENER, SETTINGS_OPENER, haccpRowOpener, ingredientUseOpener, recipeOpener, useHandBackState } from './handBack';
 import { LabelShowsProvider } from './labelShows';
 import { createRecipeDeletions, RecipeDeletionsProvider } from './recipeDeletions';
 import { recipePhotoOn } from './photoGate';
 import { messageText } from './recipesMessages';
 import { RecipeReturnProvider, carriedPlace, carryPlace, forgetCarriedPlace } from './recipeReturn';
 import type { Place, RecipeReturn } from './recipeReturn';
-import { FROM_HACCP, FROM_LIST, FROM_SHEET, cameFromList } from './recipesNav';
-import { ALLERGENS_PATH, HACCP_PATH, NEW_PATH, RECIPES_PATH, SETTINGS_PATH, haccpPath, recipePath, resolveRecipesPath } from './recipesPath';
+import { FROM_HACCP, FROM_LIST, FROM_SHEET, cameFromList, fromIngredients } from './recipesNav';
+import { ALLERGENS_PATH, HACCP_PATH, INGREDIENTS_PATH, NEW_PATH, RECIPES_PATH, SETTINGS_PATH, haccpPath, recipePath, resolveRecipesPath } from './recipesPath';
 import type { ShownView } from './recipesPath';
 import styles from './RecipesSection.module.css';
 
@@ -208,6 +208,27 @@ function RecipesLayout({ view }: { view: ShownView }) {
     }
   };
 
+  // The ingredient book (14 Nov 2026) opens the same way as the HACCP list: one level below the list, in the right-hand pane on the
+  // split.
+  const openIngredients = () => {
+    if (view.kind === 'ingredients') return;
+    handBack.expect(INGREDIENTS_OPENER);
+    if (split && view.kind !== 'list') {
+      void navigate(INGREDIENTS_PATH, { replace: true, state: cameFromList(state) ? FROM_LIST : KEEP_FOCUS });
+    } else {
+      if (!split && view.kind === 'list') listTop.current = scrollArea()?.scrollTop ?? null;
+      void navigate(INGREDIENTS_PATH, { state: FROM_LIST });
+    }
+  };
+
+  // A recipe link of the ingredient book opens that recipe one level down, ALWAYS as a new entry, so Back returns to the book with
+  // the same ingredient open and the focus owed to that link (the recipe's own Back expects it again, RecipesDetail).
+  const openFromIngredients = (ingredientId: string, recipeId: string) => {
+    const opener = ingredientUseOpener(ingredientId, recipeId);
+    handBack.expect(opener);
+    void navigate(recipePath(recipeId), { state: fromIngredients(opener) });
+  };
+
   // A row of the HACCP list opens that recipe's HACCP label one level down, ALWAYS as a new entry, so Back returns to the list
   // and the focus is owed to that row.
   const openFromHaccp = (id: string) => {
@@ -261,7 +282,8 @@ function RecipesLayout({ view }: { view: ShownView }) {
   useLayoutEffect(() => {
     const before = lastKind.current;
     lastKind.current = view.kind;
-    if (view.kind === 'list' || (view.kind === 'allergens' && before === 'recipe') || (view.kind === 'haccp' && before === 'haccpLabel')) handBack.deliver();
+    if (view.kind === 'list' || (view.kind === 'allergens' && before === 'recipe') || (view.kind === 'haccp' && before === 'haccpLabel')
+      || (view.kind === 'ingredients' && before === 'recipe')) handBack.deliver();
   }, [view.kind, handBack]);
 
   // On the split the right-hand side scrolls on its own (RecipesSection.module.css), and it stays
@@ -291,6 +313,8 @@ function RecipesLayout({ view }: { view: ShownView }) {
                 onOpenSettings={openSettings}
                 haccpOpen={view.kind === 'haccp'}
                 onOpenHaccp={openHaccp}
+                ingredientsOpen={view.kind === 'ingredients'}
+                onOpenIngredients={openIngredients}
                 newOpen={view.kind === 'new'}
                 onNew={openNew}
               />
@@ -298,7 +322,7 @@ function RecipesLayout({ view }: { view: ShownView }) {
           </div>
           <div ref={detail} className={styles.detail}>
             <PartBoundary resetKey={pathname}>
-              <RecipesDetail view={view} onOpenFromSheet={openFromSheet} onOpenFromHaccp={openFromHaccp} />
+              <RecipesDetail view={view} onOpenFromSheet={openFromSheet} onOpenFromHaccp={openFromHaccp} onOpenFromIngredients={openFromIngredients} />
             </PartBoundary>
           </div>
         </div>
