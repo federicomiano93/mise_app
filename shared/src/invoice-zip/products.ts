@@ -16,7 +16,7 @@ import type { InvoiceDocument, InvoiceLine, LoadResult } from './fatturapa';
 import {
   PACK_UNITS, PIECES, computeDocument, params as makeParams, roundHalfUp, unitClass, unitWeightKg, worse,
 } from './pricing';
-import type { ComputedPrice, PricingPack, PricingParams } from './pricing';
+import type { ComputeOptions, ComputedPrice, PricingPack, PricingParams } from './pricing';
 import { DOCUMENT_STATUS, EXCLUDED, NOTE } from './reasons';
 
 export const DEFAULT_EGG_WEIGHT_G = 50.0;
@@ -263,12 +263,13 @@ export interface Evaluation {
 // products: the catalogue. problems: strings from paramsFromCells().
 // -> { results: [{ entry, computed }], points, reliability, note, unitWeightKg }
 // A point: { invoiceId, line, date, price (4 decimals), qty (3 decimals), vatRate }
+// MISE 2: `options` (pricing.ts ComputeOptions) is handed to every computeDocument; without it, the original's behaviour.
 export function evaluate(product: Product, p: PricingParams, catalogue: Catalogue,
-  problems: readonly string[] | null = null): Evaluation {
+  problems: readonly string[] | null = null, options: ComputeOptions = {}): Evaluation {
   const results: Evaluation['results'] = [];
   const points: PricePoint[] = [];
   for (const entry of product.entries) {
-    const computed = computeDocument(entry.lines, p, catalogue.discountDocs.has(entry.doc.docId));
+    const computed = computeDocument(entry.lines, p, catalogue.discountDocs.has(entry.doc.docId), options);
     results.push({ entry, computed });
     if (computed.price !== null && computed.qty !== null) {
       points.push({

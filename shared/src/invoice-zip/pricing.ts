@@ -129,8 +129,14 @@ function computed(price: number | null, qty: number | null, reliability: string,
   return { price, qty, reliability, note, unitWeightKg: null, vatRate: null, ...extra };
 }
 
+// MISE 2 ONLY (14 Nov 2026): `weightlessPieces` — goods priced per piece that need no weight at all (resale and other:
+// a bottle sold as it arrives, a detergent): no per-kilo cost is ever asked of them. Without the option a piece with no
+// weight has no price («no-piece-weight»), as in the original; with it, the price is the invoice's own per piece.
+export interface ComputeOptions { weightlessPieces?: boolean }
+
 // One product on one invoice -> its price, quantity and how far to trust them.
-export function computeDocument(lines: readonly PricedLine[], p: PricingParams, discountFlag = false): ComputedPrice {
+export function computeDocument(lines: readonly PricedLine[], p: PricingParams, discountFlag = false,
+  options: ComputeOptions = {}): ComputedPrice {
   const ordered = [...lines].sort((a, b) => a.number - b.number);
   // The cast is typing only: an empty list throws here, as in the original.
   const first = ordered[0] as PricedLine;
@@ -164,6 +170,11 @@ export function computeDocument(lines: readonly PricedLine[], p: PricingParams, 
 
   if (p.priceUnit === 'pcs') {
     const weight = unitWeightKg(p);
+    if (weight === null && options.weightlessPieces === true && !p.egg) {
+      // The invoice counts what it sells and says what it cost: the price per piece is exact.
+      const qty = pieces * count;
+      return finish(computed(total / qty, qty, 'alta', '', { vatRate: vat }), mixed, discountFlag, p.priceUnit);
+    }
     if (weight === null) return fail(NOTE.NO_PIECE_WEIGHT);
     let result: ComputedPrice;
     if (p.egg) {
