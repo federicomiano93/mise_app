@@ -136,7 +136,8 @@ describe('choosing the role', () => {
     expect(source.createInvitation).not.toHaveBeenCalled();
     expect(main().getByText('Choose the role first, then send the link or read out the code.')).toBeInTheDocument();
     expect(screen.getByRole('radiogroup')).toHaveAttribute('aria-invalid', 'true');
-    expect(radio('Owner')).toHaveFocus();
+    // The LIST has the keyboard, not its first radio: one stray arrow key from Owner would choose a role.
+    expect(screen.getByRole('radiogroup')).toHaveFocus();
     // The focus chose nothing.
     for (const item of radios()) expect(item).not.toBeChecked();
 
@@ -253,7 +254,7 @@ describe('a link', () => {
     expect(within(notice).getByText(LINK)).toBeInTheDocument();
   });
 
-  it('Done forgets it, starts again with no role, and puts the keyboard on the first choice', async () => {
+  it('Done forgets it, starts again with no role, and puts the keyboard on the list', async () => {
     const { user } = await open();
     await user.click(radio('Owner'));
     await user.click(main().getByRole('button', { name: 'Send a link' }));
@@ -262,7 +263,11 @@ describe('a link', () => {
     expect(main().queryByText(LINK)).not.toBeInTheDocument();
     expect(radios()).toHaveLength(6);
     for (const item of radios()) expect(item).not.toBeChecked();
-    await waitFor(() => { expect(radio('Owner')).toHaveFocus(); });
+    await waitFor(() => { expect(screen.getByRole('radiogroup')).toHaveFocus(); });
+    // A Tab from the list reaches the first choice, and chooses nothing.
+    await user.tab();
+    expect(radio('Owner')).toHaveFocus();
+    expect(radio('Owner')).not.toBeChecked();
     expect(main().getByText('Choose the role first: it decides what they can do in the app.')).toBeInTheDocument();
   });
 
@@ -348,6 +353,37 @@ describe('while the invitation is made', () => {
     await waitFor(() => { expect(isBusy()).toBe(false); });
   });
 
+  it('lets go of the busy marker, and says nothing, when the screen is left while the call is in the air', async () => {
+    const source = fakeSettingsSource();
+    let answer: (invitation: Invitation) => void = () => undefined;
+    source.createInvitation = vi.fn(() => new Promise<Invitation>(done => { answer = done; }));
+    const { router, user } = await open({}, source);
+    await user.click(radio('Employee'));
+    await user.click(main().getByRole('button', { name: 'Send a link' }));
+    expect(isBusy()).toBe(true);
+    await user.click(screen.getByRole('button', { name: 'Back' }));
+    await waitFor(() => { expect(router.state.location.pathname).toBe('/settings'); });
+    await waitFor(() => { expect(isBusy()).toBe(false); });
+    await act(async () => { answer({ code: FAKE_LINK_TOKEN, kind: 'link', role: 'staff', title: null, expiresAt: Date.now() + 86_400_000 }); });
+    expect(isBusy()).toBe(false);
+    expect(screen.queryByText(LINK)).not.toBeInTheDocument();
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+  });
+
+  it('a result nobody closed says «expired» when the code dies, and lets go of the busy marker then', async () => {
+    const source = fakeSettingsSource();
+    source.createInvitation = vi.fn(async (): Promise<Invitation> => ({
+      code: FAKE_DIGITS, kind: 'digits', role: 'staff', title: null, expiresAt: Date.now() + 300,
+    }));
+    const { user } = await open({}, source);
+    await user.click(radio('Employee'));
+    await user.click(main().getByRole('button', { name: 'Read out a code' }));
+    expect(await main().findByText(/^Joins as employee · 1 minute left ·/)).toBeInTheDocument();
+    expect(isBusy()).toBe(true);
+    expect(await main().findByText(/^Joins as employee · expired ·/, {}, { timeout: 2000 })).toBeInTheDocument();
+    expect(isBusy()).toBe(false);
+  });
+
   it('counts the invitation in the usage record, by name only', async () => {
     const actions: unknown[] = [];
     const listen = (event: Event) => { actions.push((event as CustomEvent).detail); };
@@ -414,6 +450,18 @@ describe('refusals, in the app’s own words', () => {
     expect(radio(role)).toBeChecked();
   });
 
+  it('a phone that knows it is offline is told to check the connection, whatever code the SDK gave', async () => {
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    const source = fakeSettingsSource();
+    // No signal reaches the screen as `internal` (HTTP status 0), not `unavailable`.
+    source.functionsFailWith = Object.assign(new Error('internal'), { code: 'functions/internal' });
+    const { user } = await open({}, source);
+    await user.click(radio('Employee'));
+    await user.click(main().getByRole('button', { name: 'Send a link' }));
+    const notice = await screen.findByRole('alertdialog');
+    expect(within(notice).getByText('Could not make a code. Check your connection and try again.')).toBeInTheDocument();
+  });
+
   it('a malformed answer from the server is a failure, never half a screen', async () => {
     const source = fakeSettingsSource();
     source.createInvitation = vi.fn(() => Promise.reject(new Error('The invitation answer was not an invitation.')));
@@ -441,7 +489,7 @@ describe('in Italian', () => {
 
     await user.click(radio('Dipendente'));
     await user.click(main().getByRole('button', { name: 'Detta un codice' }));
-    expect(await main().findByText('Leggilo a voce a loro:')).toBeInTheDocument();
+    expect(await main().findByText('Leggilo ad alta voce alla persona:')).toBeInTheDocument();
     expect(main().getByText('Entra come dipendente · scade fra 24 ore · apre l’app, tocca “Ho un codice di accesso”, crea il suo account e digita il codice.')).toBeInTheDocument();
     await user.click(main().getByRole('button', { name: 'Fatto' }));
 

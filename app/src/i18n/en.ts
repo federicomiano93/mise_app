@@ -2915,7 +2915,7 @@ export const en = {
   'staffSections.show.ok': 'Show it',
 
   // «Who can get in» (staff slice 3): the full owner invites someone, role first. The current app's words, key for key
-  // (js/i18n.js), but for the four marked new.
+  // (js/i18n.js), but for the four marked new (and the Italian of `people.readOut`, reworded).
   'people.title': 'Who can get in',
   // New in Mise 2: the row's sentence on the Settings page.
   'people.row.sub': 'Invite someone who works here, with the role you choose.',

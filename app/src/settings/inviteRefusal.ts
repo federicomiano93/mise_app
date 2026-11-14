@@ -30,11 +30,10 @@ export function inviteRefusal(error: unknown): InviteRefusalKey {
     case 'unavailable':
     case 'deadline-exceeded':
       return 'people.err.code';
-    case '':
-      // A failed download of the Functions SDK itself has no code at all; a phone that knows it is offline says so.
-      if (typeof navigator !== 'undefined' && navigator.onLine === false) return 'people.err.code';
-      return 'people.err.failed';
     default:
+      // ⚠️ NO SIGNAL IS NOT `unavailable`: the Functions SDK turns a fetch that never left the phone into `internal` (HTTP status 0),
+      // and a failed download of the SDK itself has no code at all. A phone that knows it is offline says so, whatever the code.
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) return 'people.err.code';
       return 'people.err.failed';
   }
 }

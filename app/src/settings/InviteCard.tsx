@@ -85,11 +85,14 @@ export function InviteCard() {
   // ⚠️ ONE CALL PER TAP, read at once (the state is only read on the next render): a double tap must not mint two keys.
   const inFlight = useRef(false);
   const alive = useRef(true);
-  const firstRole = useRef<HTMLInputElement>(null);
+  const roleGroup = useRef<HTMLDivElement>(null);
   const resultStart = useRef<HTMLParagraphElement>(null);
   const buttons = useRef(new Map<JoinCodeKind, HTMLButtonElement>());
-  // Where the keyboard goes after the next render: the result's first line, the first role (after Done), or the button that was pressed
-  // (after a refusal has been read).
+  // The clock the time left is read against: set when a result appears, moved on every minute while it is on screen and when the
+  // device comes back to the foreground, so a result nobody closed comes to say «expired» rather than «24 hours left» for ever.
+  const [now, setNow] = useState(() => Date.now());
+  // Where the keyboard goes after the next render: the result's first line, the list of roles (after Done), or the button that was
+  // pressed (after a refusal has been read).
   const [focusNext, setFocusNext] = useState<'result' | 'roles' | JoinCodeKind | null>(null);
 
   useEffect(() => {
@@ -97,13 +100,33 @@ export function InviteCard() {
     return () => { alive.current = false; };
   }, []);
 
-  const held = making !== null || invitation !== null;
+  const expired = invitation !== null && now >= invitation.expiresAt;
+
+  // ⚠️ A HOLD MUST END (session/busy.ts): a result nobody closed on the lab tablet would otherwise keep it off every update for good.
+  // The code is unrepeatable only while it can still be used, so the hold ends when it expires, as well as at Done and on leaving.
+  const held = making !== null || (invitation !== null && !expired);
   useEffect(() => (held ? markBusy() : undefined), [held]);
+
+  useEffect(() => {
+    if (invitation === null) return undefined;
+    const tick = () => { setNow(Date.now()); };
+    tick();
+    const minute = setInterval(tick, 60_000);
+    // One timer to the very moment it dies, so the hold ends then and not up to a minute later. Capped: a browser runs a delay
+    // longer than about 24.8 days at once.
+    const end = setTimeout(tick, Math.min(Math.max(invitation.expiresAt - Date.now(), 0) + 50, 2_000_000_000));
+    document.addEventListener('visibilitychange', tick);
+    return () => {
+      clearInterval(minute);
+      clearTimeout(end);
+      document.removeEventListener('visibilitychange', tick);
+    };
+  }, [invitation]);
 
   useEffect(() => {
     if (focusNext === null || making !== null) return;
     if (focusNext === 'result') resultStart.current?.focus();
-    else if (focusNext === 'roles') firstRole.current?.focus();
+    else if (focusNext === 'roles') roleGroup.current?.focus();
     else buttons.current.get(focusNext)?.focus();
     setFocusNext(null);
   }, [focusNext, making]);
@@ -115,8 +138,9 @@ export function InviteCard() {
     if (inFlight.current) return;
     if (chosen === null) {
       // FOCUS FIRST, then the new text: the list is read with its description as it takes the focus, and the live note then speaks
-      // the change once rather than the same words twice (the current app's order).
-      firstRole.current?.focus();
+      // the change once rather than the same words twice (the current app's order). ⚠️ THE LIST, NOT ITS FIRST RADIO: a radio chooses
+      // on an arrow key, and the first one is Owner — one stray key from there would choose a role nobody meant (fix ff7046a8).
+      roleGroup.current?.focus();
       setMissing(true);
       return;
     }
@@ -166,7 +190,7 @@ export function InviteCard() {
 
   if (invitation !== null) {
     const role = t(IN_SENTENCE[choiceKeyOf(invitation.role, invitation.title)]);
-    const left = expiresIn(invitation);
+    const left = expiresIn(invitation, now);
     const expires = t(`join.expires.${left.unit}`, { n: left.n });
 
     if (invitation.kind === 'digits') {
@@ -215,7 +239,10 @@ export function InviteCard() {
       <p className={styles.intro}>{t('people.invite.intro')}</p>
       <p id={groupLabel} className={styles.legend}>{t('people.roleGroup')}</p>
       <div
+        ref={roleGroup}
         role="radiogroup"
+        // Focusable by the code only (after Done, or when a role is missing), never a Tab stop of its own.
+        tabIndex={-1}
         aria-labelledby={groupLabel}
         aria-describedby={noteId}
         aria-required="true"
@@ -223,14 +250,13 @@ export function InviteCard() {
         className={styles.roles}
         data-invalid={missing || undefined}
       >
-        {ROLE_CHOICES.map((choice, index) => {
+        {ROLE_CHOICES.map(choice => {
           const checked = chosen?.key === choice.key;
           const nameId = `${ids}-${choice.key}-name`;
           const meansId = `${ids}-${choice.key}-means`;
           return (
             <label key={choice.key} className={styles.role} data-checked={checked}>
               <input
-                ref={index === 0 ? firstRole : undefined}
                 type="radio"
                 name={`${ids}-role`}
                 value={choice.key}

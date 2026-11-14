@@ -59,6 +59,12 @@
 
 .role:first-child {
   border-top: 0;
+  border-radius: var(--r-md) var(--r-md) 0 0;
+}
+
+/* The tint of a chosen first or last row follows the list's rounded corners (no `overflow: hidden`, which would clip focus rings). */
+.role:last-child {
+  border-radius: 0 0 var(--r-md) var(--r-md);
 }
 
 /* The chosen role is told by its tint and its weight as well as by the radio. */

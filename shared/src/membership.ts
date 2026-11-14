@@ -1,6 +1,7 @@
 // membership.ts — what a person may do inside a location they already belong to.
 //
-// TypeScript port of the PURE half of js/roles.js (the roles and the two powers). The other half
+// TypeScript port of the PURE half of js/roles.js (the roles, the powers, and the six choices of «Who
+// can get in»). The other half
 // turns a role into words through the current app's dictionary, which Mise 2 does not share, so
 // this is not a whole-module port and parity.spec.ts does not pair it; membership.spec.ts runs
 // every test against both files instead.

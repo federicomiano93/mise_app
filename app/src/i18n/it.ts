@@ -2725,7 +2725,8 @@ export const it: Messages = {
   'people.add.digits': 'Detta un codice',
   'people.add.digitsStaffOnly': 'Un responsabile, uno chef di cucina o un titolare si invita con un link. Il codice di sei cifre è solo per i dipendenti.',
   'people.making': 'Sto creando l’invito…',
-  'people.readOut': 'Leggilo a voce a loro:',
+  // Not the current app's «Leggilo a voce a loro:» (a plural for one person); «alla persona», as the card's other sentences say.
+  'people.readOut': 'Leggilo ad alta voce alla persona:',
   'people.joinsAs': 'Entra come {role} · {expires} · apre l’app, tocca “{button}”, crea il suo account e digita il codice.',
   'people.link.intro': 'Manda questo link alla persona. Funziona una volta sola, e quando lo apre sceglie da sé la sua email e la sua password.',
   'people.link.joinsAs': 'Entra come {role} · {expires}',

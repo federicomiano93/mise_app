@@ -3,7 +3,7 @@
 // shared/ and the js/ file the live app uses today. Ported from tests/roles.test.mjs.
 //
 // membership.ts is the PURE half of js/roles.js only (ROLES, DEFAULT_ROLE, isValidRole, roleOf,
-// canManage, isOwner). The other half turns a role into words through the current app's
+// canManage, isOwner, and ROLE_CHOICES without its dictionary keys). The other half turns a role into words through the current app's
 // dictionary, which Mise 2 does not share, so the label tests are not ported and this module is
 // NOT paired in parity.spec.ts (js/roles.js exports more than the port does).
 //
