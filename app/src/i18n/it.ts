@@ -1109,7 +1109,7 @@ export const it: Messages = {
   'cat.split.tooSmall': 'Troppo poco da dividere',
   'cat.split.line': '→ {a} + {b}',
   'cat.fromRow.do': 'Calcola da questo ingrediente',
-  'cat.fromRow.title': 'Quanto {name} vuoi?',
+  'cat.fromRow.title': 'Quantità di {name}?',
   'cat.fromRow.label': 'Quantità ({unit})',
   'cat.fromRow.tooSmall': 'Scrivi una quantità maggiore di 0.',
   'cat.fromRow.tooBig': 'Sarebbero più di 10 tonnellate di impasto. Controlla la quantità.',

@@ -1,5 +1,5 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { LOAD, recipe, renderRecipes, sourceWith } from '../testing/renderRecipes';
 
 // «Calculate from this ingredient» (Mise 2 only, 14 Nov 2026): the whole recipe scaled from one row's amount, that row exact.
@@ -14,15 +14,14 @@ afterEach(() => {
 });
 
 // The owner's example: sugar 800 g → 1000 g gives butter 1000 g, flour 2500 g, a total of about 5469 g.
-const BRIOCHE = recipe('b', {
-  name: 'Brioche',
-  ingredients: [
-    { label: 'Flour', grams: 2000, unit: 'g', rid: 'r1' },
-    { label: 'Butter', grams: 800, unit: 'g', rid: 'r2' },
-    { label: 'Sugar', grams: 800, unit: 'g', rid: 'r3' },
-    { label: 'Eggs', grams: 775, unit: 'g', rid: 'r4' },
-  ],
-});
+type Row = { label: string; grams: number; unit: string; rid: string };
+const BRIOCHE_ROWS: Row[] = [
+  { label: 'Flour', grams: 2000, unit: 'g', rid: 'r1' },
+  { label: 'Butter', grams: 800, unit: 'g', rid: 'r2' },
+  { label: 'Sugar', grams: 800, unit: 'g', rid: 'r3' },
+  { label: 'Eggs', grams: 775, unit: 'g', rid: 'r4' },
+];
+const BRIOCHE = recipe('b', { name: 'Brioche', ingredients: BRIOCHE_ROWS });
 // Pieces, a volume, «to taste», a row with no amount and a sub-recipe row.
 const MIXED = recipe('m', {
   name: 'Mixed',
@@ -79,16 +78,16 @@ describe('«Calculate from this ingredient»', () => {
     expect(gramsBox()).toHaveValue(5469);
     expect(main().getByText('Calculated from Sugar: 1000 g')).toBeInTheDocument();
     // Remembered on this device like the box's batch, with the row it came from.
-    expect(stored().b).toMatchObject({ target: 5468.75, by: { key: 'name:Sugar#1', amount: 1000 } });
+    expect(stored().b).toMatchObject({ target: 5468.75, by: { key: 'name:Sugar#1', amount: 1000, unit: 'g' } });
     // The focus goes back to the ingredient that was chosen.
     await waitFor(() => { expect(rowButton('Sugar')).toHaveFocus(); });
   });
 
-  it('asks «How much … do you want?» with one labelled box in the row’s own unit, focused', async () => {
+  it('asks «Amount of …?» with one labelled box in the row’s own unit, focused', async () => {
     const { user } = await open([MIXED], 'm');
     await user.click(rowButton('Eggs'));
     await user.click(fromRowItem()!);
-    expect(screen.getByRole('dialog', { name: 'How much Eggs do you want?' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Amount of Eggs?' })).toBeInTheDocument();
     const box = dialog().getByRole('spinbutton', { name: 'Amount (pcs)' });
     expect(box).toHaveFocus();
     expect(dialog().getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
@@ -193,7 +192,7 @@ describe('«Calculate from this ingredient»', () => {
   });
 
   it('is remembered on this device: the recipe opened again shows the row exact and the line', async () => {
-    window.localStorage.setItem('catalogue-scaled', JSON.stringify({ b: { target: 5468.75, ts: Date.now() - 60_000, by: { key: 'name:Sugar#1', amount: 1000 } } }));
+    window.localStorage.setItem('catalogue-scaled', JSON.stringify({ b: { target: 5468.75, ts: Date.now() - 60_000, by: { key: 'name:Sugar#1', amount: 1000, unit: 'g' } } }));
     await open();
     expect(rowsOf()[2]).toEqual(['Sugar', '1000', 'g']);
     expect(gramsBox()).toHaveValue(5469);
@@ -244,11 +243,103 @@ describe('«Calculate from this ingredient»', () => {
     ]);
   });
 
+  // ── The review of 14 Nov 2026: what a live change (another phone) must not do ─────────────────────────────────────────────────
+
+  // A colleague's edit, as the live stream brings it.
+  function liveEdit(source: Awaited<ReturnType<typeof open>>['source'], ingredients: unknown[]) {
+    act(() => {
+      source.recipes.set('b', { ...BRIOCHE, ingredients });
+      source.push();
+    });
+  }
+  const briocheWith = (sugar: Record<string, unknown>) => BRIOCHE_ROWS.map((row: Row) => (row.label === 'Sugar' ? { ...row, ...sugar } : row));
+
+  it('⚠️ the chosen row’s unit changed since (800 g tidied into 0.8 kg): the typed 1000 is not read as kg, the total remembered stays', async () => {
+    const { user, source } = await open();
+    await calculateFrom(user, 'Sugar', '1000');
+    expect(gramsBox()).toHaveValue(5469);
+    liveEdit(source, briocheWith({ grams: 0.8, unit: 'kg' }));
+    await waitFor(() => { expect(main().queryByText(/Calculated from/)).not.toBeInTheDocument(); });
+    // Not 5,468,750 g: the batch the person chose, by its total.
+    expect(gramsBox()).toHaveValue(5469);
+    expect(rowsOf().at(-1)).toEqual(['Total', '5469', 'g']);
+  });
+
+  it('⚠️ a batch worked out again past ten tonnes (the row’s amount cut to almost nothing elsewhere) falls back to the total remembered', async () => {
+    const { user, source } = await open();
+    await calculateFrom(user, 'Sugar', '1000');
+    liveEdit(source, briocheWith({ grams: 0.1 }));
+    await waitFor(() => { expect(main().queryByText(/Calculated from/)).not.toBeInTheDocument(); });
+    expect(gramsBox()).toHaveValue(5469);
+  });
+
+  it('⚠️ a row added above while the question is open: it still asks about the same ingredient, and the answer goes to it', async () => {
+    const { user, source } = await open();
+    await user.click(rowButton('Sugar'));
+    await user.click(fromRowItem()!);
+    expect(screen.getByRole('dialog', { name: 'Amount of Sugar?' })).toBeInTheDocument();
+    liveEdit(source, [{ label: 'Yeast', grams: 10, unit: 'g', rid: 'r0' }, ...BRIOCHE_ROWS]);
+    expect(screen.getByRole('dialog', { name: 'Amount of Sugar?' })).toBeInTheDocument();
+    await user.type(dialog().getByRole('spinbutton'), '1000');
+    await user.click(dialog().getByRole('button', { name: 'Calculate' }));
+    expect(main().getByText('Calculated from Sugar: 1000 g')).toBeInTheDocument();
+    expect(rowsOf()[3]).toEqual(['Sugar', '1000', 'g']);
+  });
+
+  it('⚠️ the row deleted (or changed unit) while the question is open: the question closes and nothing is calculated', async () => {
+    const { user, source } = await open();
+    await user.click(rowButton('Sugar'));
+    await user.click(fromRowItem()!);
+    liveEdit(source, BRIOCHE_ROWS.filter((row: Row) => row.label !== 'Sugar'));
+    await waitFor(() => { expect(screen.queryByRole('dialog')).not.toBeInTheDocument(); });
+    expect(stored()).toEqual({});
+    // The row is gone: the focus goes to the card's full-screen button, never to <body> nor to the row now in its place.
+    await waitFor(() => { expect(main().getByRole('button', { name: 'Full screen' })).toHaveFocus(); });
+
+    await user.click(rowButton('Butter'));
+    await user.click(fromRowItem()!);
+    liveEdit(source, BRIOCHE_ROWS.map((row: Row) => (row.label === 'Butter' ? { ...row, grams: 0.8, unit: 'kg' } : row)));
+    await waitFor(() => { expect(screen.queryByRole('dialog')).not.toBeInTheDocument(); });
+    expect(stored()).toEqual({});
+    await waitFor(() => { expect(rowButton('Butter')).toHaveFocus(); });
+
+    // Emptied (0, the same unit): closed too — it would otherwise say «more than 10 tonnes» to any amount.
+    await user.click(rowButton('Eggs'));
+    await user.click(fromRowItem()!);
+    liveEdit(source, BRIOCHE_ROWS.map((row: Row) => (row.label === 'Eggs' ? { ...row, grams: 0 } : row)));
+    await waitFor(() => { expect(screen.queryByRole('dialog')).not.toBeInTheDocument(); });
+    expect(stored()).toEqual({});
+  });
+
+  it('Enter calculates what the button calculates, a decimal in a grams row included (no browser bubble)', async () => {
+    const { user } = await open();
+    await user.click(rowButton('Sugar'));
+    await user.click(fromRowItem()!);
+    const box = dialog().getByRole('spinbutton');
+    await user.type(box, '999.6');
+    // user-event does not model Enter's implicit submit for a number box (real browsers do, and the drive presses it): the form is
+    // submitted as Enter would, and the browser's own check — which would stop 999.6 against step=1 — is off.
+    const form = box.closest('form')!;
+    expect(form).toHaveAttribute('novalidate');
+    act(() => { fireEvent.submit(form); });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(main().getByText('Calculated from Sugar: 1000 g')).toBeInTheDocument();
+  });
+
+  it('an amount so big it overflows says the ten-tonne sentence, not «greater than 0»', async () => {
+    const { user } = await open();
+    await user.click(rowButton('Sugar'));
+    await user.click(fromRowItem()!);
+    await user.type(dialog().getByRole('spinbutton'), '1e308');
+    await user.click(dialog().getByRole('button', { name: 'Calculate' }));
+    expect(dialog().getByRole('status')).toHaveTextContent('That would be more than 10 tonnes of dough. Check the amount.');
+  });
+
   it('says it all in Italian', async () => {
     const { user } = await open([BRIOCHE], 'b', { lang: 'it', session: { language: 'it' } });
     await user.click(rowButton('Sugar'));
     await user.click(fromRowItem()!);
-    expect(screen.getByRole('dialog', { name: 'Quanto Sugar vuoi?' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Quantità di Sugar?' })).toBeInTheDocument();
     await user.click(dialog().getByRole('button', { name: 'Calcola' }));
     expect(dialog().getByRole('status')).toHaveTextContent('Scrivi una quantità maggiore di 0.');
     await user.type(dialog().getByRole('spinbutton', { name: 'Quantità (g)' }), '1000');

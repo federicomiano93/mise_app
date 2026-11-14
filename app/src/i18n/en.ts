@@ -1221,7 +1221,7 @@ export const en = {
   'cat.split.tooSmall': 'Too small to split',
   'cat.split.line': '→ {a} + {b}',
   'cat.fromRow.do': 'Calculate from this ingredient',
-  'cat.fromRow.title': 'How much {name} do you want?',
+  'cat.fromRow.title': 'Amount of {name}?',
   'cat.fromRow.label': 'Amount ({unit})',
   'cat.fromRow.tooSmall': 'Enter an amount greater than 0.',
   'cat.fromRow.tooBig': 'That would be more than 10 tonnes of dough. Check the amount.',

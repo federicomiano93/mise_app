@@ -1,5 +1,5 @@
 import { useId, useState } from 'react';
-import { scaleFromRow, unitDecimals } from '@mise/shared/catalogue-model';
+import { MAX_WEIGHT_G, scaleFromRow, unitDecimals } from '@mise/shared/catalogue-model';
 import type { CatalogueRecipe, CatalogueUnit, RowScaleResult } from '@mise/shared/catalogue-model';
 import { useT } from '../i18n/useT';
 import { Button } from '../ui/Button';
@@ -9,7 +9,8 @@ import styles from './FromRowDialog.module.css';
 // The ceiling of a batch worked out from one ingredient: ten tonnes, the bound the database puts on a weighing (firestore.rules,
 // `rawGrams`). Far past the batch box's louder question (100 kg, or 50 times the recipe), which still comes first for anything
 // above that; this only keeps an absurd typing (a stray row of zeros) from becoming a number nobody can read.
-export const MAX_FROM_ROW_TARGET_G = 10_000_000;
+// The same number as catalogue-model MAX_WEIGHT_G, which recipeScale also falls back at: one bound, not two copies.
+export const MAX_FROM_ROW_TARGET_G = MAX_WEIGHT_G;
 
 type Props = {
   recipe: CatalogueRecipe;
@@ -25,7 +26,8 @@ type Props = {
 
 type Problem = 'tooSmall' | 'tooBig' | null;
 
-// «Calculate from this ingredient» (Mise 2 only, 14 Nov 2026): «How much {name} do you want?», one number box in the row's OWN
+// «Calculate from this ingredient» (Mise 2 only, 14 Nov 2026): «Amount of {name}?» / «Quantità di {name}?» (the owner's wording:
+// «Quanto {name} vuoi?» read «Quanto farina», «Quanto uova»), one number box in the row's OWN
 // unit (grams, pieces, ml, kg…), Calculate and Cancel. The box takes the focus when the dialog opens (Dialog's modal gives it back
 // to the page when it closes; the row's own menu button is then focused by the caller, since the menu item that opened this is
 // gone). A wrong amount is said under the box, in a live region that is there (empty) before it speaks, tied to the box by
@@ -42,7 +44,9 @@ export function FromRowDialog({ recipe, index, name, unit, unitWord, onCancel, o
     // A comma is the Italian decimal mark; the box may hand either.
     const typed = Number(text.trim().replace(',', '.'));
     const result = text.trim() === '' || !Number.isFinite(typed) ? null : scaleFromRow(recipe, index, typed);
-    if (result === null) { setProblem('tooSmall'); return; }
+    // The caller shows this dialog only on a row that can be scaled from, so an amount of 1 or more (never rounded to 0 in any unit)
+    // that gives nothing has overflowed (1e308 g, or 1e400, which reads as Infinity): «too big», not «enter an amount greater than 0».
+    if (result === null) { setProblem(typed >= 1 ? 'tooBig' : 'tooSmall'); return; }
     if (result.target > MAX_FROM_ROW_TARGET_G) { setProblem('tooBig'); return; }
     onCalculate(result);
   }
@@ -61,6 +65,9 @@ export function FromRowDialog({ recipe, index, name, unit, unitWord, onCancel, o
     >
       <form
         className={styles.field}
+        // The browser's own check would stop Enter on 2.5 g or 3.5 eggs with a bubble in the browser's language, while the button
+        // takes the same text and rounds it: the two must agree, so the dialog does its own checking.
+        noValidate
         // Enter in the box calculates, as the button does.
         onSubmit={event => { event.preventDefault(); calculate(); }}
       >

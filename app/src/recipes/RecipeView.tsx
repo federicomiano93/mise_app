@@ -448,7 +448,7 @@ function DuplicateAction({ recipe }: { recipe: CatalogueRecipe }) {
 // their row key (shared/row-actions-model), so a live change that adds a row above one leaves it split.
 // «Order» opens Orders on that ingredient's supplier (the Orders section, with the recipe in the address), and Back there returns
 // here with the same row focused, the scroll where it was and the splits still shown (recipeReturn.ts, origin 'order').
-// «Calculate from this ingredient» (Mise 2 only, 14 Nov 2026) asks «How much {name} do you want?» (FromRowDialog) and scales the
+// «Calculate from this ingredient» (Mise 2 only, 14 Nov 2026) asks «Amount of {name}?» (FromRowDialog) and scales the
 // whole recipe by (typed ÷ the row's amount): the row shows exactly what was typed, the batch box the new total, and a line under the
 // table says which ingredient the batch was worked out from, with Undo back to the base recipe. The batch is remembered on this
 // device like the box's (the store's `catalogue-scaled`, with the row's key), so the full screen, the export and «Use as base
@@ -461,8 +461,10 @@ function IngredientsCard({ recipe, scale }: { recipe: CatalogueRecipe; scale: Re
   const store = useRecipesStore();
   const target = scale?.target ?? null;
   const fromRow = scale?.row ?? null;
-  // The row whose «How much … do you want?» is open, by its place and its key.
-  const [asking, setAsking] = useState<{ index: number; key: string } | null>(null);
+  // The row whose «Amount of …?» is open, by its KEY and the unit it had when it opened — never by its place: a row added above it
+  // on another phone would otherwise turn the question onto a different ingredient (review of 14 Nov 2026). Its place is looked up
+  // again on every draw (`askingIndex`), and the dialog closes when the row is gone, can no longer be scaled from, or changed unit.
+  const [asking, setAsking] = useState<{ key: string; unit: string } | null>(null);
   const [confirm, confirmDialog] = useConfirm();
   // The row button owed the focus once the dialog (or the louder question) has closed: the menu item that opened it is gone.
   const focusRow = useRef<string | null>(null);
@@ -478,6 +480,16 @@ function IngredientsCard({ recipe, scale }: { recipe: CatalogueRecipe; scale: Re
   const amounts = recipeAmounts(recipe, target, t, locale, fromRow);
   const { rows, total } = amounts;
   const keys = rowKeysOf(recipe.ingredients);
+  const askingIndex = asking === null ? -1 : keys.indexOf(asking.key);
+  const askingStale = asking !== null
+    && (askingIndex < 0 || unitOf(recipe.ingredients[askingIndex]) !== asking.unit || scaleFromRow(recipe, askingIndex, 1) === null);
+  // The row changed under the open question (deleted, emptied, made «to taste», another unit): the question is closed, nothing is
+  // calculated, and the focus goes back to the row's button — or, when the row is gone, to the card's own first button (below).
+  useEffect(() => {
+    if (!askingStale || asking === null) return;
+    focusRow.current = asking.key;
+    setAsking(null);
+  }, [askingStale, asking]);
   // ⚠️ Asked on every draw (the venue and the role can arrive late), the very question Orders' own gate asks.
   const mayOrder = mayOpenOrders(location, canManage, role);
 
@@ -540,7 +552,7 @@ function IngredientsCard({ recipe, scale }: { recipe: CatalogueRecipe; scale: Re
   function act(index: number, id: string) {
     const key = keys[index] ?? '';
     if (id === 'fromRow') {
-      setAsking({ index, key });
+      setAsking({ key, unit: unitOf(recipe.ingredients[index]) });
       return;
     }
     if (id === 'split') {
@@ -567,8 +579,11 @@ function IngredientsCard({ recipe, scale }: { recipe: CatalogueRecipe; scale: Re
     const key = focusRow.current;
     if (key === null) return;
     focusRow.current = null;
-    const button = buttons.current.get(key);
-    if (button === undefined || !button.isConnected) return;
+    // ⚠️ THE ROW MAY BE GONE (deleted on another phone while its question, or the louder one, was open): the focus must not fall to
+    // <body>, nor onto whichever row now sits in its place, so it goes to the card's full-screen button, the first thing in the card.
+    const own = buttons.current.get(key);
+    const button = own !== undefined && own.isConnected ? own : opener.current;
+    if (button === null || !button.isConnected) return;
     button.focus({ preventScroll: true });
     // Once more after React Aria's modal has handed the focus back to what had it before it opened (the menu item, gone).
     requestAnimationFrame(() => { if (button.isConnected && document.activeElement !== button) button.focus({ preventScroll: true }); });
@@ -576,7 +591,7 @@ function IngredientsCard({ recipe, scale }: { recipe: CatalogueRecipe; scale: Re
 
   // A valid amount typed: the same louder question as the batch box for a batch past 100 kg or 50 times the recipe (never a block),
   // then the batch is remembered with the row it came from.
-  async function calculateFrom(key: string, result: RowScaleResult) {
+  async function calculateFrom(key: string, unit: string, result: RowScaleResult) {
     focusRow.current = key;
     setAsking(null);
     const warning = batchWarning(result.target, weighableTotalGrams(recipe), t);
@@ -589,7 +604,7 @@ function IngredientsCard({ recipe, scale }: { recipe: CatalogueRecipe; scale: Re
       });
       if (!ok) return;
     }
-    store.setScaledTarget(recipe.id, result.target, { key, amount: result.amount });
+    store.setScaledTarget(recipe.id, result.target, { key, amount: result.amount, unit });
   }
 
   function undoFromRow() {
@@ -698,18 +713,18 @@ function IngredientsCard({ recipe, scale }: { recipe: CatalogueRecipe; scale: Re
         );
       })()}
 
-      {asking === null ? null : (() => {
-        const ing = recipe.ingredients[asking.index];
+      {asking === null || askingStale ? null : (() => {
+        const ing = recipe.ingredients[askingIndex];
         const unit = unitOf(ing);
         return (
           <FromRowDialog
             recipe={recipe}
-            index={asking.index}
+            index={askingIndex}
             name={!ing || ing.label === '' ? t('cat.noName') : ing.label}
             unit={unit}
             unitWord={unitWord(t, unit)}
             onCancel={() => { focusRow.current = asking.key; setAsking(null); }}
-            onCalculate={result => { void calculateFrom(asking.key, result); }}
+            onCalculate={result => { void calculateFrom(asking.key, asking.unit, result); }}
           />
         );
       })()}

@@ -147,9 +147,13 @@ export interface ScaledEntry {
 // ⚠️ THE SAME KEY AND SHAPE AS THE CURRENT APP'S (`catalogue-scaled`, `{ target, ts }`), WITH ONE EXTRA FIELD: the current app reads
 // `target` and `ts` only and keeps the entry whole, so it shows such a batch by its total; a batch it calculates itself replaces
 // the entry, without `by`.
+// ⚠️ THE UNIT IS PART OF THE AMOUNT: «1000» means nothing without it. When the row's unit has changed since (a colleague tidied
+// Sugar 800 g into 0.8 kg), the typed number would be read in the new unit and the batch would jump a thousandfold; the screen then
+// falls back to the total remembered (recipeScale `resolveScale`). An entry written without a unit is dropped for the same reason.
 export interface ScaledBy {
   readonly key: string;
   readonly amount: number;
+  readonly unit: string;
 }
 
 export interface RecipesSnapshot {
@@ -315,11 +319,12 @@ function asLabelConfig(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value) ? { ...(value as Record<string, unknown>) } : null;
 }
 
-// A row a batch came from as stored, or null: a key and a positive, finite amount, nothing else.
+// A row a batch came from as stored, or null: a key, a positive, finite amount and the unit it was typed in, nothing else.
 function asScaledBy(value: unknown): ScaledBy | null {
   const by = asMap(value);
   return typeof by.key === 'string' && by.key !== '' && typeof by.amount === 'number' && Number.isFinite(by.amount) && by.amount > 0
-    ? { key: by.key, amount: by.amount } : null;
+    && typeof by.unit === 'string' && by.unit !== ''
+    ? { key: by.key, amount: by.amount, unit: by.unit } : null;
 }
 
 function asScaled(value: unknown): Record<string, ScaledEntry> {
