@@ -11,7 +11,7 @@
 import { B_END, B_START, WORD, escapeRegex, roundHalfUp, stripChars } from './py-compat';
 import { EXCLUDED } from './reasons';
 import {
-  BEVERAGE_RE, COSTS_RE, DISCOUNT_RE, FOOD_RE, NOISE_RE, PACKAGING_RE, READY_RE,
+  BEVERAGE_RE, COSTS_RE, DISCOUNT_RE, FOOD_RE, NOISE_RE, NONFOOD_RE, PACKAGING_RE, READY_RE,
 } from './keywords';
 
 // ── product key ───────────────────────────────────────────────────────────────
@@ -41,10 +41,12 @@ export function isUnattributedDiscount(description: unknown, quantity: number | 
   return DISCOUNT_RE.test((description as string) || '');
 }
 
-export type LineType = 'ingrediente' | 'packaging' | 'rivendita';
+// MISE 2: 'altro' (14 Nov 2026) — what is neither food nor packaging nor resale (cleaning, tools, clothing). The original
+// files those lines as 'packaging'.
+export type LineType = 'ingrediente' | 'packaging' | 'rivendita' | 'altro';
 
 // ['excluded', reason] for a line that is not goods, else [type, ''].
-// type is `ingrediente`, `packaging` or `rivendita`.
+// type is `ingrediente`, `packaging`, `rivendita` or (Mise 2) `altro`.
 export function classify(description: unknown, quantity: number | null | undefined,
   total: number | null | undefined): ['excluded', string] | [LineType, ''] {
   const d = String(description || '').trim();
@@ -55,6 +57,8 @@ export function classify(description: unknown, quantity: number | null | undefin
   if (READY_RE.test(low)) return ['rivendita', ''];
   if (FOOD_RE.test(low)) return ['ingrediente', ''];
   if (PACKAGING_RE.test(low)) return ['packaging', ''];
+  // MISE 2: the tools, clothing and cleaning words were the tail of the packaging list (keywords.ts says why they moved).
+  if (NONFOOD_RE.test(low)) return ['altro', ''];
   if (BEVERAGE_RE.test(low)) return ['rivendita', ''];
   return ['ingrediente', ''];
 }
@@ -122,8 +126,24 @@ const withFractions = (description: unknown): string => String(description || ''
   .replace(FRACTION_RE, (match: string, a: string, b: string) => (
     Number(b) === 0 ? match : fractionText(Number(a), Number(b))));
 
+// «1/2X12»: a fraction of a litre, then how many — never inside a longer number («11/2», «1,1/2») or a date. «NAT.1/2X24»: a dot
+// after a word is fine.
+const BARE_FRACTION_X = /(?<![\d/]|\d[.,])(\d)\s*\/\s*(\d)\s*[X×*]\s*(\d+)(?!\d)/u;
+
 export function parsePack(description?: unknown): PackInfo | null {
   const d = withFractions(description);
+
+  // MISE 2 (14 Nov 2026): a drink sized by a fraction then a count, «ACQUA SABRINELLA NAT 1/2X12», «ACQUA VERA NAT.1/2X24»: half a
+  // litre, twelve (twenty-four) bottles. Without it the line had no size at all, and «LT 1/2X24» read as ONE litre (the «LT 1»
+  // below), twice the real bottle. First, so nothing below reads the fraction's numerator as the size. Only on a line the
+  // beverage words name: elsewhere a bare «1/2» means nothing certain.
+  if (BEVERAGE_RE.test(d)) {
+    const bare = BARE_FRACTION_X.exec(d);
+    if (bare && Number(bare[2]) > 0) {
+      const count = Number(bare[3]);
+      return packInfo(Number(fractionText(Number(bare[1]), Number(bare[2]))), 'l', count > 1 ? count : null);
+    }
+  }
 
   // "2,5kg* 4pz", "85gr* 50pz", "2,5 KG X 4", "1kgx6", "7gx80"
   let m = P_KG_X.exec(d);

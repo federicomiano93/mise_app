@@ -22,7 +22,8 @@ import { DOCUMENT_STATUS, EXCLUDED, NOTE } from './reasons';
 export const DEFAULT_EGG_WEIGHT_G = 50.0;
 export const NO_SDI_REASON = EXCLUDED.NO_SDI_ID;
 const VAT_RATES = [0, 4, 5, 10, 20, 22];
-export const TYPE_ORDER: Record<LineType, number> = { ingrediente: 0, packaging: 1, rivendita: 2 };
+// MISE 2: 'altro' last (14 Nov 2026; classify.ts). A deliberate difference from the original, listed in parity.spec.ts.
+export const TYPE_ORDER: Record<LineType, number> = { ingrediente: 0, packaging: 1, rivendita: 2, altro: 3 };
 export const EGG_PACK_WORD = 'uovo';
 
 // What the import is configured with.

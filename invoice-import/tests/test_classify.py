@@ -135,6 +135,10 @@ class ClassifyTest(unittest.TestCase):
     def test_beverages_are_resale_ready_made_food_is_an_ingredient(self):
         self.assertEqual(self.kind("ACQUA NATURALE 50 CL")[0], "rivendita")
         self.assertEqual(self.kind("COCA COLA LATTINA")[0], "rivendita")
+        # Real lines of 14 Nov 2026 that were proposed as ingredients, and their kin.
+        for text in ("LIMONATA TOM LATTINA CL 33X24", "TONICA SCHWEPPES LEMON CL 18X24", "GASSOSA BOTTIGLIA CL 27X24",
+                     "SPUMA BIONDA CL 25X24", "CEDRATA TASSONI CL 18X24", "GINGER BEER CL 20X24"):
+            self.assertEqual(self.kind(text)[0], "rivendita", text)
         self.assertEqual(self.kind("CORNETTO ALLA CREMA")[0], "ingrediente")
         self.assertEqual(self.kind("FECOLA DI PATATE")[0], "ingrediente")
 

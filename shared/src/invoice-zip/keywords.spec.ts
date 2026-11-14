@@ -23,6 +23,23 @@ const pythonSourceRef = { current: pythonText };
 
 const NAMES =['NOISE_RE', 'COSTS_RE', 'DISCOUNT_RE', 'FOOD_RE', 'READY_RE', 'PACKAGING_RE', 'BEVERAGE_RE'] as const;
 
+// ⚠️ MISE 2 (14 Nov 2026): the non-food words (tools, clothing, cleaning) are a pattern of their own in keywords.ts, NONFOOD_RE,
+// the line type «altro». In classify.py and in the frozen current app they are still the tail of PACKAGING_RE, so the port's
+// packaging pattern is compared as PACKAGING_RE + «|» + NONFOOD_RE: not one word may be added to or lost from either side.
+const portPattern = (name: (typeof NAMES)[number]): RegExp => (name === 'PACKAGING_RE'
+  ? new RegExp(`${keywords.PACKAGING_RE.source}|${keywords.NONFOOD_RE.source}`, keywords.PACKAGING_RE.flags)
+  : keywords[name]);
+
+// ⚠️ MISE 2 (14 Nov 2026): the two deliberate differences from the frozen current app's source, undone before the source texts are
+// compared — the NONFOOD_RE split above, and six soft drinks added to BEVERAGE_RE (also in classify.py). Anything else that differs
+// still fails.
+const MISE2_SOFT_DRINKS = "'limonata', 'tonica', 'gassosa', 'spuma', 'cedrata', 'ginger', ";
+const MISE2_SPLIT = "', 'iu'); const NONFOOD_RE = new RegExp( `alluminio";
+function withoutMise2Changes(block: string): string {
+  if (!block.includes(MISE2_SOFT_DRINKS) || !block.includes(MISE2_SPLIT)) throw new Error('the Mise 2 differences are not where this check looks for them');
+  return block.replace(MISE2_SOFT_DRINKS, '').replace(MISE2_SPLIT, "' + `|alluminio");
+}
+
 // The pattern of `NAME = re.compile(` in the Python file: the raw string pieces r"…" in order, comment lines
 // skipped, up to the flag.
 function pythonPattern(name: string): string {
@@ -95,12 +112,13 @@ function toJavaScript(python: string): string {
 }
 
 describe('the keyword patterns of keywords.ts are those of invoice-import/classify.py', () => {
-  test('keywords.ts holds exactly the seven patterns', () => {
-    expect(Object.keys(keywords).sort()).toStrictEqual([...NAMES].sort());
+  test('keywords.ts holds exactly the seven patterns, and Mise 2\'s NONFOOD_RE', () => {
+    expect(Object.keys(keywords).sort()).toStrictEqual([...NAMES, 'NONFOOD_RE'].sort());
+    expect(keywords.NONFOOD_RE.flags).toBe('iu');
   });
 
   test.each(NAMES)('%s has the same words in the same order, and the flags iu', (name) => {
-    const port = keywords[name];
+    const port = portPattern(name);
     expect(port.flags, `${name}: flags`).toBe('iu');
     expect(
       toJavaScript(pythonPattern(name)),
@@ -118,7 +136,7 @@ describe('the keyword patterns of keywords.ts are those of invoice-import/classi
 
   test('keywords.ts writes the seven patterns exactly as the current app\'s js/orders/invoice-zip/classify.js (a word added there alone is caught)', () => {
     expect(
-      patternBlock(keywordsSource, 'shared/src/invoice-zip/keywords.ts'),
+      withoutMise2Changes(patternBlock(keywordsSource, 'shared/src/invoice-zip/keywords.ts')),
       'the keyword patterns of js/orders/invoice-zip/classify.js and shared/src/invoice-zip/keywords.ts differ: change both (and classify.py)',
     ).toBe(patternBlock(legacyClassifySource, 'js/orders/invoice-zip/classify.js'));
   });
