@@ -372,7 +372,7 @@ async function ingredients() {
     () => createWrite('locations/main/ingredients', { bakery: 'main', name: 'Acqua', kind: 'resale' }, asAccount(BOB)));
   await expectAllowed('…a new item created with no kind at all (absent means food)',
     () => createWrite('locations/main/ingredients', { bakery: 'main', name: 'Farina' }, asAccount(SAM)));
-  await expectAllowed('…and a resale item filed back as an ingredient',
+  await expectAllowed('…and an other item filed back as an ingredient',
     () => mergeWrite('locations/main/ingredients/ING_MODERN', { kind: 'ingredient', bakery: 'main' }));
   await expectDenied('a kind nobody writes',
     () => mergeWrite('locations/main/ingredients/ING_MODERN', { kind: 'box', bakery: 'main' }));

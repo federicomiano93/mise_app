@@ -1078,8 +1078,8 @@ export function IngredientCard({
             type="button"
             className={styles.deleteIcon}
             ref={bin}
-            aria-label={t(KIND_WORDS[kind].delete)}
-            title={t(KIND_WORDS[kind].delete)}
+            aria-label={t(KIND_WORDS[kindNow].delete)}
+            title={t(KIND_WORDS[kindNow].delete)}
             aria-disabled={deleting ? 'true' : undefined}
             aria-busy={deleting}
             onClick={remove}

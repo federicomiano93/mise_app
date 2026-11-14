@@ -63,12 +63,12 @@
 import { isWeighable as isWeighableRow, resolveRecipe } from './calculator-recipe-source';
 import { ridOf } from './guided-model';
 import { isOther, isPackaging, isResale } from './ingredient-kind';
+import { ingredientDisplayName } from './ingredient-name';
 
 // ⚠️ MISE 2 (14 Nov 2026): only FOOD may be linked to a recipe row — never packaging, resale or other. Asked as «not one of the
 // three non-food kinds» rather than isFood so that something that is not an item at all (an odd input: a string, a number)
 // gets the original's answer, which odd-inputs.spec.ts holds both files to; for every item it is exactly isFood.
 const notFood = (ing: unknown): boolean => isPackaging(ing) || isResale(ing) || isOther(ing);
-import { ingredientDisplayName } from './ingredient-name';
 
 export type CatalogueUnit = 'g' | 'kg' | 'mg' | 'ml' | 'cl' | 'dl' | 'l' | 'pcs' | 'tsp' | 'tbsp' | 'pinch' | 'to taste';
 

@@ -486,6 +486,8 @@ describe('the «Type» menu', () => {
     // Resale hides what packaging hides: no allergens to declare.
     expect(view.region.queryByRole('button', { name: /^Allergens/ })).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Edit resale item' })).toBeInTheDocument();
+    // The bin follows the menu too, so the title and the bin never name two different kinds.
+    expect(view.region.getByRole('button', { name: 'Delete resale item' })).toBeInTheDocument();
     await view.user.click(view.region.getByRole('button', { name: 'Save' }));
     await view.user.click(within(await dialogOf('Save resale item?')).getByRole('button', { name: 'Save' }));
     await waitFor(() => { expect(view.source.writes).toHaveLength(1); });
