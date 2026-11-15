@@ -197,6 +197,27 @@ describe('answering on a banner', () => {
     expect(source.records.get(`${TODAY}_s-alp`)?.quantities).toEqual({ 'i-flour': 2 });
   });
 
+  it('⚠️ words a unit clash by the day the order was FOR, not today', async () => {
+    const day = new Date();
+    day.setDate(day.getDate() - 2);
+    const date = new Intl.DateTimeFormat('en-CA').format(day);
+    const source = withQuestions({ 's-alp': { at: when(10, 42, 2), date, quantities: { 'i-flour': 2 }, units: { 'i-flour': 'sack' } } });
+    // The day's record already holds the same line in another unit, and fewer: no «may already be recorded» question, a refusal.
+    source.records.set(`${date}_s-alp`, {
+      date, supplierId: 's-alp', supplierName: 'Alpine Mills', quantities: { 'i-flour': 1 }, stock: {}, names: {}, units: { 'i-flour': 'box' },
+      createdAt: when(9, 0, 2), updatedAt: when(9, 0, 2),
+    });
+    // A real database takes a round trip to put the refused question back: until then it is not on the page, and the notice must still
+    // know its day.
+    vi.spyOn(source, 'restoreAwaitingSentIfAbsent').mockImplementation(() => new Promise<boolean>(() => {}));
+    const view = await atList(source);
+    await view.user.click(await screen.findByRole('button', { name: /^(Yes|Sì)$/, description: /^Order to Alpine Mills sent/ }));
+    const notice = within(await screen.findByRole('alertdialog', undefined, LOAD));
+    expect(notice.getByText(/Already ordered from this supplier/)).toBeInTheDocument();
+    expect(notice.queryByText(/today/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Order to Alpine Mills sent/)).not.toBeInTheDocument();
+  });
+
   it('says «Already answered on another device.» when the question is gone by the time «Yes» is pressed', async () => {
     const source = withQuestions({ 's-alp': question(ALP, { 'i-flour': 2 }) });
     const view = await atList(source);

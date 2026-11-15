@@ -40,6 +40,10 @@ export function useAnswerAwaiting(lens: OrdersLens): readonly [
 
   const answer = useCallback(async (supplierId: string, which: 'yes' | 'no', at: string): Promise<AwaitingOutcome> => {
     const name = () => awaitingSupplierName(latest.current.suppliers, supplierId, latest.current.t);
+    // ⚠️ THE DAY THE QUESTION WAS FOR, TAKEN BEFORE ANSWERING: the claim removes the question from the page, and a unit clash is
+    // worded by the day it is about — read afterwards it would fall back to today.
+    const askedFor = store.getSnapshot().awaiting.questions
+      .find(question => question.supplierId === supplierId && question.entry.at === at)?.entry.date ?? '';
     const outcome = await store.answerAwaiting(supplierId, which, at, () => {
       const { t: tt, confirm: ask } = latest.current;
       return ask({
@@ -72,9 +76,8 @@ export function useAnswerAwaiting(lens: OrdersLens): readonly [
           const line = known.find(candidate => candidate.id === id);
           return (line && ingredientDisplayLabel(line)) || id;
         });
-        const stored = store.getSnapshot().awaiting.questions.find(question => question.supplierId === supplierId);
         await latest.current.alert({
-          message: unitConflictOfLines({ date: stored?.entry.date || todayISO(), names, now: new Date(), t: tt }),
+          message: unitConflictOfLines({ date: askedFor || todayISO(), names, now: new Date(), t: tt }),
           okLabel: tt('common.ok'),
         });
       } else {

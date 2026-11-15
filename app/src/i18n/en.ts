@@ -2690,7 +2690,6 @@ export const en = {
   'ord.sendEditor.discard.body': 'The text you changed will not be sent.',
   'ord.sendEditor.discard.yes': 'Discard',
   'ord.sendEditor.discard.no': 'Keep editing',
-  'ord.supplierSend': 'Send',
   'ord.supplierSendAria': 'Send the order to {supplier}',
   'ord.send.failed': 'Something went wrong while sending. Try again.',
   'ord.sentCheck.sendNow': 'Send it now',

@@ -2471,7 +2471,6 @@ export const it: Messages = {
   'ord.sendEditor.discard.body': 'Il testo che hai cambiato non verrà inviato.',
   'ord.sendEditor.discard.yes': 'Scarta',
   'ord.sendEditor.discard.no': 'Continua a modificare',
-  'ord.supplierSend': 'Invia',
   'ord.supplierSendAria': 'Invia l’ordine a {supplier}',
   'ord.send.failed': 'Qualcosa è andato storto durante l’invio. Riprova.',
   'ord.sentCheck.sendNow': 'Invialo ora',
