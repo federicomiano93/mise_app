@@ -10,7 +10,7 @@ import { readFileSync } from 'node:fs';
 import { draft, stub } from './helpers/load-draft.mjs';
 import {
   awaitingEntry, draftQuantities, isAwaiting, awaitingList, claimDecision, linesToClear,
-  supplierKeepsLines, answerAwaiting, shouldAskBeforeRecording, restoreDecision,
+  supplierKeepsLines, answerAwaiting, shouldAskBeforeRecording, restoreDecision, putQuestionBack,
 } from '../js/orders/awaiting-sent.js';
 
 const read = p => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8').replace(/\r\n/g, '\n');
@@ -339,8 +339,31 @@ test('the restore is a transaction stamped with the bakery, and the screen does 
   assert.match(fn, /tx\.get\(ref\)/);
   assert.match(fn, /tx\.set\(ref, withBakery\(data\), \{ mergeFields: \['bakery', \.\.\.fieldPaths\] \}\)/);
   const answer = main.slice(main.indexOf('async function answerAwaitingSent'), main.indexOf('// ── Sending the list to whoever'));
-  assert.match(answer, /restore: \(id, e\) => \{ restoreAwaitingSentIfAbsent\(id, e, restoreDecision\)\.catch\(err => console\.error/);
+  assert.match(answer, /restore: \(id, e\) => \{ putQuestionHere\(id, e\); \}/);
+  assert.match(main, /write: \(id, e\) => restoreAwaitingSentIfAbsent\(id, e, restoreDecision\)/);
   assert.doesNotMatch(answer, /setAwaitingSent\(/, 'no blind overwrite any more');
+});
+
+test('⚠️ a restore that rejects (offline: a transaction is never queued) keeps the question on THIS device', async () => {
+  const kept = [];
+  const offline = async () => { throw new Error('unavailable'); };
+  assert.equal(await putQuestionBack('S1', SENT, { write: offline, keepHere: (id, e) => kept.push([id, e]) }), 'kept');
+  assert.deepEqual(kept, [['S1', SENT]]);
+  const wrote = [];
+  assert.equal(await putQuestionBack('S1', SENT, { write: async id => { wrote.push(id); return true; }, keepHere: () => kept.push('no') }), 'restored');
+  assert.deepEqual(wrote, ['S1']);
+  assert.equal(kept.length, 1, 'a write that works keeps nothing here');
+});
+
+test('the kept question is shown here, warned about, and retried when the network returns', () => {
+  const fn = main.slice(main.indexOf('const questionsToRetry'), main.indexOf('// The questions as the screen shows them'));
+  assert.match(fn, /localAwaiting\.set\(id, e\)/);
+  assert.match(fn, /askHere\.set\(id, \{ at: e\.at, seen: true \}\)/);
+  assert.match(fn, /t\('orders\.awaiting\.notShared'/);
+  assert.match(fn, /window\.addEventListener\('online', retryQuestions\)/);
+  assert.match(fn, /restoreAwaitingSentIfAbsent\(id, e, restoreDecision\)/);
+  assert.match(fn, /localAwaiting\.delete\(id\)/, 'the local copy goes once the shared one stands');
+  assert.match(fn, /localAwaiting\.get\(id\) !== e/, 'an answered question is not put back');
 });
 
 // ── «Sì» when History already holds the order (review, 15 Nov 2026) ─────────────────

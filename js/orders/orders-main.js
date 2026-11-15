@@ -46,7 +46,7 @@ import {
 } from './draft.js';
 import {
   awaitingEntry, awaitingList, isAwaiting, claimDecision, linesToClear, supplierKeepsLines, answerAwaiting,
-  draftQuantities, shouldAskBeforeRecording, restoreDecision,
+  draftQuantities, shouldAskBeforeRecording, restoreDecision, putQuestionBack,
 } from './awaiting-sent.js';
 import { saveStateView, paintSaveState } from './save-state-view.js';
 import { buildSendScreen } from './preview.js';
@@ -1979,6 +1979,41 @@ function waitForAnswer(sent, { handOff = 'text' } = {}) {
   maybeAskHere();
 }
 
+// A question the recording could not put back (offline: transactions are never queued) stays on
+// THIS device, exactly like one that could not be shared, and goes back to the shared draft when
+// the network returns — unless a newer send already stands there, which then keeps its own.
+const questionsToRetry = new Map();
+function putQuestionHere(supplierId, entry) {
+  return putQuestionBack(supplierId, entry, {
+    write: (id, e) => restoreAwaitingSentIfAbsent(id, e, restoreDecision),
+    keepHere: (id, e, err) => {
+      console.error('Putting the question back failed:', err);
+      localAwaiting.set(id, e);
+      askHere.set(id, { at: e.at, seen: true });
+      questionsToRetry.set(id, e);
+      if (questionsToRetry.size === 1) window.addEventListener('online', retryQuestions);
+      const supplier = findOrderSupplier(id);
+      setStatus(t('orders.awaiting.notShared', { supplier: supplier ? supplierLabel(supplier) : '' }), 'warn', 10000);
+      scheduleRender('reminders');
+    },
+  });
+}
+
+async function retryQuestions() {
+  for (const [id, e] of [...questionsToRetry]) {
+    // Answered here meanwhile (the local copy went): nothing to put back.
+    if (localAwaiting.get(id) !== e) { questionsToRetry.delete(id); continue; }
+    try {
+      await restoreAwaitingSentIfAbsent(id, e, restoreDecision);
+    } catch { continue; }   // still no network: the next `online` tries again
+    questionsToRetry.delete(id);
+    // Shared now (or a newer send stands there): the shared question is the one to show.
+    localAwaiting.delete(id);
+    scheduleRender('reminders');
+  }
+  if (!questionsToRetry.size) window.removeEventListener('online', retryQuestions);
+}
+
 // The questions as the screen shows them: the draft's, plus any this device could not share.
 function currentAwaiting() {
   const all = { ...(state.awaiting || {}) };
@@ -2101,7 +2136,9 @@ async function answerAwaitingSent(supplierId, answer, at) {
     // Not awaited: a write Firestore queues offline must not hold the answer open.
     // ⚠️ Only if no question stands for this supplier now: a newer send by another device meanwhile
     // keeps its own question (restoreAwaitingSentIfAbsent, in a transaction).
-    restore: (id, e) => { restoreAwaitingSentIfAbsent(id, e, restoreDecision).catch(err => console.error('Putting the question back failed:', err)); },
+    // Offline the transaction rejects: the question then stays on THIS device (putQuestionBack) and
+    // is retried when the network returns.
+    restore: (id, e) => { putQuestionHere(id, e); },
     drop: id => { clearAwaitingSent(id).catch(err => console.error('Removing the question failed:', err)); },
   }, { local: Boolean(local) });
   // The banner's two buttons go quiet while this answer is under way (the busy guard is set).

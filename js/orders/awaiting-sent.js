@@ -154,6 +154,21 @@ export function supplierKeepsLines(supplierIngredients, entries, cleared) {
   return (supplierIngredients || []).some(ing => !gone.has(ing.id) && positive(entries?.[ing.id]?.qty) > 0);
 }
 
+// Put a question back after a failed recording. ⚠️ THE WRITE IS A TRANSACTION AND A TRANSACTION IS
+// NEVER QUEUED OFFLINE: it rejects exactly when the recording failed for network reasons, and a
+// rejection must not leave the order neither recorded nor asked about. So a failed write keeps the
+// question on THIS device (`keepHere`), as a send whose question could not be shared does.
+// Resolves 'restored' or 'kept'.
+export async function putQuestionBack(supplierId, entry, { write, keepHere }) {
+  try {
+    await write(supplierId, entry);
+    return 'restored';
+  } catch (err) {
+    keepHere(supplierId, entry, err);
+    return 'kept';
+  }
+}
+
 // One answer, start to finish, with the side effects handed in so the rule can be proved without
 // Firestore. Resolves to what happened:
 //   'recorded'  — claimed and recorded
