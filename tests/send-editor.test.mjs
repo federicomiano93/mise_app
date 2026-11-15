@@ -454,5 +454,7 @@ test('the new words exist in both languages, Italian in the house style', async 
   assert.equal(d.it['orders.sendEditor.send'], 'Invia');
   assert.equal(d.en['orders.sendEditor.send'], 'Send');
   assert.equal(d.it['orders.supplierSend'], 'Invia');
+  assert.equal(d.it['orders.supplierSendAria'], 'Invia l’ordine a {supplier}');
+  assert.equal(d.en['orders.supplierSendAria'], 'Send the order to {supplier}');
   assert.equal(d.it['orders.sendEditor.titleOf'], 'Ordine per {name} ({i} di {n})');
 });

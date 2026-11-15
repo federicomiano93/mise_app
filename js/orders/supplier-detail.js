@@ -76,7 +76,7 @@ export function buildSupplierDetail(supplier, ctx) {
   const sendBtn = el('button', {
     type: 'button', class: 'app-icon-btn orders-icon-btn supplier-send-btn',
     id: `send-btn-${supplier.id}`,
-    'aria-label': t('orders.supplierSend'), title: t('orders.supplierSend'),
+    'aria-label': t('orders.supplierSendAria', { supplier: supplierLabel(supplier) }), title: t('orders.supplierSend'),
     icon: SEND_SVG, onClick: () => ctx.onSend?.(supplier.id),
   });
   sendBtn.disabled = true;

@@ -296,7 +296,7 @@ test('the send button sits in the header, LEFT of «+», named «Send» and draw
   assert.ok(send, 'built');
   assert.equal(right.children.indexOf(send), 0, 'first in the right slot');
   assert.equal(right.children.length, 2, '«Invia» then «+»');
-  assert.equal(send.getAttribute('aria-label'), 'Send');
+  assert.equal(send.getAttribute('aria-label'), 'Send the order to Brava Fresh', 'names the supplier, like «+»');
   assert.equal(send.getAttribute('type'), 'button');
   const header = read('orders.html').match(/id="orders-wa-btn"[^>]*>(<svg[\s\S]*?<\/svg>)/)[1];
   assert.equal(send._html, header, 'the very same send icon as the Orders header');
