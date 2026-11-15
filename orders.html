@@ -242,6 +242,11 @@
         <button class="view-switch-btn active" id="view-by-supplier" type="button" role="tab" aria-selected="true" data-i18n="orders.bySupplier">By supplier</button>
         <button class="view-switch-btn" id="view-all-ingredients" type="button" role="tab" aria-selected="false" data-i18n="ui.ingredients">Ingredients</button>
       </div>
+      <!-- Whether everything typed on THIS device has reached the server: «Saved ✓» / «Not sent yet»
+           (js/orders/save-state-view.js). In the sticky head, so it stays in sight while typing. Empty
+           and invisible until the first snapshot of the order, but its room is always kept, so
+           nothing jumps when it appears. -->
+      <p class="draft-save-state" id="draft-save-state" role="status" aria-live="polite"></p>
     </div>
 
     <!-- ORDER -->

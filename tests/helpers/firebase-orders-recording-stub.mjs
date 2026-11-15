@@ -55,6 +55,10 @@ export async function clearFields(name, id, paths, patch = {}) {
 }
 export async function transactDoc(name, id, updater) { calls.transactDoc.push({ name, id, updater }); return null; }
 export function watchDoc(name, id, onChange) { watcher = onChange; return () => { watcher = null; }; }
+// Firestore's «this device still has unconfirmed writes» flag (draft.js queuedOnDevice).
+let pendingWatcher = null;
+export function watchPendingWrites(name, id, onPending) { pendingWatcher = onPending; return () => { pendingWatcher = null; }; }
+export function emitPendingWrites(flag) { pendingWatcher?.(flag); }
 export function watchServerAnswer(name, id, onAnswer) { serverWaiter = onAnswer; return () => { serverWaiter = null; }; }
 export const currentBakery = () => 'venue-a';
 // The orders the server holds, as draft.js asks for them before a line comes back. `history.fail`

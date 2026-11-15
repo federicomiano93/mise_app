@@ -41,13 +41,14 @@ import {
   scheduleDraftSave, saveDraftNow, flushDraftSave, sendBeforeLeaving, flushDraftWhenHidden, watchDraft, archiveSupplier, clearSupplier,
   clearQuantities, saveHistoryRecord, deleteHistoryRecord, setDraftSaveReporter,
   confirmDelivery, resolveMissing, dropDeletedIngredientFromDraft, freezeUnitInDraft,
-  setSupplierSkipped, clearSupplierSkipped,
+  setSupplierSkipped, clearSupplierSkipped, sendWaitingDraft, onDraftSaveState,
   setAwaitingSent, clearAwaitingSent, claimAwaitingSent, clearSentLines,
 } from './draft.js';
 import {
   awaitingEntry, awaitingList, isAwaiting, claimDecision, linesToClear, supplierKeepsLines, answerAwaiting,
   draftQuantities,
 } from './awaiting-sent.js';
+import { saveStateView, paintSaveState } from './save-state-view.js';
 import { buildSendScreen } from './preview.js';
 import { buildSupplierPicker } from './supplier-picker.js';
 import { renderHistory as renderHistoryView } from './history.js';
@@ -841,6 +842,8 @@ function openSupplier(supplierId) {
 }
 
 function closeSupplier() {
+  // A quantity typed a moment ago goes now, not after the pause (draft.js sendWaitingDraft).
+  sendWaitingDraft();
   // ⚠️ A summary opened OVER this screen goes with it, whatever closed the screen (Back, order
   // placed, quantities cleared, supplier deactivated): left behind it would sit over the list
   // with a flag that says «over a supplier screen» when none exists. Closed first, while the
@@ -854,6 +857,7 @@ function closeSupplier() {
   openedFromRecipe = null;
   detailView?.overlay.remove();
   detailView = null;
+  paintDraftSaveState();        // the page's own line speaks again
   if (id) globalThis.window?.dispatchEvent(new CustomEvent('mise:screen', { detail: '' }));
   // closeSummary() just focused the bar's button, which went with the screen: hand focus to the
   // list row instead, or a keyboard user is dropped on the page body (leaveSupplier does the same).
@@ -1118,6 +1122,7 @@ function renderOpenSupplier() {
   // Into the screen that now covers everything, on its Back — as the summary sheet does.
   // Only on a NEW screen: a repaint (above) must never pull focus out of a box mid-typing.
   built.overlay.querySelector('.orders-icon-btn')?.focus({ preventScroll: true });
+  paintDraftSaveState();
   paintMoney();
 }
 
@@ -1447,6 +1452,8 @@ function setView(view) {
   // show everything, so leaving for them drops it rather than hiding it somewhere
   // invisible and surprising the operator with it on the way back.
   if (view === 'suppliers') state.filterIds = null;
+  // The focused box is about to be removed, which may not count as leaving it: send what waits now.
+  sendWaitingDraft();
   dropListViews();              // force a remount; both queries are kept in state
   syncViewButtons();
   render();
@@ -3439,6 +3446,7 @@ function setupTabs() {
 const DRAFT_SAVE_ERROR_KEY = 'orders.couldNotSaveThe2';
 
 let statusTimer = null;
+let lastDraftSaveState = { ready: false, saved: true };   // draft.js's last word; painted by paintDraftSaveState
 
 // ⚠️ SAY IT WHERE THE PERSON IS LOOKING. History is a fixed overlay over this page and
 // the past-order editor sits over History, so a message written to the page's own line
@@ -3513,6 +3521,18 @@ function listLost(lost) {
   };
 }
 
+// Paint the save-status line in sight (draft.js onDraftSaveState). ⚠️ ONE VOICE: while a supplier's
+// screen covers the page, only ITS line changes — the page's line underneath is left alone (closeSupplier
+// repaints it), or a screen reader would hear every change twice. Leaving it unpainted is surer than
+// aria-live="off" on a role="status", which some readers still announce.
+function paintDraftSaveState() {
+  const view = saveStateView(lastDraftSaveState, navigator.onLine !== false);
+  const lines = detailView
+    ? detailView.overlay.querySelectorAll('.draft-save-state')
+    : [document.getElementById('draft-save-state')];
+  lines.forEach(node => paintSaveState(node, view, t));
+}
+
 // Hide the status line, but ONLY if it still shows `text`. Same guard as the
 // auto-hide above and for the same reason: whoever set a newer message — an error,
 // or "order saved to history ✓" — must never have it wiped by a stale clear.
@@ -3579,6 +3599,22 @@ async function init() {
     else setStatus(t(DRAFT_SAVE_ERROR_KEY), 'error');
   });
   flushDraftWhenHidden();
+
+  // ⚠️ LEAVING A QUANTITY OR STOCK BOX SENDS WHAT IS WAITING AT ONCE (the iPad order of 14 Nov 2026,
+  // draft.js sendWaitingDraft). One listener for the cards, the flat list and a supplier's screen:
+  // at most one write per box left, none per keystroke — the pause stays for typing.
+  document.addEventListener('focusout', event => {
+    if (event.target?.matches?.('.ing-qty, .ing-stock')) sendWaitingDraft();
+  });
+  // The save-status line on the page and on a supplier's screen: whether everything typed HERE has
+  // reached the server. Offline counts as «not sent yet» (save-state-view.js).
+  onDraftSaveState(saveState => {
+    lastDraftSaveState = saveState;
+    paintDraftSaveState();
+  });
+  onLanguageChange(() => paintDraftSaveState());
+  window.addEventListener('online', () => paintDraftSaveState());
+  window.addEventListener('offline', () => paintDraftSaveState());
 
   document.getElementById('place-all-btn')?.addEventListener('click', whenLive(openPlaceAllScreen));
   document.getElementById('clear-all-btn')?.addEventListener('click', whenLive(openClearScreen));
