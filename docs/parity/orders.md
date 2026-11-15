@@ -1866,3 +1866,114 @@ came back; clearing it and typing the same number again on purpose is a new act,
 intended behaviour:** if the person leaves Orders before the server answers the opening that showed the alert, the next opening
 puts the number back with only the status line and no second alert (pinned by «a reopening before the server answered does not say
 it again»).
+
+## Port of v1.145.0 — the iPad order fixes (15 Nov 2026) — plan
+
+**Why.** On 14 Nov 2026 an order typed on Federico's iPad and sent from his phone reached the supplier with a whole product
+missing. The fixes went live in the CURRENT app as `v1.145.0` (PRs #551 and #554, merged 15 Nov 2026; Firestore rules for
+`drafts/current.awaitingSent` deployed first). His decision: build them in the current app first, then port them to Mise 2, which
+must not lose them at the switch. ⚠️ This branch (`feature/mise2-next`) was cut from `main` on 8 Nov and does NOT contain those
+PRs: read the originals with `git show origin/main:<path>` — `js/orders/draft.js` (sendWaitingDraft, onDraftSaveState,
+setAwaitingSent, clearAwaitingSent, claimAwaitingSent, restoreAwaitingSentIfAbsent, clearSentLines), `js/orders/save-state-view.js`,
+`js/orders/send-editor.js`, `js/orders/awaiting-sent.js`, `js/orders/reminder-view.js` (renderAwaiting, refocusAwaiting),
+`js/orders/supplier-detail.js` (the send button), `js/orders/send-chooser.js` (viaEditor), `js/orders/preview.js`,
+`js/orders/firebase-orders.js` (watchPendingWrites, saveFields, clearFieldsIf, saveFieldsIf), `js/orders/orders-main.js`
+(sendOneSupplier, waitForAnswer, putQuestionHere, retryQuestions, currentAwaiting, awaitingQuestion, noteAwaitingSnapshot,
+maybeAskHere, answerAwaitingSent, forgetAwaitingAfterRecording, withSentLines, placeOrder `sentOnly`, askSentCheck), and their
+tests `tests/awaiting-sent.test.mjs`, `tests/send-editor.test.mjs`, `tests/draft-save-state.test.mjs`,
+`tests/save-state-view.test.mjs`, `tests/order-sent-check.test.mjs`, `tests/awaiting-banner-focus.test.mjs`. `gh pr diff 551` /
+`gh pr diff 554` show the whole change.
+
+**Open decisions of his that touch this port (Controlli page, 15 Nov 2026, not answered):** the save line's wording («Non ancora
+inviato» vs «Non ancora salvato»), WhatsApp choosing the chat by hand when a picture is shared, pack sizes always in the message.
+The port uses the LIVE behaviour and wording; whatever he decides applies to both apps.
+
+### What is ported (five pieces)
+
+1. **Sent at once, and saying so.** Leaving a quantity or stock box (`NumberBox` onBlur, both boxes of `OrderLine`, every list
+   that draws them), closing a supplier's screen (its unmount) and swapping the list view send what waits for the 800 ms pause AT
+   ONCE (`draftSync.sendWaiting`, already there for the page going hidden): one write per box left, none per keystroke. A line
+   «Salvato ✓» / «Non ancora inviato» says whether everything typed on THIS device has reached the server: «saved» only when
+   nothing waits for the pause, nothing is in the air, nothing refused waits to go again (`hasUnsaved`), nothing the last page left
+   in the device note is still waiting to come back (`restored` non-empty), Firestore reports no pending write on
+   `drafts/current` (`snap.metadata.hasPendingWrites`, which outlives a page iOS threw away), and the device is online. Nothing is
+   shown before the first snapshot of the draft (the line keeps its room). Placed in the Orders head (both views, in the sticky
+   part) and under a supplier screen's bar. ⚠️ ONE VOICE: while a supplier screen is open (the split shows both), only ITS line
+   is a live region and painted — the list's keeps its room, empty.
+2. **The send editor.** Every road that hands an order over (both WhatsApp roads and email) goes through ONE editor per message:
+   the text exactly as `buildOrderMessage` writes it, shown as WhatsApp shows it (`*bold*` drawn bold, built from nodes, never
+   innerHTML; email shown plain), a labelled textarea to correct it, a hint («Le modifiche cambiano solo il messaggio: nello
+   storico restano le quantità dell’ordine»), and ONE «Invia». On the WhatsApp roads where the browser can share a picture, the
+   picture is drawn AHEAD of the tap from the box's text and redrawn (debounced 350 ms) while typing; «Invia» stays disabled until
+   the picture matches the box, and its press hands the ready File to `sharePhoto` with NO await before it. A drawing that fails
+   asks «Couldn’t share the photo, sending the text instead» (OK opens the EDITED text). No picture possible, and email: the edited
+   text opens in the press (`openWindow`). Several messages: one editor after the other, «Salta» and «Annulla» as before, the ones
+   not sent named at the end. Leaving with an edited text (Annulla, Salta, Escape) asks «Scartare le modifiche?» first; nothing
+   leaves while the share sheet is open; coming back to the page (visibilitychange) re-enables «Invia». History keeps the
+   CONFIRMED quantities: the edit changes only the words. This REPLACES `FormatDialog`, `PhotoDialog` and `OpenDialog`.
+3. **«Invia» on a supplier's own screen**, in the bar LEFT of «+», an icon button (the `Share` glyph the head's «Manda» uses) with
+   aria-label «Invia l’ordine a {supplier}», disabled while nothing is typed for that supplier (`lens.filledFor(id) === 0`), one
+   send at a time (a second press while the chooser or editor is up does nothing). It sends that supplier's rows only
+   (`draftSendRows(lens, draft, [id])`), through the same road chooser (the in-app list included), then «è partito?».
+4. **«È partito?» on every device** — `drafts/current.awaitingSent.<supplierId>` = `{ at, date, quantities, units, draft? }`
+   (`awaiting-sent.js awaitingEntry`), written whole per supplier (mergeFields, never a deep merge) the moment the editor hands an
+   order over. Every device shows a persistent banner per waiting supplier («Ordine a {supplier} inviato alle {time}: è partito?»,
+   with the day when it was not today) with «Sì» / «No», oldest first, only for suppliers Orders can record for. The device that
+   sent it also asks with a dialog when the page comes back (share sheet answered while visible, or the window it opened returns);
+   ⚠️ that dialog CLOSES ITSELF when another device has answered (the leftover found on the tablet in the current app). «Sì»
+   claims the key in a TRANSACTION (only if `at` still matches) and only the winner records — the STORED quantities on the stored
+   day, whatever the draft says now — then clears only the lines still reading what went (`linesToClear`, using `draft` when the
+   review screen had corrected numbers), and the day stamp only when nothing of that supplier is left. «Sì» asks «Forse è già
+   registrato» (Registra di nuovo / Non registrare) ONLY when History already holds that supplier's record for that day with every
+   stored line at a quantity at least the stored one. A failed recording puts the question back in a transaction only if no newer
+   question stands; offline that transaction rejects, so the question stays on THIS device and is retried on `online`. A write of
+   the question that is refused keeps it on this device with «Non sono riuscito ad avvisare gli altri dispositivi…». «No» removes
+   only the key; the quantities stay. Recording a supplier any other way («Ordine fatto» → «Sì, inviato», «Placed yesterday»)
+   answers its waiting question (key removed). «Sì» offline is refused with the offline line.
+5. **NEW (his ask): «Invia al fornitore» on an order LIST** received in the app (`OrderListScreen`): sends the list's lines that
+   are not ticked yet, with the LIST's frozen quantities, names and units (built like `recordSendRows`), one editor per supplier of
+   the list, only roads that reach a supplier (`supplierRoadsOnly`), then «è partito?» with exactly those quantities (no `draft`
+   field: «Sì» clears only draft lines that still read the same). Hidden when every line is ticked or no road reaches a supplier.
+   «Invia al fornitore» with one supplier, «Invia ai fornitori» with several.
+
+**Where the confirm screen changes.** The send screen no longer goes on to «Ordine mandato» (the confirm screen in after-send
+mode): after a send, back to the list, and «è partito?» on every device (as live). «Invialo ora» on «Hai inviato l’ordine?»
+records NOTHING itself: what the road handed over waits for «è partito?» with the CONFIRMED quantities and, as `draft`, what the
+draft said for those suppliers BEFORE the editor opened (snapshot taken first); the screen then goes to the list, saying who was
+not reached. Nothing handed over: the screen stays, corrections kept (as today).
+
+### Decisions taken in the port (to list for him)
+
+- P1. The editor replaces Mise 2's «Testo / Foto» question, whose «text first» was his 9 Nov choice: his 14 Nov decision for the
+  live app (see what the supplier gets, sent as a picture) is the newer one. Mise 2 keeps its own D1 (one window per tap — each
+  editor's «Invia» is its own tap) and C (an email counts only when a window really opened; the current app counts it always).
+- P2. The «è partito?» banners are always on the Orders page under the head (both views), not inside the bell's panel: an order
+  handed over and never answered is the order that used to go unrecorded.
+- P3. On the split, only the supplier screen's save line speaks while one is open.
+- P4. The list's «Invia al fornitore» sends only the lines not ticked yet, with the list's own quantities, and asks «è partito?».
+
+### Building it — shared, data, store, screens
+
+- `shared/src/awaiting-sent.ts` — full port of `js/orders/awaiting-sent.js`. `shared/src/send-editor.ts` — the pure half of
+  `js/orders/send-editor.js`: `previewLines`, `picturePrep`, `runSendBatch` (ADAPTED: the translator as an argument; it also
+  reports `blocked` — windows were due and the browser refused them all — so Mise 2's «Non si è aperto niente» survives), and
+  `editorTitle` (adapted: translator). `shared/src/save-state.ts` — `saveStateView` (Mise 2 keys). NOT PAIRED in `parity.spec.ts`:
+  the originals are on `main` only; each spec ports the original's tests (and says so) — pair them when `main` is merged into the
+  Mise 2 branch. ⚠️ That merge also removes `runPhotoBatch`, `sendTexts`, `settleOnce` and `afterShare` from
+  `js/orders/send-chooser.js` (moved to `send-editor.js`): `shared/src/send-chooser.spec.ts` must follow then.
+- `firestore.rules` and `tests/rules/firestore-rules-check.mjs`: ONLY the `awaitingSent` hunks of #554 (byte-identical to `main`,
+  so the later merge is clean): optional map of at most 200, values not judged. `.claude/skills/firestore-rules/data-model.md`: the
+  `awaitingSent` paragraph of #554.
+- `ordersSource.ts`: `watchDraft` meta gains `pendingWrites` (`snap.metadata.hasPendingWrites`); `setAwaitingSent` (setDoc with
+  `mergeFields: ['bakery', new FieldPath('awaitingSent', id)]` — an id is data, not a path), `clearAwaitingSent` (updateDoc
+  FieldPath delete, as `clearSupplierSkipped`), `claimAwaitingSent` and `restoreAwaitingSentIfAbsent` (runTransaction, decide on
+  the stored data; ⚠️ a transaction needs the network).
+- `draftSync.ts`: `awaitingSent` in `DraftView` (kept across repaints like `skipped`), an optional `onStateChange` dep called
+  wherever the original calls `announceSaveState`, and `noteWaiting()`. `ordersStore.ts`: `saveState` `{ ready, saved }` in the
+  snapshot (online counted by the screen), `sendWaitingDraft()`, the awaiting API (wait, answer, local questions, retry on
+  `online`), and `place` with a `sentOnly` item (record the stored quantities filed under that supplier even if a line moved,
+  clear only `linesToClear`, the day only when nothing is left; nothing after the record may throw).
+- Screens: `SaveStateLine`, `SendEditorDialog` (on the shared `Dialog`), `AwaitingBanners` (focus survives a rebuild and moves
+  to the next «Sì» or the head when a row goes), the sender's dialog, the supplier screen's button, the list's button. Text through
+  `t()` in both dictionaries (`ord.saveState.*`, `ord.sendEditor.*`, `ord.supplierSend*`, `ord.awaiting.*`, the list's button),
+  words copied from `js/i18n.js` on `main`.
