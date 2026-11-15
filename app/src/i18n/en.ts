@@ -2596,6 +2596,9 @@ export const en = {
   'ord.clearAction': 'Clear quantities…',
   'ord.orderPlaced': 'Order placed',
   'ord.offline.place': 'You’re offline — reconnect to record this order.',
+  // The line that says whether everything typed on this device has reached the server (the iPad order of 14 Nov 2026).
+  'ord.saveState.saved': 'Saved ✓',
+  'ord.saveState.unsent': 'Not sent yet',
   'ord.offline.clear': 'You’re offline — reconnect to clear these quantities.',
   'ord.confirm.titleAdd': 'Add to the order',
   'ord.confirm.titleMany': 'Record these orders',

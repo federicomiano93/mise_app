@@ -268,6 +268,8 @@ function OrdersLayout({ view }: { view: ShownView }) {
   // ONLY at list level (OrdersHead `swapOpen`): with a screen open beside the list the person closes it with Back first, so there is no
   // step back to arm, no duplicate entry to avoid and nothing left pending when a «discard changes?» question is answered Cancel.
   const swap = () => {
+    // The box that had the focus is about to be removed, which may not count as leaving it: what waits goes now.
+    store.sendWaitingDraft();
     handBack.expect(SWAP_OPENER);
     void navigate(view.kind === 'ingredients' ? ORDERS_PATH : INGREDIENTS_PATH, { replace: true, state: KEEP_FOCUS });
   };
@@ -494,7 +496,7 @@ function OrdersLayout({ view }: { view: ShownView }) {
           <div className={styles.list}>
             <PartBoundary>
               {flatColumn ? (
-                <IngredientsList lens={lens} ready={ready} swapOpen={atList} onSwap={swap} onSend={openSend} onSettings={openSettings} onHistory={openHistory} onOpenSupplier={openOrHold} onOpenPending={openPending} initial={trip.current === null ? undefined : { query: trip.current.query, only: trip.current.only }} />
+                <IngredientsList lens={lens} ready={ready} swapOpen={atList} saveSilent={view.kind === 'supplier'} onSwap={swap} onSend={openSend} onSettings={openSettings} onHistory={openHistory} onOpenSupplier={openOrHold} onOpenPending={openPending} initial={trip.current === null ? undefined : { query: trip.current.query, only: trip.current.only }} />
               ) : (
               <OrdersList
                 lens={lens}
@@ -510,6 +512,7 @@ function OrdersLayout({ view }: { view: ShownView }) {
                 onPlaceAll={openPlaceAll}
                 onClearAll={openClear}
                 swapOpen={atList}
+                saveSilent={view.kind === 'supplier'}
                 onSwap={swap}
                 onSend={openSend}
                 onSettings={openSettings}

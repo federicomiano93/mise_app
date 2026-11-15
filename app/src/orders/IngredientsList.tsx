@@ -21,6 +21,8 @@ type Props = {
   ready: boolean;
   // Drawn only at list level: with a screen open beside the list the swap's place is kept, empty.
   swapOpen: boolean;
+  // A supplier's screen is open beside the list: its save line speaks, the head's keeps its room (SaveStateLine).
+  saveSilent: boolean;
   onSwap: () => void;
   onSend: () => void;
   onSettings: () => void;
@@ -38,7 +40,7 @@ type Props = {
 //
 // ⚠️ ITS SEARCH TEXT AND ITS FILTER ARE ITS OWN, not the supplier list's, and NOT REMEMBERED: leaving the view (or the section)
 // ends them. The box is a controlled input in a component that stays mounted (OrdersHead), so a snapshot never remounts it.
-export function IngredientsList({ lens, ready, swapOpen, onSwap, onSend, onSettings, onHistory, onOpenSupplier, onOpenPending, initial }: Props) {
+export function IngredientsList({ lens, ready, swapOpen, saveSilent, onSwap, onSend, onSettings, onHistory, onOpenSupplier, onOpenPending, initial }: Props) {
   const { t } = useT();
   const store = useOrdersStore();
   const snapshot = useOrders();
@@ -95,6 +97,7 @@ export function IngredientsList({ lens, ready, swapOpen, onSwap, onSend, onSetti
         });
       } : undefined}
       onEdit={(edited, edit) => { store.editLine(line.supplier, edited.ingredient, edit); }}
+      onLeaveBox={() => { store.sendWaitingDraft(); }}
     />
   );
 
@@ -128,6 +131,7 @@ export function IngredientsList({ lens, ready, swapOpen, onSwap, onSend, onSetti
         onSend={onSend}
         onSettings={onSettings}
         onHistory={onHistory}
+        saveSilent={saveSilent}
         headRef={headHeight.ref}
       >
         {showFilter ? (

@@ -21,6 +21,8 @@ type Props = {
   handle?: Ref<BoxHandle>;
   // The id of the line that explains this box (a hint, a warning); read out with it.
   describedBy?: string;
+  // The box lost the focus: what waits for the autosave's pause goes now (the iPad order of 14 Nov 2026).
+  onLeave?: () => void;
 };
 
 const textOf = (n: number): string => (n > 0 ? String(n) : '');
@@ -31,7 +33,7 @@ const textOf = (n: number): string => (n > 0 ? String(n) : '');
 // echo of what is being typed, must not rewrite the digits under the finger. The box follows the draft only while it is not
 // focused, and picks the draft up again the moment it loses the focus. A stepper or the × writes through `handle.show`, so
 // they do not wait for a blur.
-export function NumberBox({ value, className, ariaLabel, onChange, handle, describedBy }: Props) {
+export function NumberBox({ value, className, ariaLabel, onChange, handle, describedBy, onLeave }: Props) {
   const shown = textOf(value);
   const [text, setText] = useState(shown);
   const [seen, setSeen] = useState(shown);
@@ -72,6 +74,7 @@ export function NumberBox({ value, className, ariaLabel, onChange, handle, descr
         focused.current = false;
         latest.current = shown;
         setText(shown);
+        onLeave?.();
       }}
       onChange={event => {
         latest.current = event.target.value;

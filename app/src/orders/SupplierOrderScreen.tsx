@@ -15,6 +15,7 @@ import { tabOfLine, useCardDoors } from './CardDoors';
 import { DayLine } from './DayLine';
 import { OrderLine } from './OrderLine';
 import { OrderTotals } from './OrderTotals';
+import { SaveStateLine } from './SaveStateLine';
 import { useOrders, useOrdersStore } from './OrdersContext';
 import { ADD_DOOR, ITEMS_DOOR, PLACE_DOOR, SUMMARY_DOOR, SUPPLIER_DOOR, SUPPLIER_TITLE, supplierOpener, useHandBack } from './handBack';
 import { ORDERS_PATH, supplierConfirmPath, supplierItemsPath, supplierSummaryPath } from './ordersPath';
@@ -54,6 +55,8 @@ export function SupplierOrderScreen({ id, lens }: { id: string; lens: OrdersLens
   const leave = origin === null ? leaveToList : leaveToRecipe;
   const say = useStatusMessage();
   const [clearQuantities, clearDialog] = useClearQuantities(lens);
+  // Closing the screen sends what waits for the autosave's pause at once (the iPad order of 14 Nov 2026).
+  useEffect(() => () => { store.sendWaitingDraft(); }, [store]);
   // The totals box above «Order placed» is for the split only (his choice C4, 6 Nov 2026).
   const split = useMediaQuery(SPLIT_QUERY);
 
@@ -153,6 +156,7 @@ export function SupplierOrderScreen({ id, lens }: { id: string; lens: OrdersLens
       hint={row.elsewhere ? { kind: 'none' } : snapshot.suggester.hint(row.ingredient, entries[row.ingredient.id])}
       onEdit={(edited, edit) => { store.editLine(supplier, edited.ingredient, edit); }}
       onOpenCard={doors.may ? openCard : undefined}
+      onLeaveBox={() => { store.sendWaitingDraft(); }}
     />
   );
   const empty = rows.active.length === 0 && rows.inactive.length === 0;
@@ -228,6 +232,7 @@ export function SupplierOrderScreen({ id, lens }: { id: string; lens: OrdersLens
             </div>
           )}
         />
+        <SaveStateLine inBar />
       </div>
       <DayLine supplier={supplier} lens={lens} />
       {empty ? null : (

@@ -2379,6 +2379,8 @@ export const it: Messages = {
   'ord.clearAction': 'Azzera le quantità…',
   'ord.orderPlaced': 'Ordine fatto',
   'ord.offline.place': 'Sei offline — riconnettiti per registrare questo ordine.',
+  'ord.saveState.saved': 'Salvato ✓',
+  'ord.saveState.unsent': 'Non ancora inviato',
   'ord.offline.clear': 'Sei offline — riconnettiti per azzerare queste quantità.',
   'ord.confirm.titleAdd': 'Aggiungi all’ordine',
   'ord.confirm.titleMany': 'Registra questi ordini',
