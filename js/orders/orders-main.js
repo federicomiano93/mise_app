@@ -50,7 +50,7 @@ import {
 } from './awaiting-sent.js';
 import { saveStateView, paintSaveState } from './save-state-view.js';
 import { buildSendScreen } from './preview.js';
-import { buildSupplierPicker } from './supplier-picker.js';
+import { buildSupplierPicker, ignoreWhilePending } from './supplier-picker.js';
 import { renderHistory as renderHistoryView } from './history.js';
 import {
   renderDeliveries, renderReorderButton, repaintReorderButton, renderOwedBanner,
@@ -1081,7 +1081,7 @@ function renderOpenSupplier() {
     // would quietly undo the switch. Asked on every repaint, so it follows the switch live.
     onAddIngredient: mayAddIngredient() ? () => openAddIngredient(supplier.id) : null,
     // «Invia» in the header: the send editor for this supplier's rows only.
-    onSend: sendOneSupplier,
+    onSend: sendOneSupplierOnce,
     dayInfo: () => dayInfoFor(supplier),
   };
 
@@ -1942,6 +1942,12 @@ function sendOneSupplier(supplierId) {
     },
   });
 }
+
+// ⚠️ ONE SEND AT A TIME, like every other send door: a second tap (or Enter) on «Invia» while the
+// road chooser or the editor is still up must not open a second one on top of the first (two
+// editors would answer for the same rows and ask «did it go?» twice). Shut on the copy of the
+// list too (whenLive): its rows are not the draft's yet.
+const sendOneSupplierOnce = whenLive(ignoreWhilePending(sendOneSupplier));
 
 // ── «Ordine a X inviato alle 10:42: è partito?» (awaiting-sent.js) ────────────
 // Handed to the share sheet or a chat is not «gone»: the question is written into the shared

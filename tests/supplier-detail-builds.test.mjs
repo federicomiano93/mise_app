@@ -323,6 +323,25 @@ test('tapping it sends THIS supplier', () => {
   assert.deepEqual(seen, ['S1']);
 });
 
+test('⚠️ a second tap while a send is under way does nothing (one send at a time, like every other door)', async () => {
+  const main = read('js/orders/orders-main.js');
+  assert.match(main, /const sendOneSupplierOnce = whenLive\(ignoreWhilePending\(sendOneSupplier\)\);/);
+  assert.match(main, /import \{ buildSupplierPicker, ignoreWhilePending \} from '\.\/supplier-picker\.js'/);
+  // The guard itself, as the screen composes it: a send that is still open swallows the next tap.
+  const { ignoreWhilePending } = await import('../js/orders/supplier-picker.js');
+  let opened = 0;
+  let finish;
+  const send = ignoreWhilePending(() => { opened++; return new Promise(r => { finish = r; }); });
+  const view = buildSupplierDetail(supplier, sendCtx({ a: { qty: 2 } }, { onSend: id => send(id) }));
+  sendOf(view).fire('click');
+  sendOf(view).fire('click');
+  assert.equal(opened, 1, 'the second tap is ignored while the editor is up');
+  finish(true);
+  await new Promise(r => setImmediate(r));
+  sendOf(view).fire('click');
+  assert.equal(opened, 2, 'and works again once the send is over');
+});
+
 test('the keystroke path keeps it in step, like «Ordine fatto»', () => {
   const src = read('js/orders/suppliers.js');
   const fn = src.slice(src.indexOf('export function refreshSupplierDerived'));
@@ -332,7 +351,7 @@ test('the keystroke path keeps it in step, like «Ordine fatto»', () => {
 
 test('orders-main hands the screen its send: one supplier, through the unchanged road chooser', () => {
   const main = read('js/orders/orders-main.js');
-  assert.match(main, /onSend: sendOneSupplier,/);
+  assert.match(main, /onSend: sendOneSupplierOnce,/);
   const fn = main.slice(main.indexOf('function sendOneSupplier'), main.indexOf('// ── «Ordine a X inviato'));
   assert.match(fn, /chooseAndSend\(\{/);
   assert.match(fn, /rows: \[row\]/, 'this supplier only — no picker');
