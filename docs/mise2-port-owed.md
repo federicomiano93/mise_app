@@ -55,6 +55,7 @@ Before the switch, not ports:
       `js/catalogue/label-zpl.js` adds `^PON` to every standard label, which agent 1.0.1 refuses («not a single label made
       by the app»). No venue printing through the Zebra queue = nothing to do; say which.
 - [ ] The Italian Club warned that order reminders stop arriving with the switch (reminder notifications are deferred)
+- [ ] Deploy the rules with ingredient kinds 'resale' and 'other' before the first Mise 2 import in production
 - [x] His OK on what the switch leaves out until later: staff and join screens, kiosk, reminder notifications, `order.html` kept as it is — given 8 Nov 2026 («switch with the minimum»), with every item of «Deferred until AFTER the switch»
 - [x] His OK on the TTL policy on `todos.expireAt` — given for the switch; the command is run at the switch hour (`docs/switch-runbook.md`)
 

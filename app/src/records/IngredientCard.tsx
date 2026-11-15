@@ -6,6 +6,7 @@ import { useBlocker } from 'react-router';
 import type { BlockerFunction } from 'react-router';
 import type { NutrientKey } from '@mise/shared/allergen-model';
 import { FALLBACK_MONEY } from '@mise/shared/currency';
+import { INGREDIENT_KINDS } from '@mise/shared/ingredient-kind';
 import { allergensOn, nutritionOn } from '@mise/shared/venue-features';
 import type { Money } from '@mise/shared/currency';
 import { formatSummary, usesLegacyCard } from '@mise/shared/pack-format';
@@ -37,6 +38,7 @@ import { AllergenSections } from './AllergenSections';
 import type { AllergenControls, NutrientBoxes } from './AllergenSections';
 import { allergenDirty, allergenPayload, allergenWorkingFrom, nutritionRefusal } from './allergenCardModel';
 import type { AllergenWorking, NutritionRefusal } from './allergenCardModel';
+import { KIND_WORDS } from './kindWords';
 import { PriceHistory } from './PriceHistory';
 import { PriceSection } from './PriceSection';
 import type { PriceBox } from './PriceSection';
@@ -77,8 +79,12 @@ type Props = {
   presetName?: string;
   // Hosted above another screen: the card then registers no router blocker (see LeaveBlocker) and reports through this.
   host?: IngredientCardHost;
-  // The kind it is filed under: fixed while the card is open, and sent as `kind`.
+  // The kind it opens as: an existing item's own, a new one's from the tab its «New …» was pressed on. Sent as `kind`.
+  // Mise 2 (14 Nov 2026): the card's «Type» menu changes it on the working copy, saved by Save like every other field.
   kind: CardKind;
+  // The «Type» menu is not drawn and the kind stays the one given: the Recipe catalogue's «+ Add … as an ingredient», where only
+  // food may be made (a recipe row is never linked to anything else).
+  kindLocked?: boolean;
   // A supplier to start a NEW item on; never applied to an existing one.
   preset: string | null;
   suppliers: readonly ItemLike[];
@@ -104,6 +110,10 @@ type Props = {
   onDelete?: (markClean: () => void) => void | Promise<boolean>;
   // The delete is counting what uses the item: the bin is disabled and says it is busy.
   deleting?: boolean;
+  // How many recipes use this EXISTING item, from the server (null: it could not be counted). Asked only when Save would turn a
+  // food item into packaging, resale or other, so the question can say so first (Mise 2, 15 Nov 2026). Left out, the question
+  // says it MAY be used in recipes — never a false «no recipe».
+  countRecipes?: () => Promise<number | null>;
   // «Merge another pack…»: the door is drawn only when this is given AND the card shows an EXISTING ingredient (never packaging, never a
   // new item). With unsaved edits it says so and does NOT call this: a merge closes and reopens the card, so typing must never be lost.
   onMerge?: () => void;
@@ -123,6 +133,19 @@ type Props = {
   readHistory?: (id: string) => Promise<readonly Readonly<Record<string, unknown>>[]>;
 };
 
+// How long Save waits for the recipe count before it asks anyway, with the «may be used» words: the count is a server read,
+// and with no signal it might never answer.
+export const RECIPE_COUNT_WAIT_MS = 4000;
+
+export function countWithin(count: (() => Promise<number | null>) | undefined): Promise<number | null> {
+  if (!count) return Promise.resolve(null);
+  return new Promise(resolve => {
+    const timer = setTimeout(() => { resolve(null); }, RECIPE_COUNT_WAIT_MS);
+    const settle = (n: number | null) => { clearTimeout(timer); resolve(n); };
+    count().then(n => { settle(typeof n === 'number' && Number.isFinite(n) ? n : null); }, () => { settle(null); });
+  });
+}
+
 // A Save refused on a price box, or on the weight box with the price's own sentence (`legacyPackWeight`: the card of before's
 // own sentence), or on a «+ New …» box of the card of before's two menus.
 type Refused = RefusedField | PriceBox | LegacyBox | 'priceWeight' | 'legacyPackWeight' | 'legacyPack' | 'legacyUnit';
@@ -138,7 +161,7 @@ type Refused = RefusedField | PriceBox | LegacyBox | 'priceWeight' | 'legacyPack
 //
 // ⚠️ THE FOOD WORDS (the categories, the package words, the carton word) COME FROM THE VENUE'S COUNTRY, never from `t()`.
 export function IngredientCard({
-  item, presetName, host, kind, preset, suppliers, categories, packs, orderUnits = [], language, titleRef, onSave, onLeave, onDelete, deleting = false, onMerge, mergeDoorRef, renderNewSupplier, watchRefusedSupplier,
+  item, presetName, host, kind, kindLocked = false, preset, suppliers, categories, packs, orderUnits = [], language, titleRef, onSave, onLeave, onDelete, deleting = false, countRecipes, onMerge, mergeDoorRef, renderNewSupplier, watchRefusedSupplier,
   mayPrice = false, country, money = FALLBACK_MONEY, readHistory,
 }: Props) {
   const { t, locale } = useT();
@@ -195,6 +218,12 @@ export function IngredientCard({
 
   // ── The pack list, allergens and nutrition's working copy (step 3e-4) ──
   // ⚠️ MADE ONCE, WHEN THE CARD OPENS, like the rest: the model's header says what a save writes from it.
+  // ── The kind (Mise 2, 14 Nov 2026): on the working copy like the rest, kept in a ref for the same reason as `dirtyRef` ──
+  const [kindNow, setKindNow] = useState<CardKind>(kind);
+  // Save is counting the recipes that use the item before it asks (a food item leaving food): the button says it is busy.
+  const [counting, setCounting] = useState(false);
+  const kindRef = useRef<CardKind>(kind);
+
   const [allergenBaseline] = useState<AllergenWorking>(() => allergenWorkingFrom(opened, money));
   const [allergenWork, setAllergenWork] = useState<AllergenWorking>(allergenBaseline);
   const allergenRef = useRef(allergenWork);
@@ -206,6 +235,7 @@ export function IngredientCard({
     legacyNow: LegacyPriceState = legacyRef.current, menusNow: LegacyProduct = productRef.current,
   ) =>
     isDirty(current, baseline, state ? isPriceEdited(state, ctxOf(current, state)) : false)
+    || kindRef.current !== kind
     || allergenDirty(allergenCopy, allergenBaseline)
     || (legacyCard && (isLegacyEdited(legacyNow, legacyOpened) || isLegacyProductEdited(menusNow, productOpened)));
 
@@ -366,8 +396,9 @@ export function IngredientCard({
     if (typeof target?.scrollIntoView === 'function') target.scrollIntoView({ block: 'center' });
   }
 
-  async function save() {
-    if (deleting || busy.current || askingLeave.current || leavingClean.current) return;
+  // Every check of a Save, in order, and what it would write — read from the card as it stands NOW. Null when a box was refused
+  // (it has been shown, said and focused). Run again after the recipe count (below), so nothing typed meanwhile is lost.
+  function prepare() {
     // ⚠️ FIRST OF ALL, a proposal still waiting on the pack text (the pause has not ended) is run now, so that what is checked and
     // written below is what the screen shows. The card's copy is updated synchronously by changeAllergen.
     allergenControls.current?.flushProposal();
@@ -392,27 +423,29 @@ export function IngredientCard({
       : firstRefusal(current, opened, { mayPrice: priceActive, lang: language, priceDirty, packTypeShown: packTypeVisible(current, opened, typeOpts) });
     if (wrong) {
       show(wrong);
-      return;
+      return null;
     }
     const legacyCtx = legacyCtxOf(current, menus);
     const wrongLegacy = legacyNow && mayPrice ? legacyRefusal(legacyNow, legacyCtx) : null;
     if (wrongLegacy) {
       show(wrongLegacy === 'packWeight' ? 'legacyPackWeight' : wrongLegacy);
-      return;
+      return null;
     }
     const ctx = state ? ctxOf(current, state) : null;
     const wrongPrice = state && ctx ? priceRefusal(state, ctx) : null;
     if (wrongPrice) {
       show(wrongPrice === 'weight' ? 'priceWeight' : wrongPrice);
-      return;
+      return null;
     }
     // Then the nutrition's: text that is not a number, or a negative one (a new rule of Mise 2, the model's header says why). Only
     // the boxes somebody changed, and only while the venue shows the nutrition (read now, like the sections do).
     const allergenCopy = allergenRef.current;
-    const wrongNutrient = kind === 'ingredient' && nutritionOn(location) ? nutritionRefusal(allergenCopy, allergenBaseline) : null;
+    // The kind as the menu stands now: only an ingredient has (and checks, and writes) the allergens and the nutrition.
+    const kindToSave = kindRef.current;
+    const wrongNutrient = kindToSave === 'ingredient' && nutritionOn(location) ? nutritionRefusal(allergenCopy, allergenBaseline) : null;
     if (wrongNutrient) {
       showNutrient(wrongNutrient);
-      return;
+      return null;
     }
     // The card of before hands the store a price only when a price box or menu moved, or the weight did (legacySends), and only
     // for whoever may write prices NOW; it never reports a unit change (the order unit is a menu a person chose).
@@ -422,28 +455,60 @@ export function IngredientCard({
         : null)
       : (state && ctx ? pricePatchOf(readPrice(state, ctx), new Date().toISOString(), weightText(current)) : null);
     const built = legacyNow && opened
-      ? { payload: buildLegacySave({ working: current, product: menus, item: opened, kind, startSupplierId: baseline.supplierId }), unitChangedFrom: '', typeReplacedFrom: '' }
+      ? { payload: buildLegacySave({ working: current, product: menus, item: opened, kind: kindToSave, startSupplierId: baseline.supplierId }), unitChangedFrom: '', typeReplacedFrom: '' }
       : buildSave({
-        working: current, item: opened, kind, lang: language, startSupplierId: baseline.supplierId,
+        working: current, item: opened, kind: kindToSave, lang: language, startSupplierId: baseline.supplierId,
         mayPrice: priceActive, priceDirty, pricePatch: patch,
       });
     // ⚠️ ONLY THE GROUPS THAT CHANGED are added, and `now` is taken once, here (the model's header).
     const payload = { ...built.payload, ...allergenPayload(
-      allergenCopy, opened, kind, new Date().toISOString(), { allergens: allergensOn(location), nutrition: nutritionOn(location) },
+      allergenCopy, opened, kindToSave, new Date().toISOString(), { allergens: allergensOn(location), nutrition: nutritionOn(location) },
     ) };
+    return { built, payload, patch, kindToSave };
+  }
+
+  // An existing FOOD item about to be saved as packaging, resale or other (see save()).
+  const leavesFood = (kindToSave: CardKind) => opened !== null && kind === 'ingredient' && kindToSave !== 'ingredient';
+
+  async function save() {
+    if (deleting || busy.current || askingLeave.current || leavingClean.current) return;
+    let ready = prepare();
+    if (!ready) return;
     busy.current = true;
     let ok = false;
     try {
+      // ⚠️ AN EXISTING FOOD ITEM SAVED AS PACKAGING, RESALE OR OTHER while recipes use it (Mise 2, 15 Nov 2026): the question
+      // says so first — a warning, not a refusal. The recipes keep their link, but the item leaves the food choosers and its
+      // allergens are no longer drawn. A count that cannot be made (offline, no answer in time) says it MAY be used: never a
+      // false «no recipe». No count, no words, for a change between non-food kinds or a new item (no recipe can name it yet).
+      let used: number | null = 0;
+      if (leavesFood(ready.kindToSave)) {
+        setCounting(true);
+        used = await countWithin(countRecipes);
+        if (!mounted.current) return;
+        setCounting(false);
+        // ⚠️ THE BOXES STAYED EDITABLE WHILE IT COUNTED: the card is read again, so what is asked about and written is what the
+        // screen shows now (a box refused now is shown, and nothing is asked). A way out taken meanwhile (its «Discard
+        // changes?» is open, or the card is leaving) wins: Save then asks nothing.
+        if (askingLeave.current || leavingClean.current) return;
+        ready = prepare();
+        if (!ready) return;
+      }
+      const question = t('sup.save.question', { name: labelOf(ready.built.payload) });
       ok = await confirm({
-        title: t(kind === 'packaging' ? 'sup.pack.save.title' : 'sup.ing.save.title'),
-        message: t('sup.save.question', { name: labelOf(built.payload) }),
+        title: t(KIND_WORDS[ready.kindToSave].saveTitle),
+        message: !leavesFood(ready.kindToSave) || used === 0
+          ? question
+          : used === null ? t('sup.kind.leavesFoodUnknown') : t('sup.kind.leavesFood', { n: used }),
         okLabel: t('ui.save'),
         cancelLabel: t('common.cancel'),
       });
     } finally {
       busy.current = false;
+      if (mounted.current) setCounting(false);
     }
     if (!ok || !mounted.current) return;
+    const { built, payload, patch } = ready;
     // Saved: nothing is unsaved any more, so leaving asks nothing. Local-first: the list changes at once and the database
     // follows; a refused write is taken back and said by the store.
     leavingClean.current = true;
@@ -522,9 +587,7 @@ export function IngredientCard({
 
   // ── What is drawn ────────────────────────────────────────────────────────────────────────────────────────────
   const invoiceName = typeof opened?.invoiceName === 'string' ? opened.invoiceName.trim() : '';
-  const titleKey: MessageKey = kind === 'packaging'
-    ? (opened ? 'sup.editPackaging' : 'sup.newPackaging')
-    : (opened ? 'sup.editIngredient' : 'sup.newIngredient');
+  const titleKey: MessageKey = opened ? KIND_WORDS[kindNow].editTitle : KIND_WORDS[kindNow].newTitle;
   const carton = working.format === 'carton' && !legacyCard;
   const typeRefused = refused === 'packType' || refused === 'packTypeWord';
   const weightRefused = refused === 'weight' || refused === 'priceWeight' || refused === 'legacyPackWeight';
@@ -612,6 +675,14 @@ export function IngredientCard({
     );
   };
 
+  function changeKind(value: string) {
+    const next = INGREDIENT_KINDS.find(one => one === value);
+    if (next === undefined || next === kindRef.current) return;
+    kindRef.current = next;
+    setKindNow(next);
+    dirtyRef.current = dirtyOf(workingRef.current, priceRef.current);
+  }
+
   const aria = (field: Refused, errorId: string, ...more: string[]) => ({
     'aria-invalid': refused === field ? true : undefined,
     'aria-describedby': [...more, refused === field ? errorId : ''].filter(Boolean).join(' ') || undefined,
@@ -626,7 +697,7 @@ export function IngredientCard({
         titleId={id('title')}
         titleRef={titleRef}
         action={
-          <Button variant="primary" onPress={() => { void save(); }}>
+          <Button variant="primary" isPending={counting} onPress={() => { void save(); }}>
             <Check aria-hidden="true" />
             {t('ui.save')}
           </Button>
@@ -680,6 +751,24 @@ export function IngredientCard({
           />
           <p id={id('short-hint')} className={styles.hint}>{t('sup.ing.listNameHint')}</p>
         </div>
+
+        {/* «Type» (Mise 2, 14 Nov 2026): ingredient, packaging, resale or other, on the working copy and written by Save (asked
+            first, like every field). Only an ingredient can go into a recipe; the allergens follow the choice as it stands. */}
+        {kindLocked ? null : (
+          <div className={styles.field}>
+            <label htmlFor={id('kind')} className={styles.label}>{t('sup.ing.type')}</label>
+            <select
+              id={id('kind')}
+              className={styles.box}
+              aria-describedby={id('kind-hint')}
+              value={kindNow}
+              onChange={event => { changeKind(event.target.value); }}
+            >
+              {INGREDIENT_KINDS.map(one => <option key={one} value={one}>{t(KIND_WORDS[one].option)}</option>)}
+            </select>
+            <p id={id('kind-hint')} className={styles.hint}>{t('sup.ing.typeHint')}</p>
+          </div>
+        )}
 
         <div className={styles.field}>
           <label htmlFor={id('supplier')} className={styles.label}>{t('sup.ing.supplier')}</label>
@@ -984,8 +1073,9 @@ export function IngredientCard({
           />
         ) : null}
 
-        {/* Packaging has none of it (parity C80). Each panel is read live from the venue's switches inside. */}
-        {kind === 'ingredient' ? (
+        {/* Packaging has none of it (parity C80), nor have resale and other (14 Nov 2026): it follows the «Type» menu as it stands.
+            Each panel is read live from the venue's switches inside. */}
+        {kindNow === 'ingredient' ? (
           <AllergenSections
             working={allergenWork}
             opened={opened}
@@ -1040,8 +1130,8 @@ export function IngredientCard({
             type="button"
             className={styles.deleteIcon}
             ref={bin}
-            aria-label={t(kind === 'packaging' ? 'sup.pack.delete' : 'sup.ing.delete')}
-            title={t(kind === 'packaging' ? 'sup.pack.delete' : 'sup.ing.delete')}
+            aria-label={t(KIND_WORDS[kindNow].delete)}
+            title={t(KIND_WORDS[kindNow].delete)}
             aria-disabled={deleting ? 'true' : undefined}
             aria-busy={deleting}
             onClick={remove}

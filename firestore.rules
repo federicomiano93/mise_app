@@ -848,9 +848,13 @@ service cloud.firestore {
           // ⚠️ 13 Sep 2026: an item may be PACKAGING (a box, a tray, a label) rather than
           // food. Absent means food — every item written before this — and the value is
           // closed, because the Catalogue and Food cost decide what to offer by it.
+          // ⚠️ 14 Nov 2026 (Mise 2): two more kinds, so that EVERY product of an invoice
+          // can be kept — 'resale' (sold as it arrives: water, Coca Cola, beer) and
+          // 'other' (cleaning, tools, clothing). Priced, ordered and counted like the
+          // rest, never offered where food is chosen. Still a closed list.
           && (!('kind' in request.resource.data)
               || request.resource.data.kind == null
-              || request.resource.data.kind in ['ingredient', 'packaging'])
+              || request.resource.data.kind in ['ingredient', 'packaging', 'resale', 'other'])
           && request.resource.data.keys().hasOnly([
                'bakery', 'name', 'shortName', 'supplierId', 'brand', 'weight',
                'category', 'unit', 'active', 'kind',

@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { Navigate, useLocation, useNavigate, useNavigationType } from 'react-router';
-import { isPackaging } from '@mise/shared/ingredient-kind';
+import { kindOf } from '@mise/shared/ingredient-kind';
 import { PartBoundary } from '../errors/PartBoundary';
 import { useT } from '../i18n/useT';
 import { useSession } from '../session/SessionContext';
@@ -21,8 +21,8 @@ import { SuppliersList } from './SuppliersList';
 import { FROM_LIST, cameFromList, fromListTab, supplierScreenOf, tabOfState } from './suppliersNav';
 import { messageText } from './suppliersMessages';
 import {
-  NEW_INGREDIENT_PATH, NEW_PACKAGING_PATH, NEW_SUPPLIER_PATH, SUPPLIERS_IMPORT_PATH, SUPPLIERS_PATH, SUPPLIERS_PRICE_CHANGES_PATH, SUPPLIERS_SETTINGS_PATH,
-  ingredientPath, parseSuppliersPath, supplierPath, tabOf, tabPath,
+  NEW_SUPPLIER_PATH, SUPPLIERS_IMPORT_PATH, SUPPLIERS_PATH, SUPPLIERS_PRICE_CHANGES_PATH, SUPPLIERS_SETTINGS_PATH, TAB_OF_KIND,
+  ingredientPath, kindOfTab, newIngredientPath, parseSuppliersPath, supplierPath, tabOf, tabPath,
 } from './suppliersPath';
 import type { SuppliersTab } from './suppliersPath';
 import styles from './SuppliersSection.module.css';
@@ -118,7 +118,7 @@ function SuppliersLayout({ view }: { view: ShownView }) {
   let listTab = tabOf(view);
   if (cardLike) {
     const item = view.kind === 'ingredient' ? ingredients.find(candidate => candidate.id === view.id) : undefined;
-    listTab = supplierOrigin !== null ? 'suppliers' : (tabOfState(state) ?? (item && isPackaging(item) ? 'packaging' : listTab));
+    listTab = supplierOrigin !== null ? 'suppliers' : (tabOfState(state) ?? (item ? TAB_OF_KIND[kindOf(item)] : listTab));
   }
 
   // ⚠️ THIS SECTION OWNS THE SCROLL for the moves inside itself (shell/scrollArea.tsx), because its list and its suppliers
@@ -163,7 +163,8 @@ function SuppliersLayout({ view }: { view: ShownView }) {
   const openNew = () => {
     if (newOpen) return;
     handBack.expect(NEW_OPENER);
-    const target = listTab === 'suppliers' ? NEW_SUPPLIER_PATH : listTab === 'packaging' ? NEW_PACKAGING_PATH : NEW_INGREDIENT_PATH;
+    const newKind = kindOfTab(listTab);
+    const target = newKind === null ? NEW_SUPPLIER_PATH : newIngredientPath({ kind: newKind });
     if (split && view.kind !== 'list') {
       void navigate(target, { replace: true, state: cameFromList(state) ? fromListTab(listTab) : KEEP_FOCUS });
     } else {

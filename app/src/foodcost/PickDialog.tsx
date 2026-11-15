@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { normalizeSearchText } from '@mise/shared/catalogue-model';
-import { isPackaging } from '@mise/shared/ingredient-kind';
+import { isFood, isPackaging } from '@mise/shared/ingredient-kind';
 import { ingredientDisplayName } from '@mise/shared/ingredient-name';
 import { fcMoney } from '@mise/shared/fc-number';
 import { pricePerKg } from '@mise/shared/price-model';
@@ -81,9 +81,10 @@ export function PickDialog({ mode, initialQuery = '', onChoose, onClose }: Props
       .map(recipe => ({ id: recipe.id, name: String(recipe.name).trim(), invoiceName: '', meta: '', supplier: '' }))
       .sort(byName);
 
-    // Active, named, and never packaging: that has its own section.
+    // Active, named, and FOOD only: packaging has its own section; resale and other (drinks, detergents) are never
+    // offered here (14 Nov 2026) — isFood, never «not packaging», or they would leak in.
     const ingredientOptions: Option[] = Object.values(ingredients)
-      .filter(item => item.active !== false && !isPackaging(item) && named(item))
+      .filter(item => item.active !== false && isFood(item) && named(item))
       .map(ingredientOption)
       .sort(byName);
 
@@ -95,7 +96,7 @@ export function PickDialog({ mode, initialQuery = '', onChoose, onClose }: Props
 
     // 3e-5b: the ones switched off with «Not in use at the moment» are offered LAST, never hidden.
     const inactiveIngredientOptions: Option[] = Object.values(ingredients)
-      .filter(item => item.active === false && !isPackaging(item) && named(item))
+      .filter(item => item.active === false && isFood(item) && named(item))
       .map(ingredientOption)
       .sort(byName);
     const inactivePackagingOptions: Option[] = Object.values(ingredients)
