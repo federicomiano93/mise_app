@@ -102,6 +102,9 @@ export function useSendOrder(lens: OrdersLens): readonly [(request: SendRequest)
   const ask = useCallback(<A, Q extends { answer: (value: A) => void }>(
     show: (question: Q | null) => void, build: (answer: (value: A) => void) => Q, ifLeft: A,
   ): Promise<A> => new Promise<A>(resolve => {
+    // ⚠️ ASKED AFTER THE SCREEN HAS GONE (the phone's back gesture in the middle of a batch): nobody can answer, and the batch would
+    // wait for ever — so the orders that already went would never reach «did it go?». It answers `ifLeft` at once.
+    if (!mounted.current) { resolve(ifLeft); return; }
     const settle = settleOnce<A>(resolve, () => { show(null); });
     const giveUp = () => { settle(ifLeft); };
     waiting.current.add(giveUp);
@@ -125,14 +128,17 @@ export function useSendOrder(lens: OrdersLens): readonly [(request: SendRequest)
 
     const language = outputLanguage(who.location);
     const ui: SendUi = {
-      alert: message => latest.current.alert({ message, okLabel: latest.current.t('common.ok') }),
+      // ⚠️ A SCREEN THAT HAS GONE can show no notice and answer no question: asked then, the dialog is never drawn and the batch waits for
+      // ever, so the orders that already went never reach «did it go?» (SendPicker hands them over once the batch ends). It answers at
+      // once: no notice, and no text sent instead of a picture.
+      alert: message => (mounted.current ? latest.current.alert({ message, okLabel: latest.current.t('common.ok') }) : Promise.resolve()),
       canSharePhotos,
       askEditor: question => ask<EditorAnswer, EditorAsk>(setEditor, answer => ({ ...question, answer }), { outcome: 'cancelled', text: question.job.text }),
-      confirmText: () => latest.current.confirm({
+      confirmText: () => (!mounted.current ? Promise.resolve(false) : latest.current.confirm({
         message: latest.current.t('ord.sendFormat.photoFailed'),
         okLabel: latest.current.t('common.ok'),
         cancelLabel: latest.current.t('common.cancel'),
-      }),
+      })),
       sendList: async rows => {
         const uid = who.user?.uid ?? '';
         // ⚠️ NEVER BLOCKS, ONLY REFUSES TO BE SILENT: the list still belongs in the app. A failed read answers «go ahead» (the store).
