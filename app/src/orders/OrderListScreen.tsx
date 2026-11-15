@@ -142,22 +142,30 @@ function Open({ request, lens, leave, left, titleId }: OpenProps) {
   // in the list's order, only the lines not ticked as bought yet, with the quantities, names and units FROZEN in the list — never the
   // shared order, which has moved on underneath it. Built like History's re-send (recordSendRows). Only suppliers the order knows now:
   // a road to a supplier needs its phone or email.
+  //
+  // ⚠️ THE NAMES ARE THE LIST'S FROZEN ONES, never `item.name` (a deleted ingredient with no frozen name reads as the INTERFACE word
+  // there): what the supplier reads follows the venue's country, so a line with no name at all gets the venue-language word (itemsFromQuantities).
+  // ⚠️ A LINE WHOSE INGREDIENT NO LONGER EXISTS IS LEFT OUT, of the message and of the question: «Yes» files what went through the
+  // ingredients the order knows (sentLinesOf), so it could not record that line, and asking about it would promise a record never made.
+  const frozenNames = useMemo(() => {
+    const names = request.names;
+    return typeof names === 'object' && names !== null ? names as Record<string, unknown> : {};
+  }, [request]);
   const toSend = useMemo(() => {
     const rows: SendRow[] = [];
     const lines: Record<string, Lines> = {};
     for (const group of groups) {
       if (group.supplierId === '' || lens.supplierById(group.supplierId) === undefined) continue;
-      const open = group.items.filter(item => !item.done && item.qty > 0);
+      const open = group.items.filter(item => !item.done && item.qty > 0 && ingredientsById[item.id] !== undefined);
       const quantities = Object.fromEntries(open.map(item => [item.id, item.qty]));
       const units = Object.fromEntries(open.flatMap(item => (item.unit === '' ? [] : [[item.id, item.unit]])));
-      const names = Object.fromEntries(open.map(item => [item.id, item.name]));
-      const items = itemsFromQuantities(quantities, ingredientsById, names, units, language);
+      const items = itemsFromQuantities(quantities, ingredientsById, frozenNames, units, language);
       if (items.length === 0) continue;
       rows.push({ id: group.supplierId, name: group.supplierName, items });
       lines[group.supplierId] = { quantities, units };
     }
     return { rows, lines };
-  }, [groups, lens, ingredientsById, language]);
+  }, [groups, lens, ingredientsById, frozenNames, language]);
   // Hidden when nothing is left to send, or no road reaches a supplier for it (the in-app list for the managers is not a road to a
   // supplier): the same rule as «Send it now».
   const canSend = toSend.rows.length > 0 && sendOffers({

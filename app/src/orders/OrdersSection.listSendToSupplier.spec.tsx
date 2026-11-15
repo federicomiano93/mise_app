@@ -127,4 +127,49 @@ describe('«Send to the supplier» on an order list', () => {
     await atOne(source);
     expect(await one().findByRole('button', { name: 'Send to the supplier' })).toBeInTheDocument();
   });
+
+  async function sendAndRead(source: FakeOrdersSource, session: Record<string, unknown> = {}) {
+    const open = vi.spyOn(window, 'open').mockImplementation(() => ({ opener: null }) as unknown as Window);
+    const view = renderOrders('/orders/lists/r-1', { source, session: { ...STAFF.session, ...session } });
+    await screen.findByRole('region', { name: 'Order list' }, LOAD);
+    await view.user.click(await one().findByRole('button', { name: 'Send to the supplier' }));
+    const editor = within(await screen.findByRole('dialog', { name: 'Check the order' }, LOAD));
+    await waitFor(() => { expect(editor.getByRole('button', { name: 'Send' })).toBeEnabled(); }, LOAD);
+    act(() => { editor.getByRole('button', { name: 'Send' }).click(); });
+    expect(open).toHaveBeenCalledTimes(1);
+    return textOf(String(open.mock.calls[0]?.[0]));
+  }
+
+  it('⚠️ names a line with no frozen name in the VENUE’s language, not the interface’s', async () => {
+    // The interface is English; the venue is Italian: the supplier reads Italian. The ingredient has no name, live or frozen.
+    const source = seeded(list({
+      quantities: { 'i-flour': 4, 'i-rye': 2 }, names: { 'i-flour': 'Flour' },
+    }), { ingredients: [ingredient('i-flour', { name: 'Flour', supplierId: 's-alp', unit: 'kg' }), ingredient('i-rye', { name: '', supplierId: 's-alp', unit: 'kg' })] });
+    const text = await sendAndRead(source, { location: { country: 'IT' } });
+    expect(text).toContain('- Flour: 4');
+    expect(text).toContain('Ingrediente eliminato');
+    expect(text).not.toContain('Deleted ingredient');
+  });
+
+  it('⚠️ leaves out a line whose ingredient is gone, from the message AND the question', async () => {
+    const source = seeded(list({
+      quantities: { 'i-flour': 4, 'i-gone': 1 }, names: { 'i-flour': 'Flour', 'i-gone': 'Gone' },
+      supplierOf: { 'i-flour': 's-alp', 'i-gone': 's-alp' }, supplierNames: { 's-alp': 'Alpine Mills' },
+    }));
+    const text = await sendAndRead(source);
+    expect(text).toContain('- Flour: 4');
+    expect(text).not.toContain('Gone');
+    await waitFor(() => { expect(Object.keys(asking(source))).toEqual(['s-alp']); });
+    expect(asking(source)['s-alp']).toMatchObject({ quantities: { 'i-flour': 4 } });
+    expect(Object.keys(asking(source)['s-alp']?.quantities as object)).toEqual(['i-flour']);
+  });
+
+  it('hides the button when every open line is of an ingredient that is gone', async () => {
+    const source = seeded(list({
+      quantities: { 'i-gone': 1 }, names: { 'i-gone': 'Gone' }, supplierOf: { 'i-gone': 's-alp' }, supplierNames: { 's-alp': 'Alpine Mills' },
+    }));
+    await atOne(source);
+    await one().findByRole('button', { name: 'Finish' }, LOAD);
+    expect(screen.queryByRole('button', { name: /^Send to the supplier/ })).not.toBeInTheDocument();
+  });
 });
