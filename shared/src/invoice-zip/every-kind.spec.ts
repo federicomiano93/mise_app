@@ -11,6 +11,8 @@ import { ported } from './testing/implementations';
 import { makeCase } from './testing/invoice-builders';
 import type { LineSpec } from './testing/invoice-builders';
 import type { ImportResult } from './build-import';
+import { changesFromPoints } from '../price-changes-model';
+import { planPriceChanges } from '../invoice-import-plan';
 
 const SUPPLIER = 'IT00000000001';
 const FLOUR: LineSpec = { desc: 'FARINA TIPO 00 SACCO KG 25', code: 'F00', qty: 25, unit: 'KG', total: 14.25 };
@@ -174,5 +176,66 @@ describe('the plan and the writes with every kind', () => {
     expect(planIngredients(file, ctx(existing))[0]).toMatchObject({ ingredientId: 'p1' });
     // Without the option (the original) a packaging item is never a match: a new item would be proposed.
     expect(planIngredients(file, { ...ctx(existing), everyKind: false })[0]).not.toMatchObject({ ingredientId: 'p1' });
+  });
+});
+
+// Code review of 15 Nov 2026: a product priced per piece with NO weight must keep being priced by the next invoices, and must
+// never put that price on a FOOD item.
+describe('per-piece prices with no weight, on the next invoices', () => {
+  const SUPPLIER_ID = 's-cerere';
+  const ctx = (ingredients: readonly Record<string, unknown>[], pricesById: Record<string, Record<string, unknown>> = {}) => ({
+    supplierIdByKey: { [SUPPLIER]: SUPPLIER_ID }, ingredients, pricesById, invoicePointIds: {}, everyKind: true,
+  });
+  const trays = (fields: Record<string, unknown> = {}) =>
+    ({ id: 'p1', supplierId: SUPPLIER_ID, name: 'Vaschette', supplierCode: 'VA', kind: 'packaging', ...fields });
+  const storedPrice = (fields: Record<string, unknown> = {}) =>
+    ({ priceUnit: 'pcs', pricePerUnit: 0.14, unitWeightKg: null, priceUpdatedAt: '2020-01-01T12:00:00.000Z', ...fields });
+
+  test('⚠️ an item already priced per piece with no weight gets the newer price (never «a piece of another size»)', () => {
+    const file = fileOf(built([TRAYS]));
+    const row = planIngredients(file, ctx([trays()], { p1: storedPrice() }))[0];
+    expect(row).toMatchObject({ ingredientId: 'p1', status: 'update-price', updateCurrent: true });
+    expect(row).not.toHaveProperty('reason', 'piece-differs');
+    const ops = ingredientWrites(row, file[0], '2026-11-15T10:00:00.000Z', { language: 'it' }).flat();
+    expect(ops.find(op => op.type === 'set-current-price')?.data).toMatchObject({ priceUnit: 'pcs', pricePerUnit: 0.15, unitWeightKg: null });
+  });
+
+  test('a stored piece WITH a weight is still another piece: the new prices go to the history only', () => {
+    const file = fileOf(built([TRAYS]));
+    const row = planIngredients(file, ctx([trays()], { p1: storedPrice({ unitWeightKg: 0.02 }) }))[0];
+    expect(row).toMatchObject({ ingredientId: 'p1', status: 'history-only', updateCurrent: false });
+  });
+
+  test.each([
+    ['no kind', {}],
+    ['kind «ingredient»', { kind: 'ingredient' }],
+  ])('⚠️ never on a FOOD item (%s): matched by its code, the row is an error and nothing is written', (_label, fields) => {
+    const file = fileOf(built([TRAYS]));
+    const row = planIngredients(file, ctx([trays({ kind: undefined, ...fields })]))[0];
+    expect(row).toMatchObject({ status: 'error', reason: 'unit-weight-missing' });
+    expect(ingredientWrites(row, file[0], '2026-11-15T10:00:00.000Z', { language: 'it' }).flat()).toStrictEqual([]);
+  });
+
+  test('price changes: two per-piece prices with no weight are compared (Mise 2 option); a weighed and a weightless one never', () => {
+    const point = (invoiceId: string, invoiceDate: string, pricePerUnit: number, unitWeightKg?: number) => ({
+      invoiceId, line: 1, invoiceDate, pricePerUnit, priceUnit: 'pcs', ...(unitWeightKg ? { unitWeightKg } : {}),
+    });
+    const item = { id: 'p1', supplierId: SUPPLIER_ID, name: 'Vaschette' };
+    const weightless = [point('A', '2026-10-01', 0.14), point('B', '2026-11-01', 0.17)];
+    expect(changesFromPoints(item, weightless)).toStrictEqual([]);
+    expect(changesFromPoints(item, weightless, { weightlessPieces: true })).toMatchObject([{ oldPrice: 0.14, newPrice: 0.17 }]);
+    expect(changesFromPoints(item, [point('A', '2026-10-01', 0.14, 0.02), point('B', '2026-11-01', 0.17)], { weightlessPieces: true }))
+      .toStrictEqual([]);
+  });
+
+  test('planPriceChanges records the change of a per-piece price with no weight', async () => {
+    const plan = await planPriceChanges({
+      ingredientId: 'p1', supplierId: SUPPLIER_ID, name: 'Vaschette', priceUnit: 'pcs', unitWeightKg: null, isNew: false,
+      storedPoints: [{ invoiceId: '101', line: 1, invoiceDate: '2026-10-01', pricePerUnit: 0.14, priceUnit: 'pcs' }],
+      newPoints: [{ invoiceId: '102', line: 1, invoiceDate: '2026-11-01', pricePerUnit: 0.17, priceUnit: 'pcs' }],
+      read: { changeIds: () => [] }, nowIso: '2026-11-15T10:00:00.000Z',
+    });
+    expect(plan.create).toHaveLength(1);
+    expect(plan.create[0]).toMatchObject({ type: 'add-price-change', data: { oldPrice: 0.14, newPrice: 0.17 } });
   });
 });

@@ -200,7 +200,10 @@ export async function planPriceChanges({
     ...(packLabel ? { pack: packLabel } : {}),
   }));
   const label = String(name ?? '').trim().slice(0, MAX_NAME);
-  const found = changesFromPoints({ id: ingredientId, supplierId, name: label }, [...known, ...fresh])
+  // MISE 2: the file's piece has no weight only for packaging, resale and other (`everyKind`; the original refuses such an
+  // entry): their per-piece prices are then compared with the stored ones that have no weight either.
+  const weightlessPieces = priceUnit === 'pcs' && !(typeof unitWeightKg === 'number' && unitWeightKg > 0);
+  const found = changesFromPoints({ id: ingredientId, supplierId, name: label }, [...known, ...fresh], { weightlessPieces })
     .filter(acceptable);
   if (found.length === 0 && (isNew || fresh.length === 0)) return none;
   const stored: StoredChange[] = isNew ? [] : [...(await read.changeIds(ingredientId))];

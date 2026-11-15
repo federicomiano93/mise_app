@@ -40,6 +40,7 @@ import { cartonWordFor, defaultPackFor, pieceWordFor } from './record-choices';
 import { supplierLabel } from './supplier-label';
 import { normalizeVat } from './vat-number';
 import { sameUnitWeight } from './price-changes-model';
+import { isFood } from './ingredient-kind';
 import { NOTE, LEFT_OUT } from './invoice-zip/reasons';
 
 export const IMPORT_FORMAT = 'mise-invoice-import';
@@ -711,7 +712,17 @@ const rescaled = (p: PlanPoint, factor: number): PlanPoint => (p.fromPack === tr
   }
   : p);
 
+// MISE 2 (15 Nov 2026): a per-piece price with NO piece weight — only ever a packaging, resale or other entry of a file made
+// with `everyKind` (the original refuses a per-piece entry without a weight, so it never gets here).
+const noPieceWeight = (w: unknown): boolean => !(typeof w === 'number' && w > 0);
+const weightlessPiece = (base: BaseRow): boolean => base.priceUnit === 'pcs' && noPieceWeight(base.unitWeightKg);
+
 function matchedRow(base: BaseRow, existing: ExistingIngredient, ctx: PlanContext): IngredientRow {
+  // ⚠️ MISE 2: NEVER ON A FOOD ITEM (code review of 15 Nov 2026). A matched item keeps its kind, and food needs the weight of
+  // its piece (its card refuses a per-piece price without one; recipes cost it by weight): the row is an error, nothing written.
+  if (weightlessPiece(base) && isFood(existing)) {
+    return { ...base, status: 'error', newPoints: [], updateCurrent: false, reason: 'unit-weight-missing' };
+  }
   const known = asSet(lookup(ctx.invoicePointIds, existing.id));
   const weightRead = storedWeightFactor(base, existing);
   const factor = weightRead.factor || 1;
@@ -726,8 +737,10 @@ function matchedRow(base: BaseRow, existing: ExistingIngredient, ctx: PlanContex
   const unitDiffers = newPoints.length > 0 && storedUnit !== null && storedUnit !== base.priceUnit;
   // ⚠️ THE SAME HOLDS FOR A PIECE OF ANOTHER SIZE: a per-piece price of a 5 kg sack never replaces the per-piece
   // price of a 1 kg bag (the two packs of one ingredient). Only an equal piece weight (0.1%) may update it.
-  const pieceDiffers = newPoints.length > 0 && !unitDiffers && storedUnit === 'pcs' && base.priceUnit === 'pcs'
-    && !sameUnitWeight(base.unitWeightKg, doc?.unitWeightKg);
+  // MISE 2: a piece with no weight and a stored piece with no weight are the same piece (packaging, resale and other priced by
+  // the piece as the invoice counts it); otherwise «no weight» is never «the same» (sameUnitWeight's rule).
+  const samePiece = weightlessPiece(base) ? noPieceWeight(doc?.unitWeightKg) : sameUnitWeight(base.unitWeightKg, doc?.unitWeightKg);
+  const pieceDiffers = newPoints.length > 0 && !unitDiffers && storedUnit === 'pcs' && base.priceUnit === 'pcs' && !samePiece;
   // An invoice older than the price in force only feeds the history.
   const updateCurrent = newPoints.length > 0 && !unitDiffers && !pieceDiffers
     && (!doc || !stamp || (latest as PlanPoint).invoiceDate > stamp.slice(0, 10));

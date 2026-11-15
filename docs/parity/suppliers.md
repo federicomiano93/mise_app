@@ -1476,3 +1476,12 @@ its item kind. The current app is frozen and unchanged (it still imports ingredi
   Specs: `every-kind.spec.ts` (the reader, the file entry valid, the new packaging item and its writes; food still
   unreadable), `InvoiceImport.run.spec.tsx` (through the screen: the new packaging item priced per piece; food without weight
   not imported). Not driven in a browser.
+- **The next invoices, and food (code review of 15 Nov 2026).** A product priced per piece with no weight (packaging, resale,
+  other) is matched again next month: «no weight» against a stored «no weight» is now the SAME piece, so the newer price
+  replaces the one in force (`matchedRow`; before, every later invoice went to the history only with «a piece of another
+  size», and the price stayed frozen), and its price changes are recorded (`changesFromPoints`' Mise-2-only option
+  `weightlessPieces`, asked by `planPriceChanges` when the file's piece has no weight). A weighed piece and a weightless one
+  are still never the same. ⚠️ Such a price is NEVER laid on a FOOD item: a weightless per-piece row matched to food (by code,
+  by name or «Uguale a …») is an error row, «The weight of one piece is missing.», and writes nothing. The frozen app never
+  makes a per-piece entry without a weight, so none of this changes its behaviour (parity and odd-input specs unchanged).
+  Specs: `every-kind.spec.ts` («per-piece prices with no weight, on the next invoices»).
