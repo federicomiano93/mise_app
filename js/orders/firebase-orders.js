@@ -491,6 +491,21 @@ export async function watchDoc(name, id, onChange, onError) {
   );
 }
 
+// Call back with whether THIS DEVICE still holds writes to the document that the server has not
+// confirmed — Firestore's own queue, which outlives the page that started them (iOS throws a frozen
+// page away; the write waits in the browser's database until the app is opened again). ⚠️
+// includeMetadataChanges, because the server's confirmation changes no data, only this flag. On a
+// document already being watched Firestore shares the one listen, so this costs no extra read.
+export async function watchPendingWrites(name, id, onPending) {
+  await authReady;
+  return onSnapshot(
+    doc(db, pathFor(name), id),
+    { includeMetadataChanges: true },
+    snap => onPending(snap.metadata.hasPendingWrites),
+    err => console.error(`watchPendingWrites(${name}/${id}) failed:`, err),
+  );
+}
+
 // Call back ONCE, the first time the SERVER itself has answered for this document: an answer from
 // the offline copy, however recent it looks, may not know what another phone has done since. Offline
 // it simply waits. ⚠️ includeMetadataChanges, because a server answer identical to the cached copy
