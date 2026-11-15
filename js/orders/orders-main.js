@@ -90,7 +90,7 @@ import {
 import { storedUnitFor, entryUnit, isDefaultUnit } from '../order-unit.js';
 import { todayOrders, dueTodayIds, pendingSuppliers, closeOffer } from './reminders.js';
 import { kioskSectionsFromData } from './kiosk-lines.js';
-import { renderTodayOrders, renderPending, renderAwaiting } from './reminder-view.js';
+import { renderTodayOrders, renderPending, renderAwaiting, refocusAwaiting } from './reminder-view.js';
 import { resolveSuppliers, orderSuppliers, NO_SUPPLIER_ID } from './no-supplier.js';
 import { overrideSignature } from './line-supplier.js';
 import { memoLast } from './memo.js';
@@ -2104,6 +2104,10 @@ async function answerAwaitingSent(supplierId, answer, at) {
   if (answer === 'yes' && shouldAskBeforeRecording(entry, filed)) {
     if (askingBeforeRecording.has(supplierId) || globalThis.document?.querySelector('.app-dialog-backdrop')) return;
     askingBeforeRecording.add(supplierId);
+    // The dialog gives focus back to the button that opened it, which the banner may have rebuilt
+    // meanwhile (detached: focus would fall to <body>): put it on the live one afterwards.
+    const tapped = globalThis.document?.activeElement?.dataset;
+    const tappedAnswer = tapped?.awaitingSupplier === supplierId ? tapped.awaitingAnswer : null;
     let record;
     try {
       record = await confirmDialog({
@@ -2114,6 +2118,7 @@ async function answerAwaitingSent(supplierId, answer, at) {
       });
     } finally {
       askingBeforeRecording.delete(supplierId);
+      if (tappedAnswer) refocusAwaiting(document.getElementById('orders-awaiting'), { supplier: supplierId, answer: tappedAnswer });
     }
     // Answered on another device while the dialog was open.
     if (!local && state.awaiting?.[supplierId]?.at !== entry.at) {

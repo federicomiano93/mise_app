@@ -3,11 +3,14 @@
 // the row and drop focus to <body>. Executed against the small DOM in tests/helpers/form-dom.mjs.
 
 import { test } from 'node:test';
+import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import { installDom, walk, Node } from './helpers/form-dom.mjs';
 
 installDom();
-const { renderAwaiting } = await import('../js/orders/reminder-view.js');
+const tabButton = new Node('button');
+globalThis.document.getElementById = id => (id === 'tab-order-btn' ? tabButton : null);
+const { renderAwaiting, refocusAwaiting } = await import('../js/orders/reminder-view.js');
 
 const AT = '2026-11-14T10:42:00.000Z';
 const list = [
@@ -73,4 +76,43 @@ test('while answering the buttons stay focusable (aria-disabled) and a tap does 
   assert.deepEqual(calls, [['yes', 'S2', AT]], 'the other supplier is not busy');
   draw(host, [], calls);
   assert.equal(button(host, 'S1', 'yes').getAttribute('aria-disabled'), undefined);
+});
+
+const drawList = (host, entries, busyIds = []) => renderAwaiting(host, entries, {
+  question: s => `Order to ${s.name}?`, onYes() {}, onNo() {}, busy: id => busyIds.includes(id),
+});
+
+test('⚠️ the answered row is removed: focus goes to the next row’s «Sì», else to the Orders tab', () => {
+  const host = new Node('div');
+  drawList(host, list);
+  focusOn(button(host, 'S1', 'yes'));
+  drawList(host, [list[1]]);                       // S1 recorded elsewhere: its row is gone
+  assert.equal(button(host, 'S2', 'yes').focused, 1, 'the next row’s «Sì»');
+  assert.equal(tabButton.focused, 0);
+  focusOn(button(host, 'S2', 'no'));
+  drawList(host, []);                              // the last row goes
+  assert.equal(tabButton.focused, 1, 'a stable control above the banner, never <body>');
+});
+
+test('the focused row is the LAST of several and goes: nothing after it, so the Orders tab', () => {
+  const host = new Node('div');
+  tabButton.focused = 0;
+  drawList(host, list);
+  focusOn(button(host, 'S2', 'yes'));
+  drawList(host, [list[0]]);
+  assert.equal(tabButton.focused, 1);
+  assert.equal(button(host, 'S1', 'yes').focused, 0);
+});
+
+test('a dialog that gave focus back to a detached button: refocusAwaiting finds the live one', () => {
+  const host = new Node('div');
+  tabButton.focused = 0;
+  drawList(host, list);
+  drawList(host, list, ['S1']);                    // rebuilt while the dialog was open
+  refocusAwaiting(host, { supplier: 'S1', answer: 'yes' });
+  assert.equal(button(host, 'S1', 'yes').focused, 1);
+  refocusAwaiting(host, { supplier: 'S9', answer: 'yes' });
+  assert.equal(tabButton.focused, 1, 'row gone meanwhile: the Orders tab');
+  const html = fs.readFileSync(new URL('../orders.html', import.meta.url), 'utf8');
+  assert.match(html, /id="tab-order-btn"/, 'the fallback exists on the page');
 });

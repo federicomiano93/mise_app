@@ -136,6 +136,8 @@ export function renderAwaiting(container, list, { question, onYes, onNo, busy } 
   const key = JSON.stringify(list.map((e, i) => [e.supplier.id, e.at, sentences[i], Boolean(busy?.(e.supplier.id))]));
   if (container.dataset.awaitingKey === key) return;
   container.dataset.awaitingKey = key;
+  const oldOrder = (() => { try { return JSON.parse(container.dataset.awaitingOrder || '[]'); } catch { return []; } })();
+  container.dataset.awaitingOrder = JSON.stringify(list.map(e => e.supplier.id));
   // ⚠️ FOCUS SURVIVES THE REBUILD. Tapping «Sì» flips the busy state, which changes the key, which
   // rebuilds the row — and a keyboard or screen-reader user's focus fell to <body>. The button
   // that had it (which supplier, which answer) is found again in the new row and focused.
@@ -143,9 +145,9 @@ export function renderAwaiting(container, list, { question, onYes, onNo, busy } 
   const hadFocus = active?.dataset?.awaitingSupplier
     ? { supplier: active.dataset.awaitingSupplier, answer: active.dataset.awaitingAnswer } : null;
   container.textContent = '';
-  if (!list.length) return;
 
   let restoreFocus = null;
+  const yesOf = new Map();
   list.forEach((entry, i) => {
     const { supplier } = entry;
     const id = `awaiting-q-${++awaitingSeq}`;
@@ -163,6 +165,7 @@ export function renderAwaiting(container, list, { question, onYes, onNo, busy } 
     }, label);
     const yes = answer(t('orders.awaiting.yes'), ' primary', 'yes', onYes);
     const no = answer(t('orders.awaiting.no'), '', 'no', onNo);
+    yesOf.set(supplier.id, yes);
     if (hadFocus && hadFocus.supplier === supplier.id) restoreFocus = hadFocus.answer === 'yes' ? yes : no;
     container.appendChild(el('div', { class: 'pending-banner awaiting-banner' }, [
       el('div', { class: 'pending-main' }, [
@@ -171,5 +174,26 @@ export function renderAwaiting(container, list, { question, onYes, onNo, busy } 
       el('div', { class: 'pending-actions' }, [yes, no]),
     ]));
   });
-  restoreFocus?.focus();
+  if (restoreFocus) { restoreFocus.focus(); return; }
+  // ⚠️ THE ANSWERED ROW IS GONE (recorded, dropped, answered elsewhere): the focused button left
+  // the page with it and focus would fall to <body>. It goes to the «Sì» of the next row that
+  // follows it in the old banner, else to the Orders tab, a stable control just above.
+  if (hadFocus) {
+    const at = oldOrder.indexOf(hadFocus.supplier);
+    const nextId = at < 0 ? undefined : oldOrder.slice(at + 1).find(id => yesOf.has(id));
+    (nextId !== undefined ? yesOf.get(nextId) : globalThis.document?.getElementById?.('tab-order-btn'))?.focus();
+  }
+}
+
+// Put focus back on one answer of one supplier after something outside the banner took it and
+// handed it back to a button that is no longer on the page (a confirm dialog opened over a banner
+// that was rebuilt meanwhile). Falls back like the rebuild does. Walks the children, no selector.
+export function refocusAwaiting(container, { supplier, answer }) {
+  const found = [];
+  const visit = node => {
+    if (node?.dataset?.awaitingSupplier === supplier && node.dataset.awaitingAnswer === answer) found.push(node);
+    (node?.children ? [...node.children] : []).forEach(visit);
+  };
+  visit(container);
+  (found[0] || globalThis.document?.getElementById?.('tab-order-btn'))?.focus();
 }

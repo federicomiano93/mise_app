@@ -253,6 +253,12 @@ test('the banner host is first on the order tab and is NOT moved into the tablet
   assert.match(main, /renderAwaiting\(document\.getElementById\('orders-awaiting'\)/);
 });
 
+test('the «already recorded?» dialog hands focus back to the live banner button, not a detached one', () => {
+  const fn = main.slice(main.indexOf('async function answerAwaitingSent'), main.indexOf('// ── Sending the list to whoever'));
+  assert.match(fn, /refocusAwaiting\(document\.getElementById\('orders-awaiting'\), \{ supplier: supplierId, answer: tappedAnswer \}\)/);
+  assert.ok(fn.indexOf('tappedAnswer = ') < fn.indexOf('await confirmDialog'), 'read before the dialog takes focus');
+});
+
 test('the words, both languages', async () => {
   const d = (await import('../js/i18n.js'))._dictionaries();
   assert.equal(d.it['orders.awaiting.question'], 'Ordine a {supplier} inviato alle {time}: è partito?');
