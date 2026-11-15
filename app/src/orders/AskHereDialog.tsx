@@ -12,8 +12,8 @@ import { useAnswerAwaiting } from './useAnswerAwaiting';
 const RECHECK_MS = 1000;
 
 // «Order to Bruno sent at 10:42: did it go?» as a dialog, on the device that SENT it, once the page is back (the share sheet answered
-// while it was visible, or the window the text opened has come back). One question at a time, «Yes» / «No», and no Cancel: Escape or
-// a tap outside leaves it to the banner, which asks the same thing for as long as it takes.
+// while it was visible, or the window the text opened has come back). One question at a time, «Yes» / «No», and no Cancel: Escape
+// leaves it to the banner, which asks the same thing for as long as it takes (a tap outside does nothing: the dialog is not dismissable).
 //
 // Mounted at the level of the whole section, so it survives moving from one Orders screen to another.
 //
@@ -22,10 +22,13 @@ const RECHECK_MS = 1000;
 //
 // ⚠️ IT CLOSES ITSELF WHEN SOMEBODY ELSE HAS ANSWERED (or a newer send replaced the question) while it is open — the leftover found on
 // the tablet in the current app, where a dialog kept asking about an order another device had already recorded. It says so.
+// ⚠️ «ELSEWHERE» ONLY WHEN THAT QUESTION IS GONE (same supplier, same `at`) from the questions on the page — never because the store
+// stopped asking: it stops while the page is hidden, and a question that still stands has not been answered by anybody.
 export function AskHereDialog({ lens }: { lens: OrdersLens }) {
   const { t, locale } = useT();
   const store = useOrdersStore();
   const { awaiting, suppliers } = useOrders();
+  const { questions } = awaiting;
   const say = useStatusMessage();
   const [answer, dialogs] = useAnswerAwaiting(lens);
   const [open, setOpen] = useState<{ supplierId: string; at: string } | null>(null);
@@ -37,7 +40,8 @@ export function AskHereDialog({ lens }: { lens: OrdersLens }) {
       if (ask !== null && document.querySelector('[role="dialog"],[role="alertdialog"]') === null) setOpen(ask);
       return;
     }
-    if (ask === null || ask.supplierId !== open.supplierId || ask.at !== open.at) {
+    const stands = questions.some(question => question.supplierId === open.supplierId && question.entry.at === open.at);
+    if (!stands) {
       setOpen(null);
       say(t('ord.awaiting.elsewhere'), 4000);
     }

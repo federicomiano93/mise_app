@@ -281,6 +281,26 @@ describe('the sender’s own dialog', () => {
     expect(await screen.findByText('Already answered on another device.')).toBeInTheDocument();
   });
 
+  it('⚠️ stays open while the page is hidden: the store stops asking then, and nobody has answered', async () => {
+    allowShare();
+    const source = seeded({ draft: DRAFT });
+    const view = await toSupplier(source);
+    await view.user.click(sendIcon());
+    await pressEditorSend(view);
+    await askedDialog();
+    act(() => { visibility('hidden'); });
+    // Any snapshot while hidden makes the store drop its wish to ask.
+    act(() => {
+      const next = structuredClone(source.draft ?? {}) as { entries?: Record<string, unknown> };
+      next.entries = { ...next.entries, 'i-milk': { qty: 9 } };
+      source.draft = next;
+      source.emit();
+    });
+    await new Promise(resolve => { setTimeout(resolve, 50); });
+    expect(screen.queryByText('Already answered on another device.')).not.toBeInTheDocument();
+    expect(screen.getByRole('alertdialog', { name: /did it go\?$/ })).toBeInTheDocument();
+  });
+
   it('is never opened over another dialog; it asks when the way is clear', async () => {
     const source = withQuestions({}, DRAFT);
     const view = await toSupplier(source);
