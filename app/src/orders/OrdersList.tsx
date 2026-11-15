@@ -15,6 +15,7 @@ import { SPLIT_QUERY } from '../ui/split';
 import { useMediaQuery } from '../ui/useMediaQuery';
 import { DeliveryDoors } from './DeliveryDoors';
 import { ListsDoor } from './ListsDoor';
+import { AwaitingBanners } from './AwaitingBanners';
 import { NoticesPanel } from './NoticesPanel';
 import { OrdersFilter } from './OrdersFilter';
 import { OrdersHead } from './OrdersHead';
@@ -64,6 +65,8 @@ type Props = {
   onLists: () => void;
   // «Placed yesterday» on a pending banner (step 3f-6): the supplier's confirm screen, recording under that day.
   onOpenPending: (id: string, day: string) => void;
+  // A supplier's screen is open beside the list: its save line speaks, the head's keeps its room (SaveStateLine).
+  saveSilent: boolean;
 };
 
 const HEADING_KEY = {
@@ -74,7 +77,7 @@ const HEADING_KEY = {
 // The left column: the head (OrdersHead: the search box, the send arrow, the tools and the All / Ordering filter, which stay put
 // while the rows scroll), over the suppliers. The search box's text lives HERE, in a component that stays mounted, so a data
 // snapshot never remounts the box (see OrdersHead).
-export function OrdersList({ lens, earlyLens, ready, openId, heldId, onLookingElsewhere, onOpenSupplier, onOpenItems, onOpenSummary, onOpenClosed, onPlaceAll, onClearAll, swapOpen, onSwap, onSend, onSettings, onHistory, onIncoming, onReorder, onLists, onOpenPending }: Props) {
+export function OrdersList({ lens, earlyLens, ready, openId, heldId, onLookingElsewhere, onOpenSupplier, onOpenItems, onOpenSummary, onOpenClosed, onPlaceAll, onClearAll, swapOpen, onSwap, onSend, onSettings, onHistory, onIncoming, onReorder, onLists, onOpenPending, saveSilent }: Props) {
   const { t } = useT();
   const { config, draft, suppliers, suppliersLoaded, history, historyBroken, draftBroken, serverSeen, suppliersBroken, ingredientsBroken } = useOrders();
   const [query, setQuery] = useState('');
@@ -136,6 +139,7 @@ export function OrdersList({ lens, earlyLens, ready, openId, heldId, onLookingEl
         onSend={onSend}
         onSettings={onSettings}
         onHistory={onHistory}
+        saveSilent={saveSilent}
       >
         {showFilter ? (
           <OrdersFilter
@@ -147,6 +151,11 @@ export function OrdersList({ lens, earlyLens, ready, openId, heldId, onLookingEl
           />
         ) : null}
       </OrdersHead>
+
+      {/* «Did it go?»: always on the page, above everything the bell holds (decision P2 of the v1.145.0 port). */}
+      <PartBoundary>
+        <AwaitingBanners lens={lens} />
+      </PartBoundary>
 
       <PartBoundary>
         <NoticesPanel onOpenSupplier={onOpenSupplier} onOpenPending={onOpenPending} onSend={onSend} />

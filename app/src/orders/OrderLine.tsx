@@ -30,6 +30,9 @@ type Props = {
   onOpenCard?: (row: OrderRow) => void;
   // Where the line is drawn, which names its door for the hand-back (the flat view, or a supplier's screen).
   doorIn?: 'flat' | 'supplier';
+  // Leaving the quantity or the stock box: what waits for the autosave's pause is sent at once (the iPad order of 14 Nov 2026,
+  // when the last number typed on a frozen page never left the device).
+  onLeaveBox?: () => void;
 };
 
 const text = (value: unknown): string => (typeof value === 'string' ? value : '');
@@ -38,7 +41,7 @@ const text = (value: unknown): string => (typeof value === 'string' ? value : ''
 //
 // ⚠️ A ROW MARKED `elsewhere` SHOWS AN EMPTY ORDER BOX whatever the draft says: that number belongs to the other supplier's
 // order. Typing there (or + ) takes the line back — the store does it in the same write (ordersStore.ts editLine).
-export function OrderLine({ row, entry, showStock, hint, onEdit, supplierName, onOpenCard, doorIn = 'supplier' }: Props) {
+export function OrderLine({ row, entry, showStock, hint, onEdit, supplierName, onOpenCard, doorIn = 'supplier', onLeaveBox }: Props) {
   const { t } = useT();
   const handBack = useHandBack();
   const id = row.ingredient.id;
@@ -126,6 +129,7 @@ export function OrderLine({ row, entry, showStock, hint, onEdit, supplierName, o
           ariaLabel={t('ord.qtyToOrderFor', { name: label })}
           describedBy={hintText !== '' ? hintId : undefined}
           onChange={n => { onEdit(row, { qty: n }); }}
+          onLeave={onLeaveBox}
         />
         <div className={styles.steps}>
           <button
@@ -155,6 +159,7 @@ export function OrderLine({ row, entry, showStock, hint, onEdit, supplierName, o
             className={styles.box}
             ariaLabel={t('ord.stockOnHandFor', { name: label })}
             onChange={n => { onEdit(row, { stock: n }); }}
+            onLeave={onLeaveBox}
           />
         </div>
       ) : null}

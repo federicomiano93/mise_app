@@ -41,6 +41,10 @@ export interface DraftView {
   // The suppliers closed as «not ordered» (drafts/current.skipped, { supplierId: 'YYYY-MM-DD' }), as the server last said.
   // Written on their own, never by the autosave (ordersSource.setSupplierSkipped); only the day counts (reminders skippedOn).
   readonly skipped: DraftDays;
+  // «Order to X sent at 10:42: did it go?» (drafts/current.awaitingSent, { supplierId: entry }), as the server last said — see
+  // @mise/shared/awaiting-sent. Written on their own (ordersSource.setAwaitingSent), never by the autosave. Whole values, shaped
+  // by the writer: the store judges them (isAwaiting), the draft only carries them.
+  readonly awaitingSent: Readonly<Record<string, unknown>>;
   // The document's own `updatedAt` (ISO), '' when it has none.
   readonly updatedAt: string;
   // Whether drafts/current exists at all.
@@ -68,6 +72,10 @@ export interface DraftSyncDeps {
   onResult(ok: boolean): void;
   // The note that outlives the page (F-15, @mise/shared/draft-journal). Absent: nothing is noted (a spec of the sync alone).
   journal?: DraftJournalDeps;
+  // Told whenever what the save line says may have changed: hasUnsaved() or noteWaiting() (the iPad order of 14 Nov 2026: the
+  // line says whether everything typed HERE has reached the server). Called WITHOUT the new state: the listener asks. A throwing
+  // listener never reaches the save.
+  onStateChange?(): void;
 }
 
 // What the note needs from the page around it.
@@ -103,7 +111,8 @@ export const SAVE_DELAY_MS = 800;
 export const ORDERS_RETRY_MS = 30_000;
 
 export const EMPTY_DRAFT: DraftView = Object.freeze({
-  entries: Object.freeze({}), days: Object.freeze({}), skipped: Object.freeze({}), updatedAt: '', exists: false,
+  entries: Object.freeze({}), days: Object.freeze({}), skipped: Object.freeze({}),
+  awaitingSent: Object.freeze({}), updatedAt: '', exists: false,
 });
 
 export interface DraftSync {
@@ -124,6 +133,9 @@ export interface DraftSync {
   view(): DraftView;
   // True while a change is waiting for the debounce, a save is in the air, or a refused change waits to be sent again.
   hasUnsaved(): boolean;
+  // True while what the last page left in this device's note (`restored`) still holds lines or days: typed here, not yet
+  // back with the server's word. ⚠️ «Saved» would be a lie meanwhile (the iPad, 14 Nov 2026).
+  noteWaiting(): boolean;
   // True while a write is in the air (sent, no answer yet).
   saving(): boolean;
   // Sends a change still waiting for its pause NOW, and reports it as an autosave does (the page went out of sight: F-15).
@@ -236,6 +248,13 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
   // A change is waiting for the pause to end.
   let waiting = false;
 
+  // Tells the screen that the save line may have changed. ⚠️ Never lets a listener's mistake reach the save: this runs inside
+  // a write's own answer.
+  function announce() {
+    try { deps.onStateChange?.(); } catch (err) { console.error('The save state could not be shown:', err); }
+  }
+  const noteHolds = () => restored !== null && (!isEmpty(restored.entries) || !isEmpty(restored.days));
+
   // ── What survives this page (F-15, the current app's js/orders/draft.js) ─────────────────────────────────────────────
   //
   // ⚠️ `pending` DIES WITH THE PAGE. Measured on the lab tablet in the current app: on a freshly opened page a write reaches
@@ -329,6 +348,7 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
     if (!note) return;
     journalAt = note.at;
     restored = note;
+    announce();
   }
 
   // A write the server refused is refused again on the next open, and every save would then carry it: a note that outlived
@@ -442,6 +462,7 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
     if (expired || isEmpty(stillOurs(restored, known).entries)) {
       restored = null;
       saveJournal();
+      announce();
       return false;
     }
     let ordered: Set<string>;
@@ -485,6 +506,8 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
       for (const [id, day] of Object.entries(days)) if (!(id in pending.days)) pending.days[id] = day;
     }
     saveJournal();
+    // After the claims are back, so the line never reads «saved» between the note emptying and the lines being claimed.
+    announce();
     return anyLine;
   }
 
@@ -808,6 +831,8 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
       entries,
       days: { ...daysOf(doc?.days), ...pending.days },
       skipped: daysOf(doc?.skipped),
+      awaitingSent: doc?.awaitingSent && typeof doc.awaitingSent === 'object' && !Array.isArray(doc.awaitingSent)
+        ? { ...(doc.awaitingSent as Record<string, unknown>) } : {},
       updatedAt: typeof doc?.updatedAt === 'string' ? doc.updatedAt : '',
       exists: doc !== null && doc !== undefined,
     };
@@ -830,7 +855,10 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
     }
     for (const [id, day] of Object.entries(pending.days)) if (dayCarried(id) !== day) sent.days[id] = day;
     // Nothing this phone changed, so nothing to say. Staying quiet also stops a snapshot bouncing straight back as a write.
-    if (isEmpty(sent.entries) && isEmpty(sent.days)) return Promise.resolve();
+    if (isEmpty(sent.entries) && isEmpty(sent.days)) {
+      announce();
+      return Promise.resolve();
+    }
 
     const payload: { updatedAt: string; entries?: MutableEntries; days?: MutableDays } = { updatedAt: deps.nowIso() };
     if (!isEmpty(sent.entries)) payload.entries = sent.entries as MutableEntries;
@@ -864,6 +892,7 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
       flightBases.delete(sent);
       flightAlternatives.delete(sent);
     };
+    announce();
     const answer = deps.save(payload);
     const settled = answer.then(() => undefined, () => undefined);
     answers.add(settled);
@@ -901,6 +930,7 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
       }
       claimedSinceNow();
       if (journalLive) saveJournal(); else releaseStored(sent);
+      announce();
     }, (err: unknown) => {
       land();
       // ⚠️ A REFUSED WRITE HANDS ITS TYPING BACK (parity L37: «the typing is kept»). A change made while it was in the air
@@ -937,6 +967,7 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
         releaseStored(sent);
         noteRefused(sent, sentBase, sentAlternatives, sentAt);
       }
+      announce();
       throw err;
     });
   }
@@ -959,6 +990,7 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
       timer = null;
       if (waiting) autosave();
     }, SAVE_DELAY_MS);
+    announce();
   }
 
   // Also after a refusal with nothing typed since: leaving the section tries the refused typing once more.
@@ -1013,6 +1045,7 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
         if (refusedLeft) checkRefused();
       }
       claimedSinceNow();
+      announce();
       // …but anything typed here and not yet written goes back ON TOP, or the snapshot would erase it mid-keystroke.
       return view();
     },
@@ -1054,6 +1087,7 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
       serverAnswered = false;
       // Forgotten here, not in storage: the note stays for the next opening, which reads it afresh.
       restored = null;
+      announce();
       journalOpen = false;
       settleStarted = false;
       journalAt = 0;
@@ -1078,6 +1112,8 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
     // ⚠️ A REFUSED CHANGE IS STILL UNSAVED: it lives only here (Firestore took its copy back), so a self-started reload
     // must not throw it away (rule 2 of every screen).
     hasUnsaved: () => waiting || flights.length > 0 || !isEmpty(pending.entries) || !isEmpty(pending.days),
+
+    noteWaiting: noteHolds,
 
     saving: () => flights.length > 0,
 
@@ -1137,6 +1173,7 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
       if (lastDoc) lastDoc = { ...lastDoc, entries: shown, days: shownDays };
       claimedSinceNow();
       saveJournal();
+      announce();
       return view();
     },
   };

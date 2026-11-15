@@ -29,7 +29,8 @@
   gap: var(--s2);
 }
 
-.barActions .add {
+.barActions .add,
+.barActions .send {
   flex: none;
   width: var(--hit);
   padding: 0;
