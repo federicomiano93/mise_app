@@ -48,6 +48,9 @@ export type StoredDoc = { readonly id: string } & Record<string, unknown>;
 // be empty, or old, because this phone never synced the collection.
 export interface OrdersMeta {
   readonly fromServer: boolean;
+  // A document watch only: this device still holds writes to it that the server has not confirmed (`hasPendingWrites`) — Firestore's
+  // own queue, which outlives the page that started them. The draft's «Saved ✓» waits for it (draftSync.ts SaveState).
+  readonly pendingWrites?: boolean;
 }
 
 export interface OrdersSource {
@@ -231,7 +234,7 @@ export function createFirestoreOrdersSource(firestore: () => Promise<FirestoreKi
         { includeMetadataChanges: true },
         snap => onChange(
           snap.exists() ? { ...(snap.data() as Record<string, unknown>) } : null,
-          { fromServer: !snap.metadata.fromCache },
+          { fromServer: !snap.metadata.fromCache, pendingWrites: snap.metadata.hasPendingWrites },
         ),
         err => {
           console.error(`watch(${label}) failed:`, err);

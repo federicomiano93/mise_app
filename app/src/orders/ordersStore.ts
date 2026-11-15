@@ -55,7 +55,7 @@ import { confirmedEntries } from '@mise/shared/untold-changes';
 import { markBusy as markBusyOfSession } from '../session/busy';
 import { createDraftSync, EMPTY_DRAFT } from './draftSync';
 import { watchPageHidden } from './pageHidden';
-import type { DraftDays, DraftEntries, DraftEntry, DraftSync, DraftSyncDeps, DraftView } from './draftSync';
+import type { DraftDays, DraftEntries, DraftEntry, DraftSync, DraftSyncDeps, DraftView, SaveState } from './draftSync';
 import { buildOrdersLens } from './ordersLens';
 import { correctedRecord, sameOrder } from './historyEdit';
 import type { RecordEdits } from './historyEdit';
@@ -110,6 +110,8 @@ export interface OrdersSnapshot {
   readonly draftBroken: boolean;
   // The last autosave was refused and no later one has landed (parity L37).
   readonly draftSaveFailed: boolean;
+  // Whether everything typed on THIS device has reached the server: the «Saved ✓» / «Not sent yet» line (draftSync.ts SaveState).
+  readonly draftSaveState: SaveState;
   // How many times quantities left by the last page came back from this device's note (F-15): the section then looks again
   // for orders typed on an earlier day and never placed (the current app's `cameBack`).
   readonly draftCameBack: number;
@@ -291,6 +293,10 @@ export interface OrdersStore {
   // Changes one line of the order, LOCAL-FIRST. `supplier` is the supplier whose screen the row is on (the pseudo
   // «No supplier» included); `ingredient` is the row's line as the lens filed it.
   editLine(supplier: StoredDoc, ingredient: LensIngredient, edit: LineEdit): void;
+  // ⚠️ SENT AT ONCE, NOT AFTER THE PAUSE (the current app's PR #551, the order typed on the iPad, 14 Nov 2026): leaving a quantity or
+  // stock box, closing a supplier's screen or switching the list sends a change still waiting for its 800 ms. At most one write per
+  // box left, never one per keystroke — the pause stays for typing. Nothing waiting, nothing sent.
+  sendWaiting(): void;
   // The day line (parity D7): the supplier's lines are for `day` ('YYYY-MM-DD'). Written at once, LOCAL-FIRST; a refusal
   // puts the stored day back and says 'day-not-saved'. Resolves once the server answered: true = saved (or nothing to change),
   // false = refused. ⚠️ Offline it waits for the connection, so no screen may wait on it before showing the change (step 3f-6:
@@ -405,7 +411,7 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
     suppliers: [], suppliersLoaded: false, suppliersBroken: false,
     ingredients: [], ingredientsLoaded: false, ingredientsBroken: false,
     config: normalizeOrdersConfig(null), configLoaded: false, configAnswered: false, deliveryCheck: deliveryCheckOf(null),
-    draft: EMPTY_DRAFT, draftLoaded: false, draftBroken: false, draftSaveFailed: false, draftCameBack: 0, refusedEarlier: false,
+    draft: EMPTY_DRAFT, draftLoaded: false, draftBroken: false, draftSaveFailed: false, draftSaveState: { ready: false, saved: true }, draftCameBack: 0, refusedEarlier: false,
     serverSeen: { suppliers: false, ingredients: false, draft: false, history: false },
     placing: [],
     history: [], historyLoaded: false, historyBroken: false, suggester: NO_SUGGESTIONS,
@@ -483,6 +489,8 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
       }
       dropBusyWhenSaved();
     },
+    // Told only when it changed (draftSync announce): one repaint of the line per change, never one per keystroke.
+    onSaveState: state => { set({ draftSaveState: state }); },
     journal: deps.journal && venue ? {
       venue,
       storage: deps.journal.storage,
@@ -804,7 +812,7 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
         // no copy of it. The lines are drawn only once the server has answered or the copy holds the document.
         source.watchDraft(
           (data, meta) => set({
-            draft: sync.receive(data, meta.fromServer),
+            draft: sync.receive(data, meta.fromServer, meta.pendingWrites === true),
             draftLoaded: snapshot.draftLoaded || data !== null || meta.fromServer,
             draftBroken: false,
             serverSeen: meta.fromServer && !snapshot.serverSeen.draft ? { ...snapshot.serverSeen, draft: true } : snapshot.serverSeen,
@@ -911,6 +919,10 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
       holdBusy();
       sync.change(entries, days);
       if (!stockOnly) reopenIfTyped(supplier.id);
+    },
+
+    sendWaiting() {
+      sync.sendWaiting();
     },
 
     closeNotOrdered(supplierId) {

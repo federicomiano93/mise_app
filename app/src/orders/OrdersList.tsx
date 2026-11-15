@@ -51,6 +51,8 @@ type Props = {
   onClearAll: () => void;
   // The swap button in the head: the flat view, «by ingredient» (step 3f-8b).
   swapOpen: boolean;
+  // A supplier's screen is open beside the list: the head's «Saved ✓» line leaves the speaking to it.
+  saveQuiet?: boolean;
   onSwap: () => void;
   // The arrow beside the search box: the send screen.
   onSend: () => void;
@@ -74,7 +76,7 @@ const HEADING_KEY = {
 // The left column: the head (OrdersHead: the search box, the send arrow, the tools and the All / Ordering filter, which stay put
 // while the rows scroll), over the suppliers. The search box's text lives HERE, in a component that stays mounted, so a data
 // snapshot never remounts the box (see OrdersHead).
-export function OrdersList({ lens, earlyLens, ready, openId, heldId, onLookingElsewhere, onOpenSupplier, onOpenItems, onOpenSummary, onOpenClosed, onPlaceAll, onClearAll, swapOpen, onSwap, onSend, onSettings, onHistory, onIncoming, onReorder, onLists, onOpenPending }: Props) {
+export function OrdersList({ lens, earlyLens, ready, openId, heldId, onLookingElsewhere, onOpenSupplier, onOpenItems, onOpenSummary, onOpenClosed, onPlaceAll, onClearAll, swapOpen, saveQuiet = false, onSwap, onSend, onSettings, onHistory, onIncoming, onReorder, onLists, onOpenPending }: Props) {
   const { t } = useT();
   const { config, draft, suppliers, suppliersLoaded, history, historyBroken, draftBroken, serverSeen, suppliersBroken, ingredientsBroken } = useOrders();
   const [query, setQuery] = useState('');
@@ -132,6 +134,7 @@ export function OrdersList({ lens, earlyLens, ready, openId, heldId, onLookingEl
         ready={ready}
         hasSuppliers={lens.suppliers.length > 0}
         swapOpen={swapOpen}
+        saveQuiet={saveQuiet}
         onSwap={onSwap}
         onSend={onSend}
         onSettings={onSettings}

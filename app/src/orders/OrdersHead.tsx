@@ -3,6 +3,7 @@ import type { ReactNode, Ref } from 'react';
 import { ArrowLeftRight, History, Search, Settings, Share } from 'lucide-react';
 import { useT } from '../i18n/useT';
 import { Button } from '../ui/Button';
+import { SaveStateLine } from './SaveStateLine';
 import { HISTORY_DOOR, SEARCH_BOX, SEND_OPENER, SETTINGS_OPENER, SWAP_OPENER, useHandBack } from './handBack';
 import styles from './OrdersHead.module.css';
 
@@ -29,6 +30,8 @@ type Props = {
   headRef?: Ref<HTMLDivElement>;
   // Under the search row: the All / Ordering filter.
   children?: ReactNode;
+  // A supplier's screen is open beside the list: its own «Saved ✓» line speaks, this one stays empty (SaveStateLine `quiet`).
+  saveQuiet?: boolean;
 };
 
 // The head of «Orders», over the supplier list AND over the flat view: a row of words (Send, the swap, History) that scrolls away, and
@@ -38,7 +41,7 @@ type Props = {
 // ⚠️ THE SEARCH BOX IS NEVER REMOUNTED BY A DATA SNAPSHOT: it is a controlled input in a component that stays mounted, and
 // only the rows below it are redrawn, so a snapshot landing mid-keystroke finds the text and the keyboard where the person
 // left them (the current app built the box once for the same reason). Its text lives in the view that owns the rows.
-export function OrdersHead({ view, label, query, onQuery, onLookingElsewhere, ready, hasSuppliers, swapOpen, onSwap, onSend, onSettings, onHistory, headRef, children }: Props) {
+export function OrdersHead({ view, label, query, onQuery, onLookingElsewhere, ready, hasSuppliers, swapOpen, onSwap, onSend, onSettings, onHistory, headRef, children, saveQuiet = false }: Props) {
   const { t } = useT();
   const handBack = useHandBack();
   // Back from a screen hands the focus back to the button that opened it; the swap button gets it after the view changed.
@@ -110,6 +113,8 @@ export function OrdersHead({ view, label, query, onQuery, onLookingElsewhere, re
           </Button>
         </div>
         {children}
+        {/* «Saved ✓» / «Not sent yet» in the sticky part, so it stays in sight while typing (the current app's PR #551). */}
+        <SaveStateLine quiet={saveQuiet} />
       </div>
     </>
   );

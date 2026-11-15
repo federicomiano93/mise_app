@@ -2428,6 +2428,9 @@ export const it: Messages = {
   'ord.nSuppliers': { one: '{n} fornitore', other: '{n} fornitori' },
   'ord.discard.title': 'Vuoi scartare le modifiche?',
   'ord.discard.text': 'Hai modifiche non salvate. Vuoi scartarle?',
+  // The «Saved ✓» line of Orders (the current app's PR #551; orders.saveState.*).
+  'ord.saveState.saved': 'Salvato ✓',
+  'ord.saveState.unsent': 'Non ancora inviato',
   'ord.send.action': 'Manda',
   'ord.send.title': 'Manda l’ordine',
   'ord.send.empty': 'Ancora nessuna voce in questo ordine. Aggiungi prima le quantità.',

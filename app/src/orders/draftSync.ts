@@ -68,6 +68,17 @@ export interface DraftSyncDeps {
   onResult(ok: boolean): void;
   // The note that outlives the page (F-15, @mise/shared/draft-journal). Absent: nothing is noted (a spec of the sync alone).
   journal?: DraftJournalDeps;
+  // Whether everything typed on THIS device has reached the server, told at every change of it (saveState). Absent: nobody is told.
+  onSaveState?(state: SaveState): void;
+}
+
+// What the «Saved ✓» / «Not sent yet» line on Orders says (the current app's PR #551, the order typed on the iPad, 14 Nov 2026):
+//   ready — the first snapshot of the draft has arrived (before it the line shows nothing, but keeps its room);
+//   saved — nothing typed here waits for the pause, is in the air, was refused, waits to come back from the last page's note, or
+//           is still queued in Firestore on this device (`hasPendingWrites`).
+export interface SaveState {
+  readonly ready: boolean;
+  readonly saved: boolean;
 }
 
 // What the note needs from the page around it.
@@ -111,7 +122,9 @@ export interface DraftSync {
   // server has not confirmed goes back ON TOP. Returns what the screens draw.
   // `fromServer`: the SERVER sent it (not the phone's own copy). The first such snapshot is what a note left by the last page
   // waits for (F-15).
-  receive(doc: Readonly<Record<string, unknown>> | null, fromServer?: boolean): DraftView;
+  // `pendingWrites`: Firestore says this device still holds writes to the draft the server has not confirmed (the snapshot's
+  // `hasPendingWrites`) — a write a PREVIOUS page started can still be queued, and `flights` cannot see it.
+  receive(doc: Readonly<Record<string, unknown>> | null, fromServer?: boolean, pendingWrites?: boolean): DraftView;
   // The whole local state after an edit: the changed rows are claimed as this phone's and the autosave is (re)armed.
   change(entries: DraftEntries, days: DraftDays): void;
   // Sends a waiting (or refused) change RIGHT NOW (leaving the section, or before a record is written). Resolves at once
@@ -126,6 +139,8 @@ export interface DraftSync {
   hasUnsaved(): boolean;
   // True while a write is in the air (sent, no answer yet).
   saving(): boolean;
+  // Whether everything typed on this device has reached the server (SaveState); also told through deps.onSaveState.
+  saveState(): SaveState;
   // Sends a change still waiting for its pause NOW, and reports it as an autosave does (the page went out of sight: F-15).
   // Nothing waiting, nothing sent.
   sendWaiting(): void;
@@ -235,6 +250,10 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
   let timer: unknown = null;
   // A change is waiting for the pause to end.
   let waiting = false;
+  // «Saved ✓» (SaveState): the first snapshot has come; Firestore still queues a draft write on this device; the last thing told.
+  let draftSeen = false;
+  let queuedOnDevice = false;
+  let lastSaveState = '';
 
   // ── What survives this page (F-15, the current app's js/orders/draft.js) ─────────────────────────────────────────────
   //
@@ -304,6 +323,28 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
     timer = null;
   }
 
+  const unsaved = () => waiting || flights.length > 0 || !isEmpty(pending.entries) || !isEmpty(pending.days);
+
+  // ⚠️ «SAVED» ONLY WHEN NOTHING TYPED HERE CAN STILL BE LOST (the current app's draft.js currentSaveState, PR #551). A snapshot can
+  // never make it «saved» while a write is in the air: it may be Firestore showing this phone's own write before the server answers.
+  // ⚠️ NOR WHILE THE LAST PAGE'S NOTE STILL WAITS TO COME BACK (`restored`): a page the phone froze and threw away leaves its last
+  // quantity only in this device's note, sent once the server has answered — «Saved» meanwhile would be the very lie of 14 Nov, on
+  // the very device that typed it. NOR WHILE FIRESTORE STILL QUEUES A DRAFT WRITE HERE (`queuedOnDevice`): a write the last page
+  // started can wait in the browser's database, and the note drops a line as soon as a snapshot shows it.
+  const noteWaiting = () => restored !== null && (!isEmpty(restored.entries) || !isEmpty(restored.days));
+  function saveState(): SaveState {
+    return { ready: draftSeen, saved: !unsaved() && !noteWaiting() && !queuedOnDevice };
+  }
+  // Tells deps.onSaveState when the state changed. ⚠️ A watcher's mistake must never reach the save: this runs inside the write's own
+  // answer.
+  function announce() {
+    const state = saveState();
+    const key = `${String(state.ready)}/${String(state.saved)}`;
+    if (key === lastSaveState) return;
+    lastSaveState = key;
+    try { deps.onSaveState?.(state); } catch (err) { console.error('The save state could not be shown:', err); }
+  }
+
   const inAir = (id: string, field: Field) => flights.some(flight => flight.entries[id] !== undefined && field in flight.entries[id]);
   const dayInAir = (id: string) => flights.some(flight => id in flight.days);
   // What the LATEST write in the air says for a field (or a supplier's day): undefined when none carries it.
@@ -329,6 +370,7 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
     if (!note) return;
     journalAt = note.at;
     restored = note;
+    announce();
   }
 
   // A write the server refused is refused again on the next open, and every save would then carry it: a note that outlived
@@ -494,6 +536,7 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
     if (!journal) return;
     const asked = epoch;
     void settleRestored().then(cameBack => {
+      announce();
       if (asked !== epoch) return;
       if (cameBack === null) {
         journal.retryLater(() => { if (asked === epoch) checkNote(); }, ORDERS_RETRY_MS);
@@ -699,6 +742,7 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
     // ⚠️ SAID IN THE SAME STEP AS IT IS HANDED BACK (code review): a newer reading in between must not leave it on screen
     // without «not saved» and without the busy marker that keeps a reload from throwing it away.
     if (anything) journal.onRefusedBack?.(view());
+    announce();
     return anything;
   }
 
@@ -830,7 +874,10 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
     }
     for (const [id, day] of Object.entries(pending.days)) if (dayCarried(id) !== day) sent.days[id] = day;
     // Nothing this phone changed, so nothing to say. Staying quiet also stops a snapshot bouncing straight back as a write.
-    if (isEmpty(sent.entries) && isEmpty(sent.days)) return Promise.resolve();
+    if (isEmpty(sent.entries) && isEmpty(sent.days)) {
+      announce();
+      return Promise.resolve();
+    }
 
     const payload: { updatedAt: string; entries?: MutableEntries; days?: MutableDays } = { updatedAt: deps.nowIso() };
     if (!isEmpty(sent.entries)) payload.entries = sent.entries as MutableEntries;
@@ -901,6 +948,7 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
       }
       claimedSinceNow();
       if (journalLive) saveJournal(); else releaseStored(sent);
+      announce();
     }, (err: unknown) => {
       land();
       // ⚠️ A REFUSED WRITE HANDS ITS TYPING BACK (parity L37: «the typing is kept»). A change made while it was in the air
@@ -937,6 +985,7 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
         releaseStored(sent);
         noteRefused(sent, sentBase, sentAlternatives, sentAt);
       }
+      announce();
       throw err;
     });
   }
@@ -974,8 +1023,10 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
   }
 
   return {
-    receive(doc, fromServer = false) {
+    receive(doc, fromServer = false, pendingWrites = false) {
       lastDoc = doc;
+      draftSeen = true;
+      queuedOnDevice = pendingWrites;
       // The server's word becomes the baseline, so a row somebody else changed is not «changed here» and never gets
       // re-asserted at this phone's stale value…
       known = { entries: detach(doc?.entries), days: daysOf(doc?.days) };
@@ -1013,6 +1064,7 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
         if (refusedLeft) checkRefused();
       }
       claimedSinceNow();
+      announce();
       // …but anything typed here and not yet written goes back ON TOP, or the snapshot would erase it mid-keystroke.
       return view();
     },
@@ -1037,6 +1089,7 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
       // …and note it before anything else can happen.
       saveJournal(true);
       arm();
+      announce();
     },
 
     sendWaiting() {
@@ -1057,6 +1110,7 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
       journalOpen = false;
       settleStarted = false;
       journalAt = 0;
+      announce();
     },
 
     startJournal() {
@@ -1077,9 +1131,11 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
 
     // ⚠️ A REFUSED CHANGE IS STILL UNSAVED: it lives only here (Firestore took its copy back), so a self-started reload
     // must not throw it away (rule 2 of every screen).
-    hasUnsaved: () => waiting || flights.length > 0 || !isEmpty(pending.entries) || !isEmpty(pending.days),
+    hasUnsaved: unsaved,
 
     saving: () => flights.length > 0,
+
+    saveState,
 
     // ⚠️ ALL THREE COPIES, OR THE LINES COME BACK (draft.js forgetKnown):
     //   • `pending`: re-applied over every snapshot, so a quantity left there after its order was recorded would reappear on
@@ -1137,6 +1193,7 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
       if (lastDoc) lastDoc = { ...lastDoc, entries: shown, days: shownDays };
       claimedSinceNow();
       saveJournal();
+      announce();
       return view();
     },
   };

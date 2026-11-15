@@ -15,6 +15,7 @@ import { tabOfLine, useCardDoors } from './CardDoors';
 import { DayLine } from './DayLine';
 import { OrderLine } from './OrderLine';
 import { OrderTotals } from './OrderTotals';
+import { SaveStateLine } from './SaveStateLine';
 import { useOrders, useOrdersStore } from './OrdersContext';
 import { ADD_DOOR, ITEMS_DOOR, PLACE_DOOR, SUMMARY_DOOR, SUPPLIER_DOOR, SUPPLIER_TITLE, supplierOpener, useHandBack } from './handBack';
 import { ORDERS_PATH, supplierConfirmPath, supplierItemsPath, supplierSummaryPath } from './ordersPath';
@@ -126,6 +127,10 @@ export function SupplierOrderScreen({ id, lens }: { id: string; lens: OrdersLens
   // The column names stick right under the bar, whose height changes with the title's lines and the width.
   const barHeight = useHeight();
 
+  // ⚠️ CLOSING THIS SCREEN SENDS WHAT WAITS AT ONCE, not after the pause (the current app's PR #551): a quantity typed a moment ago
+  // goes now. Leaving a box does the same (OrderLine); this covers a Back pressed with the focus still in one.
+  useEffect(() => () => { store.sendWaiting(); }, [store]);
+
   if (supplier === undefined) {
     return (
       <section className={styles.screen} aria-label={t('section.orders')}>
@@ -228,6 +233,8 @@ export function SupplierOrderScreen({ id, lens }: { id: string; lens: OrdersLens
             </div>
           )}
         />
+        {/* «Saved ✓» / «Not sent yet» under the bar, stuck with it (the current app's PR #551). */}
+        <SaveStateLine className={styles.saveLine} />
       </div>
       <DayLine supplier={supplier} lens={lens} />
       {empty ? null : (

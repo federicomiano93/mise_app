@@ -2646,6 +2646,9 @@ export const en = {
   'ord.nSuppliers': { one: '{n} supplier', other: '{n} suppliers' },
   'ord.discard.title': 'Discard changes?',
   'ord.discard.text': 'You have unsaved changes. Discard them?',
+  // The «Saved ✓» line of Orders (the current app's PR #551; orders.saveState.*).
+  'ord.saveState.saved': 'Saved ✓',
+  'ord.saveState.unsent': 'Not sent yet',
   'ord.send.action': 'Send',
   'ord.send.title': 'Send order',
   'ord.send.empty': 'No items in this order yet. Add quantities first.',

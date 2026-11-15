@@ -1,0 +1,19 @@
+/* «Saved ✓» / «Not sent yet» (SaveStateLine.tsx): quiet on purpose — muted text, the «done» green once saved, no box, no icon.
+   ⚠️ A FIXED HEIGHT AND ONE LINE, whatever it says: it sits in a sticky part, and a line that changed height would move the rows. */
+.line {
+  box-sizing: border-box;
+  height: 1.5rem;
+  margin: 0;
+  font-family: var(--mono);
+  font-size: var(--fs-xs);
+  line-height: 1.5rem;
+  text-align: end;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--ink-2);
+}
+
+.line[data-state='saved'] {
+  color: var(--ok-ink);
+}

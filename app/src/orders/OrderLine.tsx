@@ -6,6 +6,7 @@ import { ingredientDisplayName } from '@mise/shared/ingredient-name';
 import { entryUnit, sameUnit, unitChoices } from '@mise/shared/order-unit';
 import { useT } from '../i18n/useT';
 import { NumberBox } from './NumberBox';
+import { useOrdersStore } from './OrdersContext';
 import { cardDoor, useHandBack } from './handBack';
 import type { BoxHandle } from './NumberBox';
 import type { DraftEntry } from './draftSync';
@@ -41,6 +42,10 @@ const text = (value: unknown): string => (typeof value === 'string' ? value : ''
 export function OrderLine({ row, entry, showStock, hint, onEdit, supplierName, onOpenCard, doorIn = 'supplier' }: Props) {
   const { t } = useT();
   const handBack = useHandBack();
+  const store = useOrdersStore();
+  // ⚠️ LEAVING A BOX SENDS WHAT WAITS AT ONCE (the current app's PR #551, the iPad order of 14 Nov 2026): a phone can freeze the page
+  // inside the 800 ms pause. One write per box left at most, none per keystroke.
+  const onLeaveBox = () => { store.sendWaiting(); };
   const id = row.ingredient.id;
   // Back from the card hands the focus back to this button (cardTrip.ts).
   const doorNode = useCallback((node: HTMLButtonElement | null) => { handBack.register(cardDoor(id, doorIn), node); }, [handBack, id, doorIn]);
@@ -126,6 +131,7 @@ export function OrderLine({ row, entry, showStock, hint, onEdit, supplierName, o
           ariaLabel={t('ord.qtyToOrderFor', { name: label })}
           describedBy={hintText !== '' ? hintId : undefined}
           onChange={n => { onEdit(row, { qty: n }); }}
+          onLeave={onLeaveBox}
         />
         <div className={styles.steps}>
           <button
@@ -155,6 +161,7 @@ export function OrderLine({ row, entry, showStock, hint, onEdit, supplierName, o
             className={styles.box}
             ariaLabel={t('ord.stockOnHandFor', { name: label })}
             onChange={n => { onEdit(row, { stock: n }); }}
+            onLeave={onLeaveBox}
           />
         </div>
       ) : null}

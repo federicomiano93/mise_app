@@ -494,7 +494,7 @@ function OrdersLayout({ view }: { view: ShownView }) {
           <div className={styles.list}>
             <PartBoundary>
               {flatColumn ? (
-                <IngredientsList lens={lens} ready={ready} swapOpen={atList} onSwap={swap} onSend={openSend} onSettings={openSettings} onHistory={openHistory} onOpenSupplier={openOrHold} onOpenPending={openPending} initial={trip.current === null ? undefined : { query: trip.current.query, only: trip.current.only }} />
+                <IngredientsList lens={lens} ready={ready} swapOpen={atList} saveQuiet={view.kind === 'supplier'} onSwap={swap} onSend={openSend} onSettings={openSettings} onHistory={openHistory} onOpenSupplier={openOrHold} onOpenPending={openPending} initial={trip.current === null ? undefined : { query: trip.current.query, only: trip.current.only }} />
               ) : (
               <OrdersList
                 lens={lens}
@@ -510,6 +510,7 @@ function OrdersLayout({ view }: { view: ShownView }) {
                 onPlaceAll={openPlaceAll}
                 onClearAll={openClear}
                 swapOpen={atList}
+                saveQuiet={view.kind === 'supplier'}
                 onSwap={swap}
                 onSend={openSend}
                 onSettings={openSettings}
