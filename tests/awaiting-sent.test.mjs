@@ -10,7 +10,7 @@ import { readFileSync } from 'node:fs';
 import { draft, stub } from './helpers/load-draft.mjs';
 import {
   awaitingEntry, draftQuantities, isAwaiting, awaitingList, claimDecision, linesToClear,
-  supplierKeepsLines, answerAwaiting, shouldAskBeforeRecording,
+  supplierKeepsLines, answerAwaiting, shouldAskBeforeRecording, restoreDecision,
 } from '../js/orders/awaiting-sent.js';
 
 const read = p => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8').replace(/\r\n/g, '\n');
@@ -305,6 +305,37 @@ test('⚠️ «Invialo ora» with numbers corrected on the review screen: «Sì�
   const check = main.slice(main.indexOf('async function askSentCheck'), main.indexOf('// The line that says which suppliers'));
   assert.match(check, /draft: draftQuantities\(bySupplier\[id\] \|\| \[\], state\.entries\)/);
   assert.match(main, /sentDraft: e\.draft \|\| null/);
+});
+
+// ── a failed recording must not overwrite a NEWER send (review, 15 Nov 2026) ───────────
+
+test('⚠️ the question is put back only when no question stands for that supplier now', async () => {
+  const OLD = structuredClone(SENT);
+  const NEWER = { ...SENT, at: '2026-11-14T11:30:00.000Z', quantities: { flour: 7 }, units: {} };
+  // Another device sent the same supplier again while this one was recording: its question stays.
+  stub.server.draft = { awaitingSent: { S1: structuredClone(NEWER) } };
+  assert.equal(await draft.restoreAwaitingSentIfAbsent('S1', OLD, restoreDecision), false);
+  assert.deepEqual(stub.server.draft.awaitingSent.S1, NEWER, 'the newer send is not overwritten');
+  // Nothing stands any more (the claim removed the key): the question comes back, whole.
+  stub.server.draft = { entries: { flour: { qty: 1 } }, awaitingSent: { S2: { at: AT } } };
+  assert.equal(await draft.restoreAwaitingSentIfAbsent('S1', OLD, restoreDecision), true);
+  assert.deepEqual(stub.server.draft.awaitingSent.S1, OLD);
+  assert.deepEqual(stub.server.draft.awaitingSent.S2, { at: AT }, 'another supplier\'s question is untouched');
+  const write = stub.calls.saveFieldsIf.at(-1);
+  assert.deepEqual([write.name, write.id, write.fieldPaths], ['drafts', 'current', ['awaitingSent.S1']]);
+  assert.equal(restoreDecision(null, 'S1'), true, 'no draft at all: put it back');
+  assert.equal(restoreDecision({ awaitingSent: { S1: OLD } }, 'S1'), false);
+});
+
+test('the restore is a transaction stamped with the bakery, and the screen does not await it', () => {
+  const fs = read('js/orders/firebase-orders.js');
+  const fn = fs.slice(fs.indexOf('export async function saveFieldsIf'), fs.indexOf('// Create a document'));
+  assert.match(fn, /runTransaction\(db/);
+  assert.match(fn, /tx\.get\(ref\)/);
+  assert.match(fn, /tx\.set\(ref, withBakery\(data\), \{ mergeFields: \['bakery', \.\.\.fieldPaths\] \}\)/);
+  const answer = main.slice(main.indexOf('async function answerAwaitingSent'), main.indexOf('// ── Sending the list to whoever'));
+  assert.match(answer, /restore: \(id, e\) => \{ restoreAwaitingSentIfAbsent\(id, e, restoreDecision\)\.catch\(err => console\.error/);
+  assert.doesNotMatch(answer, /setAwaitingSent\(/, 'no blind overwrite any more');
 });
 
 // ── «Sì» when the lines are already gone (review, 15 Nov 2026) ─────────────────────

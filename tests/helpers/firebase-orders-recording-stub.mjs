@@ -8,7 +8,7 @@
 // resolve/reject, as the server's answer would arrive. `answerFromServer(doc)` plays the server's
 // first word on the document to whoever is waiting for it (tests/draft-journal.test.mjs).
 
-export const calls = { saveDoc: [], clearFields: [], patchDoc: [], transactDoc: [], saveFields: [], clearFieldsIf: [] };
+export const calls = { saveDoc: [], clearFields: [], patchDoc: [], transactDoc: [], saveFields: [], clearFieldsIf: [], saveFieldsIf: [] };
 export const COLLECTIONS = { drafts: 'drafts', history: 'orders-history' };
 export const held = [];
 
@@ -81,6 +81,20 @@ export async function removeDoc() {}
 export const server = { draft: null };
 export async function saveFields(name, id, data, fieldPaths) {
   calls.saveFields.push({ name, id, data, fieldPaths: [...fieldPaths] });
+}
+// The mirror: write the named paths only when `decide(data)` allows, against the same server copy.
+export async function saveFieldsIf(name, id, data, fieldPaths, decide) {
+  calls.saveFieldsIf.push({ name, id, data, fieldPaths: [...fieldPaths] });
+  if (!decide(server.draft)) return false;
+  server.draft = server.draft || {};
+  fieldPaths.forEach(path => {
+    const parts = path.split('.');
+    let from = data;
+    let at = server.draft;
+    for (const part of parts.slice(0, -1)) { from = from?.[part]; at = at[part] = at[part] || {}; }
+    at[parts[parts.length - 1]] = structuredClone(from?.[parts[parts.length - 1]]);
+  });
+  return true;
 }
 export async function clearFieldsIf(name, id, paths, decide) {
   calls.clearFieldsIf.push({ name, id, paths: [...paths] });

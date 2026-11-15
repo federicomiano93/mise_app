@@ -42,11 +42,11 @@ import {
   clearQuantities, saveHistoryRecord, deleteHistoryRecord, setDraftSaveReporter,
   confirmDelivery, resolveMissing, dropDeletedIngredientFromDraft, freezeUnitInDraft,
   setSupplierSkipped, clearSupplierSkipped, sendWaitingDraft, onDraftSaveState,
-  setAwaitingSent, clearAwaitingSent, claimAwaitingSent, clearSentLines,
+  setAwaitingSent, clearAwaitingSent, claimAwaitingSent, clearSentLines, restoreAwaitingSentIfAbsent,
 } from './draft.js';
 import {
   awaitingEntry, awaitingList, isAwaiting, claimDecision, linesToClear, supplierKeepsLines, answerAwaiting,
-  draftQuantities, shouldAskBeforeRecording,
+  draftQuantities, shouldAskBeforeRecording, restoreDecision,
 } from './awaiting-sent.js';
 import { saveStateView, paintSaveState } from './save-state-view.js';
 import { buildSendScreen } from './preview.js';
@@ -2091,7 +2091,9 @@ async function answerAwaitingSent(supplierId, answer, at) {
       date: e.date || undefined, quantities: e.quantities, units: e.units, sentDraft: e.draft || null,
     }),
     // Not awaited: a write Firestore queues offline must not hold the answer open.
-    restore: (id, e) => { setAwaitingSent(id, e).catch(err => console.error('Putting the question back failed:', err)); },
+    // ⚠️ Only if no question stands for this supplier now: a newer send by another device meanwhile
+    // keeps its own question (restoreAwaitingSentIfAbsent, in a transaction).
+    restore: (id, e) => { restoreAwaitingSentIfAbsent(id, e, restoreDecision).catch(err => console.error('Putting the question back failed:', err)); },
     drop: id => { clearAwaitingSent(id).catch(err => console.error('Removing the question failed:', err)); },
   }, { local: Boolean(local) });
   // The banner's two buttons go quiet while this answer is under way (the busy guard is set).

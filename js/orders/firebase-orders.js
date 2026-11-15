@@ -345,6 +345,22 @@ export async function clearFieldsIf(name, id, paths, decide) {
   });
 }
 
+// The mirror of clearFieldsIf: read a document and, in the same transaction, write the named
+// field paths (each replaced WHOLE, like saveFields) — only when `decide(data)` (the stored
+// fields, or null for a missing document) says so. Resolves true when written, false when
+// `decide` refused. Stamped with the bakery like every other write, so the rules' stampedFor
+// passes. ⚠️ A transaction needs the network: offline it rejects, it is not queued.
+export async function saveFieldsIf(name, id, data, fieldPaths, decide) {
+  await authReady;
+  const ref = doc(db, pathFor(name), id);
+  return runTransaction(db, async tx => {
+    const snap = await tx.get(ref);
+    if (!decide(snap.exists() ? snap.data() : null)) return false;
+    tx.set(ref, withBakery(data), { mergeFields: ['bakery', ...fieldPaths] });
+    return true;
+  });
+}
+
 // Create a document with an auto-generated id. Returns the new id.
 export async function createDoc(name, data) {
   await authReady;

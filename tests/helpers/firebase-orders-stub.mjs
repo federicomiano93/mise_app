@@ -19,3 +19,4 @@ export async function removeDoc() {}
 // The «did it go?» question (js/orders/awaiting-sent.js) writes through these two.
 export async function saveFields(name, id, data, fieldPaths) { globalThis.__draftWrites.push({ name, id, data, fieldPaths }); }
 export async function clearFieldsIf() { return false; }
+export async function saveFieldsIf() { return false; }

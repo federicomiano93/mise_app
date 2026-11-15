@@ -107,6 +107,13 @@ export function claimDecision(draft, supplierId, at) {
   return Boolean(value) && value.at === at;
 }
 
+// Inside the restore transaction: may the question be put back? Only when no question stands for
+// this supplier any more. A key present now is either this very question (nothing to restore) or
+// a NEWER send by another device, which must not be overwritten by the older one.
+export function restoreDecision(draft, supplierId) {
+  return !draft?.awaitingSent?.[supplierId];
+}
+
 // After «Sì»: the lines to clear from the draft. ⚠️ ONLY WHAT WAS SENT, AND ONLY WHERE THE DRAFT
 // STILL SAYS WHAT WAS SENT. Between the send and the answer somebody can type — a line forgotten
 // in the message, a number corrected — and that typing must survive: it is the next order, not

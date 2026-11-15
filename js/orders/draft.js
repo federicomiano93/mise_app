@@ -16,7 +16,7 @@
 
 import {
   saveDoc, patchDoc, watchDoc, watchPendingWrites, watchServerAnswer, getRecentHistoryFromServer, clearFields, transactDoc,
-  replaceDoc, removeDoc, getDocOnce, currentBakery, COLLECTIONS, saveFields, clearFieldsIf,
+  replaceDoc, removeDoc, getDocOnce, currentBakery, COLLECTIONS, saveFields, clearFieldsIf, saveFieldsIf,
 } from './firebase-orders.js';
 import {
   readJournal, writeJournal, dropNotedLine, orderedSince, historyLookBackDay, DRAFT_JOURNAL_MAX_AGE_MS,
@@ -1000,6 +1000,15 @@ export function clearAwaitingSent(supplierId) {
 export function claimAwaitingSent(supplierId, at, decide) {
   return clearFieldsIf(COLLECTIONS.drafts, DRAFT_ID, [`awaitingSent.${supplierId}`],
     data => decide(data, supplierId, at));
+}
+
+// «Sì» failed to record: put the question back — but ONLY if no question stands for that supplier
+// now. Another device may have sent the same supplier again meanwhile; its newer question must
+// not be overwritten by this older one. `decide` is awaiting-sent.js restoreDecision. Resolves
+// true when the question was put back.
+export function restoreAwaitingSentIfAbsent(supplierId, value, decide) {
+  return saveFieldsIf(COLLECTIONS.drafts, DRAFT_ID, { awaitingSent: { [supplierId]: value } },
+    [`awaitingSent.${supplierId}`], data => decide(data, supplierId));
 }
 
 // After «Sì» was recorded: remove the lines that went (awaiting-sent.js linesToClear chooses
