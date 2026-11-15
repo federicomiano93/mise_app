@@ -24,6 +24,10 @@ export const SETTINGS_OPENER = 'settings-door';
 export const HACCP_OPENER = 'haccp-door';
 // A row of the HACCP list: Back from that recipe's HACCP label returns the focus to its row.
 export const haccpRowOpener = (id: string): string => `haccp:${id}`;
+// The door to the ingredient book, at the foot of the list (after the HACCP list's): Back from the book returns the focus to it.
+export const INGREDIENTS_OPENER = 'ingredients-door';
+// A recipe link of the ingredient book, under one ingredient: Back from that recipe returns the focus to that very link.
+export const ingredientUseOpener = (ingredientId: string, recipeId: string): string => `ingredients:${ingredientId}:${recipeId}`;
 // The «New recipe» button at the top of the list: Back from a new recipe's editor returns the focus to it.
 export const NEW_OPENER = 'new-door';
 

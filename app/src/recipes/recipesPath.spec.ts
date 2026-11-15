@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ALLERGENS_PATH, HACCP_PATH, NEW_PATH, PHOTO_PATH, RECIPES_PATH, SETTINGS_PATH, editPath, haccpPath, labelPath, mixPath, parseRecipesPath, recipePath, resolveRecipesPath, stepsPath } from './recipesPath';
+import { ALLERGENS_PATH, HACCP_PATH, INGREDIENTS_PATH, NEW_PATH, PHOTO_PATH, RECIPES_PATH, SETTINGS_PATH, editPath, haccpPath, labelPath, mixPath, parseRecipesPath, recipePath, resolveRecipesPath, stepsPath } from './recipesPath';
 
 describe('the addresses of the Recipe catalogue', () => {
   it('has the list at /recipes and a recipe at /recipes/<id>', () => {
@@ -151,6 +151,18 @@ describe('the guided mix address (step 3d-8, slice B)', () => {
     expect(parseRecipesPath('/abc/Mix')).toEqual({ kind: 'unknown' });
     expect(parseRecipesPath('/abc/mixes')).toEqual({ kind: 'unknown' });
     expect(parseRecipesPath('/abc/mix/x')).toEqual({ kind: 'unknown' });
+  });
+});
+
+describe('the ingredient book’s address (14 Nov 2026)', () => {
+  it('is /recipes/ingredients, a reserved word, with nothing more under it', () => {
+    expect(INGREDIENTS_PATH).toBe('/recipes/ingredients');
+    expect(parseRecipesPath('/ingredients')).toEqual({ kind: 'ingredients' });
+    expect(parseRecipesPath('/ingredients/')).toEqual({ kind: 'ingredients' });
+    expect(parseRecipesPath('/ingredients/x')).toEqual({ kind: 'unknown' });
+    expect(resolveRecipesPath('/ingredients')).toEqual({ view: { kind: 'ingredients' } });
+    // Never a recipe whose id is «ingredients»: not its label, editor, steps, mix or HACCP label either.
+    for (const tail of ['label', 'edit', 'steps', 'mix', 'haccp']) expect(parseRecipesPath(`/ingredients/${tail}`), tail).toEqual({ kind: 'unknown' });
   });
 });
 

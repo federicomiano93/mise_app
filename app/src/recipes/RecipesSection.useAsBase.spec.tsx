@@ -260,7 +260,7 @@ describe('«Use as base recipe»', () => {
 
   it('is offered to an employee, who sees the recipe’s «Edit» too: the one flag draws both', async () => {
     scaled('f', 4500);
-    await open([FOCACCIA], 'f', { session: { role: 'employee', canManage: false } });
+    await open([FOCACCIA], 'f', { session: { role: 'staff', canManage: false } });
     expect(main().getByRole('button', { name: 'Edit' })).toBeInTheDocument();
     expect(useAsBase()).toBeInTheDocument();
   });
