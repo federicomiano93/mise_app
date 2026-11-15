@@ -70,9 +70,11 @@ export function joinRefusal(error: unknown): JoinRefusal {
     case 'deadline-exceeded':
       return { key: 'join.offline' };
     default:
-      // A failed download of the Functions SDK itself has no code at all; a phone that knows it is
-      // offline says so.
-      if (!code && typeof navigator !== 'undefined' && navigator.onLine === false) return { key: 'join.offline' };
+      // ⚠️ NO SIGNAL IS NOT `unavailable`: the Functions SDK turns a call that never left the phone
+      // into `internal` (HTTP status 0), and a failed download of the SDK itself has no code at all.
+      // So a phone that knows it is offline says so whatever this code is. The codes above are left
+      // alone: each one is an answer the server sent, so the phone was online when it came.
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) return { key: 'join.offline' };
       return { key: 'join.failed' };
   }
 }
