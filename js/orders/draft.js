@@ -15,7 +15,7 @@
 // including whatever someone else is typing right now — is left alone.
 
 import {
-  saveDoc, patchDoc, watchDoc, watchServerAnswer, getRecentHistoryFromServer, clearFields, transactDoc,
+  saveDoc, patchDoc, watchDoc, watchPendingWrites, watchServerAnswer, getRecentHistoryFromServer, clearFields, transactDoc,
   replaceDoc, removeDoc, getDocOnce, currentBakery, COLLECTIONS,
 } from './firebase-orders.js';
 import {
@@ -42,6 +42,9 @@ let reportSaveResult = null;   // (ok: boolean) => void — injected by orders-m
 const saveStateWatchers = new Set();
 let lastSaveState = '';
 let draftSeen = false;
+// Firestore's own word: this device still holds draft writes the server has not confirmed. Covers what
+// `flights` cannot see — a write a PREVIOUS page started and Firestore kept queued (watchPendingWrites).
+let queuedOnDevice = false;
 
 // The draft as this device last agreed on it with the server: what a snapshot
 // reported, plus what we have since sent and had accepted. What this phone claims
@@ -631,7 +634,7 @@ export function sendWaitingDraft() {
 // lie of 14 Nov, on the very device that typed it.
 const noteWaiting = () => Boolean(restored) && (!isEmpty(restored.entries) || !isEmpty(restored.days));
 function currentSaveState() {
-  return { ready: draftSeen, saved: settled() && !unsent() && !noteWaiting() };
+  return { ready: draftSeen, saved: settled() && !unsent() && !noteWaiting() && !queuedOnDevice };
 }
 
 function announceSaveState() {
@@ -714,6 +717,13 @@ export function watchDraft(onChange, onError) {
     // An error simply leaves the note for the next open.
     watchServerAnswer(COLLECTIONS.drafts, DRAFT_ID, settle);
   };
+  // ⚠️ A WRITE THE LAST PAGE STARTED CAN STILL BE QUEUED ON THIS DEVICE: the note drops a line as soon as
+  // a snapshot shows it, but the server may not have it yet (iOS froze the page right after the write
+  // began). Until Firestore says nothing is pending, this device is not «saved».
+  watchPendingWrites(COLLECTIONS.drafts, DRAFT_ID, pending => {
+    queuedOnDevice = Boolean(pending);
+    announceSaveState();
+  });
   return watchDoc(COLLECTIONS.drafts, DRAFT_ID, doc => {
     // The server's word on the draft becomes the baseline the next autosave
     // measures itself against, so a row someone else changed is not "changed

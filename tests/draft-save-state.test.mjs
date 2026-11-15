@@ -26,7 +26,8 @@ function fakeStorage() {
 mock.timers.enable({ apis: ['setTimeout', 'setInterval'] });
 const settle = () => new Promise(resolve => setImmediate(resolve));
 const server = (entries = {}, days = {}) => ({ entries, days, updatedAt: 'x' });
-const read = p => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
+// Line endings normalised: on a Windows checkout (core.autocrlf) the files carry \r\n.
+const read = p => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8').replace(/\r\n/g, '\n');
 
 // A fresh draft.js, a page that watches it and a list of every save state it was told.
 async function openPage({ snapshot = true } = {}) {
@@ -167,6 +168,32 @@ test('a note the server already holds settles to «saved» without a write', asy
   await settle();
   assert.deepEqual(now(second), { ready: true, saved: true });
   assert.equal(stub.calls.saveDoc.length, 0);
+});
+
+test('a write the last page started and Firestore still holds on this device is NOT «saved» (review of #551)', async () => {
+  // The note let the line go when a snapshot showed it, but iOS froze the page before the server had it:
+  // Firestore's own queue still holds it. Nothing typed on this page, nothing in the note.
+  const page = await openPage();
+  stub.emitPendingWrites(true);
+  assert.deepEqual(now(page), { ready: true, saved: false }, 'queued on this device');
+  stub.emit(server({ flour: { qty: 3, stock: 0 } }));
+  assert.deepEqual(now(page), { ready: true, saved: false }, 'a snapshot alone does not make it saved');
+  stub.emitPendingWrites(false);
+  assert.deepEqual(now(page), { ready: true, saved: true }, 'the server confirmed it');
+  assert.equal(stub.calls.saveDoc.length, 0, 'nothing written by this page');
+});
+
+test('the page wiring: the draft listens to Firestore\'s pending-writes flag, with metadata changes', () => {
+  assert.match(read('js/orders/draft.js'), /watchPendingWrites\(COLLECTIONS\.drafts, DRAFT_ID, pending => \{\n\s+queuedOnDevice = Boolean\(pending\);/);
+  assert.match(read('js/orders/firebase-orders.js'), /\{ includeMetadataChanges: true \},\n\s+snap => onPending\(snap\.metadata\.hasPendingWrites\)/);
+});
+
+test('one voice: while a supplier screen is open only its line is painted', () => {
+  const main = read('js/orders/orders-main.js');
+  const paint = main.slice(main.indexOf('function paintDraftSaveState() {'));
+  const body = paint.slice(0, paint.indexOf('\n}\n'));
+  assert.match(body, /detailView\n\s+\? detailView\.overlay\.querySelectorAll\('\.draft-save-state'\)\n\s+: \[document\.getElementById\('draft-save-state'\)\]/);
+  assert.doesNotMatch(body, /aria-live/);
 });
 
 // ── Sent at once on leaving a box ────────────────────────────────────────────

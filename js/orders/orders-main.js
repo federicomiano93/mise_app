@@ -3284,12 +3284,16 @@ function listLost(lost) {
   };
 }
 
-// Paint every save-status line (draft.js onDraftSaveState). ⚠️ ONE VOICE: while a supplier's screen
-// covers the page, the page's own line is kept quiet, or a screen reader would hear every change twice.
+// Paint the save-status line in sight (draft.js onDraftSaveState). ⚠️ ONE VOICE: while a supplier's
+// screen covers the page, only ITS line changes — the page's line underneath is left alone (closeSupplier
+// repaints it), or a screen reader would hear every change twice. Leaving it unpainted is surer than
+// aria-live="off" on a role="status", which some readers still announce.
 function paintDraftSaveState() {
   const view = saveStateView(lastDraftSaveState, navigator.onLine !== false);
-  document.querySelectorAll('.draft-save-state').forEach(node => paintSaveState(node, view, t));
-  document.getElementById('draft-save-state')?.setAttribute('aria-live', detailView ? 'off' : 'polite');
+  const lines = detailView
+    ? detailView.overlay.querySelectorAll('.draft-save-state')
+    : [document.getElementById('draft-save-state')];
+  lines.forEach(node => paintSaveState(node, view, t));
 }
 
 // Hide the status line, but ONLY if it still shows `text`. Same guard as the
