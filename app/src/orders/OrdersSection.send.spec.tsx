@@ -734,3 +734,19 @@ describe('the package word (Mise 2 only)', () => {
     await waitingFor(source, 's-alp');
   });
 });
+
+describe('leaving the send screen in the middle of a batch', () => {
+  it('⚠️ an order that already went still waits for «did it go?» when the screen is left with the next editor open', async () => {
+    spyOpen();
+    const source = seeded({ ordersConfig: DIRECT_ONLY });
+    const view = await atList(source, STAFF);
+    await toSend(view, 'Zed', 'Café');
+    await view.user.click(sendButton());
+    await editorSend(view, 'Order for Café Bar Srl (1 of 2)');
+    await editorOf('Order for Zed (2 of 2)');
+    // The phone's back gesture, with the second editor still open.
+    await act(async () => { await view.router.navigate(-1); });
+    await backAtList(view);
+    await waitingFor(source, 's-caf');
+  });
+});
