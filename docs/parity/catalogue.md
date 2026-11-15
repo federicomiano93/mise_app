@@ -2188,6 +2188,12 @@ weigh has NO Total row. It takes part in the fit like any row (counted with its 
 the horizontal). Weights stay right-aligned by per-character measurement (no kerning). `recipe-dividers.spec.ts` now checks the port's
 page against the original's moved down by 40 pt.
 
+**The file name** (recipe book only; `titleFileName`, handed to the export sheet by the recipe screen as `fileName`): the recipe's own
+title as written — spaces, capitals, accents and apostrophes kept («Torta di prova.pdf», «… .xlsx»); each of `/ \ : * ? " < > |` and
+every control character becomes «-»; leading dots and spaces and trailing dots and spaces trimmed; 80 characters at most; the translated
+fallback word («ricetta») when nothing but dashes is left. No batch in the name. The CALCULATOR keeps `exportFileName` unchanged
+(«Pizza_x3.pdf», «Focaccia_12000g.pdf»): several batches of one recipe are made there in a day.
+
 **No longer compared with `js/`:** `scaleCatalogue` (`catalogue-model.spec.ts`, its three whole-gram tests now run against `js/` only;
 `odd-inputs.spec.ts`) and `amountsFor` (`odd-inputs.spec.ts`), which draws with it. `baseAmounts` is still compared.
 
@@ -2198,4 +2204,9 @@ gram, the protection, pieces and «to taste», a ml row, from a row, «Use as ba
 `applyTargetTotal` alone (each step, both protections, junk); `app/src/recipes/RecipesSection.cleanStep.spec.tsx` (the table, the
 warning line under the Total in English and Italian, the Total as the rows added up); `app/src/recipes/cleanStepReaders.spec.ts`
 (the table, the guided run, the export model and «Use as base recipe» agree at several batches, by total and from a row, and every
-Total is its rows added up).
+Total is its rows added up); `shared/src/recipe-export.spec.ts` («Mise 2 PDF: the first row lower, and a Total row»: 158 pt, the
+Total as the printed rows added up for several models, none for pieces only, bold with its line and air, a divider under the last row,
+the vertical and horizontal fit, 1-4 digit weights on one right edge within 0.1 pt; «titleFileName»); `app/src/ui/recipeExport.spec.ts`
+(a real PDF with its Total row, no rounding of its own), `ExportSheet.spec.tsx` (no rounding question), `RecipesSection.export.spec.tsx`
+(the title as the file name, the Total word handed to the PDF). Not driven on the emulator or a device; the owner checks the PDFs
+against his references on his PC.

@@ -13,7 +13,8 @@
 //
 // ⚠️ DIFFERS ON PURPOSE (the owner's decision, 16 Nov 2026): the PDF's first row sits lower (FIRST_ROW_GAP 88, the original's 48),
 // and `pdfLayout` takes an optional `total` — a Total row closing the list, label and weight bold, a line above it. Mise 2 only:
-// `printedTotalGrams`, the rows as printed added up. The original's pdfLayout is no longer compared output for output. What the
+// `printedTotalGrams`, the rows as printed added up. The original's pdfLayout is no longer compared output for output. Also Mise 2
+// only: `titleFileName`, the recipe book's file name (its title, as written). What the
 // app's loader needs from here to make the SAME error the two functions below recognise is `LIBRARY_ERROR`
 // and `libraryError(cause)` (new in the port: in the original they are private to the loader).
 //
@@ -171,6 +172,22 @@ export function exportFileName(m: ExportModel, ext: string, fallback: string = '
   const trays = Number(m.trays) || 0;
   const suffix = trays > 0 ? `_x${trays}` : (Number(m.totalG) > 0 ? `_${String(m.totalG)}g` : '');
   return `${base}${suffix}.${ext}`;
+}
+
+// The RECIPE BOOK's file name: the recipe's own title, as a person wrote it («Torta di prova.pdf»). Mise 2 only (the owner's decision,
+// 16 Nov 2026): spaces, capitals, accents and apostrophes are kept; each character a file system refuses (/ \ : * ? " < > | and
+// control characters) becomes «-»; leading dots and spaces, and trailing dots and spaces (Windows drops them), are trimmed; 80
+// characters at most; `fallback` (the caller's translated word) when nothing but dashes is left. No batch suffix: the recipe book exports one recipe at a
+// time. ⚠️ THE CALCULATOR KEEPS exportFileName («Pizza_x3.pdf», «Focaccia_12000g.pdf»): several batches of one recipe are made
+// there in a day, and the suffix keeps their files apart.
+export function titleFileName(name: unknown, ext: string, fallback: string = 'recipe'): string {
+  const base = String(name ?? '')
+    .replace(/[\\/:*?"<>|\u0000-\u001f\u007f]/g, '-')
+    .replace(/^[.\s]+/, '')
+    .slice(0, 80)
+    .replace(/[.\s]+$/, '');
+  // A title made only of refused characters («///») would be a file called «---»: the fallback word says more.
+  return `${/^[-.\s]*$/.test(base) ? fallback : base}.${ext}`;
 }
 
 // The weight as the result card prints it (js/calc.js renderIngredients).

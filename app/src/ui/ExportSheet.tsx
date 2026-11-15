@@ -9,7 +9,13 @@ import { Dialog } from './Dialog';
 import { buildPdfBlob, buildXlsxBlob } from './recipeExport';
 import styles from './ExportSheet.module.css';
 
-type Request = { model: ExportModel; totalLabel: string };
+// `fileName`: how the CALLER names the file, given the extension and the translated word for a nameless recipe. The recipe book names
+// it after the recipe's title (titleFileName); left out, the Calculator's batch names (exportFileName: «Pizza_x3.pdf»).
+type Request = {
+  model: ExportModel;
+  totalLabel: string;
+  fileName?: (ext: 'pdf' | 'xlsx', fallback: string) => string;
+};
 type Kind = 'pdf' | 'xlsx';
 
 // «Export as PDF or Excel» for a recipe as the screen shows it (the Calculator's scaled dough, or a Recipe
@@ -17,7 +23,7 @@ type Kind = 'pdf' | 'xlsx';
 // file…», then «File ready» with a Download link. Port of js/export-sheet.js, state for state.
 //
 //   const [openExport, exportSheet] = useExportSheet();
-//   openExport({ model, totalLabel });    // and put exportSheet in the component's output
+//   openExport({ model, totalLabel, fileName? });    // and put exportSheet in the component's output
 //
 // ⚠️ THE FILE IS NOT SAVED ON THE FIRST TAP, AND THAT IS DELIBERATE. The libraries load on the tap, so by the
 // time the file exists the tap's «user activation» may have run out, and a browser then refuses a programmatic
@@ -91,7 +97,9 @@ function ExportSheet({ request, onClose }: { request: Request; onClose: () => vo
     const mine = ++run.current;
     setState({ kind: 'working' });
     // The words for a nameless recipe are read now, in the venue's language, never at module load.
-    const fileName = exportFileName(request.model, kind, t('export.fileFallback'));
+    const fileName = request.fileName !== undefined
+      ? request.fileName(kind, t('export.fileFallback'))
+      : exportFileName(request.model, kind, t('export.fileFallback'));
     const made = kind === 'pdf'
       ? buildPdfBlob(request.model, request.totalLabel)
       : buildXlsxBlob(request.model, request.totalLabel, t('export.sheetFallback'));

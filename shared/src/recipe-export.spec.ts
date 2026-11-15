@@ -505,6 +505,49 @@ describe('Mise 2 PDF: the first row lower, and a Total row', () => {
   });
 });
 
+// ── The recipe book's file name (Mise 2 only, 16 Nov 2026) ──────────────────────────────────────────────────────────────────────
+
+describe('titleFileName: the recipe book names the file after the recipe, as written', () => {
+  test('a plain title keeps its spaces and capitals', () => {
+    expect(ported.titleFileName('Torta Di Prova', 'pdf')).toBe('Torta Di Prova.pdf');
+    expect(ported.titleFileName('Torta Di Prova', 'xlsx')).toBe('Torta Di Prova.xlsx');
+  });
+
+  test('accents and apostrophes are kept', () => {
+    expect(pdfName('Crème brûlée dell’orto di prova')).toBe('Crème brûlée dell’orto di prova.pdf');
+    expect(pdfName("Pane d'altri tempi di prova")).toBe("Pane d'altri tempi di prova.pdf");
+    expect(pdfName('Più è buona: sì')).toBe('Più è buona- sì.pdf');
+  });
+
+  test('each character a file system refuses becomes «-»; control characters too', () => {
+    expect(pdfName('a/b\\c:d*e?f"g<h>i|j')).toBe('a-b-c-d-e-f-g-h-i-j.pdf');
+    expect(pdfName('Riga\nnuova\tdi prova\u007f')).toBe('Riga-nuova-di prova-.pdf');
+  });
+
+  test('leading dots and spaces, trailing dots and spaces are trimmed; 80 characters at most', () => {
+    expect(pdfName('..Nascosto di prova')).toBe('Nascosto di prova.pdf');
+    expect(pdfName('  Torta di prova. . ')).toBe('Torta di prova.pdf');
+    const long = 'Torta della prova lunghissima '.repeat(5);
+    const out = pdfName(long);
+    expect(out.length).toBeLessThanOrEqual(80 + '.pdf'.length);
+    expect(out.endsWith(' .pdf')).toBe(false);
+  });
+
+  test('nothing usable left: the caller\'s translated word', () => {
+    expect(ported.titleFileName('', 'pdf', 'ricetta')).toBe('ricetta.pdf');
+    expect(ported.titleFileName('  ', 'xlsx', 'ricetta')).toBe('ricetta.xlsx');
+    expect(ported.titleFileName('///', 'pdf', 'ricetta')).toBe('ricetta.pdf');
+    expect(ported.titleFileName(null, 'pdf')).toBe('recipe.pdf');
+  });
+
+  test('the Calculator keeps its own names, with the batch in them', () => {
+    expect(ported.exportFileName(TRAYS, 'pdf')).toBe('Pizza_di_prova_x3.pdf');
+    expect(ported.exportFileName({ name: 'Focaccia di prova', trays: 0, totalG: 12000, rows: [] }, 'pdf')).toBe('Focaccia_di_prova_12000g.pdf');
+  });
+
+  function pdfName(name: string): string { return ported.titleFileName(name, 'pdf'); }
+});
+
 // ── The current app's lab rounding (js/ only) ────────────────────────────────────────────────────────────────────────────
 // Mise 2 has no rounding option any more: the recipe book's scaling rounds each row once to a clean step and the file prints what
 // it receives (the owner's decision, 16 Nov 2026). js/ is the rollback copy and keeps its switch, so these run against it alone.
@@ -567,8 +610,8 @@ describe('the port against the original', () => {
   // The two builders that load the libraries; and the PDF's «round the weights» rule and its question, which Mise 2 no longer has
   // (the owner's decision, 16 Nov 2026: the recipe book rounds once, to a clean step, and the file prints what it receives).
   const LEFT_OUT = ['buildPdfBlob', 'buildXlsxBlob', 'roundLabWeight', 'hasRoundableRows'];
-  // `printedTotalGrams`: the PDF's Total row (Mise 2 only, 16 Nov 2026).
-  const ADDED = ['LIBRARY_ERROR', 'libraryError', 'printedTotalGrams'];
+  // `printedTotalGrams`: the PDF's Total row; `titleFileName`: the recipe book's file name (Mise 2 only, 16 Nov 2026).
+  const ADDED = ['LIBRARY_ERROR', 'libraryError', 'printedTotalGrams', 'titleFileName'];
   const original = legacyJs as unknown as Record<string, unknown>;
   const port = ported as unknown as Record<string, unknown>;
   const shared = Object.keys(original).filter(name => !LEFT_OUT.includes(name)).sort();
