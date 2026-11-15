@@ -48,6 +48,10 @@ export type StoredDoc = { readonly id: string } & Record<string, unknown>;
 // be empty, or old, because this phone never synced the collection.
 export interface OrdersMeta {
   readonly fromServer: boolean;
+  // Only the drafts/current watcher says it: Firestore still holds a write of this device it has not delivered
+  // (snap.metadata.hasPendingWrites). It outlives a page iOS threw away, which is why «Saved ✓» waits for it
+  // (the iPad order of 14 Nov 2026).
+  readonly pendingWrites?: boolean;
 }
 
 export interface OrdersSource {
@@ -224,14 +228,16 @@ export function createFirestoreOrdersSource(firestore: () => Promise<FirestoreKi
       ), onError);
   }
 
-  function watchDocument(path: string, id: string, label: string) {
+  function watchDocument(path: string, id: string, label: string, reportPending = false) {
     return (onChange: (data: Record<string, unknown> | null, meta: OrdersMeta) => void, onError: (err: unknown) => void) =>
       listen(kit => kit.fs.onSnapshot(
         kit.fs.doc(kit.db, path, id),
         { includeMetadataChanges: true },
         snap => onChange(
           snap.exists() ? { ...(snap.data() as Record<string, unknown>) } : null,
-          { fromServer: !snap.metadata.fromCache },
+          reportPending
+            ? { fromServer: !snap.metadata.fromCache, pendingWrites: snap.metadata.hasPendingWrites }
+            : { fromServer: !snap.metadata.fromCache },
         ),
         err => {
           console.error(`watch(${label}) failed:`, err);
@@ -244,7 +250,7 @@ export function createFirestoreOrdersSource(firestore: () => Promise<FirestoreKi
     watchSuppliers: watchCollection(suppliersPath, SUPPLIERS),
     watchIngredients: watchCollection(ingredientsPath, INGREDIENTS),
     watchOrdersConfig: watchDocument(configPath, ORDERS_DOC, 'config/orders'),
-    watchDraft: watchDocument(draftsPath, DRAFT_ID, 'drafts/current'),
+    watchDraft: watchDocument(draftsPath, DRAFT_ID, 'drafts/current', true),
 
     // ⚠️ includeMetadataChanges: the server's confirmation of an empty cached answer changes no document and would never be
     // reported, so `readable` would stay false for a venue with no price yet. ⚠️ QUIET (warn): a refusal is the rules working.

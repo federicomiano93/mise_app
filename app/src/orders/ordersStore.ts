@@ -108,6 +108,11 @@ export interface OrdersSnapshot {
   // would light a supplier that was already ordered on another phone.
   readonly serverSeen: { readonly suppliers: boolean; readonly ingredients: boolean; readonly draft: boolean; readonly history: boolean };
   readonly draftBroken: boolean;
+  // Whether everything typed on THIS device has reached the server (the line «Saved ✓ / Not sent yet», the iPad order of
+  // 14 Nov 2026). `ready`: the first snapshot of the draft has arrived (before it nothing is said). `saved`: nothing waits for
+  // the pause, nothing is in the air or refused, nothing the last page left in the device note is still to come back, and
+  // Firestore reports no pending write on drafts/current. Online is the screen's to count (useOnline).
+  readonly saveState: { readonly ready: boolean; readonly saved: boolean };
   // The last autosave was refused and no later one has landed (parity L37).
   readonly draftSaveFailed: boolean;
   // How many times quantities left by the last page came back from this device's note (F-15): the section then looks again
@@ -282,6 +287,9 @@ export interface OrdersStore {
   // is started, the listener on ingredient-prices is open; off, it is closed and the prices are forgotten. An employee the venue
   // never showed Food cost is never on, so nothing about money is even loaded (step 3f-8c). Safe before start().
   setPriceReader(on: boolean): void;
+  // Sends what waits for the 800 ms pause AT ONCE: leaving a quantity or stock box, closing a supplier's screen, swapping the
+  // view (the iPad order of 14 Nov 2026). One write per box left, none per keystroke; nothing waiting means no write.
+  sendWaitingDraft(): void;
   // Starts the six listeners (and the price listener for a price reader, setPriceReader); stop() ends them and sends a change still waiting for the autosave at once, so leaving the
   // section within 800 ms of a keystroke loses nothing. Safe to call start → stop → start (React's development mode does).
   start(): void;
@@ -405,7 +413,7 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
     suppliers: [], suppliersLoaded: false, suppliersBroken: false,
     ingredients: [], ingredientsLoaded: false, ingredientsBroken: false,
     config: normalizeOrdersConfig(null), configLoaded: false, configAnswered: false, deliveryCheck: deliveryCheckOf(null),
-    draft: EMPTY_DRAFT, draftLoaded: false, draftBroken: false, draftSaveFailed: false, draftCameBack: 0, refusedEarlier: false,
+    draft: EMPTY_DRAFT, draftLoaded: false, draftBroken: false, saveState: { ready: false, saved: true }, draftSaveFailed: false, draftCameBack: 0, refusedEarlier: false,
     serverSeen: { suppliers: false, ingredients: false, draft: false, history: false },
     placing: [],
     history: [], historyLoaded: false, historyBroken: false, suggester: NO_SUGGESTIONS,
@@ -414,6 +422,10 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
     prices: {}, pricesReadable: false,
   };
   const listeners = new Set<() => void>();
+  // The two facts of the save state that are not the sync's: the first draft snapshot has arrived, and Firestore's own word
+  // on a write of this device it has not delivered yet (it outlives a page iOS threw away).
+  let draftSeen = false;
+  let pendingWrites = false;
   const messageListeners = new Set<(message: OrdersMessage) => void>();
   let stops: Array<() => void> = [];
   let releaseBusy: (() => void) | null = null;
@@ -437,6 +449,19 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
     // A new engine only when what it reads changed: a keystroke keeps the one the rows already asked.
     if (patch.history || patch.ingredients) snapshot = { ...snapshot, suggester: createSuggester(snapshot.history, snapshot.ingredients) };
     for (const listener of listeners) listener();
+  }
+
+  // ⚠️ Same object while nothing changed, so a keystroke never tells the screen anything about the line.
+  function currentSaveState(): OrdersSnapshot['saveState'] {
+    const saved = !sync.hasUnsaved() && !sync.noteWaiting() && !pendingWrites;
+    const now = snapshot.saveState;
+    return now.ready === draftSeen && now.saved === saved ? now : { ready: draftSeen, saved };
+  }
+  // Called by the sync from inside its own work — even from inside `sync.receive(...)` while an outer set() is still being
+  // built. set() merges into the CURRENT snapshot, so neither update is lost; and it tells the listeners only on a change.
+  function refreshSaveState() {
+    const next = currentSaveState();
+    if (next !== snapshot.saveState) set({ saveState: next });
   }
 
   function openPrices() {
@@ -472,6 +497,7 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
     nowIso: deps.draft.nowIso,
     setTimer: deps.draft.setTimer,
     clearTimer: deps.draft.clearTimer,
+    onStateChange: refreshSaveState,
     onResult: ok => {
       if (ok && snapshot.draftSaveFailed) {
         set({ draftSaveFailed: false });
@@ -803,12 +829,20 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
         // ⚠️ A DRAFT MISSING FROM THE BROWSER'S OWN DATABASE IS NOT AN EMPTY ORDER: a phone that never opened Orders has
         // no copy of it. The lines are drawn only once the server has answered or the copy holds the document.
         source.watchDraft(
-          (data, meta) => set({
-            draft: sync.receive(data, meta.fromServer),
-            draftLoaded: snapshot.draftLoaded || data !== null || meta.fromServer,
-            draftBroken: false,
-            serverSeen: meta.fromServer && !snapshot.serverSeen.draft ? { ...snapshot.serverSeen, draft: true } : snapshot.serverSeen,
-          }),
+          (data, meta) => {
+            pendingWrites = Boolean(meta.pendingWrites);
+            // receive() tells the save line itself (onStateChange) while this set() is still to come; the line is computed
+            // again here, after it, so the draft and the line always land together.
+            const draft = sync.receive(data, meta.fromServer);
+            draftSeen = true;
+            set({
+              draft,
+              saveState: currentSaveState(),
+              draftLoaded: snapshot.draftLoaded || data !== null || meta.fromServer,
+              draftBroken: false,
+              serverSeen: meta.fromServer && !snapshot.serverSeen.draft ? { ...snapshot.serverSeen, draft: true } : snapshot.serverSeen,
+            });
+          },
           () => set({ draftBroken: true, draftLoaded: true }),
         ),
         // The window starts two calendar months before TODAY when the section opens (the current app's liveHistoryStart).
@@ -838,6 +872,10 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
       priceReader = on;
       if (on) openPrices();
       else closePrices();
+    },
+
+    sendWaitingDraft() {
+      sync.sendWaiting();
     },
 
     stop() {
