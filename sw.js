@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v773';
+const CACHE_NAME = 'theitalianclub-v774';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -158,10 +158,10 @@ const ASSET_HASHES = {
   "./suppliers.html": '0f24580d8d5a1e05',
   "./install-guide.html": '322c79acf63896ef',
   "./reset-password.html": '298724d76511df05',
-  "./dist/i18n.js": 'f63a96ea067d3920',
+  "./dist/i18n.js": 'f0ebe202cb983e3e',
   "./dist/index.js": '19c36fef58413f08',
   "./dist/calculator.js": 'fc8c364a69e07796',
-  "./dist/orders.js": 'aa8b466c28d4b4e4',
+  "./dist/orders.js": '8e3b21299c785c71',
   "./dist/suppliers.js": '933942ea038a557a',
   "./dist/install-guide.js": 'beda437b74a9c6f8',
   "./js/allergen-model.js": 'a9ad7592da832a56',
@@ -172,7 +172,7 @@ const ASSET_HASHES = {
   "./js/firebase.js": '2acc9652e4f27abf',
   "./js/home-cards.js": '4e0740cfb8b8e092',
   "./js/i18n-dom.js": '24249af4367511e5',
-  "./js/i18n.js": 'd7b02dff658da8c0',
+  "./js/i18n.js": '0df72bb0c34f4a66',
   "./js/keyboard-done.js": 'de05a6dd1f3aac26',
   "./js/local-data.js": '91aa7f1699c897a1',
   "./js/location.js": '6aaf53615a8739d1',

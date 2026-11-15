@@ -499,10 +499,10 @@
       }
     },
     "dist/i18n.js": {
-      "sha": "31fd1da9270e8a83",
-      "mapSha": "11f9b6273e92e04e",
+      "sha": "135ee067fb2225d2",
+      "mapSha": "42bdec0c915a59c1",
       "inputs": {
-        "js/i18n.js": "cc105d71d61f44a9"
+        "js/i18n.js": "3c2c85a80f25ba07"
       }
     },
     "dist/index.js": {
@@ -780,8 +780,8 @@
       }
     },
     "dist/orders.js": {
-      "sha": "537657868f4a9e66",
-      "mapSha": "47d38b1ae67b2cb1",
+      "sha": "e9ea28babf252696",
+      "mapSha": "da0e5d8aab0c4c01",
       "inputs": {
         "js/allergen-match.js": "db54e694c42039c0",
         "js/allergen-model.js": "50434c6cea85b7de",
@@ -828,7 +828,7 @@
         "js/order-unit.js": "e3ee9a62a60959f7",
         "js/orders/alert-dismissal.js": "6e98b01befd6fe3d",
         "js/orders/archive.js": "5547131fe456e0b9",
-        "js/orders/awaiting-sent.js": "cf944f9179a1e883",
+        "js/orders/awaiting-sent.js": "5d334081cc110361",
         "js/orders/boot.js": "a15bb768579d519c",
         "js/orders/category-batches.js": "5b7544ce4da479bc",
         "js/orders/confirm-dialog.js": "83f2ab3c9c69025d",
@@ -866,16 +866,16 @@
         "js/orders/order-summary.js": "ae2df3d8e163c852",
         "js/orders/order-text.js": "40ad3ba8ddb014c3",
         "js/orders/orders-config.js": "c968ce3171a34b1f",
-        "js/orders/orders-main.js": "0c8f88e39d577d9d",
+        "js/orders/orders-main.js": "158941158f497b56",
         "js/orders/place-confirm.js": "61cd2d604037e847",
         "js/orders/preview.js": "3a52b0a28c1434ed",
-        "js/orders/reminder-view.js": "f854893c2331e410",
+        "js/orders/reminder-view.js": "d1ee963aab0220bc",
         "js/orders/reminders.js": "4374d45bb48f0e20",
         "js/orders/render-scheduler.js": "35a380e72f10ff89",
         "js/orders/save-state-view.js": "b375dadff53be78c",
         "js/orders/search-box.js": "d63164cf3cc0565e",
         "js/orders/send-chooser.js": "b2efb1cefb602e32",
-        "js/orders/send-editor.js": "4ac65abbf0321271",
+        "js/orders/send-editor.js": "568a948af6f73b24",
         "js/orders/send-routes.js": "3bb6703df05d4828",
         "js/orders/sent-check-dialog.js": "1c7ff413ddc995fb",
         "js/orders/sent-check.js": "01c39ee6f228bdcb",
