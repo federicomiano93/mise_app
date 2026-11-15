@@ -80,6 +80,12 @@ describe('step 3\'s tables (part B3b)', () => {
     expect(italian[key]).toBeTruthy();
   });
 
+  it('the missing piece weight tells what to do (a weightless per-piece price matched to a food item)', () => {
+    const key = reasonKey('unit-weight-missing');
+    expect(en[key]).toBe('A piece weight is missing: change the item’s type (Resale, Other or Packaging) or do not import it.');
+    expect(italian[key]).toBe('Manca il peso di un pezzo: cambia il tipo dell’articolo (Rivendita, Altro o Imballaggio) oppure non importarlo.');
+  });
+
   it('an unknown reason, a missing one and a prototype name are «could not be imported», never a blank', () => {
     expect(reasonKey('something-new')).toBe(UNKNOWN_REASON_KEY);
     expect(reasonKey(undefined)).toBe(UNKNOWN_REASON_KEY);

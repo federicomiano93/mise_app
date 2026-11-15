@@ -15,12 +15,14 @@
 // ⚠️ ONE MISE-2-ONLY OPTION, `alreadyImported` (the import log, 25 Oct 2026): the ids of the invoices the venue imported
 // before. Those invoices are set aside right after they are read — before any product, price or supplier is made of them —
 // and returned as `alreadyImported`, so the screen can say «A new, B already imported» and the run never sees them. Without
-// the option the result is the original's, key for key (the result carries no `alreadyImported` at all).
+// the option the result carries no `alreadyImported` at all.
 // ⚠️ A SECOND MISE-2-ONLY OPTION, `everyKind` (14 Nov 2026, «tutti i prodotti delle fatture in Mise»): EVERY product that can be
 // read goes into the import file, each carrying the `kind` its line type stands for (ingrediente → 'ingredient', packaging →
 // 'packaging', rivendita → 'resale', altro → 'other'), and a resale or other product invoiced by the piece with no weight is
 // priced per piece (it never needs a per-kilo cost); so is packaging since 15 Nov 2026 (Food cost counts it by the piece).
-// Without the option the result is the original's, key for key: only ingredients in the file, no `kind` anywhere.
+// Without the option the file holds only the ingredients and no `kind` anywhere. NOT everything else is the original's: the line type
+// «altro», the soft drinks, `TYPE_ORDER` and the «1/2X» drink reading apply in the port even without it (deliberate, pinned by
+// classify.spec.ts, keywords.spec.ts, products.spec.ts and parity.spec.ts).
 
 import type { IngredientKind } from '../ingredient-kind';
 import { formatPackSize, invoiceNameOf } from './classify';

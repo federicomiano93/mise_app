@@ -1490,3 +1490,30 @@ its item kind. The current app is frozen and unchanged (it still imports ingredi
   by name or «Uguale a …») is an error row, «The weight of one piece is missing.», and writes nothing. The frozen app never
   makes a per-piece entry without a weight, so none of this changes its behaviour (parity and odd-input specs unchanged).
   Specs: `every-kind.spec.ts` («per-piece prices with no weight, on the next invoices»).
+
+## Invoice import, every kind — fixes of 15 Nov 2026
+
+Found by code review and by driving a real drinks supplier's zip on the emulator. All Mise 2 only; `js/` is untouched.
+
+- **Write-time re-check (blocker).** `replanRow` built its context without `everyKind`, so at write time a line matched on screen to an
+  existing PACKAGING item by its code was planned «new» and written as a duplicate (next month both carry the code: `code-ambiguous`).
+  `ReplanInput` now carries `everyKind` and `ingredientsRun.ts` passes `true`. Specs: `every-kind.spec.ts` («the re-check before each
+  row is written»), `InvoiceImport.run.spec.tsx` («an existing PACKAGING item matched by its article code»).
+- **Drinks counted in bottles.** A drinks supplier counts single bottles (PZ, NR, N, BT, BOTT, PEZZI) while the description says the
+  carton («COLA ML 450 X24», 12 PZ): the price used pieces × size × 24, so every such drink was 6 to 24 times too cheap per litre.
+  `computeDocument` has an option `singleBottles` (set by `build-import.ts` only with `everyKind` and for resale lines): when every
+  line of the product is a single-piece unit and the description's count is 6 or more, the count is not multiplied in. A pack unit
+  (CF, CT…), a count under 6 (a retail multipack) and food keep the original reading; lines of one product in both kinds of unit keep
+  it and are «da verificare». What is saved on the item (weight, count, pack word) does not change, only the price per litre.
+- **«CL 200X24».** On a line the beverage words name, a CL number above 100 is read as millilitres (200 ml); up to 100 it stays
+  centilitres. Lives in `parsePack` like the «1/2X» drink reading (no option; a deliberate difference from `js/`, pinned in
+  `classify.spec.ts`). Note: the drink words do not include «energy» or «tea», so such lines are not drinks and read CL as before.
+- **Soft-drink words are whole words** (`keywords.ts` and `classify.py`, same text): limonata, tonica, gassosa, spuma, cedrata; ginger
+  only as «ginger ale», «ginger beer» or «gingerino». «GINGER CANDITO» and «SPUMANTE» stay ingredients.
+- **«1 1/2X6»** on a drink is 1.5 l (it read 0.5 l); a zero denominator still gives no size.
+- **A remembered «import as an ingredient»** (`invoice-decisions` value `ingredient`, stored by the current app) makes the NEW item's
+  kind `ingredient` (the owner's correction wins over the reader's guess); an existing item never changes kind.
+- **Words.** The row error «unit-weight-missing» now says what to do (change the type of the item, or do not import it), in both
+  languages (`sup.imp.reason.unitWeightMissing`).
+- Comments corrected: without `everyKind` the result is NOT always the original's: the «altro» line type, the soft drinks,
+  `TYPE_ORDER` and the «1/2X» reading apply in the port either way.

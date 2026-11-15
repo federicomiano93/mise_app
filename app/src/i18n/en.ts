@@ -2381,7 +2381,7 @@ export const en = {
   'sup.imp.reason.supplierKeyMissing': 'It names no supplier.',
   'sup.imp.reason.supplierMissing': 'Its supplier was skipped or is not in the file.',
   'sup.imp.reason.priceUnit': 'The price unit is not kg, litre or each.',
-  'sup.imp.reason.unitWeightMissing': 'The weight of one piece is missing.',
+  'sup.imp.reason.unitWeightMissing': 'A piece weight is missing: change the item’s type (Resale, Other or Packaging) or do not import it.',
   'sup.imp.reason.packCount': 'The number of packs in a carton is not valid.',
   'sup.imp.reason.noPrices': 'The file has no price for it.',
   'sup.imp.reason.priceInvalid': 'A price in the file is not valid.',

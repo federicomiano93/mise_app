@@ -2165,7 +2165,7 @@ export const it: Messages = {
   'sup.imp.reason.supplierKeyMissing': 'Non indica nessun fornitore.',
   'sup.imp.reason.supplierMissing': 'Il suo fornitore è stato saltato o non è nel file.',
   'sup.imp.reason.priceUnit': 'L’unità del prezzo non è kg, litro o al pezzo.',
-  'sup.imp.reason.unitWeightMissing': 'Manca il peso di un pezzo.',
+  'sup.imp.reason.unitWeightMissing': 'Manca il peso di un pezzo: cambia il tipo dell’articolo (Rivendita, Altro o Imballaggio) oppure non importarlo.',
   'sup.imp.reason.packCount': 'Il numero di confezioni in un cartone non è valido.',
   'sup.imp.reason.noPrices': 'Nel file non c’è nessun prezzo.',
   'sup.imp.reason.priceInvalid': 'Un prezzo nel file non è valido.',
