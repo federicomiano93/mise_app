@@ -104,7 +104,7 @@ export async function toIngredients(user: UserEvent, ...files: File[]): Promise<
     const dialog = await screen.findByRole('alertdialog', { name: 'Save these suppliers?' }, LOAD);
     await user.click(within(dialog).getByRole('button', { name: 'Save' }));
   }
-  await screen.findByRole('heading', { level: 3, name: 'Ingredients' }, LOAD);
+  await screen.findByRole('heading', { level: 3, name: 'Products' }, LOAD);
   await waitFor(() => { expect(screen.queryByText('Checking what is already in Mise…')).not.toBeInTheDocument(); }, LOAD);
 }
 

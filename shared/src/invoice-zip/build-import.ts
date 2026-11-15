@@ -15,8 +15,16 @@
 // ⚠️ ONE MISE-2-ONLY OPTION, `alreadyImported` (the import log, 25 Oct 2026): the ids of the invoices the venue imported
 // before. Those invoices are set aside right after they are read — before any product, price or supplier is made of them —
 // and returned as `alreadyImported`, so the screen can say «A new, B already imported» and the run never sees them. Without
-// the option the result is the original's, key for key (the result carries no `alreadyImported` at all).
+// the option the result carries no `alreadyImported` at all.
+// ⚠️ A SECOND MISE-2-ONLY OPTION, `everyKind` (14 Nov 2026, «tutti i prodotti delle fatture in Mise»): EVERY product that can be
+// read goes into the import file, each carrying the `kind` its line type stands for (ingrediente → 'ingredient', packaging →
+// 'packaging', rivendita → 'resale', altro → 'other'), and a resale or other product invoiced by the piece with no weight is
+// priced per piece (it never needs a per-kilo cost); so is packaging since 15 Nov 2026 (Food cost counts it by the piece).
+// Without the option the file holds only the ingredients and no `kind` anywhere. NOT everything else is the original's: the line type
+// «altro», the soft drinks, `TYPE_ORDER` and the «1/2X» drink reading apply in the port even without it (deliberate, pinned by
+// classify.spec.ts, keywords.spec.ts, products.spec.ts and parity.spec.ts).
 
+import type { IngredientKind } from '../ingredient-kind';
 import { formatPackSize, invoiceNameOf } from './classify';
 import type { LineType } from './classify';
 import { loadInvoices } from './fatturapa';
@@ -35,6 +43,14 @@ export const IMPORT_VERSION = 1;
 // took each product for.
 export const IMPORTED_TYPE = 'ingrediente';
 export const NOT_IMPORTED_REASON = LEFT_OUT.NOT_AN_INGREDIENT;
+
+// MISE 2 (`everyKind`): the item kind each line type is imported as. Not an export of the original.
+const KIND_OF_TYPE: Readonly<Record<LineType, IngredientKind>> = Object.freeze({
+  ingrediente: 'ingredient', packaging: 'packaging', rivendita: 'resale', altro: 'other',
+});
+// The kinds priced per piece with no weight when the invoice gives none: never food (its cost per kilo is the point). Packaging
+// too since 15 Nov 2026 (his decision): Food cost counts packaging by the piece, so a box needs no weight either.
+const WEIGHTLESS_TYPES: ReadonlySet<LineType> = new Set<LineType>(['packaging', 'rivendita', 'altro']);
 export { NO_SDI_REASON };
 
 const NEEDS_CHECK = 'da verificare';
@@ -110,6 +126,8 @@ export interface ImportIngredient {
   prices: ImportPrice[];
   latestUnverified?: true;
   priceCheck?: string;
+  // Mise 2 only (`everyKind`): what the product is imported as. Absent means an ingredient.
+  kind?: IngredientKind;
 }
 
 export interface ImportSupplier { key: string; vatNumber: string; name: string }
@@ -169,11 +187,13 @@ export interface BuildOptions extends LoadOptions, ConfigOptions {
   now?: unknown;
   // Mise 2 only: the ids (`docId`: the SDI id, else the file-name id) of the invoices imported before.
   alreadyImported?: ReadonlySet<string>;
+  // Mise 2 only: every readable product is imported, with its kind (see the head of this file).
+  everyKind?: boolean;
 }
 
 // What one product looks like in the result and, when it can be imported, in the file.
 // -> { row, ingredient } where `ingredient` is null when the product stays out (and row.leftOutReason says why).
-function describeProduct(catalogue: Catalogue, product: Product): { row: ProductRow; ingredient: ImportIngredient | null } {
+function describeProduct(catalogue: Catalogue, product: Product, everyKind = false): { row: ProductRow; ingredient: ImportIngredient | null } {
   const supplier = catalogue.suppliers.get(product.supplierKey) as CatalogueSupplier;
   const proposal = proposeParams(product, catalogue.config);
   const cells = {
@@ -181,10 +201,22 @@ function describeProduct(catalogue: Catalogue, product: Product): { row: Product
     weight: proposal.pack ? formatPackSize(proposal.pack.size, proposal.pack.unit) : '',
     count: proposal.packCount || '',
   };
-  const { params, problems } = paramsFromCells(cells.unit, cells.weight, cells.count, proposal);
-  const evaluation = evaluate(product, params, catalogue, problems);
-  const { points } = evaluation;
   const latestLine = latestOf(product).lines[0] as InvoiceLine;
+  const type = typeOf(product);
+  const imported = everyKind || type === IMPORTED_TYPE;
+  let { params, problems } = paramsFromCells(cells.unit, cells.weight, cells.count, proposal);
+  // MISE 2 (`everyKind`): a packaging, resale or other product invoiced by the piece whose weight the description does not give
+  // (no price unit could be proposed, or a kilo/litre unit with no package size) is priced per piece, as the invoice counts it.
+  const weightless = everyKind && WEIGHTLESS_TYPES.has(type) && problems.length === 0 && !params.egg
+    && unitClass(latestLine.unit)[0] === PIECES
+    && (params.priceUnit === null || ((params.priceUnit === 'kg' || params.priceUnit === 'l') && params.pack === null));
+  if (weightless) ({ params, problems } = paramsFromCells('pz', '', cells.count, proposal));
+  // MISE 2 (`everyKind`): a drinks supplier counts bottles, so a resale product's carton count is not multiplied into its price (pricing.ts).
+  const evaluation = evaluate(product, params, catalogue, problems, {
+    ...(weightless ? { weightlessPieces: true } : {}),
+    ...(everyKind && type === 'rivendita' ? { singleBottles: true } : {}),
+  });
+  const { points } = evaluation;
   // ⚠️ THE VAT OF THE NEWEST PAID LINE: a free line carries 0 % because it is outside the tax base, not because the
   // goods are zero-rated, and a VAT of 0 is a real answer. Never paid = null, «not stated».
   const paidLine = [...product.entries].reverse().flatMap((entry) => entry.lines).find((ln) => (ln.total ?? 0) > 0);
@@ -196,7 +228,7 @@ function describeProduct(catalogue: Catalogue, product: Product): { row: Product
     supplierKey: product.supplierKey,
     supplierName: supplier.name,
     vatNumber: supplier.vatNumber,
-    type: typeOf(product),
+    type,
     name,
     brand: '',
     category: '',
@@ -249,7 +281,7 @@ function describeProduct(catalogue: Catalogue, product: Product): { row: Product
     if (!onlyFree) unreadable = last ? last.computed.note : LEFT_OUT.NO_COMPUTABLE_PRICE;
   }
   row.canImport = unreadable === null;
-  if (row.type !== IMPORTED_TYPE) row.leftOutReason = NOT_IMPORTED_REASON;
+  if (!imported) row.leftOutReason = NOT_IMPORTED_REASON;
   else if (unreadable !== null) row.leftOutReason = unreadable;
   if (unreadable !== null) {
     row.unreadableReason = unreadable;
@@ -285,8 +317,9 @@ function describeProduct(catalogue: Catalogue, product: Product): { row: Product
     prices: good.map(({ good: _good, ...p }) => p),
     ...(latestUnverified ? { latestUnverified: true as const } : {}),
     ...(checkReason && good.length === 0 ? { priceCheck: checkReason.split('; ')[0] as string } : {}),
+    ...(everyKind ? { kind: KIND_OF_TYPE[type] } : {}),
   };
-  row.inImport = row.type === IMPORTED_TYPE;
+  row.inImport = imported;
   return { row, ingredient };
 }
 
@@ -310,13 +343,15 @@ export function buildImportFromRead(read: InvoiceRead, options: BuildOptions = {
   const load = skip ? { ...loaded, documents: loaded.documents.filter((doc) => !skip.has(doc.docId)) } : loaded;
   const catalogue = buildCatalogue(load, makeConfig(options));
 
-  const described = [...catalogue.products.values()].map((product) => describeProduct(catalogue, product));
+  const everyKind = options.everyKind === true;
+  const described = [...catalogue.products.values()].map((product) => describeProduct(catalogue, product, everyKind));
   const products = described.map((d) => d.row).sort(rowOrder(catalogue));
 
   const candidates = described.map((d) => d.ingredient).filter((i): i is ImportIngredient => Boolean(i))
     .sort((a, b) => cmp(a.key, b.key));
   const typeByKey = new Map(described.map((d) => [d.row.key, d.row.type]));
-  const ingredients = candidates.filter((i) => typeByKey.get(i.key) === IMPORTED_TYPE);
+  // MISE 2 (`everyKind`): every candidate is in the file; otherwise only those proposed as ingredients.
+  const ingredients = everyKind ? candidates : candidates.filter((i) => typeByKey.get(i.key) === IMPORTED_TYPE);
   const used = [...new Set(ingredients.map((i) => i.supplierKey))].sort();
   const suppliers = used.map((key) => {
     const s = catalogue.suppliers.get(key) as { vatNumber: string; name: string };

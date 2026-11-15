@@ -82,6 +82,8 @@ export async function planIngredientStep(
     ingredients: venue.ingredients as unknown as ExistingIngredient[],
     pricesById: { ...venue.pricesById } as PlanContext['pricesById'],
     invoicePointIds,
+    // Mise 2 (14 Nov 2026): the file brings every kind, so it is matched against the items of every kind, packaging included.
+    everyKind: true,
   });
   const ids = idsToCheck(planIngredients(active, ctxFor({})));
   const known: Record<string, PointIds> = {};
@@ -235,7 +237,7 @@ export async function runIngredientImport(input: RunInput): Promise<RunOutcome> 
     };
   };
   const replan = (fileIngredient: FileIngredient, key: string) => replanRow({
-    fileIngredient, decision: answers.decisions[key], supplierIdByKey: { ...supplierIdByKey }, read: readFor(fileIngredient),
+    fileIngredient, decision: answers.decisions[key], supplierIdByKey: { ...supplierIdByKey }, everyKind: true, read: readFor(fileIngredient),
   });
   const toWrite = (fresh: IngredientRow, key: string, held: boolean) => rowToWrite(fresh, {
     confirmed: answers.confirmKeys.has(key), rename: answers.renames.get(key) ?? null, held,

@@ -80,6 +80,12 @@ describe('step 3\'s tables (part B3b)', () => {
     expect(italian[key]).toBeTruthy();
   });
 
+  it('the missing piece weight tells what to do (a weightless per-piece price matched to a food item)', () => {
+    const key = reasonKey('unit-weight-missing');
+    expect(en[key]).toBe('A piece weight is missing: change the item’s type (Resale, Other or Packaging) or do not import it.');
+    expect(italian[key]).toBe('Manca il peso di un pezzo: cambia il tipo dell’articolo (Rivendita, Altro o Imballaggio) oppure non importarlo.');
+  });
+
   it('an unknown reason, a missing one and a prototype name are «could not be imported», never a blank', () => {
     expect(reasonKey('something-new')).toBe(UNKNOWN_REASON_KEY);
     expect(reasonKey(undefined)).toBe(UNKNOWN_REASON_KEY);
@@ -234,10 +240,13 @@ describe('the words the owner agreed', () => {
     expect(italian['sup.imp.file.label']).toBe('Scegli il file');
     expect(italian['sup.imp.file.reading']).toBe('Sto leggendo le fatture…');
     expect(italian['sup.imp.file.explain']).toMatch(/zip delle fatture .*Agenzia delle Entrate/);
-    expect(italian['sup.imp.zip.group.notImported']).toBe('Imballaggi e rivendita ({n})');
+    // Mise 2 (14 Nov 2026): every product is imported, grouped by kind; «Imballaggi e rivendita» and «Importa come ingrediente» are gone.
+    expect(italian['sup.imp.zip.kind.ingredient']).toBe('Ingredienti ({n})');
+    expect(italian['sup.imp.zip.kind.packaging']).toBe('Imballaggi ({n})');
+    expect(italian['sup.imp.zip.kind.resale']).toBe('Rivendita ({n})');
+    expect(italian['sup.imp.zip.kind.other']).toBe('Altro ({n})');
     expect(italian['sup.imp.zip.group.skippedByYou']).toBe('Esclusi da te ({n})');
     expect(italian['sup.imp.zip.group.skippedSuppliers']).toBe('Fornitori esclusi da te ({n})');
-    expect(italian['sup.imp.zip.importAsIngredient']).toBe('Importa come ingrediente');
     expect(italian['sup.imp.zip.importAgain']).toBe('Importa di nuovo');
     expect(italian['sup.imp.stop.offline']).toMatch(/^Non c’è connessione\./);
   });

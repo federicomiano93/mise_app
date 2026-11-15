@@ -63,7 +63,7 @@ describe('the summary', () => {
   it('always counts what was created, updated, added, recorded, left unchanged and skipped — zero included', () => {
     draw(totals());
     expect(lines()).toEqual([
-      '0 ingredients created', '0 existing ingredients got new prices', '0 prices added', 'Price changes recorded: 0', '0 unchanged', '0 skipped',
+      '0 products created', '0 existing products got new prices', '0 prices added', 'Price changes recorded: 0', '0 unchanged', '0 skipped',
     ]);
     expect(screen.getByRole('heading', { level: 3, name: 'Import finished' })).toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
@@ -72,18 +72,18 @@ describe('the summary', () => {
   it('puts the saved invoice names after the prices, and the optional lines after the rest', () => {
     draw(totals({ created: 1, updated: 2, pricesAdded: 3, namesSaved: 1, namesLost: 2, codesFull: 1, changesAdded: 4 }), { decisionsWritten: 5 });
     expect(lines()).toEqual([
-      '1 ingredient created', '2 existing ingredients got new prices', '3 prices added', '1 name on the invoice saved',
+      '1 product created', '2 existing products got new prices', '3 prices added', '1 name on the invoice saved',
       'Price changes recorded: 4', '0 unchanged', '0 skipped',
       '2 names on the invoice not saved: they changed while importing — load the file again',
-      'Choices remembered: 5', '1 ingredient could not remember its new pack code (20 codes already)',
+      'Choices remembered: 5', '1 product could not remember its new pack code (20 codes already)',
     ]);
   });
 
   it('a run the rules stopped says so in an alert, with how many were not tried, and says to load the file again', () => {
     draw(totals({ stopped: 'permission', notRun: 2, failed: [{ key: 'k', name: 'Sale', reason: 'Mise was not allowed', retry: true }], retryable: 1 }));
-    expect(screen.getByRole('alert')).toHaveTextContent('Mise was not allowed to save this: your account may not change prices here. The import stopped. 2 ingredients were not tried.');
+    expect(screen.getByRole('alert')).toHaveTextContent('Mise was not allowed to save this: your account may not change prices here. The import stopped. 2 products were not tried.');
     expect(screen.getByText('Load the same file again to finish: what is already saved is not repeated.')).toBeInTheDocument();
-    expect(screen.getByText('1 ingredient not imported')).toBeInTheDocument();
+    expect(screen.getByText('1 product not imported')).toBeInTheDocument();
   });
 
   it('lists the rows that could not be imported, each with its reason', () => {
@@ -101,7 +101,7 @@ describe('the summary', () => {
     draw(totals({ changesFailed: 2 }), { decisionsFailed: true });
     const alerts = screen.getAllByRole('alert').map(alert => alert.textContent);
     expect(alerts).toEqual([
-      'Price changes could not be recorded for 2 ingredients: load the same file again to complete them.',
+      'Price changes could not be recorded for 2 products: load the same file again to complete them.',
       'Your choices could not be remembered. The import itself is not affected.',
     ]);
   });
@@ -109,7 +109,7 @@ describe('the summary', () => {
   it('speaks Italian', () => {
     draw(totals({ created: 2, pricesAdded: 2 }), {}, 'it');
     expect(screen.getByRole('heading', { level: 3, name: 'Importazione conclusa' })).toBeInTheDocument();
-    expect(lines().slice(0, 3)).toEqual(['2 ingredienti creati', '0 ingredienti già presenti hanno nuovi prezzi', '2 prezzi aggiunti']);
+    expect(lines().slice(0, 3)).toEqual(['2 prodotti creati', '0 prodotti già presenti hanno nuovi prezzi', '2 prezzi aggiunti']);
   });
 });
 

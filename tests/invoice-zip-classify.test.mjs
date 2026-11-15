@@ -1,4 +1,6 @@
 // Port of invoice-import/tests/test_classify.py (+ the egg-count part of test_review_fixes.py).
+// ⚠️ Not every case there is mirrored here: js/ is frozen until the switch, so the Mise 2 additions in test_classify.py (the six soft
+// drinks and their whole-word rule) are Python/Mise 2 only, pinned by shared/src/invoice-zip/classify.spec.ts.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {

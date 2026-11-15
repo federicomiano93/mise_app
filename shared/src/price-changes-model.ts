@@ -113,6 +113,11 @@ export function sameUnitWeight(a: unknown, b: unknown): boolean {
   return Math.abs(a - b) / Math.max(a, b) <= 0.001;
 }
 
+// MISE 2 ONLY (15 Nov 2026), `weightlessPieces` of changesFromPoints: goods priced per piece with no weight at all (packaging,
+// resale and other bought as the invoice counts them). Two such points ARE the same piece; a point with a weight and one
+// without still never are. Without the option, the original's rule above.
+const noWeight = (w: unknown): boolean => !(typeof w === 'number' && w > 0);
+
 const codeKey = (v: unknown): string => (typeof v === 'string' ? v.trim().toLowerCase() : '');
 
 // A point that passed `usable`, its invoice id already text.
@@ -132,7 +137,7 @@ interface CleanPoint extends PricePoint {
 export function changesFromPoints(
   ingredient: PriceIngredient,
   points?: unknown,
-  { minPct = 0.5 }: { minPct?: number } = {},
+  { minPct = 0.5, weightlessPieces = false }: { minPct?: number; weightlessPieces?: boolean } = {},
 ): PriceChange[] {
   const seen = new Set<string>();
   const clean: CleanPoint[] = [];
@@ -154,7 +159,8 @@ export function changesFromPoints(
     const prev = clean[i - 1] as CleanPoint;
     const next = clean[i] as CleanPoint;
     if (prev.priceUnit !== next.priceUnit) continue;
-    if (next.priceUnit === 'pcs' && !sameUnitWeight(prev.unitWeightKg, next.unitWeightKg)) continue;
+    if (next.priceUnit === 'pcs' && !sameUnitWeight(prev.unitWeightKg, next.unitWeightKg)
+      && !(weightlessPieces && noWeight(prev.unitWeightKg) && noWeight(next.unitWeightKg))) continue;
     if (next.pricePerUnit === prev.pricePerUnit) continue;
     const pct = Math.round(((next.pricePerUnit - prev.pricePerUnit) / prev.pricePerUnit) * 10000) / 100;
     if (!Number.isFinite(pct) || Math.abs(pct) < minPct) continue;

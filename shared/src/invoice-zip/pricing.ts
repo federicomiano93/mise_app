@@ -129,8 +129,25 @@ function computed(price: number | null, qty: number | null, reliability: string,
   return { price, qty, reliability, note, unitWeightKg: null, vatRate: null, ...extra };
 }
 
+// MISE 2 ONLY (14 Nov 2026): `weightlessPieces` — goods priced per piece that need no weight at all (resale, other and, since
+// 15 Nov 2026, packaging: a bottle sold as it arrives, a detergent, a box): no per-kilo cost is ever asked of them. Without the option a piece with no
+// weight has no price («no-piece-weight»), as in the original; with it, the price is the invoice's own per piece.
+//
+// MISE 2 ONLY (15 Nov 2026): `singleBottles` — a drinks supplier counts BOTTLES on the invoice («COLA ML 450 X24», 12 PZ at 0.7481: 12
+// bottles, not 12 cartons of 24). When every line of the product is in a single-piece unit (PZ, NR, N, BT, BOTT, PEZZI) and the description's
+// count is a carton composition (6 or more, not a retail multipack like «X3»), the quantity already counts single bottles, so the count
+// of the description is not multiplied in. A pack unit (CF, CT, …) or a smaller count keeps the original's reading; lines of one product in
+// both kinds of unit keep it too, and need a look. Only the price changes: what is saved on the item (weight, count) does not.
+export interface ComputeOptions { weightlessPieces?: boolean; singleBottles?: boolean }
+
+// A line counted in single pieces, as the invoice's unit of measure says it (spaces and dots ignored, like unitClass).
+const SINGLE_PIECE_UNITS: ReadonlySet<string> = new Set(['PZ', 'NR', 'N', 'BT', 'BOTT', 'PEZZI']);
+const CARTON_COUNT_MIN = 6;
+const isSinglePiece = (rawUnit?: unknown): boolean => SINGLE_PIECE_UNITS.has(String(rawUnit || '').replace(/[\s.]+/g, '').toUpperCase());
+
 // One product on one invoice -> its price, quantity and how far to trust them.
-export function computeDocument(lines: readonly PricedLine[], p: PricingParams, discountFlag = false): ComputedPrice {
+export function computeDocument(lines: readonly PricedLine[], p: PricingParams, discountFlag = false,
+  options: ComputeOptions = {}): ComputedPrice {
   const ordered = [...lines].sort((a, b) => a.number - b.number);
   // The cast is typing only: an empty list throws here, as in the original.
   const first = ordered[0] as PricedLine;
@@ -164,6 +181,11 @@ export function computeDocument(lines: readonly PricedLine[], p: PricingParams, 
 
   if (p.priceUnit === 'pcs') {
     const weight = unitWeightKg(p);
+    if (weight === null && options.weightlessPieces === true && !p.egg) {
+      // The invoice counts what it sells and says what it cost: the price per piece is exact.
+      const qty = pieces * count;
+      return finish(computed(total / qty, qty, 'alta', '', { vatRate: vat }), mixed, discountFlag, p.priceUnit);
+    }
     if (weight === null) return fail(NOTE.NO_PIECE_WEIGHT);
     let result: ComputedPrice;
     if (p.egg) {
@@ -206,10 +228,17 @@ export function computeDocument(lines: readonly PricedLine[], p: PricingParams, 
   if (base === null) return fail(NOTE.NO_WEIGHT_ON_INVOICE);
   const [size, dim] = base;
   if (dim !== p.priceUnit) return fail(NOTE.PRICE_UNIT_PACK_MISMATCH);
-  const qty = pieces * size * count;
+  let bottleCount = count;
+  let mixedPacks = false;
+  if (options.singleBottles === true && count >= CARTON_COUNT_MIN) {
+    const singles = same.filter((ln) => isSinglePiece(ln.unit)).length;
+    if (singles === same.length) bottleCount = 1;
+    else if (singles > 0) mixedPacks = true;
+  }
+  const qty = pieces * size * bottleCount;
   const result = finish(
     computed(total / qty, qty, 'media', NOTE.WEIGHT_FROM_DESCRIPTION, { vatRate: vat }),
-    mixed, discountFlag, p.priceUnit);
+    mixed || mixedPacks, discountFlag, p.priceUnit);
   // ⚠️ NO CARTON WEIGHS THIS MUCH: «2Kg* 55pz» read as 55 × 2 kg gives a price that still looks believable, and the
   // spellings of a piece weight are endless (classify.ts catches the common one). Above this it needs a look.
   if (count > 1 && size * count > MAX_PACK_KG_L) {
