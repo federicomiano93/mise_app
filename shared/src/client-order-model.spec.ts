@@ -394,6 +394,22 @@ describe.each([
     expect(m.orderTotalLines(order)).toBe(2);
   });
 
+  test('⚠️ a frozen name that is a number or a map does not throw, and every other row still sorts', () => {
+    // The order is written by the client's phone; the rules cannot look at the values of `names` (security audit).
+    const order = {
+      quantities: { 'p-num': 1, 'p-map': 2, 'p-z': 3, 'p-a': 4 },
+      names: { 'p-num': 42, 'p-map': { evil: true }, 'p-z': 'Zucchini bread', 'p-a': 'Apple pie' },
+    };
+    const rows = rowsOf(order, () => '');
+    expect(rows.map(r => r.name)).toStrictEqual(['Apple pie', 'Deleted product', 'Deleted product', 'Zucchini bread']);
+    expect(rows.every(r => typeof r.name === 'string')).toBe(true);
+    // A live name that is not text is forced to text too.
+    expect(rowsOf({ quantities: { x: 1, y: 2 } }, (id: string) => (id === 'x' ? 7 : 'Bun')).map(r => r.name)).toStrictEqual(['7', 'Bun']);
+    // `quantities` / `names` that are not objects are no quantities / no names.
+    expect(rowsOf({ quantities: 'abc', names: 5 }, () => '')).toStrictEqual([]);
+    expect(rowsOf({ quantities: { x: 1 }, names: 'x' }, () => '').map(r => r.name)).toStrictEqual(['Deleted product']);
+  });
+
   test('a RENAMED product shows its new name', () => {
     expect(rowsOf(build(), liveNameOf)[0]?.name).toBe('Burger buns');
   });

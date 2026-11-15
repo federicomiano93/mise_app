@@ -389,12 +389,19 @@ export function isApplied(order: unknown): boolean {
 // `deletedWord`, handed in by the caller (the original looks up `co.deletedProduct`).
 export function orderRows(order: unknown, liveNameOf: unknown, deletedWord: string): OrderRow[] {
   const o = order as Loose | null | undefined;
-  const quantities = ((o && o['quantities']) || {}) as Loose;
-  const frozen = ((o && o['names']) || {}) as Loose;
+  // ⚠️ EVERY NAME IS FORCED TO TEXT (security audit, 2 Nov 2026; the original's f272b4d9). The order is written by the
+  // CLIENT's phone, and the rules can count the keys of `names` but cannot look at its values — they cannot iterate a map.
+  // So a link holder could send a name that is a number or a map, and the sort below threw on it: the bakery's day panel
+  // stopped drawing at that card, hiding every OTHER client's order after it. A frozen name that is not a string is
+  // treated as no name at all.
+  const quantities = ((o && typeof o['quantities'] === 'object' && o['quantities']) || {}) as Loose;
+  const frozen = ((o && typeof o['names'] === 'object' && o['names']) || {}) as Loose;
   const live = typeof liveNameOf === 'function' ? liveNameOf as (id: string) => unknown : null;
   const rows = Object.keys(quantities).map(id => ({
     id,
-    name: ((live && live(id)) || frozen[id] || deletedWord) as string,
+    name: String((live && live(id))
+      || (typeof frozen[id] === 'string' && frozen[id])
+      || deletedWord),
     qty: num(quantities[id]),
     // The row is still shown, but the screen can mark it: a product nobody sells any more cannot be put into the
     // Calculator, because there is no field for it.
