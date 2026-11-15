@@ -113,7 +113,19 @@ describe('selection with everyKind', () => {
       everyKind: true,
       decisions: [{ id: decisionId(supplierDecisionKey(SUPPLIER)), decision: 'skip' }, { id: decisionId(key('AQ')), decision: 'ingredient' }],
     });
-    expect(stored.importFile.ingredients.map(i => [i.key, i.kind])).toStrictEqual([[key('AQ'), 'resale']]);
+    // Fix of 15 Nov: for a NEW item the stored «ingredient» answer wins over the reader's guess (packaging here), in the file and the groups.
+    expect(stored.importFile.ingredients.map(i => [i.key, i.kind])).toStrictEqual([[key('AQ'), 'ingredient']]);
+  });
+
+  test('⚠️ a remembered «import as an ingredient» makes the NEW item an ingredient, in the file and in the groups', () => {
+    const result = built([FLOUR, FILM, WATER]);
+    const selection = selectImport(result, { everyKind: true, decisions: [{ id: decisionId(key('PEL')), decision: 'ingredient' }] });
+    const kinds = Object.fromEntries(selection.importFile.ingredients.map(i => [i.key, i.kind]));
+    expect(kinds).toStrictEqual({ [key('F00')]: 'ingredient', [key('PEL')]: 'ingredient', [key('AQ')]: 'resale' });
+    expect(selection.counts.byKind).toStrictEqual({ ingredient: 2, packaging: 0, resale: 1, other: 0 });
+    expect(selection.groups.byKind?.ingredient.map(item => item.key).sort()).toStrictEqual([key('F00'), key('PEL')]);
+    // Another product, no decision: unchanged.
+    expect(selectImport(result, { everyKind: true }).importFile.ingredients.find(i => i.key === key('PEL'))?.kind).toBe('packaging');
   });
 });
 

@@ -17,7 +17,9 @@
 // ⚠️ ONE MISE-2-ONLY OPTION, `everyKind` (14 Nov 2026), for a build made with build-import's own `everyKind`: every product that
 // can be read is imported (packaging, resale and other too — nothing is «not imported» for what it was taken for), and the
 // result adds `groups.byKind` and `counts.byKind`, what goes in, by item kind. «Skip this product» and «skip this supplier» work
-// as before; a stored 'ingredient' simply means «import». Without the option the result is the original's, key for key.
+// as before; a stored 'ingredient' means «import», and the new item's kind is 'ingredient' (the owner's past correction wins over the
+// reader's guess). The line type «altro», the soft drinks, `TYPE_ORDER` and the «1/2X» reading are NOT behind the option: they
+// apply in the port without it (deliberate, pinned by classify.spec.ts, keywords.spec.ts and parity.spec.ts).
 
 import { normalizeVat } from '../vat-number';
 import { INGREDIENT_KINDS, kindOf } from '../ingredient-kind';
@@ -178,8 +180,12 @@ export function selectImport(built: ImportResult, options: SelectOptions = {}): 
   const taken: { row: ImportResult['products'][number]; entry: ImportIngredient }[] = [];
 
   for (const row of built.products || []) {
-    const entry = entryByKey.get(row.key) || null;
+    const found = entryByKey.get(row.key) || null;
     const stored = decisions.get(decisionId(row.key));
+    // MISE 2 (`everyKind`, 15 Nov 2026): a stored 'ingredient' is what the owner answered «import this as an ingredient» to in the
+    // current app, on a line the reader took for packaging, resale or other. That correction still wins over the reader's guess for
+    // a NEW item (an existing item never changes kind: the plan never names it).
+    const entry = everyKind && found && stored === DECISION_INGREDIENT && kindOf(found) !== 'ingredient' ? { ...found, kind: 'ingredient' as const } : found;
     const supplierStored = decisions.get(decisionId(supplierDecisionKey(row.supplierKey))) === DECISION_SKIP;
     const supplierSkipped = supplierStored && supplierOverrides[row.supplierKey] !== 'import';
     const vat = normalizeVat(row.vatNumber);
