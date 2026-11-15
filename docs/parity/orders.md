@@ -1866,3 +1866,54 @@ came back; clearing it and typing the same number again on purpose is a new act,
 intended behaviour:** if the person leaves Orders before the server answers the opening that showed the alert, the next opening
 puts the number back with only the status line and no second alert (pinned by «a reopening before the server answered does not say
 it again»).
+
+## Save at once, the send editor and «did it go?» as built (15 Nov 2026, current app PRs #551 and #554)
+
+Ported from the current app's v1.145.0 into Mise 2 before the switch (the two PRs went live on `main` only). The stack's `js/` predates
+both, so nothing here is paired with a `js/` file: each piece's spec re-states the current app's tests against the TypeScript alone.
+
+**Save at once (#551).** Leaving a quantity or stock box (`OrderLine` → `NumberBox` `onLeave`) and closing a supplier's screen
+(`SupplierOrderScreen` unmount) call `ordersStore.sendWaiting()`: what waits for the 800 ms pause goes now, one write per box left at most.
+`draftSync.ts` has `saveState()` (`{ ready, saved }`) and tells `onSaveState` only when it changes; `saved` is false while a change waits,
+is in the air, was refused, waits in the last page's note (`restored`), or Firestore still queues a draft write on this device — the
+draft watcher now passes the snapshot's `hasPendingWrites` (`OrdersMeta.pendingWrites`, `receive(doc, fromServer, pendingWrites)`).
+`SaveStateLine` («Saved ✓» / «Not sent yet», `saveStateView.ts`; offline is «not sent yet») sits in the list's sticky head and under a
+supplier screen's bar; with a supplier open beside the list the head's line is empty (one voice). Fixed height, empty but kept before the
+first snapshot. Specs: `draftSync.saveState.spec.ts`, `OrdersSection.saveState.spec.tsx`.
+
+**The send editor (#554).** Every road that hands an order over goes through `SendEditorDialog` (one per message, «Order for X (1 of 2)»,
+«Check the order» for the grouped chat): the message drawn as WhatsApp draws it (*bold* bold; email plain), a box to correct it, the hint
+that History keeps the order's quantities, ONE «Send». The two WhatsApp roads go **as a picture** through the share sheet wherever
+`canSharePhotos()` says the phone can share a file (`navigator.canShare` with a File, feature-checked — Chrome 101 floor), else as the
+edited text by `wa.me`; email always as text. The picture is drawn ahead of the tap and again after each pause in typing
+(`sendEditor.ts picturePrep`), and «Send» shares the ready File inside its own press. A failed or undrawable picture asks
+«Couldn't share the photo, sending the text instead.»; a closed share sheet keeps the editor. **Cancel and Escape are ignored while the
+share sheet is open.** Leaving with edits asks «Discard your changes?» inside the same dialog; an edited text holds `markBusy()`.
+`runSendBatch` replaces the photo batch and `runTextBatch`: Skip / Cancel / «Not sent: …» as before, and a window counts only when it
+really opened (F-3 kept, unlike the current app's email). `SendDialogs.tsx` (format, one-picture and «Open» dialogs) is gone.
+
+**«Did it go?» (#554).** A send that reached suppliers is no longer recorded or taken to the confirm screen (`afterSend` is gone): the
+quantities that went are written to `drafts/current.awaitingSent.<supplierId>` = `{ at, date, quantities, units, draft? }`
+(`ordersStore.askDidItGo`, `setDoc` with `mergeFields`: the value replaced whole), and `AwaitingBanner` asks on EVERY device, in both
+list views, until somebody answers. «Yes» claims the key in a transaction (`claimDidItGo`, `claimDecision`), then `placeSent` records
+exactly what went — every line that went filed under that supplier, on the stored day — and clears only the lines still reading what
+went (`linesToClear`), the day stamp only when nothing of the supplier is left. «No» removes only the key. A failed recording puts the
+question back (`restoreDidItGo`, a transaction, never over a newer send); offline it stays on this device and goes back when the network
+returns. When History already holds the order for that day, «Yes» first asks «It may already be recorded» («Don't record» = «No»). The
+device that sent asks with a dialog: at once after the share sheet answered, on return to the page after a text window
+(`visibilitychange`); Escape leaves it to the banner. A question that could not be shared stays on this device and is answered without
+a claim. «Order placed» for that supplier removes its question too. «Send it now» on the confirm screen sends the corrected numbers,
+records nothing and leaves them (with what the draft said, `draft`) waiting for «did it go?». History's «Send again» goes through the
+editor but asks nobody. A supplier's screen has «Send» (the arrow, labelled «Send the order to X») left of «+», disabled while nothing is
+typed, one send at a time. Pure rules: `awaitingSent.ts` (port of `js/orders/awaiting-sent.js`); wiring: `useAwaitingSent.tsx`.
+Specs: `awaitingSent.spec.ts`, `sendEditor.spec.ts`, `sendFlow.spec.ts`, `OrdersSection.send.spec.tsx`, `OrdersSection.awaiting.spec.tsx`.
+
+**Rules.** `firestore.rules` takes `awaitingSent` from `main` word for word (a map of at most 200, optional, values not judged), with its
+checks in `tests/rules/firestore-rules-check.mjs`; already deployed live with v1.145.0.
+
+**Differences, on purpose.** (1) The photo-or-text question is gone, and with it Mise 2's «Text first» (his decision of 9 Nov 2026): the
+owner's PR #554 of 14 Nov made the picture the road wherever the phone can share one. (2) Email counts only a window that opened (F-3),
+where the current app counts every mailto. (3) The discard question is the same dialog changing its words, not a second dialog on top.
+(4) The «did it go?» banner sits under the list's head in both views (the current app has one page). (5) The saving line of the list's
+head is left empty, not stale, while a supplier screen speaks. Not checked on a real phone or tablet yet: the share sheet, WhatsApp coming
+back, and two devices answering at once are the owner's drive.

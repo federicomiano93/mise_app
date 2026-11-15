@@ -1,4 +1,5 @@
-import { vi } from 'vitest';
+import { expect, vi } from 'vitest';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import type { StoredDoc } from '../orders/ordersSource';
 import { fakeOrdersSource } from './fakeOrdersSource';
 import type { FakeOrdersSource } from './fakeOrdersSource';
@@ -37,3 +38,12 @@ export function split(): void {
 export const LOAD = { timeout: 10_000 };
 // The draft is saved 800 ms after the last keystroke (draftSync.ts): a spec that reads what was written waits this long.
 export const SAVED = { timeout: 5_000 };
+
+// The send editor that every message of a send now goes through (the current app's PR #554): its «Send», once enabled, pressed in a
+// task of its own. Resolves once pressed.
+export async function sendFromEditor(): Promise<void> {
+  const dialog = await screen.findByRole('dialog', { name: /^(Order for |Check the order)/ }, LOAD);
+  const button = within(dialog).getByRole('button', { name: 'Send' });
+  await waitFor(() => { expect(button).toBeEnabled(); }, LOAD);
+  act(() => { button.click(); });
+}

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
-import { Check, ClipboardList, List, Plus } from 'lucide-react';
+import { Check, ClipboardList, List, Plus, Share } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router';
 import { fromOrdersList, fromOrdersSupplier, ingredientCardAddress, newIngredientAddress, supplierScreenAddress } from '@mise/shared/records-link';
 import { supplierLabel } from '@mise/shared/supplier-label';
@@ -16,6 +16,9 @@ import { DayLine } from './DayLine';
 import { OrderLine } from './OrderLine';
 import { OrderTotals } from './OrderTotals';
 import { SaveStateLine } from './SaveStateLine';
+import { draftSendRows } from './sendFlow';
+import { useAwaitingSent } from './useAwaitingSent';
+import { useSendOrder } from './useSendOrder';
 import { useOrders, useOrdersStore } from './OrdersContext';
 import { ADD_DOOR, ITEMS_DOOR, PLACE_DOOR, SUMMARY_DOOR, SUPPLIER_DOOR, SUPPLIER_TITLE, supplierOpener, useHandBack } from './handBack';
 import { ORDERS_PATH, supplierConfirmPath, supplierItemsPath, supplierSummaryPath } from './ordersPath';
@@ -127,6 +130,49 @@ export function SupplierOrderScreen({ id, lens }: { id: string; lens: OrdersLens
   // The column names stick right under the bar, whose height changes with the title's lines and the width.
   const barHeight = useHeight();
 
+  // ⚠️ «SEND» FOR THIS SUPPLIER ONLY (the current app's PR #554, owner 14 Nov 2026): the road chooser and the send editor for these
+  // rows, with no supplier picker in between, then «did it go?» on every device. ONE SEND AT A TIME: a second tap while the chooser or
+  // the editor is up is ignored (two editors would answer for the same rows and ask twice). Disabled while nothing is typed.
+  const [sendOrder, sendDialogs] = useSendOrder(lens);
+  const awaiting = useAwaitingSent();
+  const sendingRef = useRef(false);
+  const [sending, setSending] = useState(false);
+  const sendNow = () => {
+    if (sendingRef.current) return;
+    const rows = draftSendRows(lens, snapshot.draft, [id]);
+    if (rows.length === 0) return;
+    sendingRef.current = true;
+    setSending(true);
+    const done = () => { sendingRef.current = false; setSending(false); };
+    let going: ReturnType<typeof sendOrder>;
+    try {
+      // Called here, in the press: the chooser's road (or the one road) is taken in a press of its own.
+      going = sendOrder({ rows, grouped: true, supplierRoadsOnly: false });
+    } catch (err) {
+      console.error('Sending the order failed:', err);
+      done();
+      say(t('ord.send.failed'), LONG_MS);
+      return;
+    }
+    void going.then(result => {
+      done();
+      if (result?.kind === 'sent' && result.ids.includes(id)) {
+        const lines = rows.find(row => row.id === id)?.lines;
+        if (lines) awaiting.wait([{ supplierId: id, ...lines }], { handOff: result.handOff });
+      } else if (result?.kind === 'sent' && result.blocked) say(t('ord.send.nothingOpened'), LONG_MS);
+      else if (result?.kind === 'list') {
+        if (result.outcome === 'sent') say(`${t('ord.request.sent')} — ${t('ord.request.sentToManagers')}`, LONG_MS);
+        else if (result.outcome === 'queued') say(t('ord.request.queued'), LONG_MS);
+        else if (result.outcome === 'failed') say(t('ord.request.sendFailed'), LONG_MS);
+        else if (result.outcome === 'nothing') say(t('ord.nothingLeft'), LONG_MS);
+      }
+    }, (err: unknown) => {
+      console.error('Sending the order failed:', err);
+      done();
+      say(t('ord.send.failed'), LONG_MS);
+    });
+  };
+
   // ⚠️ CLOSING THIS SCREEN SENDS WHAT WAITS AT ONCE, not after the pause (the current app's PR #551): a quantity typed a moment ago
   // goes now. Leaving a box does the same (OrderLine); this covers a Back pressed with the focus still in one.
   useEffect(() => () => { store.sendWaiting(); }, [store]);
@@ -190,6 +236,14 @@ export function SupplierOrderScreen({ id, lens }: { id: string; lens: OrdersLens
           titleDoorLabel={t('ord.supplierDoor', { supplier: label })}
           action={(
             <div className={styles.barActions}>
+              <Button
+                className={styles.add}
+                aria-label={t('ord.supplierSendAria', { supplier: label })}
+                isDisabled={filled === 0 || sending}
+                onPress={sendNow}
+              >
+                <Share aria-hidden="true" />
+              </Button>
               {doors.may ? (
                 <Button
                   ref={addNode}
@@ -278,6 +332,7 @@ export function SupplierOrderScreen({ id, lens }: { id: string; lens: OrdersLens
         </>
       )}
       {clearDialog}
+      {sendDialogs}
     </section>
   );
 }

@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { todayISO } from '@mise/shared/day';
 import { outputLanguage } from '@mise/shared/market';
 import { sendOffers, settleOnce } from '@mise/shared/send-chooser';
-import type { PhotoOutcome, SendJob, SendOffer } from '@mise/shared/send-chooser';
+import type { SendOffer } from '@mise/shared/send-chooser';
 import { supplierLabel } from '@mise/shared/supplier-label';
 import { useT } from '../i18n/useT';
 import { useSession } from '../session/SessionContext';
@@ -12,13 +12,14 @@ import { useAlert } from '../ui/useAlert';
 import { useConfirm } from '../ui/useConfirm';
 import { useOrders, useOrdersStore } from './OrdersContext';
 import { RoadChooser } from './RoadChooser';
-import { FormatDialog, OpenDialog, PhotoDialog } from './SendDialogs';
+import { SendEditorDialog } from './SendEditorDialog';
 import { recordDateFor } from './orderDay';
 import { canSharePhotos, renderOrderImage } from './orderImage';
 import type { OrdersLens } from './ordersLens';
 import type { StoredDoc } from './ordersSource';
 import { openWindow, sendTranslate, takeRoad } from './sendFlow';
-import type { OpenQuestion, RoadResult, SendRow, SendUi, TextOutcome } from './sendFlow';
+import type { RoadResult, SendRow, SendUi } from './sendFlow';
+import type { EditAnswer, EditQuestion } from './sendEditor';
 import { unitConflictText } from './unitConflictText';
 import { LONG_MS } from './useClearQuantities';
 
@@ -36,9 +37,7 @@ export interface SendRequest {
 
 type Offer = SendOffer<StoredDoc>;
 type Chooser = { offers: readonly Offer[]; pick: (offer: Offer) => void; cancel: () => void };
-type FormatQuestion = { answer: (format: 'photo' | 'text' | null) => void };
-type OpenAsk = { question: OpenQuestion; answer: (outcome: TextOutcome) => void };
-type PhotoQuestion = { job: SendJob; file: File | undefined; i: number; n: number; answer: (outcome: PhotoOutcome) => void };
+type EditAsk = { question: EditQuestion; render: (text: string) => Promise<File>; answer: (value: EditAnswer) => void };
 
 // Sending an order, from the send screen and from «Send it now» on the confirm screen — ONE flow, so the two can never behave
 // differently:
@@ -48,9 +47,10 @@ type PhotoQuestion = { job: SendJob; file: File | undefined; i: number; n: numbe
 //
 // The second value is every dialog the flow may open and goes in the component's output.
 //
-// ⚠️⚠️ `send` MUST BE CALLED SYNCHRONOUSLY FROM THE PRESS OF THE BUTTON THE PERSON TAPPED. With one road open it takes that
-// road in the same tick; with several it draws the chooser, and the road's own button takes the road in ITS press. Either way
-// takeRoad opens its text windows before its first await (sendFlow.ts): a window opened later is a blocked pop-up.
+// `send` is called from the press of the button the person tapped. With one road open it takes that road in the same tick; with
+// several it draws the chooser, and the road's own button takes the road in ITS press. Since the current app's PR #554 every message
+// then goes through the send editor (SendEditorDialog), whose own «Send» press opens the window or the share sheet: a window opened
+// after an await would be a blocked pop-up.
 //
 // ⚠️ THE IN-APP «TO THE MANAGER» LIST IS A ROAD LIKE THE OTHERS (step 3f-7) EXCEPT IN TWO PLACES. «Send it now» never offers it (sendOffers:
 // it puts the order in a SUPPLIER's hands), and a recorded order sent again from History never offers it either: the list is a
@@ -64,9 +64,7 @@ export function useSendOrder(lens: OrdersLens): readonly [(request: SendRequest)
   const [alert, alertDialog] = useAlert();
   const [confirm, confirmDialog] = useConfirm();
   const [chooser, setChooser] = useState<Chooser | null>(null);
-  const [format, setFormat] = useState<FormatQuestion | null>(null);
-  const [photo, setPhoto] = useState<PhotoQuestion | null>(null);
-  const [opening, setOpening] = useState<OpenAsk | null>(null);
+  const [editing, setEditing] = useState<EditAsk | null>(null);
   // What is waiting for an answer, so a screen that goes away leaves nothing hanging.
   const waiting = useRef(new Set<() => void>());
 
@@ -125,13 +123,14 @@ export function useSendOrder(lens: OrdersLens): readonly [(request: SendRequest)
     }
 
     const language = outputLanguage(who.location);
+    const render = (text: string) => renderOrderImage(text, { language });
     const ui: SendUi = {
       alert: message => latest.current.alert({ message, okLabel: latest.current.t('common.ok') }),
       canSharePhotos,
-      askFormat: () => ask<'photo' | 'text' | null, FormatQuestion>(setFormat, answer => ({ answer }), null),
-      render: text => renderOrderImage(text, { language }),
-      askPhoto: question => ask<PhotoOutcome, PhotoQuestion>(setPhoto, answer => ({ ...question, answer }), 'cancelled'),
-      askOpen: question => ask<TextOutcome, OpenAsk>(setOpening, answer => ({ question, answer }), 'cancelled'),
+      render,
+      // ⚠️ A SCREEN THAT GOES AWAY answers «cancelled» for an editor still open: nothing is counted as sent.
+      askEdit: question => ask<EditAnswer, EditAsk>(setEditing, answer => ({ question, render, answer }),
+        { outcome: 'cancelled', text: question.job.text }),
       confirmText: () => latest.current.confirm({
         message: latest.current.t('ord.sendFormat.photoFailed'),
         okLabel: latest.current.t('common.ok'),
@@ -220,9 +219,9 @@ export function useSendOrder(lens: OrdersLens): readonly [(request: SendRequest)
   const dialogs = (
     <>
       {chooser ? <RoadChooser offers={chooser.offers} onPick={chooser.pick} onCancel={chooser.cancel} /> : null}
-      {format ? <FormatDialog answer={format.answer} /> : null}
-      {opening ? <OpenDialog key={opening.question.i} question={opening.question} answer={opening.answer} /> : null}
-      {photo ? <PhotoDialog key={photo.i} job={photo.job} file={photo.file} i={photo.i} n={photo.n} answer={photo.answer} /> : null}
+      {editing ? (
+        <SendEditorDialog key={editing.question.i} question={editing.question} render={editing.render} answer={editing.answer} />
+      ) : null}
       {confirmDialog}
       {alertDialog}
     </>

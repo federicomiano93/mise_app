@@ -3,7 +3,7 @@ import { act, screen, waitFor, within } from '@testing-library/react';
 import { addDays, parseISODate, todayISO, toISODate } from '@mise/shared/day';
 import { fakeOrdersSource } from '../testing/fakeOrdersSource';
 import type { FakeOrdersSource } from '../testing/fakeOrdersSource';
-import { LOAD, ingredient, renderOrders, split, supplier } from '../testing/renderOrders';
+import { LOAD, ingredient, renderOrders, split, supplier, sendFromEditor } from '../testing/renderOrders';
 
 // «Orders», step 3f-4: the settings, History with its cards, the older orders on demand, «Send again» and «Send all»,
 // and the editor that corrects or deletes a recorded order.
@@ -356,6 +356,7 @@ describe('the package word of a typed card (Mise 2 only)', () => {
     const head = await openCard(view, 'Alpine Mills');
     expect(within(bodyOf(head)).getByText('2 bottles')).toBeInTheDocument();
     await pressThenMicrotasks(history().getByRole('button', { name: 'Send again' }));
+    await sendFromEditor();
     expect(decodeURIComponent(String(open.mock.calls[0]?.[0]))).toContain('- Cream: 2 bottles');
   });
 
@@ -364,12 +365,13 @@ describe('the package word of a typed card (Mise 2 only)', () => {
     const view = await atHistory(typedSource({ 'i-cream': 'carton' }), STAFF);
     await openCard(view, 'Alpine Mills');
     await pressThenMicrotasks(history().getByRole('button', { name: 'Send again' }));
+    await sendFromEditor();
     expect(decodeURIComponent(String(open.mock.calls[0]?.[0]))).toContain('- Cream: 2 × carton');
   });
 });
 
 describe('«Send again»', () => {
-  it('opens the one road in the very tick of the press, with no unit check against today’s record, and records nothing', async () => {
+  it('takes the one road in the press (its send editor), with no unit check against today’s record, and records nothing — and asks nobody «did it go?»', async () => {
     const open = spyOpen();
     const source = seeded({
       // Today's record in `carton`, the older one in `bag`: a send from the draft would be refused for the clash.
@@ -380,6 +382,7 @@ describe('«Send again»', () => {
     await openCard(view, 'Alpine Mills', 1);
     const before = source.recordAttempts;
     await pressThenMicrotasks(history().getByRole('button', { name: 'Send again' }));
+    await sendFromEditor();
     expect(open).toHaveBeenCalledTimes(1);
     const url = String(open.mock.calls[0]?.[0]);
     expect(decodeURIComponent(url)).toContain('- Cake box: 2 × bag');
@@ -387,6 +390,8 @@ describe('«Send again»', () => {
     await Promise.resolve();
     expect(source.recordAttempts).toBe(before);
     expect(path(view)).toBe('/orders/history');
+    // A recorded order sent again is not a new order: nobody is asked «did it go?».
+    expect(source.draft?.awaitingSent).toBeUndefined();
   });
 
   it('ignores a second press while the first is pending and frees the button when the send throws', async () => {
@@ -396,8 +401,10 @@ describe('«Send again»', () => {
     await openCard(view, 'Zed');
     const again = history().getAllByRole('button', { name: 'Send again' })[0] as HTMLElement;
     await view.user.click(again);
+    await sendFromEditor();
     expect(await screen.findByText('Something went wrong while sending. Try again.')).toBeInTheDocument();
     await view.user.click(again);
+    await sendFromEditor();
     await waitFor(() => { expect(open).toHaveBeenCalledTimes(2); });
   });
 
@@ -406,6 +413,7 @@ describe('«Send again»', () => {
     const view = await atHistory(seeded(fortnight()), STAFF);
     await openCard(view, 'Zed');
     await view.user.click(history().getAllByRole('button', { name: 'Send again' })[0] as HTMLElement);
+    await sendFromEditor();
     expect(open).toHaveBeenCalledTimes(1);
     expect(await screen.findByText(/^Nothing was opened/)).toBeInTheDocument();
   });
@@ -426,6 +434,7 @@ describe('«Send all» for a day', () => {
     expect(day.getByText('3 items')).toBeInTheDocument();
     await view.user.click(day.getByRole('radio', { name: 'One list' }));
     await view.user.click(day.getByRole('button', { name: 'Send' }));
+    await sendFromEditor();
     await waitFor(() => { expect(path(view)).toBe('/orders/history'); });
     const text = decodeURIComponent(String(open.mock.calls[0]?.[0]));
     expect(text).toContain('Flour 00');
@@ -441,6 +450,7 @@ describe('«Send all» for a day', () => {
     const day = within(await screen.findByRole('region', { name: 'Send today' }));
     await view.user.click(day.getByRole('checkbox', { name: 'Select all suppliers' }));
     await view.user.click(day.getByRole('button', { name: 'Send' }));
+    await sendFromEditor();
     expect(await screen.findByText(/^Nothing was opened/)).toBeInTheDocument();
     expect(path(view)).toBe(`/orders/history/day/${TODAY}`);
   });

@@ -4,7 +4,7 @@ import { addDays, parseISODate, todayISO, toISODate } from '@mise/shared/day';
 import { MAX_LINES } from '@mise/shared/order-request-model';
 import { fakeOrdersSource } from '../testing/fakeOrdersSource';
 import type { FakeOrdersSource } from '../testing/fakeOrdersSource';
-import { LOAD, ingredient, renderOrders, supplier } from '../testing/renderOrders';
+import { LOAD, ingredient, renderOrders, supplier, sendFromEditor } from '../testing/renderOrders';
 import { MUTE_KEY, PUSH_TOKEN_KEY } from './phoneMute';
 
 // «Orders», step 3f-7 slice B: sending the order as a list to whoever runs the place, the «nobody will be told» warning, the
@@ -76,7 +76,8 @@ describe('the road to whoever runs the place', () => {
     const view = await atList(seeded({ ordersConfig: { sendRoutes: { manager: false, whatsapp: true, whatsappSupplier: false, email: false } } }));
     await toSend(view, 'Alpine Mills');
     await view.user.click(sendButton());
-    // One road left: taken in the press, no chooser.
+    // One road left: taken in the press, no chooser — straight to the send editor.
+    await sendFromEditor();
     await waitFor(() => { expect(open).toHaveBeenCalledTimes(1); });
     expect(screen.queryByRole('dialog', { name: 'How should this order go?' })).not.toBeInTheDocument();
   });
@@ -90,7 +91,7 @@ describe('the road to whoever runs the place', () => {
     await waitFor(() => { expect(screen.queryByText('Loading…')).not.toBeInTheDocument(); }, LOAD);
     await view.user.click(await history.findByRole('button', { name: /^Alpine Mills/ }));
     act(() => { history.getByRole('button', { name: 'Send again' }).click(); });
-    for (let hop = 0; hop < 60; hop++) await Promise.resolve();
+    await sendFromEditor();
     expect(open).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole('dialog', { name: 'How should this order go?' })).not.toBeInTheDocument();
   });

@@ -1,12 +1,11 @@
 // Sending an order by one road (sendFlow.ts, parity X15–X25): who goes, the message, the links, what counts as sent, and the
-// rule that every text window opens INSIDE the tap — before the first await.
+// rule that every message goes through the send editor, whose own press opens its window or the share sheet.
 
 import { describe, expect, it, vi } from 'vitest';
 import { normalizeSendRoutes } from '@mise/shared/send-routes';
 import chooserSource from '../../../shared/src/send-chooser.ts?raw';
 import { sendOffers } from '@mise/shared/send-chooser';
 import { fallbackSupplierName } from '@mise/shared/order-text';
-import type { SendJob } from '@mise/shared/send-chooser';
 import { en } from '../i18n/en';
 import { it as itWords } from '../i18n/it';
 import { format } from '../i18n/i18n';
@@ -15,9 +14,10 @@ import type { MessageParams } from '../i18n/i18n';
 import { buildOrdersLens } from './ordersLens';
 import type { StoredDoc } from './ordersSource';
 import {
-  SEND_KEYS, confirmedSendRows, draftSendRows, jobsFor, openWindow, recordSendRows, runTextBatch, sendTranslate, takeRoad,
+  SEND_KEYS, confirmedSendRows, draftSendRows, jobsFor, openWindow, recordSendRows, sendTranslate, takeRoad,
 } from './sendFlow';
-import type { OpenQuestion, RoadInput, SendRow, SendUi, TextOutcome } from './sendFlow';
+import type { RoadInput, SendRow, SendUi } from './sendFlow';
+import type { EditQuestion } from './sendEditor';
 
 const tEn = (key: MessageKey, params?: MessageParams) => format('en', en[key], params);
 const t = sendTranslate(tEn);
@@ -42,7 +42,7 @@ function lensOf(entries: Record<string, unknown>) {
     noSupplierName: 'No supplier',
   });
 }
-const draftOf = (entries: Record<string, unknown>) => ({ entries: entries as never, days: {}, skipped: {}, updatedAt: '', exists: true });
+const draftOf = (entries: Record<string, unknown>) => ({ entries: entries as never, days: {}, skipped: {}, awaitingSent: {}, updatedAt: '', exists: true });
 
 const ALL_ON = normalizeSendRoutes({ sendRoutes: { manager: true, whatsapp: true, whatsappSupplier: true, email: true } });
 const settings = { grouped: true, locationName: 'Bakery', language: 'en' };
@@ -59,11 +59,9 @@ function ui(over: Partial<SendUi> = {}): SendUi & { said: string[]; asked: strin
     asked: [],
     alert: async message => { said.push(message); },
     canSharePhotos: () => false,
-    askFormat: async () => 'text',
     render: async text => ({ text }) as unknown as File,
-    askPhoto: async () => 'shared',
+    askEdit: async question => ({ outcome: question.open(question.job.text) ? 'opened' : 'blocked', text: question.job.text }),
     confirmText: async () => true,
-    askOpen: async question => (question.open() ? 'opened' : 'blocked'),
     sendList: async () => 'sent',
     ...over,
   };
@@ -136,172 +134,98 @@ describe('the windows of each road', () => {
   });
 });
 
-describe('taking a road', () => {
+describe('taking a road (every message through the send editor, the current app\'s PR #554)', () => {
   const rows: SendRow[] = [{ id: 'mill', name: 'Mill', items: [{ name: 'Flour', weight: '25kg', qty: 2 }] }];
   const input = (over: Partial<RoadInput> = {}): RoadInput => ({
     offer: offer('whatsapp', [mill]), rows, settings, unitRefusal: () => '', open: () => true, t, ...over,
   });
 
-  it('⚠️ every text window opens BEFORE the first await — inside the tap', () => {
+  it('opens nothing by itself: the editor\'s own «Send» press opens the window, with the EDITED text', async () => {
     const open = vi.fn(() => true);
-    void takeRoad(input({ open }), ui());
-    expect(open).toHaveBeenCalledTimes(1);
+    const asked: EditQuestion[] = [];
+    const result = await takeRoad(input({ open }), ui({
+      askEdit: async question => {
+        asked.push(question);
+        expect(open).not.toHaveBeenCalled();
+        const edited = `${question.job.text}\n- Salt: 1`;
+        return { outcome: question.open(edited) ? 'opened' : 'blocked', text: edited };
+      },
+    }));
+    expect(result).toStrictEqual({ kind: 'sent', ids: ['mill'], blocked: false, handOff: 'text' });
+    expect(asked).toHaveLength(1);
+    expect(asked[0]!.photo).toBe(false);
+    expect(decodeURIComponent(String((open.mock.calls[0] as unknown[])[0]))).toContain('- Salt: 1');
   });
 
-  it('⚠️ email too, and it counts only a window that really opened (F-3)', async () => {
-    const open = vi.fn(() => false);
-    const pending = takeRoad(input({ offer: offer('email', [mill]), open }), ui());
-    expect(open).toHaveBeenCalledTimes(1);
-    expect(await pending).toStrictEqual({ kind: 'sent', ids: [], blocked: true });
+  it('⚠️ email counts only a window that really opened (F-3), and never goes as a picture', async () => {
+    const asked: EditQuestion[] = [];
+    const result = await takeRoad(input({ offer: offer('email', [mill]), open: () => false }), ui({
+      canSharePhotos: () => true,
+      askEdit: async question => { asked.push(question); return { outcome: question.open(question.job.text) ? 'opened' : 'blocked', text: question.job.text }; },
+    }));
+    expect(result).toStrictEqual({ kind: 'sent', ids: [], blocked: true, handOff: 'text' });
+    expect(asked[0]!.photo).toBe(false);
+    expect(asked[0]!.job.plain).toBe(true);
   });
 
-  it('⚠️ a unit clash is said and NOTHING opens', async () => {
-    const open = vi.fn(() => true);
-    const screen = ui();
-    expect(await takeRoad(input({ open, unitRefusal: () => 'Already ordered' }), screen)).toStrictEqual({ kind: 'refused' });
-    expect(open).not.toHaveBeenCalled();
+  it('⚠️ a unit clash is said and NO editor opens', async () => {
+    const screen = ui({ askEdit: vi.fn() });
+    expect(await takeRoad(input({ unitRefusal: () => 'Already ordered' }), screen)).toStrictEqual({ kind: 'refused' });
+    expect(screen.askEdit).not.toHaveBeenCalled();
     expect(screen.said).toStrictEqual(['Already ordered']);
   });
 
   it('a unit check that throws never kills the send', async () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const result = await takeRoad(input({ unitRefusal: () => { throw new Error('boom'); } }), ui());
-    expect(result).toStrictEqual({ kind: 'sent', ids: ['mill'], blocked: false });
+    expect(result).toStrictEqual({ kind: 'sent', ids: ['mill'], blocked: false, handOff: 'text' });
     error.mockRestore();
   });
 
-  it('where a picture can be shared it asks first; Cancel sends nothing', async () => {
-    const open = vi.fn(() => true);
-    const result = await takeRoad(input({ open }), ui({ canSharePhotos: () => true, askFormat: async () => null }));
-    expect(result).toStrictEqual({ kind: 'cancelled' });
-    expect(open).not.toHaveBeenCalled();
-  });
-
-  it('«Text» opens the chat; «Photo» shares one picture per job and records what was shared', async () => {
-    expect(await takeRoad(input(), ui({ canSharePhotos: () => true, askFormat: async () => 'text' })))
-      .toStrictEqual({ kind: 'sent', ids: ['mill'], blocked: false });
-    const asked: SendJob[] = [];
+  it('⚠️ where the phone can share a file, WhatsApp goes AS A PICTURE: no «photo or text?» question any more', async () => {
+    const asked: EditQuestion[] = [];
     const result = await takeRoad(input(), ui({
-      canSharePhotos: () => true, askFormat: async () => 'photo',
-      askPhoto: async ({ job }) => { asked.push(job); return 'shared'; },
+      canSharePhotos: () => true,
+      askEdit: async question => { asked.push(question); return { outcome: 'shared', text: question.job.text }; },
     }));
-    expect(result).toStrictEqual({ kind: 'sent', ids: ['mill'], blocked: false });
-    expect(asked).toHaveLength(1);
+    expect(asked[0]!.photo).toBe(true);
+    expect(result).toStrictEqual({ kind: 'sent', ids: ['mill'], blocked: false, handOff: 'share' });
   });
 
-  it('a picture that cannot be drawn offers the text: OK opens it, Cancel sends nothing', async () => {
-    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    const broken = { canSharePhotos: () => true, askFormat: async () => 'photo' as const, render: async () => { throw new Error('no canvas'); } };
-    expect(await takeRoad(input(), ui(broken))).toStrictEqual({ kind: 'sent', ids: ['mill'], blocked: false });
-    expect(await takeRoad(input(), ui({ ...broken, confirmText: async () => false }))).toStrictEqual({ kind: 'cancelled' });
-    error.mockRestore();
+  it('a picture that could not be drawn or shared offers the text: OK opens it, Cancel sends nothing', async () => {
+    const failed = { canSharePhotos: () => true, askEdit: async (question: EditQuestion) => ({ outcome: 'failed' as const, text: question.job.text }) };
+    expect(await takeRoad(input(), ui(failed))).toStrictEqual({ kind: 'sent', ids: ['mill'], blocked: false, handOff: 'text' });
+    expect(await takeRoad(input(), ui({ ...failed, confirmText: async () => false })))
+      .toStrictEqual({ kind: 'sent', ids: [], blocked: false, handOff: 'text' });
   });
 
-  it('the in-app list opens no window, skips the unit check and answers how the list went', async () => {
-    const open = vi.fn(() => true);
+  it('the in-app list opens no editor, skips the unit check and answers how the list went', async () => {
     const unitRefusal = vi.fn(() => 'clash');
-    const screen = ui({ sendList: async rows => { screen.asked.push(rows.map(row => row.id).join()); return 'queued'; } });
-    const result = await takeRoad(input({ offer: offer('manager', [mill]), open, unitRefusal }), screen);
+    const screen = ui({ askEdit: vi.fn(), sendList: async list => { screen.asked.push(list.map(row => row.id).join()); return 'queued'; } });
+    const result = await takeRoad(input({ offer: offer('manager', [mill]), unitRefusal }), screen);
     expect(result).toStrictEqual({ kind: 'list', outcome: 'queued' });
     expect(screen.asked).toStrictEqual(['mill']);
-    expect(open).not.toHaveBeenCalled();
+    expect(screen.askEdit).not.toHaveBeenCalled();
     expect(unitRefusal).not.toHaveBeenCalled();
-    expect(screen.said).toStrictEqual([]);
   });
 
   it('backing out of the «nobody will be told» question is a cancelled road', async () => {
     expect(await takeRoad(input({ offer: offer('manager', [mill]) }), ui({ sendList: async () => null }))).toStrictEqual({ kind: 'cancelled' });
   });
-});
 
-describe('one window per tap (runTextBatch)', () => {
-  const job = (id: string, name?: string): SendJob => ({ ids: [id], ...(name ? { name } : {}), text: id, url: `https://wa.me/${id}` });
-  const jobs = [job('a', 'Alpha'), job('b', 'Beta'), job('c', 'Gamma')];
-  const batch = (over: Partial<Parameters<typeof runTextBatch>[0]> = {}) => {
-    const said: string[] = [];
-    const asked: OpenQuestion[] = [];
-    const input = {
-      jobs, open: () => true, notify: async (message: string) => { said.push(message); }, t,
-      // A person's press comes after the question is drawn, never in the same tick.
-      askOpen: async (question: OpenQuestion): Promise<TextOutcome> => { await Promise.resolve(); asked.push(question); return question.open() ? 'opened' : 'blocked'; },
-      ...over,
-    };
-    return { said, asked, input };
-  };
-
-  it('⚠️ opens the first window before any await and asks for each further one', async () => {
+  it('by email, each supplier gets an editor of its own, «1 of 2» then «2 of 2», each opening its own mail', async () => {
     const open = vi.fn(() => true);
-    const { asked, input } = batch({ open });
-    const pending = runTextBatch(input);
-    expect(open).toHaveBeenCalledTimes(1);
-    expect(open).toHaveBeenCalledWith('https://wa.me/a');
-    expect(await pending).toStrictEqual({ ids: ['a', 'b', 'c'], blocked: false });
-    expect(asked.map(question => [question.job.ids[0], question.i, question.n])).toStrictEqual([['b', 1, 3], ['c', 2, 3]]);
-    expect(open).toHaveBeenCalledTimes(3);
-  });
-
-  it('⚠️ a further window opens only when its dialog calls open', async () => {
-    const open = vi.fn(() => true);
-    let release: (outcome: TextOutcome) => void = () => undefined;
-    const { input } = batch({ open, askOpen: () => new Promise<TextOutcome>(resolve => { release = resolve; }), jobs: jobs.slice(0, 2) });
-    const pending = runTextBatch(input);
-    await Promise.resolve();
-    expect(open).toHaveBeenCalledTimes(1);
-    release('skipped');
-    expect(await pending).toStrictEqual({ ids: ['a'], blocked: false });
-  });
-
-  it('Skip leaves that one unsent, names it and carries on', async () => {
-    const { said, input } = batch({ askOpen: async ({ job: asked, open }) => (asked.ids[0] === 'b' ? 'skipped' : open() ? 'opened' : 'blocked') });
-    expect(await runTextBatch(input)).toStrictEqual({ ids: ['a', 'c'], blocked: false });
-    expect(said).toStrictEqual(['Not sent: Beta']);
-  });
-
-  it('Cancel stops the batch and names the one it stopped at and every one after it', async () => {
-    const { said, asked, input } = batch({ askOpen: async question => { asked.push(question); return 'cancelled'; } });
-    expect(await runTextBatch(input)).toStrictEqual({ ids: ['a'], blocked: false });
-    expect(asked).toHaveLength(1);
-    expect(said).toStrictEqual(['Not sent: Beta, Gamma']);
-  });
-
-  it('a blocked window is not counted and is named', async () => {
-    const { said, input } = batch({ open: (url: string) => url !== 'https://wa.me/b' });
-    expect(await runTextBatch(input)).toStrictEqual({ ids: ['a', 'c'], blocked: false });
-    expect(said).toStrictEqual(['Not sent: Beta']);
-  });
-
-  it('every window blocked is «blocked», with no second notice: the screen says «Nothing was opened»', async () => {
-    const { said, input } = batch({ open: () => false });
-    expect(await runTextBatch(input)).toStrictEqual({ ids: [], blocked: true });
-    expect(said).toStrictEqual([]);
-  });
-
-  it('a blocked FIRST window with the others opened is named', async () => {
-    let calls = 0;
-    const { said, input } = batch({ open: () => { calls += 1; return calls > 1; } });
-    expect((await runTextBatch(input)).blocked).toBe(false);
-    expect(said).toStrictEqual(['Not sent: Alpha']);
-  });
-
-  it('nobody to name for the single grouped chat: nothing is said', async () => {
-    const { said, input } = batch({ jobs: [job('x')], open: () => false });
-    expect(await runTextBatch(input)).toStrictEqual({ ids: [], blocked: true });
-    expect(said).toStrictEqual([]);
-  });
-
-  it('takeRoad by email asks for the second supplier instead of opening it in the same tap', async () => {
-    const open = vi.fn(() => true);
-    const screen = ui({ askOpen: async question => { await Promise.resolve(); screen.asked.push(question.kind); return question.open() ? 'opened' : 'blocked'; } });
+    const asked: Array<[string, number, number]> = [];
     const two: SendRow[] = [
       { id: 'mill', name: 'Mill', items: [{ name: 'Flour', weight: '', qty: 1 }] },
       { id: 'twin', name: 'Mill', items: [{ name: 'Salt', weight: '', qty: 1 }] },
     ];
-    const pending = takeRoad({
+    const result = await takeRoad({
       offer: offer('email', [mill, { ...twin, email: 'twin@example.test' }]), rows: two, settings, unitRefusal: () => '', open, t,
-    }, screen);
-    expect(open).toHaveBeenCalledTimes(1);
-    expect(await pending).toStrictEqual({ kind: 'sent', ids: ['mill', 'twin'], blocked: false });
-    expect(screen.asked).toStrictEqual(['email']);
+    }, ui({ askEdit: async question => { asked.push([question.job.ids[0]!, question.i, question.n]); return { outcome: question.open(question.job.text) ? 'opened' : 'blocked', text: question.job.text }; } }));
+    expect(result).toStrictEqual({ kind: 'sent', ids: ['mill', 'twin'], blocked: false, handOff: 'text' });
+    expect(asked).toStrictEqual([['mill', 0, 2], ['twin', 1, 2]]);
+    expect(open).toHaveBeenCalledTimes(2);
   });
 });
 

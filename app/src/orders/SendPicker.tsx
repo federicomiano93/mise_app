@@ -23,8 +23,9 @@ type Props = {
   emptyText: string;
   // A recorded order sent again (History): nothing is recorded after it and the same-day unit check is skipped.
   resend?: boolean;
-  // A send reached these suppliers. Called before the «not reached» line is spoken; the screen goes on from here.
-  onReached: (ids: readonly string[]) => void;
+  // A send reached these suppliers. Called before the «not reached» line is spoken; the screen goes on from here. `rows`: the rows
+  // that went, as they were at the press; `handOff`: how the last message left (sendFlow.ts RoadResult).
+  onReached: (ids: readonly string[], info: { rows: readonly SendRow[]; handOff: 'share' | 'text' }) => void;
   // The in-app list was written (or is waiting for the connection): the screen leaves. Not given where the list road is never
   // offered (History's re-send).
   onListSent?: () => void;
@@ -153,7 +154,7 @@ export function SendPicker({ lens, rows, titleId, emptyText, resend = false, onR
       const notReached = result?.kind === 'sent' && missed.length > 0
         ? t('ord.sentCheck.notReached', { names: joinList(t, missed) }) : '';
       if (result?.kind === 'sent' && result.ids.length > 0) {
-        latest.current(result.ids);
+        latest.current(result.ids, { rows: going.filter(row => result.ids.includes(row.id)), handOff: result.handOff });
         if (notReached !== '') say(notReached, LONG_MS);
         return;
       }

@@ -32,6 +32,10 @@ export type FakeOrdersSource = OrdersSource & {
   // `holdWrites` keeps them in the air too.
   skippedWrites: Array<{ op: 'set'; supplierId: string; day: string } | { op: 'clear'; supplierId: string }>;
   refuseSkipped: boolean;
+  // Every «did it go?» write (awaitingSent), in order: ask, clear, claim, restore (refused ones included). `failAwaiting.<op>` refuses
+  // the NEXT one of that kind (then goes back to false) — a claim or restore refused as a transaction is offline. `holdWrites` holds asks.
+  awaitingWrites: Array<{ op: 'set' | 'clear' | 'claim' | 'restore'; supplierId: string; value?: Record<string, unknown>; done?: boolean }>;
+  failAwaiting: { set: boolean; clear: boolean; claim: boolean; restore: boolean };
   // The next watches fail (the rules refused them, or the stream died).
   refuse: { suppliers: boolean; ingredients: boolean; config: boolean; draft: boolean; history: boolean; requests: boolean };
   // Another phone writes the draft: merged like a setDoc merge, then every watcher is told.
@@ -148,6 +152,8 @@ export function fakeOrdersSource(init: {
     refuseWrites: false,
     skippedWrites: [],
     refuseSkipped: false,
+    awaitingWrites: [],
+    failAwaiting: { set: false, clear: false, claim: false, restore: false },
     refuse: { suppliers: false, ingredients: false, config: false, draft: false, history: false, requests: false },
     historyFrom: null,
     historyCached: false,
@@ -250,6 +256,59 @@ export function fakeOrdersSource(init: {
         if (held) held.push(settle);
         else queueMicrotask(settle);
       });
+    },
+
+    // setDoc with mergeFields: the supplier's value replaces the stored one WHOLE. Shown at once, taken back when refused.
+    setAwaitingSent(supplierId, value) {
+      source.awaitingWrites.push({ op: 'set', supplierId, value: structuredClone(value) as Record<string, unknown> });
+      const before = source.draft;
+      source.draft = withAwaiting(before, supplierId, structuredClone(value) as Record<string, unknown>);
+      tellDraft();
+      const refused = source.failAwaiting.set;
+      source.failAwaiting.set = false;
+      return new Promise<void>((resolve, reject) => {
+        const settle = () => {
+          if (!refused) { resolve(); return; }
+          source.draft = withAwaiting(source.draft, supplierId, awaitingOf(before, supplierId));
+          tellDraft();
+          reject(new Error('permission-denied'));
+        };
+        if (held) held.push(settle);
+        else queueMicrotask(settle);
+      });
+    },
+
+    async clearAwaitingSent(supplierId) {
+      source.awaitingWrites.push({ op: 'clear', supplierId });
+      await Promise.resolve();
+      if (source.failAwaiting.clear) { source.failAwaiting.clear = false; throw new Error('permission-denied'); }
+      if (!source.draft) throw new Error('not-found');
+      source.draft = withAwaiting(source.draft, supplierId, undefined);
+      tellDraft();
+    },
+
+    async claimAwaitingSent(supplierId, decide) {
+      const write: { op: 'claim'; supplierId: string; done?: boolean } = { op: 'claim', supplierId };
+      source.awaitingWrites.push(write);
+      await Promise.resolve();
+      if (source.failAwaiting.claim) { source.failAwaiting.claim = false; throw new Error('unavailable'); }
+      if (!source.draft || !decide(structuredClone(source.draft))) { write.done = false; return false; }
+      source.draft = withAwaiting(source.draft, supplierId, undefined);
+      tellDraft();
+      write.done = true;
+      return true;
+    },
+
+    async restoreAwaitingSent(supplierId, value, decide) {
+      const write: { op: 'restore'; supplierId: string; value: Record<string, unknown>; done?: boolean } = { op: 'restore', supplierId, value: structuredClone(value) as Record<string, unknown> };
+      source.awaitingWrites.push(write);
+      await Promise.resolve();
+      if (source.failAwaiting.restore) { source.failAwaiting.restore = false; throw new Error('unavailable'); }
+      if (!decide(source.draft ? structuredClone(source.draft) : null)) { write.done = false; return false; }
+      source.draft = withAwaiting(source.draft, supplierId, structuredClone(value) as Record<string, unknown>);
+      tellDraft();
+      write.done = true;
+      return true;
     },
 
     records: new Map(Object.entries(init.records ?? {})),
@@ -618,6 +677,21 @@ export function fakeOrdersSource(init: {
       if (held) held.push(() => settle(resolve, reject));
       else queueMicrotask(() => settle(resolve, reject));
     });
+  }
+
+  function awaitingOf(doc: Record<string, unknown> | null, supplierId: string): Record<string, unknown> | undefined {
+    const map = doc?.awaitingSent;
+    return map && typeof map === 'object' ? (map as Record<string, Record<string, unknown>>)[supplierId] : undefined;
+  }
+  // The draft with one supplier's question set whole (or removed: undefined).
+  function withAwaiting(doc: Record<string, unknown> | null, supplierId: string, value: Record<string, unknown> | undefined): Record<string, unknown> {
+    const next = structuredClone(doc ?? {});
+    const map = next.awaitingSent && typeof next.awaitingSent === 'object' ? next.awaitingSent as Record<string, unknown> : {};
+    if (value === undefined) delete map[supplierId];
+    else map[supplierId] = value;
+    next.awaitingSent = map;
+    next.bakery = 'bakery';
+    return next;
   }
 
   function tellDraft() {

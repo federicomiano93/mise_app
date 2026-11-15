@@ -6,6 +6,7 @@ import { dueFirst } from '@mise/shared/due-first';
 import type { PlacedRecord } from '@mise/shared/reminders';
 import { supplierLabel } from '@mise/shared/supplier-label';
 import type { MessageKey } from '../i18n/en';
+import { AwaitingBanner } from './AwaitingBanner';
 import { PartBoundary } from '../errors/PartBoundary';
 import { useDueSuppliers } from '../shell/useDueSuppliers';
 import { useFocusAcrossReorder } from '../shell/useFocusAcrossReorder';
@@ -150,6 +151,11 @@ export function OrdersList({ lens, earlyLens, ready, openId, heldId, onLookingEl
           />
         ) : null}
       </OrdersHead>
+
+      {/* «Order to X sent at 10:42: did it go?» — on every device, until somebody answers (the current app's PR #554). */}
+      <PartBoundary>
+        <AwaitingBanner />
+      </PartBoundary>
 
       <PartBoundary>
         <NoticesPanel onOpenSupplier={onOpenSupplier} onOpenPending={onOpenPending} onSend={onSend} />

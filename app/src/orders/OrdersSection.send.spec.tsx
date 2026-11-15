@@ -12,7 +12,9 @@ vi.mock('./orderImage', async importOriginal => ({
   renderOrderImage: vi.fn((text: string) => Promise.resolve(new File([text], 'order.png', { type: 'image/png' }))),
 }));
 
-// «Orders», step 3f-3: the send arrow, the send screen, the road chooser, the photo path and «Send it now».
+// «Orders», step 3f-3: the send arrow, the send screen, the road chooser and «Send it now» — since the current app's PR #554 every
+// message goes through the in-app send editor (as a picture where the phone can share a file), and what was handed over waits for
+// «did it go?» instead of being recorded (OrdersSection.awaiting.spec.tsx covers the answers).
 
 beforeAll(async () => { await import('./OrdersSection'); }, 60_000);
 
@@ -78,11 +80,19 @@ async function escapeFrom(view: View, dialog: HTMLElement) {
   await view.user.keyboard('{Escape}');
 }
 
-// The confirm screen that follows a send, once its working copy is on screen.
-async function orderSent() {
-  await screen.findByText('This is what will be recorded:', undefined, LOAD);
-  return within(screen.getByRole('region', { name: 'Order sent' }));
+// The send editor of one message, by its title («Order for Zed», «Order for Zed (2 of 2)», «Check the order» for the grouped chat).
+const editor = async (name: string) => within(await screen.findByRole('dialog', { name }, LOAD));
+
+// «Send» in the editor, once it is enabled (on the picture road it waits for the picture), pressed in a task of its own.
+async function editorSend(name: string) {
+  const box = await editor(name);
+  const button = box.getByRole('button', { name: 'Send' });
+  await waitFor(() => { expect(button).toBeEnabled(); }, LOAD);
+  return button;
 }
+
+// The banner every device shows once an order was handed over.
+const didItGo = (supplierName: string) => screen.findByText(new RegExp(`^Order to ${supplierName} sent at .+: did it go\\?$`), undefined, LOAD);
 
 const pressed = (open: ReturnType<typeof spyOpen>) => open.mock.calls.map(call => String(call[0]));
 const textOf = (url: string) => decodeURIComponent(url.slice(url.indexOf('?text=') + '?text='.length));
@@ -155,28 +165,56 @@ describe('the send arrow and the send screen', () => {
   });
 });
 
-describe('one open road', () => {
-  it('opens WhatsApp INSIDE the press, then asks to record what was sent', async () => {
+describe('one open road: the send editor', () => {
+  it('shows exactly what the supplier will get, opens WhatsApp INSIDE «Send»’s own press, and leaves «did it go?» behind', async () => {
     const open = spyOpen();
-    const view = await atList(seeded(), STAFF);
+    const source = seeded();
+    const view = await atList(source, STAFF);
     await toSend(view, 'Alpine Mills', 'Zed');
-    const button = sendButton();
+    await view.user.click(sendButton());
+    const box = await editor('Check the order');
+    // Nothing opened yet: the person sees the message first.
+    expect(open).not.toHaveBeenCalled();
+    const preview = box.getByRole('group', { name: 'What they will receive' });
+    expect(preview).toHaveTextContent('- Flour 00: 2');
+    // *Zed* drawn bold, as WhatsApp draws it.
+    expect(within(preview).getByText('Zed', { selector: 'strong' })).toBeInTheDocument();
+    expect(box.getByRole('textbox', { name: 'Change the message' })).toHaveAccessibleDescription(
+      'Changes go only into the message: History keeps the quantities of the order.');
+    const send = await editorSend('Check the order');
     act(() => {
-      button.click();
-      // ⚠️ Synchronously: a window opened after any await would be blocked as a pop-up.
+      send.click();
+      // ⚠️ Synchronously, in the editor's own press: a window opened after any await would be blocked as a pop-up.
       expect(open).toHaveBeenCalledTimes(1);
     });
     const url = pressed(open)[0] ?? '';
     expect(url.startsWith('https://wa.me/?text=')).toBe(true);
-    const text = textOf(url);
-    expect(text).toContain('Alpine Mills');
-    expect(text).toContain('*Zed*');
-    expect(text).toContain('- Flour 00: 2');
-    const confirm = await orderSent();
-    expect(view.router.state.location.pathname).toBe('/orders/place-all/confirm');
-    expect(confirm.getByText('Alpine Mills')).toBeInTheDocument();
-    expect(confirm.getByText('Zed')).toBeInTheDocument();
-    expect(confirm.getByRole('button', { name: 'Mark as placed' })).toBeInTheDocument();
+    expect(textOf(url)).toContain('*Zed*');
+    // Back to the list, nothing recorded: every device now asks whether it went.
+    await waitFor(() => { expect(view.router.state.location.pathname).toBe('/orders'); });
+    expect(await didItGo('Alpine Mills')).toBeInTheDocument();
+    expect(await didItGo('Zed')).toBeInTheDocument();
+    expect(source.records.size).toBe(0);
+    const awaiting = source.draft?.awaitingSent as Record<string, { quantities: unknown; date: string }>;
+    expect(awaiting['s-alp']?.quantities).toEqual({ 'i-flour': 2, 'i-rye': 3 });
+    expect(awaiting['s-zed']?.quantities).toEqual({ 'i-milk': 4 });
+    expect(awaiting['s-alp']?.date).toBe(TODAY);
+  });
+
+  it('⚠️ sends the EDITED text, while «did it go?» keeps the quantities of the order', async () => {
+    const open = spyOpen();
+    const source = seeded();
+    const view = await atList(source, STAFF);
+    await toSend(view, 'Alpine Mills');
+    await view.user.click(sendButton());
+    const box = await editor('Check the order');
+    const area = box.getByRole('textbox', { name: 'Change the message' });
+    await view.user.type(area, '{End}\n- Salt: 1');
+    expect(box.getByRole('group', { name: 'What they will receive' })).toHaveTextContent('- Salt: 1');
+    act(() => { box.getByRole('button', { name: 'Send' }).click(); });
+    expect(textOf(pressed(open)[0] ?? '')).toContain('- Salt: 1');
+    await didItGo('Alpine Mills');
+    expect((source.draft?.awaitingSent as Record<string, { quantities: unknown }>)['s-alp']?.quantities).toEqual({ 'i-flour': 2, 'i-rye': 3 });
   });
 
   it('writes ONE list when asked to', async () => {
@@ -185,38 +223,49 @@ describe('one open road', () => {
     await toSend(view, 'Alpine Mills', 'Zed');
     await view.user.click(sendScreen().getByRole('radio', { name: 'One list' }));
     await view.user.click(sendButton());
+    act(() => { void editorSend('Check the order').then(button => { button.click(); }); });
+    await waitFor(() => { expect(open).toHaveBeenCalledTimes(1); });
     const text = textOf(pressed(open)[0] ?? '');
     expect(text).not.toContain('Alpine Mills');
     expect(text).toContain('- Flour 00: 2');
   });
 
-  it('still asks «Did you send it?» after a send, records only what is confirmed, and Back goes to the list', async () => {
-    spyOpen();
+  it('Cancel with nothing changed closes the editor and sends nothing', async () => {
+    const open = spyOpen();
     const source = seeded();
     const view = await atList(source, STAFF);
     await toSend(view, 'Alpine Mills');
     await view.user.click(sendButton());
-    const confirm = await orderSent();
-    await view.user.click(confirm.getByRole('button', { name: 'Mark as placed' }));
-    const asked = await screen.findByRole('alertdialog', undefined, LOAD);
-    expect(within(asked).getByText('Did you send the order to Alpine Mills?')).toBeInTheDocument();
-    await view.user.click(within(asked).getByRole('button', { name: 'Yes, sent' }));
-    await waitFor(() => { expect(source.records.has(`${TODAY}_s-alp`)).toBe(true); });
-    await waitFor(() => { expect(view.router.state.location.pathname).toBe('/orders'); });
-    expect(source.records.has(`${TODAY}_s-zed`)).toBe(false);
+    const box = await editor('Check the order');
+    await view.user.click(box.getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => { expect(screen.queryByRole('dialog', { name: 'Check the order' })).not.toBeInTheDocument(); });
+    expect(open).not.toHaveBeenCalled();
+    expect(view.router.state.location.pathname).toBe('/orders/send');
+    expect(source.draft?.awaitingSent).toBeUndefined();
   });
 
-  it('goes back to the LIST from the confirm screen that follows a send, not to the send screen', async () => {
-    spyOpen();
+  it('⚠️ leaving with edits asks «Discard your changes?»: Keep editing keeps the text, Discard sends nothing', async () => {
+    const open = spyOpen();
     const view = await atList(seeded(), STAFF);
     await toSend(view, 'Alpine Mills');
     await view.user.click(sendButton());
-    const confirm = await orderSent();
-    await view.user.click(confirm.getByRole('button', { name: 'Back' }));
-    await waitFor(() => { expect(view.router.state.location.pathname).toBe('/orders'); });
+    let box = await editor('Check the order');
+    await view.user.type(box.getByRole('textbox', { name: 'Change the message' }), ' extra');
+    await view.user.click(box.getByRole('button', { name: 'Cancel' }));
+    let ask = within(await screen.findByRole('alertdialog', { name: 'Discard your changes?' }, LOAD));
+    expect(ask.getByText('The text you changed will not be sent.')).toBeInTheDocument();
+    await view.user.click(ask.getByRole('button', { name: 'Keep editing' }));
+    box = await editor('Check the order');
+    expect((box.getByRole('textbox', { name: 'Change the message' }) as HTMLTextAreaElement).value).toContain(' extra');
+    await escapeFrom(view, screen.getByRole('dialog', { name: 'Check the order' }));
+    ask = within(await screen.findByRole('alertdialog', { name: 'Discard your changes?' }, LOAD));
+    await view.user.click(ask.getByRole('button', { name: 'Discard' }));
+    await waitFor(() => { expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument(); });
+    expect(screen.queryByRole('dialog', { name: 'Check the order' })).not.toBeInTheDocument();
+    expect(open).not.toHaveBeenCalled();
   });
 
-  it('refuses a unit clash with today’s record, says it and opens nothing', async () => {
+  it('refuses a unit clash with today’s record, says it and opens no editor', async () => {
     const open = spyOpen();
     const source = seeded({ draft: { entries: { 'i-box': { qty: 2, unit: 'bag' } }, days: { 's-alp': TODAY } } });
     source.records.set(`${TODAY}_s-alp`, {
@@ -228,20 +277,23 @@ describe('one open road', () => {
     await view.user.click(sendButton());
     const alert = await screen.findByRole('alertdialog', undefined, LOAD);
     expect(within(alert).getByText(/^Already ordered from this supplier today: Cake box — carton\./)).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'Check the order' })).not.toBeInTheDocument();
     expect(open).not.toHaveBeenCalled();
     await view.user.click(within(alert).getByRole('button', { name: 'OK' }));
     expect(view.router.state.location.pathname).toBe('/orders/send');
     await waitFor(() => { expect(sendButton()).toBeEnabled(); });
   });
 
-  it('says «Nothing was opened» and stays when the browser blocks the window', async () => {
+  it('says «Nothing was opened» and stays, asking nobody, when the browser blocks the window', async () => {
     spyOpen(null);
-    const view = await atList(seeded(), STAFF);
+    const source = seeded();
+    const view = await atList(source, STAFF);
     await toSend(view, 'Alpine Mills');
     await view.user.click(sendButton());
+    await view.user.click(await editorSend('Check the order'));
     expect(await screen.findByText(/^Nothing was opened/)).toBeInTheDocument();
     expect(view.router.state.location.pathname).toBe('/orders/send');
-    expect(screen.queryByRole('region', { name: 'Order sent' })).not.toBeInTheDocument();
+    expect(source.draft?.awaitingSent).toBeUndefined();
   });
 
   it('says there is no way to send when the venue offers an employee only the in-app list and has turned order lists off', async () => {
@@ -253,6 +305,18 @@ describe('one open road', () => {
     const alert = await screen.findByRole('alertdialog', undefined, LOAD);
     expect(within(alert).getByText(/^There is no way to send this order/)).toBeInTheDocument();
     expect(open).not.toHaveBeenCalled();
+  });
+
+  it('says a friendly line and frees the button when the send throws', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    vi.spyOn(window, 'open').mockImplementation(() => { throw new Error('boom'); });
+    const view = await atList(seeded(), STAFF);
+    await toSend(view, 'Alpine Mills');
+    await view.user.click(sendButton());
+    await view.user.click(await editorSend('Check the order'));
+    expect(await screen.findByText('Something went wrong while sending. Try again.')).toBeInTheDocument();
+    await waitFor(() => { expect(sendButton()).toBeEnabled(); });
+    expect(error).toHaveBeenCalled();
   });
 });
 
@@ -271,26 +335,23 @@ describe('several roads', () => {
     expect(roads[3]).toContain('Email to the supplier');
     expect(roads[3]).toContain('it does not send it by itself');
     expect(roads[4]).toBe('Cancel');
-    await escapeFrom(view, await screen.findByRole('dialog', { name: 'How should this order go?' }, LOAD));
+    await escapeFrom(view, chooser);
     await waitFor(() => { expect(screen.queryByRole('dialog', { name: 'How should this order go?' })).not.toBeInTheDocument(); });
     expect(open).not.toHaveBeenCalled();
     expect(view.router.state.location.pathname).toBe('/orders/send');
   });
 
-  it('takes the road that was pressed, straight to the supplier’s number', async () => {
+  it('takes the road that was pressed: the editor for that supplier, then straight to the supplier’s number', async () => {
     const open = spyOpen();
     const view = await atList(seeded());
     await toSend(view, 'Zed');
     await view.user.click(sendButton());
     const chooser = within(await screen.findByRole('dialog', { name: 'How should this order go?' }, LOAD));
-    const road = chooser.getByRole('button', { name: /^WhatsApp straight to the supplier/ });
-    act(() => {
-      road.click();
-      // ⚠️ Synchronously, in the road button's own press: the chooser closes and the road is taken in the same handler.
-      expect(open).toHaveBeenCalledTimes(1);
-    });
+    await view.user.click(chooser.getByRole('button', { name: /^WhatsApp straight to the supplier/ }));
+    const send = await editorSend('Order for Zed');
+    act(() => { send.click(); });
     expect(pressed(open)[0]?.startsWith('https://wa.me/447700900123?text=')).toBe(true);
-    await orderSent();
+    await didItGo('Zed');
   });
 
   it('names a supplier with no phone under the road straight to the supplier', async () => {
@@ -301,62 +362,138 @@ describe('several roads', () => {
     const chooser = within(await screen.findByRole('dialog', { name: 'How should this order go?' }, LOAD));
     expect(chooser.getByRole('button', { name: /^WhatsApp straight to the supplier/ })).toHaveTextContent('no contact saved for Alpine Mills');
   });
+
+  it('by email, one editor per supplier; Escape stops the batch and names the rest', async () => {
+    const TWO_EMAILS = [supplier('s-one', { name: 'One Mill', email: 'one@mill.test' }), supplier('s-two', { name: 'Two Dairy', email: 'two@dairy.test' })];
+    const TWO_ITEMS = [ingredient('i-a', { name: 'Flour', supplierId: 's-one' }), ingredient('i-b', { name: 'Milk', supplierId: 's-two' })];
+    const open = spyOpen();
+    const source = fakeOrdersSource({ suppliers: TWO_EMAILS, ingredients: TWO_ITEMS, draft: { entries: { 'i-a': { qty: 1 }, 'i-b': { qty: 2 } }, days: {} } });
+    const view = await atList(source);
+    await toSend(view, 'One Mill', 'Two Dairy');
+    await view.user.click(sendButton());
+    const chooser = within(await screen.findByRole('dialog', { name: 'How should this order go?' }, LOAD));
+    await view.user.click(chooser.getByRole('button', { name: /^Email to the supplier/ }));
+    // The mail app shows the asterisks as they are: so does the preview.
+    const first = await editor('Order for One Mill (1 of 2)');
+    expect(first.getByRole('group', { name: 'What they will receive' }).querySelector('strong')).toBeNull();
+    act(() => { first.getByRole('button', { name: 'Send' }).click(); });
+    expect(pressed(open)[0]?.startsWith('mailto:one%40mill.test')).toBe(true);
+    await escapeFrom(view, await screen.findByRole('dialog', { name: 'Order for Two Dairy (2 of 2)' }, LOAD));
+    const notice = await screen.findByRole('alertdialog', undefined, LOAD);
+    expect(within(notice).getByText('Not sent: Two Dairy')).toBeInTheDocument();
+    expect(open).toHaveBeenCalledTimes(1);
+  });
 });
 
-describe('the order picture', () => {
-  it('asks Text or Photo (Text focused), shares one picture per supplier and names the one that was skipped', async () => {
+describe('the order AS A PICTURE through the share sheet', () => {
+  it('shares one picture per supplier, drawn from the edited text; Skip names the one skipped; asks «did it go?» at once', async () => {
     const share = allowShare();
     const open = spyOpen();
     const source = seeded({ ordersConfig: DIRECT_ONLY });
     const view = await atList(source, STAFF);
     await toSend(view, 'Zed', 'Café');
     await view.user.click(sendButton());
-    const format = within(await screen.findByRole('dialog', { name: 'How do you want to send it?' }, LOAD));
-    // Text is the focused first choice (his decision, 9 Nov 2026); the photo is the second button.
-    expect(format.getByRole('button', { name: 'Text' })).toHaveFocus();
-    expect(format.getAllByRole('button').map(button => button.textContent)).toEqual(['Text', 'Order photo', 'Cancel']);
-    await view.user.click(format.getByRole('button', { name: 'Order photo' }));
-
-    const first = within(await screen.findByRole('dialog', { name: 'Photo for Café Bar Srl (1 of 2)' }, LOAD));
-    await view.user.click(first.getByRole('button', { name: 'Share' }));
+    // ⚠️ No «photo or text?» question any more: the phone can share a file, so the order goes as a picture.
+    expect(screen.queryByRole('dialog', { name: 'How do you want to send it?' })).not.toBeInTheDocument();
+    const first = await editor('Order for Café Bar Srl (1 of 2)');
+    await view.user.type(first.getByRole('textbox', { name: 'Change the message' }), '{End}\n- Zucchero: 2');
+    const send = await editorSend('Order for Café Bar Srl (1 of 2)');
+    act(() => { send.click(); });
     expect(share).toHaveBeenCalledTimes(1);
+    const shared = (share.mock.calls[0] as unknown as [{ files: File[] }])[0].files[0];
+    expect(await shared?.text()).toContain('- Zucchero: 2');
+    expect(vi.mocked(renderOrderImage)).toHaveBeenCalled();
 
-    const second = within(await screen.findByRole('dialog', { name: 'Photo for Zed (2 of 2)' }, LOAD));
+    const second = await editor('Order for Zed (2 of 2)');
     await view.user.click(second.getByRole('button', { name: 'Skip' }));
-
     const notice = await screen.findByRole('alertdialog', undefined, LOAD);
     expect(within(notice).getByText('Not sent: Zed')).toBeInTheDocument();
     await view.user.click(within(notice).getByRole('button', { name: 'OK' }));
     expect(open).not.toHaveBeenCalled();
 
-    // Only the supplier whose picture was shared is carried on to be recorded.
-    const confirm = await orderSent();
-    expect(confirm.getByText('Café Bar Srl')).toBeInTheDocument();
-    expect(confirm.queryByText('Zed')).not.toBeInTheDocument();
+    // Only the supplier whose picture was shared waits for an answer — and THIS device asks at once: the person is back here already.
+    const asked = within(await screen.findByRole('alertdialog', { name: /^Order to Café Bar Srl sent at .+: did it go\?$/ }, LOAD));
+    expect(asked.getByRole('button', { name: 'Yes' })).toBeInTheDocument();
+    expect(asked.getByRole('button', { name: 'No' })).toBeInTheDocument();
+    expect(Object.keys(source.draft?.awaitingSent as object)).toStrictEqual(['s-caf']);
   });
 
-  it('sends the text at once when Text is chosen', async () => {
-    allowShare();
+  it('⚠️ falls back to the text by wa.me when the phone cannot share a file', async () => {
+    Object.defineProperty(navigator, 'canShare', { value: vi.fn(() => false), configurable: true });
+    Object.defineProperty(navigator, 'share', { value: vi.fn(), configurable: true });
     const open = spyOpen();
     const view = await atList(seeded({ ordersConfig: DIRECT_ONLY }), STAFF);
     await toSend(view, 'Zed');
     await view.user.click(sendButton());
-    const format = within(await screen.findByRole('dialog', { name: 'How do you want to send it?' }, LOAD));
-    await pressThenMicrotasks(format.getByRole('button', { name: 'Text' }));
-    // ⚠️ No waitFor: the window opens in the press's own task.
+    const send = await editorSend('Order for Zed');
+    act(() => { send.click(); });
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(pressed(open)[0]?.startsWith('https://wa.me/447700900123?text=')).toBe(true);
+    expect(navigator.share).not.toHaveBeenCalled();
+  });
+
+  it('⚠️ ignores Cancel and Escape while the share sheet is open', async () => {
+    let answerShare: () => void = () => undefined;
+    Object.defineProperty(navigator, 'canShare', { value: vi.fn(() => true), configurable: true });
+    const share = vi.fn(() => new Promise<void>(resolve => { answerShare = resolve; }));
+    Object.defineProperty(navigator, 'share', { value: share, configurable: true });
+    const source = seeded({ ordersConfig: DIRECT_ONLY });
+    const view = await atList(source, STAFF);
+    await toSend(view, 'Zed');
+    await view.user.click(sendButton());
+    const send = await editorSend('Order for Zed');
+    act(() => { send.click(); });
+    expect(share).toHaveBeenCalledTimes(1);
+    const box = await editor('Order for Zed');
+    await view.user.click(box.getByRole('button', { name: 'Cancel' }));
+    await view.user.keyboard('{Escape}');
+    expect(screen.getByRole('dialog', { name: 'Order for Zed' })).toBeInTheDocument();
+    expect(screen.queryByRole('alertdialog', { name: 'Discard your changes?' })).not.toBeInTheDocument();
+    act(() => { answerShare(); });
+    await waitFor(() => { expect(screen.queryByRole('dialog', { name: 'Order for Zed' })).not.toBeInTheDocument(); });
+    expect(Object.keys(source.draft?.awaitingSent as object)).toStrictEqual(['s-zed']);
+  });
+
+  it('keeps the editor and sends nothing when the person closes the share sheet', async () => {
+    const share = allowShare(Object.assign(new Error('closed'), { name: 'AbortError' }));
+    const source = seeded({ ordersConfig: DIRECT_ONLY });
+    const view = await atList(source, STAFF);
+    await toSend(view, 'Zed');
+    await view.user.click(sendButton());
+    await view.user.click(await editorSend('Order for Zed'));
+    await waitFor(() => { expect(share).toHaveBeenCalledTimes(1); });
+    await editorSend('Order for Zed');
+    expect(source.draft?.awaitingSent).toBeUndefined();
+    expect(view.router.state.location.pathname).toBe('/orders/send');
+  });
+
+  it('offers the text when the share fails any other way, and OK opens it', async () => {
+    allowShare(new Error('no sheet'));
+    const open = spyOpen();
+    const view = await atList(seeded({ ordersConfig: DIRECT_ONLY }), STAFF);
+    await toSend(view, 'Zed');
+    await view.user.click(sendButton());
+    await view.user.click(await editorSend('Order for Zed'));
+    const ask = within(await screen.findByRole('alertdialog', undefined, LOAD));
+    expect(ask.getByText('Couldn’t share the photo, sending the text instead.')).toBeInTheDocument();
+    expect(open).not.toHaveBeenCalled();
+    await pressThenMicrotasks(ask.getByRole('button', { name: 'OK' }));
     expect(open).toHaveBeenCalledTimes(1);
   });
 
-  it('sends nothing when «Photo or text?» is cancelled', async () => {
+  it('offers the text when the picture could not be drawn', async () => {
     allowShare();
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    vi.mocked(renderOrderImage).mockRejectedValueOnce(new Error('no canvas'));
     const open = spyOpen();
     const view = await atList(seeded({ ordersConfig: DIRECT_ONLY }), STAFF);
     await toSend(view, 'Zed');
     await view.user.click(sendButton());
-    await escapeFrom(view, await screen.findByRole('dialog', { name: 'How do you want to send it?' }, LOAD));
-    await waitFor(() => { expect(screen.queryByRole('dialog', { name: 'How do you want to send it?' })).not.toBeInTheDocument(); });
-    expect(open).not.toHaveBeenCalled();
-    expect(view.router.state.location.pathname).toBe('/orders/send');
+    await view.user.click(await editorSend('Order for Zed'));
+    const ask = within(await screen.findByRole('alertdialog', undefined, LOAD));
+    await pressThenMicrotasks(ask.getByRole('button', { name: 'OK' }));
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(error).toHaveBeenCalled();
   });
 });
 
@@ -367,7 +504,7 @@ describe('«Send it now» on the confirm screen', () => {
     await screen.findByText('This is what will be recorded:', undefined, LOAD);
   }
 
-  it('sends the CORRECTED numbers and records the supplier it reached', async () => {
+  it('⚠️ sends the CORRECTED numbers, records NOTHING, and leaves them waiting for «did it go?»', async () => {
     const open = spyOpen();
     const source = seeded();
     const view = await atList(source, STAFF);
@@ -380,40 +517,42 @@ describe('«Send it now» on the confirm screen', () => {
     const asked = within(await screen.findByRole('alertdialog', undefined, LOAD));
     expect(asked.getByRole('button', { name: 'Yes, sent' })).toHaveFocus();
     await view.user.click(asked.getByRole('button', { name: 'Send them now' }));
-    await waitFor(() => { expect(open).toHaveBeenCalled(); });
+    await view.user.click(await editorSend('Check the order'));
     expect(textOf(pressed(open)[0] ?? '')).toContain('Rye: 9');
-    await waitFor(() => { expect(source.records.size).toBe(3); });
-    expect(source.records.get(`${TODAY}_s-alp`)?.quantities).toEqual({ 'i-flour': 2, 'i-rye': 9 });
+    await waitFor(() => { expect(view.router.state.location.pathname).toBe('/orders'); });
+    expect(source.records.size).toBe(0);
+    const awaiting = source.draft?.awaitingSent as Record<string, { quantities: unknown; draft?: unknown }>;
+    expect(awaiting['s-alp']?.quantities).toEqual({ 'i-flour': 2, 'i-rye': 9 });
+    // What the draft said at the send (Rye 3): «Yes» clears that line too.
+    expect((awaiting['s-alp']?.draft as { quantities: unknown }).quantities).toEqual({ 'i-flour': 2, 'i-rye': 3 });
+    expect(await didItGo('Alpine Mills')).toBeInTheDocument();
   });
 
-  it('records ONLY the supplier the road reached and names the one it did not', async () => {
-    const open = spyOpen();
+  it('asks only about the supplier the road reached and names the one it did not', async () => {
+    spyOpen();
     const source = seeded({ ordersConfig: DIRECT_ONLY });
     const view = await atList(source, STAFF);
     await toConfirmAll(view);
     await view.user.click(screen.getByRole('button', { name: 'Order placed' }));
-    await pressThenMicrotasks(within(await screen.findByRole('alertdialog', undefined, LOAD)).getByRole('button', { name: 'Send them now' }));
-    // ⚠️ ONE window per tap: the first opens in «Send them now», the second waits for its own Open press.
-    expect(open).toHaveBeenCalledTimes(1);
-    const next = within(await screen.findByRole('dialog', { name: 'Open the chat for Zed (2 of 2)' }, LOAD));
-    act(() => {
-      next.getByRole('button', { name: 'Open' }).click();
-      expect(open).toHaveBeenCalledTimes(2);
-    });
-    await waitFor(() => { expect(source.records.size).toBe(2); });
-    expect(source.records.has(`${TODAY}_s-alp`)).toBe(false);
+    await view.user.click(within(await screen.findByRole('alertdialog', undefined, LOAD)).getByRole('button', { name: 'Send them now' }));
+    await view.user.click(await editorSend('Order for Café Bar Srl (1 of 2)'));
+    await view.user.click(await editorSend('Order for Zed (2 of 2)'));
+    await waitFor(() => { expect(Object.keys(source.draft?.awaitingSent as object ?? {}).sort()).toStrictEqual(['s-caf', 's-zed']); });
+    expect(source.records.size).toBe(0);
     expect(await screen.findByText(/Not sent, still to do: Alpine Mills/)).toBeInTheDocument();
   });
 
-  it('records nothing when no window opened, and stays', async () => {
+  it('records nothing and asks nobody when no window opened, and stays', async () => {
     spyOpen(null);
     const source = seeded();
     const view = await atList(source, STAFF);
     await toConfirmAll(view);
     await view.user.click(screen.getByRole('button', { name: 'Order placed' }));
     await view.user.click(within(await screen.findByRole('alertdialog', undefined, LOAD)).getByRole('button', { name: 'Send them now' }));
+    await view.user.click(await editorSend('Check the order'));
     expect(await screen.findByText(/Not sent, still to do: /)).toBeInTheDocument();
     expect(source.records.size).toBe(0);
+    expect(source.draft?.awaitingSent).toBeUndefined();
     expect(view.router.state.location.pathname).toBe('/orders/place-all/confirm');
   });
 
@@ -428,154 +567,17 @@ describe('«Send it now» on the confirm screen', () => {
   });
 });
 
-describe('one window per tap', () => {
-  const TWO_EMAILS = [
-    supplier('s-one', { name: 'One Mill', email: 'one@mill.test' }),
-    supplier('s-two', { name: 'Two Dairy', email: 'two@dairy.test' }),
-  ];
-  const TWO_ITEMS = [
-    ingredient('i-a', { name: 'Flour', supplierId: 's-one' }),
-    ingredient('i-b', { name: 'Milk', supplierId: 's-two' }),
-  ];
-  const TWO_DRAFT = { entries: { 'i-a': { qty: 1 }, 'i-b': { qty: 2 } }, days: { 's-one': TODAY, 's-two': TODAY } };
-
-  it('opens the first window in the tap and each further one inside its own Open press', async () => {
-    const open = spyOpen();
-    const view = await atList(seeded({ ordersConfig: DIRECT_ONLY }), STAFF);
-    await toSend(view, 'Zed', 'Café');
-    const button = sendButton();
-    act(() => {
-      button.click();
-      expect(open).toHaveBeenCalledTimes(1);
-    });
-    const next = within(await screen.findByRole('dialog', { name: 'Open the chat for Zed (2 of 2)' }, LOAD));
-    expect(open).toHaveBeenCalledTimes(1);
-    const press = next.getByRole('button', { name: 'Open' });
-    await waitFor(() => { expect(press).toHaveFocus(); });
-    act(() => {
-      press.click();
-      // ⚠️ Synchronously, in the Open button's own press.
-      expect(open).toHaveBeenCalledTimes(2);
-    });
-    expect(pressed(open)[0]?.startsWith('https://wa.me/39021234567?text=')).toBe(true);
-    expect(pressed(open)[1]?.startsWith('https://wa.me/447700900123?text=')).toBe(true);
-    const confirm = await orderSent();
-    expect(confirm.getByText('Café Bar Srl')).toBeInTheDocument();
-    expect(confirm.getByText('Zed')).toBeInTheDocument();
-  });
-
-  it('Skip leaves that supplier unsent and names it', async () => {
-    const open = spyOpen();
-    const view = await atList(seeded({ ordersConfig: DIRECT_ONLY }), STAFF);
-    await toSend(view, 'Zed', 'Café');
-    await view.user.click(sendButton());
-    const next = within(await screen.findByRole('dialog', { name: 'Open the chat for Zed (2 of 2)' }, LOAD));
-    await view.user.click(next.getByRole('button', { name: 'Skip' }));
-    const notice = await screen.findByRole('alertdialog', undefined, LOAD);
-    expect(within(notice).getByText('Not sent: Zed')).toBeInTheDocument();
-    await view.user.click(within(notice).getByRole('button', { name: 'OK' }));
-    expect(open).toHaveBeenCalledTimes(1);
-    const confirm = await orderSent();
-    expect(confirm.getByText('Café Bar Srl')).toBeInTheDocument();
-    expect(confirm.queryByText('Zed')).not.toBeInTheDocument();
-    expect(await screen.findByText(/Not sent, still to do: Zed/)).toBeInTheDocument();
-  });
-
-  it('by email, Escape stops the batch and names the rest', async () => {
-    const open = spyOpen();
-    const source = fakeOrdersSource({ suppliers: TWO_EMAILS, ingredients: TWO_ITEMS, draft: TWO_DRAFT });
-    const view = await atList(source);
-    await toSend(view, 'One Mill', 'Two Dairy');
-    await view.user.click(sendButton());
-    const chooser = within(await screen.findByRole('dialog', { name: 'How should this order go?' }, LOAD));
-    const road = chooser.getByRole('button', { name: /^Email to the supplier/ });
-    act(() => {
-      road.click();
-      expect(open).toHaveBeenCalledTimes(1);
-    });
-    expect(pressed(open)[0]?.startsWith('mailto:')).toBe(true);
-    await escapeFrom(view, await screen.findByRole('dialog', { name: 'Open the email for Two Dairy (2 of 2)' }, LOAD));
-    const notice = await screen.findByRole('alertdialog', undefined, LOAD);
-    expect(within(notice).getByText('Not sent: Two Dairy')).toBeInTheDocument();
-    expect(open).toHaveBeenCalledTimes(1);
-  });
-
-  it('says a friendly line and frees the button when the send throws', async () => {
-    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    vi.spyOn(window, 'open').mockImplementation(() => { throw new Error('boom'); });
-    const view = await atList(seeded(), STAFF);
-    await toSend(view, 'Alpine Mills');
-    await view.user.click(sendButton());
-    expect(await screen.findByText('Something went wrong while sending. Try again.')).toBeInTheDocument();
-    await waitFor(() => { expect(sendButton()).toBeEnabled(); });
-    expect(error).toHaveBeenCalled();
-    expect(view.router.state.location.pathname).toBe('/orders/send');
-  });
-});
-
 describe('naming the suppliers a send did not reach', () => {
-  it('says so on the way to the confirm screen when a ticked supplier has no phone (no chooser to warn)', async () => {
-    const open = spyOpen();
-    const view = await atList(seeded({ ordersConfig: DIRECT_ONLY }), STAFF);
-    await toSend(view, 'Alpine Mills', 'Zed');
-    await view.user.click(sendButton());
-    const confirm = await orderSent();
-    expect(open).toHaveBeenCalledTimes(1);
-    expect(confirm.queryByText('Alpine Mills')).not.toBeInTheDocument();
-    expect(await screen.findByText(/Not sent, still to do: Alpine Mills/)).toBeInTheDocument();
-  });
-});
-
-describe('the order picture, when the share goes wrong', () => {
-  async function toPhoto(view: View) {
-    await toSend(view, 'Zed');
-    await view.user.click(sendButton());
-    const format = within(await screen.findByRole('dialog', { name: 'How do you want to send it?' }, LOAD));
-    await view.user.click(format.getByRole('button', { name: 'Order photo' }));
-  }
-  const photoDialog = () => screen.findByRole('dialog', { name: 'Photo for Zed (1 of 1)' }, LOAD);
-
-  it('keeps the dialog and records nothing when the person closes the share sheet', async () => {
-    const share = allowShare(Object.assign(new Error('closed'), { name: 'AbortError' }));
+  it('says so when a ticked supplier has no phone (no chooser to warn), and asks only about the one reached', async () => {
     const open = spyOpen();
     const source = seeded({ ordersConfig: DIRECT_ONLY });
     const view = await atList(source, STAFF);
-    await toPhoto(view);
-    const photo = within(await photoDialog());
-    await view.user.click(photo.getByRole('button', { name: 'Share' }));
-    await waitFor(() => { expect(share).toHaveBeenCalledTimes(1); });
-    await waitFor(() => { expect(photo.getByRole('button', { name: 'Share' })).toBeEnabled(); });
-    expect(open).not.toHaveBeenCalled();
-    expect(source.records.size).toBe(0);
-    expect(view.router.state.location.pathname).toBe('/orders/send');
-  });
-
-  it('offers the text when the share fails any other way, and OK opens it', async () => {
-    allowShare(new Error('no sheet'));
-    const open = spyOpen();
-    const view = await atList(seeded({ ordersConfig: DIRECT_ONLY }), STAFF);
-    await toPhoto(view);
-    const photo = within(await photoDialog());
-    await view.user.click(photo.getByRole('button', { name: 'Share' }));
-    const ask = within(await screen.findByRole('alertdialog', undefined, LOAD));
-    expect(ask.getByText('Couldn’t share the photo, sending the text instead.')).toBeInTheDocument();
-    expect(open).not.toHaveBeenCalled();
-    await pressThenMicrotasks(ask.getByRole('button', { name: 'OK' }));
+    await toSend(view, 'Alpine Mills', 'Zed');
+    await view.user.click(sendButton());
+    await view.user.click(await editorSend('Order for Zed'));
     expect(open).toHaveBeenCalledTimes(1);
-  });
-
-  it('opens the text in the press of the OK when the picture could not be drawn', async () => {
-    allowShare();
-    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    vi.mocked(renderOrderImage).mockRejectedValueOnce(new Error('no canvas'));
-    const open = spyOpen();
-    const view = await atList(seeded({ ordersConfig: DIRECT_ONLY }), STAFF);
-    await toPhoto(view);
-    const ask = within(await screen.findByRole('alertdialog', undefined, LOAD));
-    expect(open).not.toHaveBeenCalled();
-    await pressThenMicrotasks(ask.getByRole('button', { name: 'OK' }));
-    expect(open).toHaveBeenCalledTimes(1);
-    expect(error).toHaveBeenCalled();
+    expect(await screen.findByText(/Not sent, still to do: Alpine Mills/)).toBeInTheDocument();
+    await waitFor(() => { expect(Object.keys(source.draft?.awaitingSent as object ?? {})).toStrictEqual(['s-zed']); });
   });
 });
 
@@ -596,11 +598,18 @@ describe('«Did you send it?»', () => {
 });
 
 describe('in Italian', () => {
-  it('says the arrow, the screen and the answer in Italian', async () => {
+  it('says the arrow, the screen and the editor in Italian', async () => {
+    spyOpen();
     const view = await atList(seeded(), { ...STAFF, lang: 'it' });
     await view.user.click(screen.getByRole('button', { name: 'Manda' }));
     const box = within(await screen.findByRole('region', { name: 'Manda l’ordine' }));
-    expect(box.getByRole('checkbox', { name: 'Seleziona tutti i fornitori' })).toBeInTheDocument();
+    await view.user.click(box.getByRole('checkbox', { name: /^Alpine Mills/ }));
+    await view.user.click(box.getByRole('button', { name: 'Manda' }));
+    const edit = within(await screen.findByRole('dialog', { name: 'Controlla l’ordine' }, LOAD));
+    expect(edit.getByRole('group', { name: 'Cosa riceverà' })).toBeInTheDocument();
+    expect(edit.getByRole('textbox', { name: 'Modifica il messaggio' })).toBeInTheDocument();
+    expect(edit.getByRole('button', { name: 'Invia' })).toBeInTheDocument();
+    expect(edit.getByRole('button', { name: 'Annulla' })).toBeInTheDocument();
   });
 });
 
@@ -615,10 +624,10 @@ describe('the package word (Mise 2 only)', () => {
     });
     const view = await atList(source, STAFF);
     await toSend(view, 'Alpine Mills');
-    act(() => { sendButton().click(); });
+    await view.user.click(sendButton());
+    await view.user.click(await editorSend('Check the order'));
     const text = textOf(pressed(open)[0] ?? '');
     expect(text).toContain('- Cream: 2 bottles');
     expect(text).toContain('- Flour 00: 2');
-    await orderSent();
   });
 });

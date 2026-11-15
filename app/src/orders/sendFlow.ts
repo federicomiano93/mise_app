@@ -2,11 +2,11 @@
 // the links, and taking the road. The React half (the dialogs, the send screen) is useSendOrder.tsx and SendScreen.tsx; the
 // pure rules are @mise/shared/send-chooser (offers, links, the photo batch) and @mise/shared/order-text (the message).
 //
-// ⚠️⚠️ A WINDOW IS OPENED ONLY INSIDE THE TAP. A browser lets a page open a window (WhatsApp, the mail app) only while it is
-// answering a person's tap; a window opened after an await of something that is NOT that tap — a read, a timer — is
-// blocked as a pop-up, on iPhone Safari above all. So `takeRoad` is an async function whose part BEFORE its first await does
-// the unit check and opens the first text window (ONE window per tap: see runTextBatch), and the screen calls it straight from the press of the road's own button
-// (or of «Send» when only one road is open). Its later awaits only follow dialogs, whose own taps then carry on.
+// ⚠️⚠️ A WINDOW (OR THE SHARE SHEET) IS OPENED ONLY INSIDE A TAP. A browser lets a page open a window (WhatsApp, the mail app) or the
+// share sheet only while it is answering a person's tap; one opened after an await of something that is NOT that tap — a read, a timer
+// — is blocked, on iPhone Safari above all. Since the current app's PR #554 every message goes through the send editor
+// (SendEditorDialog), whose own «Send» press opens its window or shares its picture; `takeRoad` does the unit check before its first
+// await and then only follows dialogs.
 //
 // ⚠️ A WINDOW THAT DID NOT OPEN IS NOT A SEND. `openWindow` answers whether the browser really opened it, and only the
 // suppliers whose window opened are reported sent — for email too (finding F-3: the current app counts an email as sent
@@ -15,8 +15,12 @@
 import { buildOrderMessage, emailSubject, fallbackSupplierName, indexById, itemsFromQuantities, orderedItems, whatsappUrl } from '@mise/shared/order-text';
 import type { OrderItem } from '@mise/shared/order-text';
 import { confirmedRows } from '@mise/shared/sent-check';
-import { digitsOf, mailto, runPhotoBatch } from '@mise/shared/send-chooser';
-import type { PhotoOutcome, SendJob, SendOffer, Translate } from '@mise/shared/send-chooser';
+import { digitsOf, mailto } from '@mise/shared/send-chooser';
+import type { SendOffer, Translate } from '@mise/shared/send-chooser';
+import { runSendBatch } from './sendEditor';
+import { draftQuantities } from './awaitingSent';
+import type { SentLines } from './awaitingSent';
+import type { EditAnswer, EditJob, EditQuestion } from './sendEditor';
 import { routeSendsToSupplier } from '@mise/shared/send-routes';
 import { supplierLabel } from '@mise/shared/supplier-label';
 import type { MessageKey } from '../i18n/en';
@@ -31,6 +35,9 @@ export interface SendRow {
   readonly id: string;
   readonly name: string;
   readonly items: OrderItem[];
+  // The quantities the message is built from, read at the same moment (awaitingSent.ts draftQuantities): once the order is handed
+  // over, these are what «did it go?» records — never the draft as it may read by the time somebody answers. Draft rows only.
+  readonly lines?: SentLines;
 }
 
 // What the message says around the lines: the venue's name, and the language of the venue's COUNTRY (outputLanguage) —
@@ -52,6 +59,7 @@ export function draftSendRows(lens: OrdersLens, draft: DraftView, ids?: readonly
       id: supplier.id,
       name: supplierLabel(supplier),
       items: orderedItems(lens.linesOf(supplier.id), draft.entries),
+      lines: draftQuantities(lens.linesOf(supplier.id), draft.entries),
     }))
     .filter(row => row.items.length > 0);
 }
@@ -83,27 +91,28 @@ export function recordSendRows(records: readonly StoredDoc[], ingredients: reado
     .filter(row => row.items.length > 0);
 }
 
-// The windows a road opens, one job each. The grouped chat is ONE job for every row; a road to the supplier is one job per
-// supplier it can reach, matched by ID (two suppliers can share a name, and the wrong order going to the wrong supplier is
-// the one mistake this must not be able to make), always grouped: a supplier gets its own order under its own name.
-export function jobsFor(offer: SendOffer<StoredDoc>, rows: readonly SendRow[], settings: MessageSettings): SendJob[] {
+// The messages a road sends, one job each, each with the link its EDITED text opens (sendEditor.ts EditJob). The grouped chat is ONE
+// job for every row; a road to the supplier is one job per supplier it can reach, matched by ID (two suppliers can share a name, and
+// the wrong order going to the wrong supplier is the one mistake this must not be able to make), always grouped: a supplier gets its
+// own order under its own name.
+export function jobsFor(offer: SendOffer<StoredDoc>, rows: readonly SendRow[], settings: MessageSettings): EditJob[] {
   const { grouped, locationName, language } = settings;
   if (offer.route === 'whatsapp') {
     const text = buildOrderMessage(rows.map(row => ({ supplierName: row.name, items: row.items })), { grouped, locationName, language });
     // Never an empty chat.
-    return text ? [{ ids: rows.map(row => row.id), text, url: whatsappUrl(text) }] : [];
+    return text ? [{ ids: rows.map(row => row.id), text, url: whatsappUrl(text), link: whatsappUrl, plain: false }] : [];
   }
   if (offer.route !== 'whatsappSupplier' && offer.route !== 'email') return [];
-  const jobs: SendJob[] = [];
+  const jobs: EditJob[] = [];
   offer.reachable.forEach(supplier => {
     const row = rows.find(candidate => candidate.id === supplier.id);
     if (!row) return;
     const text = buildOrderMessage([{ supplierName: row.name, items: row.items }], { grouped: true, locationName, language });
     if (!text) return;
-    const url = offer.route === 'email'
-      ? mailto(supplier.email, emailSubject(locationName, language), text)
-      : `https://wa.me/${digitsOf(supplier.phone)}?text=${encodeURIComponent(text)}`;
-    jobs.push({ ids: [supplier.id], name: supplierLabel(supplier), text, url });
+    const link = offer.route === 'email'
+      ? (edited: string) => mailto(supplier.email, emailSubject(locationName, language), edited)
+      : (edited: string) => `https://wa.me/${digitsOf(supplier.phone)}?text=${encodeURIComponent(edited)}`;
+    jobs.push({ ids: [supplier.id], name: supplierLabel(supplier), text, url: link(text), link, plain: offer.route === 'email' });
   });
   return jobs;
 }
@@ -119,82 +128,19 @@ export function openWindow(url: string): boolean {
   return true;
 }
 
-// How one further window went: the person's Open press opened it (or the browser blocked it), or they skipped it or backed out.
-export type TextOutcome = 'opened' | 'blocked' | 'skipped' | 'cancelled';
-
-// What `askOpen` is asked about: ONE further supplier's window. `open` opens THIS job's window and answers whether the browser
-// really opened one; the dialog's Open button calls it inside its own press, then answers 'opened' or 'blocked'.
-export interface OpenQuestion {
-  readonly job: SendJob;
-  readonly kind: 'chat' | 'email';
-  readonly i: number;
-  readonly n: number;
-  readonly open: () => boolean;
-}
-
-export interface TextBatch {
-  readonly jobs: readonly SendJob[];
-  readonly open: (url: string) => boolean;
-  readonly askOpen: (question: OpenQuestion) => Promise<TextOutcome>;
-  readonly notify: (message: string) => Promise<unknown>;
-  readonly kind?: 'chat' | 'email';
-  readonly t: Translate;
-}
-
-// The text windows of a road, ONE WINDOW PER TAP.
-//
-// ⚠️⚠️ A BROWSER LETS ONE TAP OPEN ONE POP-UP: the first window.open uses the tap up and the rest are blocked. So the FIRST job's
-// window opens here, synchronously, before any await, inside the tap that started the road; every further job gets a small
-// dialog whose own Open press opens it (the same way PhotoDialog starts share() inside its Share press).
-//   Skip   → that one is not sent, carry on
-//   Cancel → that one and every one after it is not sent (Escape is Cancel)
-//   a window the browser blocked is not sent either, and is not counted.
-// Whoever was not sent is named at the end with the same words as the picture batch, never dropped silently (suppliers only: the
-// single grouped chat has no name). `blocked` is true only when windows were due and none opened because the browser refused
-// them all — a person who skipped or cancelled is not told their browser is at fault.
-export async function runTextBatch({ jobs, open, askOpen, notify, kind = 'chat', t }: TextBatch): Promise<{ ids: string[]; blocked: boolean }> {
-  const sent: string[] = [];
-  const notSent: SendJob[] = [];
-  let refused = 0;
-  let declined = false;
-  const [first, ...rest] = jobs;
-  if (first) {
-    if (open(first.url)) sent.push(...first.ids);
-    else { notSent.push(first); refused += 1; }
-  }
-  for (let index = 0; index < rest.length; index++) {
-    const job = rest[index];
-    if (!job) continue;
-    const outcome = await askOpen({ job, kind, i: index + 1, n: jobs.length, open: () => open(job.url) });
-    if (outcome === 'opened') { sent.push(...job.ids); continue; }
-    notSent.push(job);
-    if (outcome === 'blocked') { refused += 1; continue; }
-    declined = true;
-    if (outcome === 'cancelled') { notSent.push(...rest.slice(index + 1)); break; }
-  }
-  const blocked = jobs.length > 0 && sent.length === 0 && !declined && refused === jobs.length;
-  // Every window refused by the browser: the screen says «Nothing was opened» with what to do, so no second notice names them.
-  const names = blocked ? [] : notSent.map(job => job.name).filter(Boolean);
-  if (names.length) await notify(t('orders.sendFormat.notSent', { names: names.join(', ') }));
-  return { ids: sent, blocked };
-}
-
 // The questions a road may ask on the way, answered by the screen's dialogs.
 export interface SendUi {
   // A notice with an OK (the unit clash, «Not sent: …»).
   alert(message: string): Promise<void>;
-  // Whether this browser can share a picture at all; without it nothing is asked and the text goes at once.
+  // Whether this browser can share a picture at all (navigator.canShare with a file, feature-checked): the WhatsApp roads then go as a
+  // picture through the share sheet; without it as the edited text.
   canSharePhotos(): boolean;
-  // «Photo or text?» — null is Cancel or Escape: nothing sent.
-  askFormat(): Promise<'photo' | 'text' | null>;
   // Draws one picture; rejects when the browser cannot.
   render(text: string): Promise<File>;
-  // The dialog for ONE picture, whose own button starts the share (parity X22).
-  askPhoto(question: { job: SendJob; file: File | undefined; i: number; n: number }): Promise<PhotoOutcome>;
+  // The send editor for ONE message (SendEditorDialog): its own «Send» press shares the picture or opens the link.
+  askEdit(question: EditQuestion): Promise<EditAnswer>;
   // «Couldn't share the photo, sending the text instead.» with OK / Cancel.
   confirmText(): Promise<boolean>;
-  // «Open the chat for {name} (2 of 3)»: the dialog for ONE further window, whose own Open button opens it (question.open).
-  askOpen(question: OpenQuestion): Promise<TextOutcome>;
   // The in-app list for whoever runs the place: asks «nobody will be told» if that is so, then writes the list. null: backed out
   // of at that question, nothing written. It opens no window, so it needs no tap of its own.
   sendList(rows: readonly SendRow[]): Promise<ListSendOutcome | null>;
@@ -205,7 +151,7 @@ export interface RoadInput {
   readonly rows: readonly SendRow[];
   readonly settings: MessageSettings;
   // The refusal for a unit clash with today's record of these rows, or '' (ordersStore.conflictsNow + unitConflictText).
-  // Answered at once: it runs before any window opens.
+  // Answered at once: it runs before any editor opens.
   readonly unitRefusal: (rows: readonly SendRow[]) => string;
   readonly open: (url: string) => boolean;
   readonly t: Translate;
@@ -214,18 +160,22 @@ export interface RoadInput {
 export type RoadResult =
   // A unit clash was said; nothing was sent.
   | { readonly kind: 'refused' }
-  // The road was backed out of on the way (Cancel on «Photo or text?»), or there was nothing to send.
+  // There was nothing to send.
   | { readonly kind: 'cancelled' }
   // Sent: the suppliers whose window really opened or whose picture was shared. `blocked`: windows were due and NONE opened.
-  | { readonly kind: 'sent'; readonly ids: readonly string[]; readonly blocked: boolean }
+  // `handOff`: how the last message left — 'share' (the share sheet answered: the person is back here already) or 'text' (a window
+  // opened: the page is about to leave). «Did it go?» is asked at once after 'share', when the page comes back after 'text'.
+  | { readonly kind: 'sent'; readonly ids: readonly string[]; readonly blocked: boolean; readonly handOff: 'share' | 'text' }
   // The in-app list for the managers: how writing it went. ⚠️ Nothing is «reached» and nothing is recorded after it, and the order
   // is NOT cleared (the list is a photograph of it; Federico's choice, 14 Aug 2026).
   | { readonly kind: 'list'; readonly outcome: ListSendOutcome };
 
-// Takes one road. ⚠️ EVERYTHING UP TO THE FIRST await RUNS INSIDE THE TAP THAT CALLED IT (see the head of this file).
+// Takes one road. The unit check runs before the first await; then every message goes through the send editor, one after the other
+// (the current app's PR #554): the person sees, and can correct, exactly what the supplier will get, and the editor's own «Send» press
+// shares the picture or opens the window.
 export async function takeRoad({ offer, rows, settings, unitRefusal, open, t }: RoadInput, ui: SendUi): Promise<RoadResult> {
   // ⚠️ THE IN-APP LIST OPENS NO WINDOW AND PUTS NOTHING IN A SUPPLIER'S HANDS: no unit check (it is never merged into the history),
-  // no jobs, no «did you send it?».
+  // no editor, no «did it go?».
   if (offer.route === 'manager') {
     const outcome = await ui.sendList(rows);
     return outcome === null ? { kind: 'cancelled' } : { kind: 'list', outcome };
@@ -246,36 +196,12 @@ export async function takeRoad({ offer, rows, settings, unitRefusal, open, t }: 
   }
   const jobs = jobsFor(offer, rows, settings);
   if (jobs.length === 0) return { kind: 'cancelled' };
-  // ⚠️ The first window opens in this very call (see runTextBatch); a second and later one wait for their own Open press.
-  const texts = async (): Promise<RoadResult> => {
-    const { ids, blocked } = await runTextBatch({
-      jobs, open, askOpen: ui.askOpen, notify: ui.alert, kind: offer.route === 'email' ? 'email' : 'chat', t,
-    });
-    return { kind: 'sent', ids, blocked };
-  };
-
-  // Email, and WhatsApp where the browser cannot share a picture: the first window opens now, inside the tap.
-  if (offer.route === 'email' || !ui.canSharePhotos()) return texts();
-
-  // ⚠️ THE TWO WHATSAPP ROADS, where a picture can be shared: «photo or text?» first (photo first).
-  const format = await ui.askFormat();
-  if (format === null) return { kind: 'cancelled' };
-  if (format === 'text') return texts();
-  // ⚠️ ALL THE PICTURES ARE DRAWN FIRST, then one dialog per picture whose own tap starts the share: share() needs a fresh
-  // tap each time, and the share sheet must never be opened by a timer or by the previous one closing.
-  let files: File[];
-  try {
-    files = await Promise.all(jobs.map(job => ui.render(job.text)));
-  } catch (err) {
-    console.error('Drawing the order picture failed:', err);
-    // OK sends the text; Cancel or Escape sends and counts nothing.
-    if (!await ui.confirmText()) return { kind: 'cancelled' };
-    return texts();
-  }
-  const ids = await runPhotoBatch({
-    jobs, files, ask: ui.askPhoto, notify: ui.alert, confirmText: ui.confirmText, open, t,
+  // The picture road: the two WhatsApp roads, where the browser can share a picture. Email is always text (a mail app).
+  const photo = offer.route !== 'email' && ui.canSharePhotos();
+  const { ids, blocked, handOff } = await runSendBatch({
+    jobs, photo, ask: ui.askEdit, open, notify: ui.alert, confirmText: ui.confirmText, t,
   });
-  return { kind: 'sent', ids, blocked: false };
+  return { kind: 'sent', ids, blocked, handOff };
 }
 
 // The words the send-chooser port asks for, by the current app's keys, found in Mise 2's dictionary

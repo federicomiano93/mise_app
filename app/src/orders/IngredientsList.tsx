@@ -2,6 +2,7 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { wholeNumber } from '@mise/shared/archive';
 import { fromOrdersList, ingredientCardAddress } from '@mise/shared/records-link';
 import { PartBoundary } from '../errors/PartBoundary';
+import { AwaitingBanner } from './AwaitingBanner';
 import { useT } from '../i18n/useT';
 import { FoldedGroup, useFoldedOpen } from '../ui/FoldedGroup';
 import { tabOfLine, useCardDoors } from './CardDoors';
@@ -143,6 +144,11 @@ export function IngredientsList({ lens, ready, swapOpen, saveQuiet = false, onSw
           />
         ) : null}
       </OrdersHead>
+
+      {/* «Did it go?» on both views: an order handed over waits for an answer whichever list is open (the current app's PR #554). */}
+      <PartBoundary>
+        <AwaitingBanner />
+      </PartBoundary>
 
       {/* The bell is in the page's bar on the split whatever the list column holds, so its panel must be here too. Only the always-on blocks
           (today's orders, the debt doors, the order lists) stay on the supplier view (F-4). */}

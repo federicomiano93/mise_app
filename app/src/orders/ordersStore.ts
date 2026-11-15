@@ -66,6 +66,8 @@ import type { OrdersMeta, OrdersSource, StoredDoc } from './ordersSource';
 import { settingPatch, withPatch } from './settingsPatch';
 import type { SettingChange, SettingRefusal } from './settingsPatch';
 import { kioskSectionsFor } from './kioskFeed';
+import { claimDecision, isAwaiting, linesToClear, restoreDecision, supplierKeepsLines } from './awaitingSent';
+import type { AwaitingEntry } from './awaitingSent';
 import type { KioskSection } from '@mise/shared/kiosk-lines';
 
 export type OrdersConfig = ReturnType<typeof normalizeOrdersConfig>;
@@ -317,7 +319,23 @@ export interface OrdersStore {
   // (decision F3), so it is always inside. A check that throws reports no clash: the write still refuses a real one.
   conflictsNow(items: ReadonlyArray<{ readonly supplierId: string; readonly date: string }>, noSupplierName: string): RecordCheck[];
   // Records these orders, one supplier after the other (parity X5, X8). `noSupplierName` names the pseudo-supplier.
+  // ⚠️ A «did it go?» still waiting for a supplier recorded here is answered by this very recording: its key goes too, or a later «Yes»
+  // on any device would record the same order a second time (the current app's forgetAwaitingAfterRecording).
   place(items: readonly PlaceItem[], noSupplierName: string): Promise<PlaceReport>;
+  // ── «Order to X sent at 10:42: did it go?» (the current app's PR #554; awaitingSent.ts) ──
+  // Ask every device: drafts/current.awaitingSent.<supplierId> = entry. LOCAL-FIRST (shown at once, queued offline); resolves true once
+  // saved, false when refused (the question then stays on this device only: useAwaitingSent).
+  askDidItGo(supplierId: string, entry: AwaitingEntry): Promise<boolean>;
+  // «No»: only the key goes. Resolves once answered; a failure is logged.
+  dropDidItGo(supplierId: string): Promise<void>;
+  // «Yes»: claims the question `at` in a transaction. true = this device records it; false = answered elsewhere (or a newer send).
+  // REJECTS offline or when the claim fails (nothing recorded, the question stays).
+  claimDidItGo(supplierId: string, at: string): Promise<boolean>;
+  // The recording after «Yes» failed: the question goes back, only if none stands for that supplier now. REJECTS offline.
+  restoreDidItGo(supplierId: string, entry: AwaitingEntry): Promise<boolean>;
+  // «Yes»: records EXACTLY what went (the stored quantities, on the day they were for, whatever the draft says now), then clears only
+  // the lines still reading what went (linesToClear) and the day stamp when nothing of the supplier is left.
+  placeSent(supplierId: string, entry: AwaitingEntry, noSupplierName: string): Promise<PlaceOutcome>;
   // «Clear quantities» (parity X11): these suppliers' quantities, units and overrides go, in ONE write; the stock readings
   // stay; nothing recorded is touched.
   clearQuantities(supplierIds: readonly string[], noSupplierName: string): Promise<ClearOutcome>;
@@ -610,6 +628,7 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
     // while the screen was open. It was not recorded, so it stays for the next order instead of vanishing from both
     // (the current app clears it; found in the review of 3f-2). The screen's rows are the confirmed quantities and, for a
     // row set to 0 there, its unit (`units` holds every row the screen showed).
+    forgetQuestion(supplierId);
     const typedSince = (id: string) => !(id in quantities) && !(id in units) && Number(snapshot.draft.entries[id]?.qty) > 0;
     const cleared = lensNow(noSupplierName).linesOf(supplierId).map(line => line.id).filter(id => !typedSince(id));
     set({ draft: sync.forget(cleared, [supplierId]) });
@@ -620,6 +639,70 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
       return { supplierId, kind: 'saved' };
     } catch (err) {
       console.error('Clearing the draft after recording the order failed:', err);
+      return { supplierId, kind: 'not-cleared' };
+    } finally {
+      setPlacing(supplierId, false);
+    }
+  }
+
+  // A supplier's order was recorded another way than «Yes»: its waiting question, if any, is answered on every device.
+  function forgetQuestion(supplierId: string) {
+    if (!isAwaiting(snapshot.draft.awaitingSent[supplierId])) return;
+    source.clearAwaitingSent(supplierId).catch((err: unknown) => { console.error('Removing the answered question failed:', err); });
+  }
+
+  // «Yes» to «did it go?»: the current app's placeOrder with `sentOnly`.
+  async function placeSentOne(supplierId: string, entry: AwaitingEntry, noSupplierName: string): Promise<PlaceOutcome> {
+    if (snapshot.placing.includes(supplierId)) return { supplierId, kind: 'busy' };
+    const quantities = entry.quantities;
+    if (Object.keys(quantities).length === 0) return { supplierId, kind: 'nothing' };
+    const supplier = lensNow(noSupplierName).supplierById(supplierId);
+    if (!supplier) return { supplierId, kind: 'failed' };
+    setPlacing(supplierId, true);
+    const date = entry.date || deps.today();
+    try {
+      await sync.settle();
+      // ⚠️ EVERY LINE THAT WENT IS FILED UNDER THIS SUPPLIER, even one another phone has since moved elsewhere «this time»: it went to
+      // this one (the current app's withSentLines).
+      const lensLines = orderable(lensNow(noSupplierName).linesOf(supplierId));
+      const inLens = new Set(lensLines.map(line => line.id));
+      const moved = snapshot.ingredients
+        .filter(card => card.id in quantities && !inLens.has(card.id))
+        .map(card => ({ ...card, supplierId, active: true }) as unknown as LensIngredient);
+      const lines = [...lensLines, ...moved];
+      const entries = confirmedEntries(snapshot.draft.entries as Record<string, Record<string, unknown> | undefined>, lines,
+        quantities, entry.units);
+      const incoming = buildSupplierArchive({ supplier, ingredients: lines, entries, date, now: new Date(deps.draft.nowIso()) });
+      if (!incoming) {
+        setPlacing(supplierId, false);
+        return { supplierId, kind: 'nothing' };
+      }
+      await source.recordOrder(historyDocId(date, supplierId), existing =>
+        mergeArchives(existing as SupplierRecord | null, incoming, { cardOf }) as unknown as Record<string, unknown>);
+    } catch (err) {
+      console.error('Recording the order that went failed:', err);
+      setPlacing(supplierId, false);
+      if (isUnitConflict(err)) return { supplierId, kind: 'unit-conflict', ids: [...err.ids] };
+      return { supplierId, kind: 'failed' };
+    }
+    // ⚠️⚠️ PAST THE POINT OF NO RETURN, as placeOne: nothing below may say «could not save» — «did it go?» reads a failure as «not
+    // recorded» and asks again, and a second «Yes» would record it twice.
+    let cleared: string[] = [];
+    let clearDay = false;
+    try {
+      cleared = linesToClear(snapshot.draft.entries, cardOf, entry);
+      clearDay = !supplierKeepsLines(lensNow(noSupplierName).linesOf(supplierId), snapshot.draft.entries, cleared);
+      set({ draft: sync.forget(cleared, clearDay ? [supplierId] : []) });
+      dropBusyWhenSaved();
+    } catch (err) {
+      console.error('Tidying up after recording the order failed:', err);
+    }
+    const paths = [...cleared.map(id => `entries.${id}`), ...(clearDay ? [`days.${supplierId}`] : [])];
+    try {
+      if (paths.length > 0) await source.clearDraft(paths, deps.draft.nowIso());
+      return { supplierId, kind: 'saved' };
+    } catch (err) {
+      console.error('Clearing the lines that went failed:', err);
       return { supplierId, kind: 'not-cleared' };
     } finally {
       setPlacing(supplierId, false);
@@ -1014,6 +1097,42 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
         const outcomes: PlaceOutcome[] = [];
         for (const item of items) outcomes.push(await placeOne(item, noSupplierName));
         return { offline: false, outcomes };
+      } finally {
+        release();
+      }
+    },
+
+    askDidItGo(supplierId, entry) {
+      return busyUntilAnswered(source.setAwaitingSent(supplierId, entry as unknown as Readonly<Record<string, unknown>>))
+        .then(() => true, (err: unknown) => {
+          console.error('Sharing the «did it go?» question failed:', err);
+          return false;
+        });
+    },
+
+    dropDidItGo(supplierId) {
+      return busyUntilAnswered(source.clearAwaitingSent(supplierId)).catch((err: unknown) => {
+        console.error('Removing the question failed:', err);
+      });
+    },
+
+    async claimDidItGo(supplierId, at) {
+      // A transaction needs the server: offline it would only wait and then fail.
+      if (!deps.online()) throw new Error('offline');
+      return source.claimAwaitingSent(supplierId, draft => claimDecision(draft, supplierId, at));
+    },
+
+    async restoreDidItGo(supplierId, entry) {
+      if (!deps.online()) throw new Error('offline');
+      return source.restoreAwaitingSent(supplierId, entry as unknown as Readonly<Record<string, unknown>>,
+        draft => restoreDecision(draft, supplierId));
+    },
+
+    async placeSent(supplierId, entry, noSupplierName) {
+      if (!deps.online()) return { supplierId, kind: 'failed' };
+      const release = deps.markBusy();
+      try {
+        return await placeSentOne(supplierId, entry, noSupplierName);
       } finally {
         release();
       }

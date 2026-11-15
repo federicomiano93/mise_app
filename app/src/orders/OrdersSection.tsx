@@ -19,6 +19,7 @@ import { OrdersProvider, useOrders, useOrdersStore } from './OrdersContext';
 import { IngredientsList } from './IngredientsList';
 import { OrdersList } from './OrdersList';
 import { RefusedEarlierAlert } from './RefusedEarlierAlert';
+import { AwaitingSentProvider } from './useAwaitingSent';
 import { DaySendScreen } from './DaySendScreen';
 import { HistoryEditScreen } from './HistoryEditScreen';
 import { IncomingMissingScreen } from './IncomingMissingScreen';
@@ -483,6 +484,8 @@ function OrdersLayout({ view }: { view: ShownView }) {
       <CardDoorsProvider value={cardDoors}>
       {/* The bell and its panel share one state, kept above the page: the number and what it opens cannot disagree (step 3f-6). */}
       <NoticesProvider lens={lens} ready={ready} onPanelOpen={dropHold}>
+      {/* «Did it go?» (the current app's PR #554): the questions of every device, the dialog on the one that sent. */}
+      <AwaitingSentProvider lens={lens}>
       <Page
         title={t('section.orders')}
         // The bell, only where the panel it opens can be seen: the list on a phone, every screen on the split. In a part of its own:
@@ -530,6 +533,7 @@ function OrdersLayout({ view }: { view: ShownView }) {
           </div>
         </div>
       </Page>
+      </AwaitingSentProvider>
       </NoticesProvider>
       </CardDoorsProvider>
     </HandBackProvider>

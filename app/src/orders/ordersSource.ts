@@ -88,6 +88,19 @@ export interface OrdersSource {
   // «Reopen»: only that supplier's key goes (a FieldPath: an id is data, not a path), whatever another phone closed meanwhile
   // survives. A draft that does not exist is refused, as updateDoc does: «Reopen» is only offered over a key that was seen.
   clearSupplierSkipped(supplierId: string): Promise<void>;
+  // ── «Order to X sent at 10:42: did it go?» (the current app's PR #554, drafts/current.awaitingSent; awaitingSent.ts) ──
+  // Like `skipped`, none of these goes through the autosave.
+  // Ask: awaitingSent.<supplierId> = value, written WHOLE (setDoc with mergeFields, never merged into the stored one: a second send to
+  // the same supplier must not keep a line of the first one's). Same promise contract as mergeDraft: shown at once, queued offline.
+  setAwaitingSent(supplierId: string, value: Readonly<Record<string, unknown>>): Promise<void>;
+  // «No» (or a question answered another way): only that supplier's key goes (updateDoc with a FieldPath).
+  clearAwaitingSent(supplierId: string): Promise<void>;
+  // «Yes»: take the question in ONE transaction, so two devices answering at once record once. `decide(stored draft)` says whether this
+  // device may (awaitingSent.ts claimDecision); resolves true only when the key was removed here. ⚠️ A transaction needs the network.
+  claimAwaitingSent(supplierId: string, decide: (draft: Record<string, unknown> | null) => boolean): Promise<boolean>;
+  // «Yes» failed to record: put the question back in a transaction, only if `decide(stored draft)` agrees (awaitingSent.ts
+  // restoreDecision: a newer send by another device keeps its own). Resolves true when written. ⚠️ Rejects offline.
+  restoreAwaitingSent(supplierId: string, value: Readonly<Record<string, unknown>>, decide: (draft: Record<string, unknown> | null) => boolean): Promise<boolean>;
   // orders-history/<id> as stored, once (null when there is none). A failure rejects.
   readRecord(id: string): Promise<Record<string, unknown> | null>;
   // Writes orders-history/<id> in a TRANSACTION: `merge` gets the record as stored (null when there is none) and returns the
@@ -316,6 +329,47 @@ export function createFirestoreOrdersSource(firestore: () => Promise<FirestoreKi
         new fs.FieldPath('skipped', supplierId), fs.deleteField(),
         'bakery', locationId,
       );
+    },
+
+    async setAwaitingSent(supplierId, value) {
+      const { fs, db } = await firestore();
+      await fs.setDoc(
+        fs.doc(db, draftsPath, DRAFT_ID),
+        { awaitingSent: { [supplierId]: value }, bakery: locationId },
+        { mergeFields: ['bakery', new fs.FieldPath('awaitingSent', supplierId)] },
+      );
+    },
+
+    async clearAwaitingSent(supplierId) {
+      const { fs, db } = await firestore();
+      await fs.updateDoc(
+        fs.doc(db, draftsPath, DRAFT_ID),
+        new fs.FieldPath('awaitingSent', supplierId), fs.deleteField(),
+        'bakery', locationId,
+      );
+    },
+
+    async claimAwaitingSent(supplierId, decide) {
+      const { fs, db } = await firestore();
+      const ref = fs.doc(db, draftsPath, DRAFT_ID);
+      return fs.runTransaction(db, async tx => {
+        const snap = await tx.get(ref);
+        if (!snap.exists() || !decide({ ...(snap.data() as Record<string, unknown>) })) return false;
+        tx.update(ref, new fs.FieldPath('awaitingSent', supplierId), fs.deleteField(), 'bakery', locationId);
+        return true;
+      });
+    },
+
+    async restoreAwaitingSent(supplierId, value, decide) {
+      const { fs, db } = await firestore();
+      const ref = fs.doc(db, draftsPath, DRAFT_ID);
+      return fs.runTransaction(db, async tx => {
+        const snap = await tx.get(ref);
+        if (!decide(snap.exists() ? { ...(snap.data() as Record<string, unknown>) } : null)) return false;
+        tx.set(ref, { awaitingSent: { [supplierId]: value }, bakery: locationId },
+          { mergeFields: ['bakery', new fs.FieldPath('awaitingSent', supplierId)] });
+        return true;
+      });
     },
 
     async readRecord(id) {
