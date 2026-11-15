@@ -5,6 +5,7 @@ import { afterShare, settleOnce } from '@mise/shared/send-chooser';
 import { editorTitle, picturePrep, previewLines } from '@mise/shared/send-editor';
 import type { EditorAnswer, EditorJob, PicturePrep, PictureState } from '@mise/shared/send-editor';
 import { useT } from '../i18n/useT';
+import { markBusy } from '../session/busy';
 import { Button } from '../ui/Button';
 import { Dialog } from '../ui/Dialog';
 import { useConfirm } from '../ui/useConfirm';
@@ -61,6 +62,10 @@ export function SendEditorDialog({ job, i, n, photo, language, answer }: Props) 
   if (photo && prep.current === null) {
     prep.current = picturePrep<File>({ render: draw => renderOrderImage(draw, { language }), onChange: setPicture });
   }
+
+  // ⚠️ AN EDITOR OPEN HOLDS THE RELOAD (the text typed here is nowhere else); useSendOrder holds it for the whole send, this is the
+  // editor's own share of it so the dialog never depends on who mounts it.
+  useEffect(() => markBusy(), []);
 
   useEffect(() => {
     const pictures = prep.current;
@@ -199,7 +204,7 @@ export function SendEditorDialog({ job, i, n, photo, language, answer }: Props) 
     >
       <div ref={body} className={styles.body}>
         <p id={ids.preview} className={styles.label}>{t('ord.sendEditor.preview')}</p>
-        <div role="group" aria-labelledby={ids.preview} className={styles.preview}>
+        <div role="group" aria-labelledby={ids.preview} tabIndex={0} className={styles.preview}>
           {lines.map((runs, index): ReactNode => (
             <div key={index} className={styles.line}>
               {runs.length === 0 ? <br /> : runs.map((run, at) => (run.bold ? <strong key={at}>{run.text}</strong> : run.text))}

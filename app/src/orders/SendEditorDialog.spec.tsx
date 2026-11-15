@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { EditorAnswer, EditorJob } from '@mise/shared/send-editor';
 import { en } from '../i18n/en';
 import { it as italian } from '../i18n/it';
 import { I18nProvider } from '../i18n/I18nProvider';
+import { isBusy } from '../session/busy';
 import { renderOrderImage } from './orderImage';
 import { SendEditorDialog } from './SendEditorDialog';
 
@@ -404,5 +405,22 @@ describe('leaving', () => {
     await user.keyboard('{Backspace>6/}');
     await user.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(answer).toHaveBeenCalledWith({ outcome: 'cancelled', text: TEXT });
+  });
+});
+
+describe('holding the reload', () => {
+  it('⚠️ holds a self-started reload while it is open, and lets go when it goes', async () => {
+    expect(isBusy()).toBe(false);
+    draw();
+    await dialog();
+    expect(isBusy()).toBe(true);
+    cleanup();
+    expect(isBusy()).toBe(false);
+  });
+
+  it('the scrolling preview can be reached by keyboard (it is a named group)', async () => {
+    draw();
+    await dialog();
+    expect(preview()).toHaveAttribute('tabindex', '0');
   });
 });

@@ -4,6 +4,7 @@ import { todayISO } from '@mise/shared/day';
 import { fakeOrdersSource } from '../testing/fakeOrdersSource';
 import type { FakeOrdersSource } from '../testing/fakeOrdersSource';
 import { LOAD, ingredient, renderOrders, supplier } from '../testing/renderOrders';
+import { isBusy } from '../session/busy';
 import { renderOrderImage } from './orderImage';
 
 // There is no canvas in jsdom: the order picture is a stand-in file.
@@ -414,6 +415,34 @@ describe('the send editor and the order picture', () => {
     await waitFor(() => { expect(screen.queryByRole('dialog', { name: 'Order for Zed' })).not.toBeInTheDocument(); });
     expect(open).not.toHaveBeenCalled();
     expect(view.router.state.location.pathname).toBe('/orders/send');
+  });
+});
+
+describe('a send holds the reload', () => {
+  it('⚠️ holds it between two editors and until the send has settled, then lets go', async () => {
+    spyOpen();
+    const view = await atList(seeded({ ordersConfig: DIRECT_ONLY }), STAFF);
+    expect(isBusy()).toBe(false);
+    await toSend(view, 'Zed', 'Café');
+    await view.user.click(sendButton());
+    await editorOf('Order for Café Bar Srl (1 of 2)');
+    expect(isBusy()).toBe(true);
+    await editorSend(view, 'Order for Café Bar Srl (1 of 2)');
+    await editorOf('Order for Zed (2 of 2)');
+    expect(isBusy()).toBe(true);
+    await editorSend(view, 'Order for Zed (2 of 2)');
+    await backAtList(view);
+    await waitFor(() => { expect(isBusy()).toBe(false); }, LOAD);
+  });
+
+  it('lets go when the chooser is cancelled', async () => {
+    const view = await atList(seeded({ ordersConfig: null }), { session: { canManage: true, role: 'manager', isOwner: false } });
+    await toSend(view, 'Zed');
+    await view.user.click(sendButton());
+    const chooser = await screen.findByRole('dialog', { name: 'How should this order go?' }, LOAD);
+    expect(isBusy()).toBe(true);
+    await escapeFrom(view, chooser);
+    await waitFor(() => { expect(isBusy()).toBe(false); }, LOAD);
   });
 });
 

@@ -7,6 +7,7 @@ import type { SendOffer } from '@mise/shared/send-chooser';
 import type { EditorAnswer, EditorJob } from '@mise/shared/send-editor';
 import { supplierLabel } from '@mise/shared/supplier-label';
 import { useT } from '../i18n/useT';
+import { markBusy } from '../session/busy';
 import { useSession } from '../session/SessionContext';
 import { useStatusMessage } from '../ui/StatusMessage';
 import { useAlert } from '../ui/useAlert';
@@ -110,7 +111,7 @@ export function useSendOrder(lens: OrdersLens): readonly [(request: SendRequest)
     }));
   }), []);
 
-  const send = useCallback((request: SendRequest): Promise<RoadResult | null> => {
+  const run = useCallback((request: SendRequest): Promise<RoadResult | null> => {
     const { t: say, session: who, store: orders, config: cfg, draft: current, lens: view } = latest.current;
     const words = sendTranslate(say);
     const suppliers = request.rows.map(row => view.supplierById(row.id)).filter((s): s is StoredDoc => s !== undefined);
@@ -211,6 +212,19 @@ export function useSendOrder(lens: OrdersLens): readonly [(request: SendRequest)
       });
     });
   }, [ask]);
+
+  // ⚠️ HELD FOR THE WHOLE SEND, from the press until `send` settles (the chooser, every editor, the road): a self-started reload in
+  // between would throw away the text the person edited, and the «did it go?» question is only written by the caller once this
+  // promise has answered. A hold always ends: settled, backed out of, or the screen gone (waiting's giveUp), and a throw releases too.
+  const send = useCallback((request: SendRequest): Promise<RoadResult | null> => {
+    const release = markBusy();
+    try {
+      return run(request).finally(release);
+    } catch (err) {
+      release();
+      throw err;
+    }
+  }, [run]);
 
   const dialogs = (
     <>
