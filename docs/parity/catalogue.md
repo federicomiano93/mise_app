@@ -2167,6 +2167,12 @@ pieces and «to taste» do not stop it; a kg, l or ml row does). It replaces the
    ten-row recipe (2990 g, three rows on the 10 g step, the small ones on 1 g): at every 100 g from 1 kg to 20 kg, about 7 batches in 10
    end with the largest row off its round number by 1 to 9 g — not rare. The rule is built exactly as approved; the owner decides.
 
+**The Total is the rows shown, added up** (`app/src/recipes/recipeAmounts.ts`): each weighable row converted to grams (0.714 l is
+714 g), pieces, spoons and «to taste» left out, in whole grams — never the batch typed or a figure worked out again. The export
+model's `totalG` is that same number. Scaled by its total with every weighable row in grams it is the batch typed (unless the line
+under it says it is off); from a row, or with kg, l or ml rows, it can be a few grams from the batch. ⚠️ The batch box still shows the
+batch («Calculate from this ingredient»: box 5469, Total 5470 on the owner's brioche example).
+
 **No longer compared with `js/`:** `scaleCatalogue` (`catalogue-model.spec.ts`, its three whole-gram tests now run against `js/` only;
 `odd-inputs.spec.ts`) and `amountsFor` (`odd-inputs.spec.ts`), which draws with it. `baseAmounts` is still compared.
 
@@ -2175,4 +2181,6 @@ pieces and «to taste» do not stop it; a kg, l or ml row does). It replaces the
 before, not scaled and its own total, from a row; «one correction of the total»: up, down, steps 2-3-4 together, every batch to the
 gram, the protection, pieces and «to taste», a ml row, from a row, «Use as base recipe»); `clean-step.spec.ts` also covers
 `applyTargetTotal` alone (each step, both protections, junk); `app/src/recipes/RecipesSection.cleanStep.spec.tsx` (the table, the
-warning line under the Total in English and Italian).
+warning line under the Total in English and Italian, the Total as the rows added up); `app/src/recipes/cleanStepReaders.spec.ts`
+(the table, the guided run, the export model and «Use as base recipe» agree at several batches, by total and from a row, and every
+Total is its rows added up).

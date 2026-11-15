@@ -46,6 +46,8 @@ describe('clean-step rounding on the recipe screen', () => {
     scaled('five', 3);
     await open('five');
     expect(rowsOf().slice(0, -1).map(row => row[1])).toEqual(['1', '1', '1', '1', '1']);
+    // The Total is the rows shown, added up — not the 3 g typed.
+    expect(rowsOf().at(-1)).toEqual(['Total', '5', 'g']);
     const line = main().getByText('The total is off by 2 g: check the recipe.');
     // Right under the ingredient table.
     expect(table().nextElementSibling).toBe(line);

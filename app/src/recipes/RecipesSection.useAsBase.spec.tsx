@@ -121,7 +121,8 @@ describe('«Use as base recipe»', () => {
     scaled('m', 2000);
     const { user, source } = await open();
     expect(rowsOf().slice(0, -1)).toEqual(MIXED_AT_2000);
-    expect(rowsOf().at(-1)).toEqual(['Total', '2000', 'g']);
+    // The rows shown, added up (16 Nov 2026): 355 g + 0.714 l + 171 ml + 0.286 kg + 470 g. No correction with litre and kg rows.
+    expect(rowsOf().at(-1)).toEqual(['Total', '1996', 'g']);
     await user.click(useAsBase()!);
     // The total the recipe will have: the rows as shown added up (each rounded in its own unit), not the batch typed.
     expect(question().getByText('The quantities of this recipe become the calculated ones: total 1996 g (was 1400 g). This cannot be undone. Continue?'))
