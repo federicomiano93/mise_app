@@ -384,6 +384,35 @@ describe('while the invitation is made', () => {
     expect(isBusy()).toBe(false);
   });
 
+  it('lets go of the busy marker after a code\'s whole life on THIS phone\'s clock, even when the server says it dies later (a phone set behind)', async () => {
+    const source = fakeSettingsSource();
+    source.createInvitation = vi.fn(async (): Promise<Invitation> => ({
+      code: FAKE_DIGITS, kind: 'digits', role: 'staff', title: null, expiresAt: Date.now() + 27 * 3_600_000,
+    }));
+    const { user } = await open({}, source);
+    await user.click(radio('Employee'));
+    await user.click(main().getByRole('button', { name: 'Read out a code' }));
+    await main().findByText(FAKE_DIGITS);
+    expect(isBusy()).toBe(true);
+    const later = Date.now() + 24 * 3_600_000 + 1_000;
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(later);
+    try {
+      act(() => { document.dispatchEvent(new Event('visibilitychange')); });
+      await waitFor(() => { expect(isBusy()).toBe(false); });
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
+  it('reads the six digits out one by one', async () => {
+    const { user } = await open();
+    await user.click(radio('Employee'));
+    await user.click(main().getByRole('button', { name: 'Read out a code' }));
+    await main().findByText(FAKE_DIGITS);
+    expect(main().getByText(FAKE_DIGITS.split('').join(' '))).toHaveClass('visually-hidden');
+    expect(main().getByText(FAKE_DIGITS)).toHaveAttribute('aria-hidden', 'true');
+  });
+
   it('counts the invitation in the usage record, by name only', async () => {
     const actions: unknown[] = [];
     const listen = (event: Event) => { actions.push((event as CustomEvent).detail); };

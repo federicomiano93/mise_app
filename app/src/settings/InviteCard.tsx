@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { Send } from 'lucide-react';
-import { expiresIn } from '@mise/shared/join-code';
+import { expiresIn, TTL_MS } from '@mise/shared/join-code';
 import type { JoinCodeKind } from '@mise/shared/join-code';
 import { joinLinkFor } from '@mise/shared/join-link';
 import { ROLE_CHOICES } from '@mise/shared/membership';
@@ -91,6 +91,9 @@ export function InviteCard() {
   // The clock the time left is read against: set when a result appears, moved on every minute while it is on screen and when the
   // device comes back to the foreground, so a result nobody closed comes to say «expired» rather than «24 hours left» for ever.
   const [now, setNow] = useState(() => Date.now());
+  // The hold's own end, on THIS phone's clock: the moment the answer arrived plus a staff code's whole life. `expiresAt` is the
+  // server's clock, so a phone set hours behind would otherwise hold every update off for 24 hours plus its error (code review).
+  const [holdUntil, setHoldUntil] = useState(0);
   // Where the keyboard goes after the next render: the result's first line, the list of roles (after Done), or the button that was
   // pressed (after a refusal has been read).
   const [focusNext, setFocusNext] = useState<'result' | 'roles' | JoinCodeKind | null>(null);
@@ -104,7 +107,7 @@ export function InviteCard() {
 
   // ⚠️ A HOLD MUST END (session/busy.ts): a result nobody closed on the lab tablet would otherwise keep it off every update for good.
   // The code is unrepeatable only while it can still be used, so the hold ends when it expires, as well as at Done and on leaving.
-  const held = making !== null || (invitation !== null && !expired);
+  const held = making !== null || (invitation !== null && !expired && now < holdUntil);
   useEffect(() => (held ? markBusy() : undefined), [held]);
 
   useEffect(() => {
@@ -114,14 +117,14 @@ export function InviteCard() {
     const minute = setInterval(tick, 60_000);
     // One timer to the very moment it dies, so the hold ends then and not up to a minute later. Capped: a browser runs a delay
     // longer than about 24.8 days at once.
-    const end = setTimeout(tick, Math.min(Math.max(invitation.expiresAt - Date.now(), 0) + 50, 2_000_000_000));
+    const end = setTimeout(tick, Math.min(Math.max(Math.min(invitation.expiresAt, holdUntil) - Date.now(), 0) + 50, 2_000_000_000));
     document.addEventListener('visibilitychange', tick);
     return () => {
       clearInterval(minute);
       clearTimeout(end);
       document.removeEventListener('visibilitychange', tick);
     };
-  }, [invitation]);
+  }, [invitation, holdUntil]);
 
   useEffect(() => {
     if (focusNext === null || making !== null) return;
@@ -151,6 +154,10 @@ export function InviteCard() {
       const made = await source.createInvitation(chosen.role, chosen.title, kind);
       if (!alive.current) return;
       announceAction('join-code-made');
+      // The clock moves with the result, so the first frame never shows the time left as of when the screen was opened.
+      const arrived = Date.now();
+      setNow(arrived);
+      setHoldUntil(arrived + TTL_MS.staff);
       setInvitation(made);
       setFocusNext('result');
       setMaking(null);
@@ -197,7 +204,11 @@ export function InviteCard() {
       return (
         <div className={styles.result}>
           <p ref={resultStart} tabIndex={-1} className={styles.lead}>{t('people.readOut')}</p>
-          <p className={styles.digits}>{invitation.code}</p>
+          {/* Read digit by digit by a screen reader, not as one six-figure number. */}
+          <p className={styles.digits}>
+            <span aria-hidden="true">{invitation.code}</span>
+            <span className="visually-hidden">{invitation.code.split('').join(' ')}</span>
+          </p>
           <p className={styles.note}>{t('people.joinsAs', { role, expires, button: t('auth.iHaveACode') })}</p>
           <div className={styles.actions}>
             <Button onPress={done}>{t('people.done')}</Button>
