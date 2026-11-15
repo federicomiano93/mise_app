@@ -35,6 +35,11 @@
 // separate thing: it lives OUTSIDE this store (useListCopy.ts), is never in the snapshot, and only draws the rows of the
 // supplier list while the live lists have not landed (a supplier tapped meanwhile is held in OrdersSection.tsx until they do).
 
+import {
+  answerAwaiting as runAnswer, awaitingEntry, awaitingList, isAwaiting, linesToClear, putQuestionBack, shouldAskBeforeRecording,
+  supplierKeepsLines,
+} from '@mise/shared/awaiting-sent';
+import type { AwaitingEntry, Lines } from '@mise/shared/awaiting-sent';
 import { awayNames, awayUids, nobodyWillBeTold } from '@mise/shared/away-model';
 import { MAX_LINES, buildOrderRequest, senderName } from '@mise/shared/order-request-model';
 import { stampFor } from '@mise/shared/order-day';
@@ -56,6 +61,7 @@ import { markBusy as markBusyOfSession } from '../session/busy';
 import { createDraftSync, EMPTY_DRAFT } from './draftSync';
 import { watchPageHidden } from './pageHidden';
 import type { DraftDays, DraftEntries, DraftEntry, DraftSync, DraftSyncDeps, DraftView } from './draftSync';
+import { recordDateFor } from './orderDay';
 import { buildOrdersLens } from './ordersLens';
 import { correctedRecord, sameOrder } from './historyEdit';
 import type { RecordEdits } from './historyEdit';
@@ -78,7 +84,10 @@ export type OrdersMessage =
   // The day chosen on a supplier's day line was refused: the line is back on the day that is stored (parity D7).
   | { readonly kind: 'day-not-saved' }
   // «Close as not ordered» or «Reopen» was refused: Firestore has already put the supplier back as it was on screen.
-  | { readonly kind: 'close-not-saved' };
+  | { readonly kind: 'close-not-saved' }
+  // The question «did it go?» could not be written to the shared order, or could not be put back: it stays on THIS device only, and
+  // the screen says so (the other devices will not ask it).
+  | { readonly kind: 'awaiting-not-shared'; readonly supplierId: string };
 
 export interface OrdersSnapshot {
   // Every supplier, as stored (the lens keeps the active ones and sorts them).
@@ -151,7 +160,51 @@ export interface OrdersSnapshot {
   // empty map alone is not enough — a refused read gives one too, and it would draw «no price» and a total in front of an
   // employee (js/orders/order-cost-view.js).
   readonly pricesReadable: boolean;
+  // «Order to X sent at 10:42: did it go?» (v1.145.0): what every device shows until somebody answers. See AwaitingState.
+  readonly awaiting: AwaitingState;
 }
+
+// One question waiting for an answer: the draft's `awaitingSent` entry (or one this device could not share, `local`).
+export interface AwaitingQuestion {
+  readonly supplierId: string;
+  readonly entry: AwaitingEntry;
+  readonly local: boolean;
+}
+
+export interface AwaitingState {
+  // One per waiting supplier Orders can record for (the live lens's suppliers, «No supplier» included, a switched-off one not),
+  // the oldest first. Names are the screen's: it holds the lens and the language.
+  readonly questions: readonly AwaitingQuestion[];
+  // The suppliers THIS device is answering right now: both banner buttons wait (aria-disabled), a second tap is ignored.
+  readonly busy: readonly string[];
+  // The question THIS device should ask in a dialog now: it sent it, the page is visible again, the draft holds it. null otherwise.
+  readonly ask: { readonly supplierId: string; readonly at: string } | null;
+}
+
+export const NO_AWAITING: AwaitingState = Object.freeze({ questions: [], busy: [], ask: null });
+
+// What an order handed over to the supplier's chat or mail is remembered as, until somebody says it went: exactly what went.
+export interface SentOrder {
+  readonly supplierId: string;
+  readonly quantities: Readonly<Record<string, number>>;
+  readonly units: Readonly<Record<string, string>>;
+  // The day it is recorded under; left out, the day of the supplier's lines in the draft (recordDateFor).
+  readonly date?: string;
+  // What the DRAFT said for this supplier at the moment of the send, when the review screen corrected the numbers (awaitingEntry).
+  readonly draft?: Lines | null;
+}
+
+// How an answer to «did it go?» ended, for the screen to say (the words are the screen's).
+//   'elsewhere' — the question is gone, or it is a newer send than the one answered: nothing done.
+//   'offline' — «Yes» needs the network (a transaction and a record): nothing done.
+//   'busy' — this device is already answering that supplier, or the «maybe already recorded» question is open.
+//   'declined' — «Yes», but History already held the order and «Don't record» was chosen: handled as «No».
+//   'kept' — «No»: only the question went, the quantities stay in the order.
+//   'claim-failed' — «Yes», but the question could not be claimed (no network): nothing recorded, the question stays.
+//   'recorded' / 'failed' — «Yes»: `place` is what recording said (saved, not-cleared, failed, unit-conflict…).
+export type AwaitingOutcome =
+  | { readonly kind: 'elsewhere' | 'offline' | 'busy' | 'declined' | 'kept' | 'claim-failed' }
+  | { readonly kind: 'recorded' | 'failed'; readonly place: PlaceOutcome | null };
 
 // How a correction or a delete from History ended (step 3f-4).
 //   'saved' / 'deleted' — written; 'changed' — the record is no longer the order the editor opened (a colleague added to it or
@@ -217,6 +270,12 @@ export interface PlaceItem {
   readonly date: string;
   readonly quantities: Readonly<Record<string, number>>;
   readonly units: Readonly<Record<string, string>>;
+  // «Yes» to «did it go?»: `quantities` and `units` are what WENT, stored when it was handed over. They are recorded whatever the
+  // draft says now — a line cleared or moved to another supplier since still went to THIS one — and afterwards only the lines still
+  // reading what went are cleared (linesToClear, with `sentDraft` when the review screen had corrected numbers), the day stamp only
+  // when nothing of the supplier is left. Typing done since stays: it is the next order.
+  readonly sentOnly?: boolean;
+  readonly sentDraft?: Lines | null;
 }
 
 // How one supplier's order ended.
@@ -274,6 +333,11 @@ export interface OrdersDeps {
     refusedNoted?(): void;
     onRefusedNoted?(run: () => void): () => void;
   };
+  // Whether the page is on screen, and the page coming back into view: the sender's «did it go?» dialog waits for it (a chat or
+  // the share sheet took the person away). Absent: always visible, and no event.
+  page?: { visible(): boolean; onVisible(run: () => void): () => void };
+  // The connection coming back: a question that could not be put back (transactions are never queued offline) tries again.
+  onOnline?(run: () => void): () => void;
 }
 
 // The page-wide signal of refusedNoted / onRefusedNoted: two stores of the same page, nothing that leaves it.
@@ -318,6 +382,18 @@ export interface OrdersStore {
   // app's refuseOnUnitConflict, which reads its live history too; a record outside the window is today's at the latest
   // (decision F3), so it is always inside. A check that throws reports no clash: the write still refuses a real one.
   conflictsNow(items: ReadonlyArray<{ readonly supplierId: string; readonly date: string }>, noSupplierName: string): RecordCheck[];
+  // «Order to X sent at 10:42: did it go?» — written WHOLE under drafts/current.awaitingSent.<supplierId> the moment an order is
+  // handed over, so every device shows it (the order of 14 Nov 2026: an order left with a line missing and nobody was asked).
+  // `handOff` 'share': the share sheet answered, so this device asks in a dialog at once (page visible); 'text': a window opened
+  // and the page is about to leave, so it asks when the page comes back. ⚠️ NEVER FATAL AND NEVER AWAITED BY A SCREEN: a refused
+  // write keeps the question on THIS device and says so (message 'awaiting-not-shared').
+  waitForAnswer(sent: readonly SentOrder[], handOff: 'share' | 'text'): void;
+  // «Yes» / «No» from a banner or the dialog, on any device. `at` is the send the question was ABOUT. `askRecordAgain` is asked only
+  // when History already holds this order (shouldAskBeforeRecording): true = record again.
+  answerAwaiting(supplierId: string, answer: 'yes' | 'no', at: string, askRecordAgain: () => Promise<boolean>,
+    noSupplierName: string): Promise<AwaitingOutcome>;
+  // The sender's dialog was left by Escape: the banner keeps asking, the dialog does not come back.
+  leaveAskToBanner(supplierId: string): void;
   // Records these orders, one supplier after the other (parity X5, X8). `noSupplierName` names the pseudo-supplier.
   place(items: readonly PlaceItem[], noSupplierName: string): Promise<PlaceReport>;
   // «Clear quantities» (parity X11): these suppliers' quantities, units and overrides go, in ONE write; the stock readings
@@ -379,6 +455,18 @@ export function browserOrdersDeps(): OrdersDeps {
       clearTimer: handle => clearTimeout(handle as ReturnType<typeof setTimeout>),
     },
     online: () => navigator.onLine,
+    page: {
+      visible: () => document.visibilityState === 'visible',
+      onVisible: run => {
+        const onChange = () => { if (document.visibilityState === 'visible') run(); };
+        document.addEventListener('visibilitychange', onChange);
+        return () => { document.removeEventListener('visibilitychange', onChange); };
+      },
+    },
+    onOnline: run => {
+      window.addEventListener('online', run);
+      return () => { window.removeEventListener('online', run); };
+    },
     journal: {
       storage: () => {
         try {
@@ -420,6 +508,7 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
     olderHistory: [], older: { loading: false, done: false, error: false },
     requests: [], requestsLoaded: false, requestsBroken: false,
     prices: {}, pricesReadable: false,
+    awaiting: NO_AWAITING,
   };
   const listeners = new Set<() => void>();
   // The two facts of the save state that are not the sync's: the first draft snapshot has arrived, and Firestore's own word
@@ -444,10 +533,44 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
   type OlderLoader = ReturnType<typeof createOlderLoader<StoredDoc>>;
   let olderLoader: OlderLoader | null = null;
 
+  // ── «Did it go?» (awaiting-sent.ts) ────────────────────────────────────────────────────────────────────────────────────────
+  // The questions THIS device could not share (the write was refused) or could not put back (offline): shown with the draft's, and
+  // answered without a claim — there is no key to claim.
+  const localQuestions = new Map<string, AwaitingEntry>();
+  // The ones among them still to be put back in the shared order, when the connection returns.
+  const questionsToRetry = new Map<string, AwaitingEntry>();
+  // The questions THIS device sent (for the dialog): `seen` once the draft holds them, forgotten once it no longer does.
+  const askHere = new Map<string, { at: string; seen: boolean }>();
+  // The page is back after a send (or the share sheet answered while it was visible): ask the questions above.
+  let askWanted = false;
+  // The suppliers being answered now. A set that tells the store when it changes, so both banner buttons wait.
+  const answering = new Set<string>();
+  const answeringAdd = answering.add.bind(answering);
+  const answeringDelete = answering.delete.bind(answering);
+  answering.add = value => { answeringAdd(value); markAwaitingDirty(); return answering; };
+  answering.delete = value => { const had = answeringDelete(value); markAwaitingDirty(); return had; };
+  // The «maybe already recorded» question is open for these suppliers: a second tap must not ask it again.
+  const askingBeforeRecording = new Set<string>();
+  let awaitingDirty = false;
+  let stopVisible: (() => void) | null = null;
+  let stopOnline: (() => void) | null = null;
+
+  function markAwaitingDirty() {
+    awaitingDirty = true;
+    set({});
+  }
+
   function set(patch: Partial<OrdersSnapshot>) {
     snapshot = { ...snapshot, ...patch };
     // A new engine only when what it reads changed: a keystroke keeps the one the rows already asked.
     if (patch.history || patch.ingredients) snapshot = { ...snapshot, suggester: createSuggester(snapshot.history, snapshot.ingredients) };
+    // The questions are re-read only when something they depend on changed (a keystroke moves the draft: with nothing waiting this
+    // costs one empty check).
+    if (awaitingDirty || patch.draft || patch.suppliers || patch.ingredients) {
+      awaitingDirty = false;
+      const awaiting = computeAwaiting();
+      if (awaiting !== snapshot.awaiting) snapshot = { ...snapshot, awaiting };
+    }
     for (const listener of listeners) listener();
   }
 
@@ -581,6 +704,7 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
   // One supplier's order: the current app's placeOrder from the confirm screen on.
   async function placeOne(item: PlaceItem, noSupplierName: string): Promise<PlaceOutcome> {
     const { supplierId, date, quantities, units } = item;
+    const sentOnly = item.sentOnly === true;
     // ⚠️ A SECOND TAP IN THE SECOND THE WRITE TAKES would pass every check and record the same lines again — and the merge
     // ADDS by design, doubling them.
     if (snapshot.placing.includes(supplierId)) return { supplierId, kind: 'busy' };
@@ -599,7 +723,7 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
       // the order is live on every phone, and a colleague may have typed since the screen opened. confirmedEntries rewrites
       // EVERY line of this supplier from the confirmed numbers (a line left out was set to 0 and is not ordered) with the
       // units the screen showed; the stock readings ride along untouched. A copy: the draft itself is never changed by it.
-      const lines = orderable(lensNow(noSupplierName).linesOf(supplierId));
+      const lines = orderable(sentOnly ? sentLinesOf(noSupplierName, supplierId, quantities) : lensNow(noSupplierName).linesOf(supplierId));
       const entries = confirmedEntries(snapshot.draft.entries as Record<string, Record<string, unknown> | undefined>, lines, quantities, units);
       const incoming = buildSupplierArchive({ supplier, ingredients: lines, entries, date, now: new Date(deps.draft.nowIso()) });
       if (!incoming) {
@@ -628,9 +752,16 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
     // while the screen was open. It was not recorded, so it stays for the next order instead of vanishing from both
     // (the current app clears it; found in the review of 3f-2). The screen's rows are the confirmed quantities and, for a
     // row set to 0 there, its unit (`units` holds every row the screen showed).
+    if (sentOnly) return clearWhatWent(item, noSupplierName);
     const typedSince = (id: string) => !(id in quantities) && !(id in units) && Number(snapshot.draft.entries[id]?.qty) > 0;
     const cleared = lensNow(noSupplierName).linesOf(supplierId).map(line => line.id).filter(id => !typedSince(id));
     set({ draft: sync.forget(cleared, [supplierId]) });
+    // ⚠️ RECORDED ANOTHER WAY: a «did it go?» still waiting for this supplier is answered by this very recording.
+    try {
+      forgetAwaitingAfterRecording(supplierId);
+    } catch (err) {
+      console.error('Forgetting the answered question failed:', err);
+    }
     // Forgetting may have taken away the last unsaved change (a refused one among those lines): the marker goes with it.
     dropBusyWhenSaved();
     try {
@@ -638,6 +769,151 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
       return { supplierId, kind: 'saved' };
     } catch (err) {
       console.error('Clearing the draft after recording the order failed:', err);
+      return { supplierId, kind: 'not-cleared' };
+    } finally {
+      setPlacing(supplierId, false);
+    }
+  }
+
+  // The questions as the screen shows them: the draft's, plus any this device could not share (the draft's wins when it holds one).
+  function currentAwaiting(): Record<string, unknown> {
+    const all: Record<string, unknown> = { ...snapshot.draft.awaitingSent };
+    localQuestions.forEach((entry, id) => { if (!isAwaiting(all[id])) all[id] = entry; });
+    return all;
+  }
+
+  function computeAwaiting(): AwaitingState {
+    const all = currentAwaiting();
+    if (Object.keys(all).length === 0 && askHere.size === 0 && answering.size === 0) return NO_AWAITING;
+    // A question this device sent is «seen» once the draft holds it, and forgotten once the draft no longer does (somebody
+    // answered) or holds a NEWER send.
+    askHere.forEach((mine, id) => {
+      const live = all[id];
+      if (isAwaiting(live) && (live as AwaitingEntry).at === mine.at) { mine.seen = true; return; }
+      if (mine.seen || (isAwaiting(live) && (live as AwaitingEntry).at !== mine.at)) askHere.delete(id);
+    });
+    const lens = lensNow('');
+    const questions = awaitingList(all, lens.suppliers).map(({ supplier, ...entry }): AwaitingQuestion => ({
+      supplierId: supplier.id,
+      entry: entry as AwaitingEntry,
+      local: localQuestions.get(supplier.id) === all[supplier.id],
+    }));
+    let ask: AwaitingState['ask'] = null;
+    if (askWanted && deps.page?.visible() !== false) {
+      const next = [...askHere].find(([id, mine]) =>
+        mine.seen && isAwaiting(all[id]) && (all[id] as AwaitingEntry).at === mine.at && lens.supplierById(id) !== undefined);
+      if (next) ask = { supplierId: next[0], at: next[1].at };
+      else if (![...askHere.values()].some(mine => !mine.seen)) askWanted = false;
+    }
+    const next: AwaitingState = { questions, busy: [...answering], ask };
+    return JSON.stringify(next) === JSON.stringify(snapshot.awaiting) ? snapshot.awaiting : next;
+  }
+
+  // ⚠️ A QUESTION THE WRITE REFUSED (rules not deployed, a revoked session) OR THE RESTORE COULD NOT PUT BACK (offline: a transaction is
+  // never queued) STAYS ON THIS DEVICE: an order handed over must never be left with nobody asking.
+  function keepQuestionHere(supplierId: string, entry: AwaitingEntry) {
+    localQuestions.set(supplierId, entry);
+    askHere.set(supplierId, { at: entry.at, seen: true });
+    say({ kind: 'awaiting-not-shared', supplierId });
+    awaitingDirty = true;
+    set({});
+  }
+
+  function dropRetryListener() {
+    if (questionsToRetry.size > 0) return;
+    stopOnline?.();
+    stopOnline = null;
+  }
+
+  // The connection is back: put the kept questions into the shared order — unless a newer send already stands there, which then
+  // keeps its own.
+  async function retryQuestions() {
+    for (const [id, entry] of [...questionsToRetry]) {
+      // Answered here meanwhile (the local copy went): nothing to put back.
+      if (localQuestions.get(id) !== entry) { questionsToRetry.delete(id); continue; }
+      try {
+        await source.restoreAwaitingSentIfAbsent(id, entry);
+      } catch {
+        continue;   // still no network: the next `online` tries again
+      }
+      questionsToRetry.delete(id);
+      // Shared now (or a newer send stands there): the shared question is the one to show.
+      localQuestions.delete(id);
+      awaitingDirty = true;
+      set({});
+    }
+    dropRetryListener();
+  }
+
+  function putQuestionHere(supplierId: string, entry: AwaitingEntry) {
+    return putQuestionBack(supplierId, entry, {
+      write: (id, e) => source.restoreAwaitingSentIfAbsent(id, e),
+      keepHere: (id, e, err) => {
+        console.error('Putting the question back failed:', err);
+        questionsToRetry.set(id, e);
+        stopOnline ??= deps.onOnline?.(() => { void retryQuestions(); }) ?? null;
+        keepQuestionHere(id, e);
+      },
+    });
+  }
+
+  // ⚠️⚠️ A SUPPLIER'S ORDER WAS JUST RECORDED WITHOUT GOING THROUGH «DID IT GO?» («Order placed», «Placed yesterday»): its waiting
+  // question is answered by this very recording. Left in place, a later «Yes» on any device would record the same order a second
+  // time, and the record ADDS (mergeArchives).
+  function forgetAwaitingAfterRecording(supplierId: string) {
+    askHere.delete(supplierId);
+    localQuestions.delete(supplierId);
+    questionsToRetry.delete(supplierId);
+    dropRetryListener();
+    if (isAwaiting(snapshot.draft.awaitingSent[supplierId])) {
+      source.clearAwaitingSent(supplierId).catch((err: unknown) => { console.error('Removing the answered question failed:', err); });
+    }
+    awaitingDirty = true;
+    set({});
+  }
+
+  // The lens for recording what WENT: every line that was sent is filed under this supplier, even one another phone has since
+  // moved elsewhere «this time» — it went to this one.
+  function sentLinesOf(noSupplierName: string, supplierId: string, quantities: Readonly<Record<string, unknown>>): LensIngredient[] {
+    const lens = lensNow(noSupplierName);
+    const byId = new Map<string, LensIngredient>(lens.linesOf(supplierId).map(line => [line.id, line]));
+    for (const line of lens.lines) {
+      if (line.id in quantities && !byId.has(line.id)) byId.set(line.id, { ...line, supplierId });
+    }
+    return [...byId.values()];
+  }
+
+  async function placeAll(items: readonly PlaceItem[], noSupplierName: string): Promise<PlaceReport> {
+    if (!deps.online()) return { offline: true };
+    // A self-started reload in the middle would cut the sequence between the record and the clear.
+    const release = deps.markBusy();
+    try {
+      // ONE AFTER THE OTHER: each writes its record and then clears its own lines of the ONE shared draft, and
+      // overlapping writes would race on it.
+      const outcomes: PlaceOutcome[] = [];
+      for (const item of items) outcomes.push(await placeOne(item, noSupplierName));
+      return { offline: false, outcomes };
+    } finally {
+      release();
+    }
+  }
+
+  // After «Yes» to «did it go?» recorded what WENT: only the lines still reading what went are cleared, the day stamp only when
+  // nothing of the supplier is left. ⚠️ NOTHING HERE MAY THROW OUT OF THE PLACE: the order IS in the record, and a rejection read as
+  // «not recorded» would put the question back — a second «Yes» would record it twice (the merge ADDS).
+  async function clearWhatWent(item: PlaceItem, noSupplierName: string): Promise<PlaceOutcome> {
+    const { supplierId, quantities, units } = item;
+    try {
+      const entries = snapshot.draft.entries;
+      const gone = linesToClear(entries as Record<string, { qty?: unknown }>, cardOf, { quantities, units, draft: item.sentDraft ?? undefined });
+      const keeps = supplierKeepsLines(orderable(lensNow(noSupplierName).linesOf(supplierId)), entries as Record<string, { qty?: unknown }>, gone);
+      set({ draft: sync.forget(gone, keeps ? [] : [supplierId]) });
+      dropBusyWhenSaved();
+      const paths = [...gone.map(id => `entries.${id}`), ...(keeps ? [] : [`days.${supplierId}`])];
+      if (paths.length > 0) await source.clearDraft(paths, deps.draft.nowIso());
+      return { supplierId, kind: 'saved' };
+    } catch (err) {
+      console.error('Clearing the draft after recording what went failed:', err);
       return { supplierId, kind: 'not-cleared' };
     } finally {
       setPlacing(supplierId, false);
@@ -792,6 +1068,11 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
       stopRefusedWatch = deps.journal?.onRefusedNoted?.(() => { sync.lookForRefused(); }) ?? null;
       // Switching app or locking the screen: what waits for its pause goes now, while the page is still alive (pageHidden.ts).
       stopHidden = deps.journal?.onPageHidden(() => { sync.sendWaiting(); }) ?? null;
+      // Back from the chat or the share sheet: the questions this device sent are asked now.
+      stopVisible = deps.page?.onVisible(() => {
+        if (askHere.size > 0) askWanted = true;
+        markAwaitingDirty();
+      }) ?? null;
       // Fixed before the first older page is asked for; once a page is in, the window it was cut from stays.
       if (!olderLoader) windowStart = liveHistoryStart(parseISODate(deps.today()));
       stops = [
@@ -878,12 +1159,112 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
       sync.sendWaiting();
     },
 
+    waitForAnswer(sent, handOff) {
+      // ONE `at` for the whole batch: the questions of one send are asked in one breath, the oldest first.
+      const at = deps.draft.nowIso();
+      const today = deps.today();
+      for (const { supplierId, quantities, units, date, draft } of sent) {
+        const entry = awaitingEntry({
+          at, date: date || recordDateFor(snapshot.draft, supplierId, today), quantities, units, draft,
+        });
+        // Nothing went for this supplier: there is no question to ask.
+        if (!entry) continue;
+        askHere.set(supplierId, { at: entry.at, seen: false });
+        localQuestions.delete(supplierId);
+        // Held busy until the server answers (offline, until the connection is back), so a self-started reload cannot throw the tap
+        // away before Firestore has the write; and not awaited by any screen.
+        const release = deps.markBusy();
+        source.setAwaitingSent(supplierId, entry).catch((err: unknown) => {
+          console.error('Sharing the «did it go?» question failed:', err);
+          // ⚠️ THE TAKE-BACK SNAPSHOT MAY HAVE COME FIRST and found nothing to ask about (it switches the wish off): this question is
+          // still to be asked here.
+          if (handOff === 'share' && deps.page?.visible() !== false) askWanted = true;
+          keepQuestionHere(supplierId, entry);
+        }).finally(release);
+      }
+      if (handOff === 'share' && deps.page?.visible() !== false) askWanted = true;
+      markAwaitingDirty();
+    },
+
+    leaveAskToBanner(supplierId) {
+      askHere.delete(supplierId);
+      markAwaitingDirty();
+    },
+
+    async answerAwaiting(supplierId, answer, at, askRecordAgain, noSupplierName) {
+      const local = localQuestions.get(supplierId) ?? null;
+      const stored = local ?? snapshot.draft.awaitingSent[supplierId];
+      if (!isAwaiting(stored) || (at && (stored as AwaitingEntry).at !== at)) return { kind: 'elsewhere' };
+      const entry = stored as AwaitingEntry;
+      // A transaction and a record both need the network (placing says the same).
+      if (answer === 'yes' && !deps.online()) return { kind: 'offline' };
+      // ⚠️ «YES» WHEN HISTORY ALREADY HOLDS THIS ORDER (that supplier, that day, every stored line at least as large): another device
+      // (one still on an older version records «Order placed» without knowing of this question) has probably recorded it, and
+      // recording again doubles it. Ask first; with no such record, record as always. «Don't record» goes the very same road as
+      // «No». A question already open for this supplier (a second tap) is not asked again.
+      let wanted = answer;
+      let declined = false;
+      if (answer === 'yes') {
+        const id = historyDocId(entry.date || recordDateFor(snapshot.draft, supplierId, deps.today()), supplierId);
+        const filed = [...snapshot.history, ...snapshot.olderHistory].find(record => record.id === id) ?? null;
+        if (shouldAskBeforeRecording(entry, filed as { quantities?: Record<string, unknown> } | null)) {
+          if (askingBeforeRecording.has(supplierId)) return { kind: 'busy' };
+          askingBeforeRecording.add(supplierId);
+          let record: boolean;
+          try {
+            record = await askRecordAgain();
+          } finally {
+            askingBeforeRecording.delete(supplierId);
+          }
+          // Answered on another device while the question was open.
+          if (!local && (snapshot.draft.awaitingSent[supplierId] as { at?: unknown } | undefined)?.at !== entry.at) return { kind: 'elsewhere' };
+          if (!record) { wanted = 'no'; declined = true; }
+        }
+      }
+      // This device is answering: the dialog (if it sent the question) has nothing more to ask.
+      askHere.delete(supplierId);
+      let placed: PlaceOutcome | null = null;
+      const result = await runAnswer(wanted, supplierId, entry, {
+        busy: answering,
+        claim: (id, claimedAt) => source.claimAwaitingSent(id, claimedAt),
+        // ⚠️ THE STORED QUANTITIES, on the day they were for, without a second «did you send it?»: this IS that answer.
+        record: async (id, e) => {
+          const report = await placeAll([{
+            supplierId: id, date: e.date || recordDateFor(snapshot.draft, id, deps.today()),
+            quantities: e.quantities, units: e.units, sentOnly: true, sentDraft: e.draft ?? null,
+          }], noSupplierName);
+          placed = report.offline ? null : report.outcomes[0] ?? null;
+          return placed !== null && (placed.kind === 'saved' || placed.kind === 'not-cleared');
+        },
+        // Not awaited: a write Firestore queues must not hold the answer open. ⚠️ Only if no question stands for this supplier now
+        // (a newer send by another device keeps its own); offline the transaction rejects and the question stays on THIS device.
+        restore: (id, e) => { void putQuestionHere(id, e); return Promise.resolve(); },
+        drop: id => {
+          source.clearAwaitingSent(id).catch((err: unknown) => { console.error('Removing the question failed:', err); });
+          return Promise.resolve();
+        },
+      }, { local: local !== null });
+      if (local && (result === 'recorded' || result === 'dropped')) {
+        localQuestions.delete(supplierId);
+        questionsToRetry.delete(supplierId);
+        dropRetryListener();
+      }
+      markAwaitingDirty();
+      if (result === 'dropped') return { kind: declined ? 'declined' : 'kept' };
+      if (result === 'elsewhere') return { kind: 'elsewhere' };
+      if (result === 'claimFailed') return { kind: 'claim-failed' };
+      if (result === 'busy') return { kind: 'busy' };
+      return { kind: result, place: placed };
+    },
+
     stop() {
       closePrices();
       for (const stop of stops) stop();
       stops = [];
       stopHidden?.();
       stopHidden = null;
+      stopVisible?.();
+      stopVisible = null;
       stopRefusedWatch?.();
       stopRefusedWatch = null;
       // ⚠️ BEFORE THE FLUSH: from now on this sync judges nothing and never rewrites the note (a new opening owns it); its
@@ -1030,20 +1411,7 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
       });
     },
 
-    async place(items, noSupplierName) {
-      if (!deps.online()) return { offline: true };
-      // A self-started reload in the middle would cut the sequence between the record and the clear.
-      const release = deps.markBusy();
-      try {
-        // ONE AFTER THE OTHER: each writes its record and then clears its own lines of the ONE shared draft, and
-        // overlapping writes would race on it.
-        const outcomes: PlaceOutcome[] = [];
-        for (const item of items) outcomes.push(await placeOne(item, noSupplierName));
-        return { offline: false, outcomes };
-      } finally {
-        release();
-      }
-    },
+    place: placeAll,
 
     async clearQuantities(supplierIds, noSupplierName) {
       const ids = supplierIds.filter(Boolean);
