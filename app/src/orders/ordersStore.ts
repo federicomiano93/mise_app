@@ -68,7 +68,7 @@ import type { RecordEdits } from './historyEdit';
 import { createSuggester, NO_SUGGESTIONS } from './suggester';
 import type { Suggester } from './suggester';
 import type { LensIngredient, OrdersLens } from './ordersLens';
-import type { OrdersMeta, OrdersSource, StoredDoc } from './ordersSource';
+import type { OrdersMeta, OrdersSource, RosterRow, StoredDoc } from './ordersSource';
 import { settingPatch, withPatch } from './settingsPatch';
 import type { SettingChange, SettingRefusal } from './settingsPatch';
 import { kioskSectionsFor } from './kioskFeed';
@@ -154,6 +154,9 @@ export interface OrdersSnapshot {
   readonly requestsLoaded: boolean;
   // The live stream of the lists died (no resubscribe): the page says so like the other streams (parity L5).
   readonly requestsBroken: boolean;
+  // The roster by uid, for the name a received list is shown under (shownSender, security audit): read ONCE, when a lists screen
+  // is first shown (prepareRoster). null while it has not arrived, or when its read failed: the typed name stands in meanwhile.
+  readonly rosterByUid: ReadonlyMap<string, RosterRow> | null;
   // ingredient-prices by ingredient id (step 3f-8c), held ONLY while this person may read prices (setPriceReader); else {}.
   readonly prices: Readonly<Record<string, Readonly<Record<string, unknown>>>>;
   // ⚠️ THE ONE GATE OF EVERY AMOUNT ON SCREEN (parity L20): true only once the read of ingredient-prices has SUCCEEDED. An
@@ -431,6 +434,9 @@ export interface OrdersStore {
   // Starts reading the sender's own roster row (their name), so the read has had time by the tap. Fire-and-forget and once per uid:
   // a read that failed is forgotten, so the next call may try again.
   prepareSender(senderUid: string): void;
+  // Starts reading the roster for the names on the received lists (rosterByUid). Fire-and-forget and once per store: ⚠️ NEVER
+  // REJECTS — a failure is logged and forgotten (the next call may try again), and the typed name stands in meanwhile.
+  prepareRoster(): void;
   // Sends the ticked suppliers' part of the shared order as a list (parity R14, R15). ⚠️ THE ORDER IS NOT CLEARED (his choice, 14 Aug
   // 2026). The sender's name is read here (3 s at most), and a read that fails or is late can never stop the send: the list goes
   // with no name. ⚠️ `stillWanted` is asked right after that read, before anything is written: a screen that was left in the
@@ -506,7 +512,7 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
     placing: [],
     history: [], historyLoaded: false, historyBroken: false, suggester: NO_SUGGESTIONS,
     olderHistory: [], older: { loading: false, done: false, error: false },
-    requests: [], requestsLoaded: false, requestsBroken: false,
+    requests: [], requestsLoaded: false, requestsBroken: false, rosterByUid: null,
     prices: {}, pricesReadable: false,
     awaiting: NO_AWAITING,
   };
@@ -1010,6 +1016,24 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
     });
     senderReads.set(senderUid, read);
     return read;
+  }
+
+  // The roster for the names on the received lists, one read per store (prepareRoster). ⚠️ NEVER REJECTS: a failure is logged and
+  // forgotten, so the next lists screen shown tries again; until then the typed name stands in.
+  let rosterRead: Promise<void> | null = null;
+  function readRoster(): void {
+    if (rosterRead !== null) return;
+    rosterRead = Promise.resolve().then(() => source.getRoster()).then(
+      rows => {
+        const byUid = new Map<string, RosterRow>();
+        for (const row of Array.isArray(rows) ? rows : []) if (row && typeof row.uid === 'string') byUid.set(row.uid, row);
+        set({ rosterByUid: byUid });
+      },
+      (err: unknown) => {
+        console.warn('Could not read the roster for the names on the order lists:', err);
+        rosterRead = null;
+      },
+    );
   }
 
   // The Orders settings' patches still on their way to the server, oldest first (saveSetting): the next change is judged on them too.
@@ -1571,6 +1595,10 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
 
     prepareSender(senderUid) {
       void senderRead(senderUid);
+    },
+
+    prepareRoster() {
+      readRoster();
     },
 
     async sendList(supplierIds, senderUid, noSupplierName, stillWanted) {
