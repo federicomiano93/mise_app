@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
-import { Check, ClipboardList, List, Plus } from 'lucide-react';
+import { Check, ClipboardList, List, Plus, Share } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router';
 import { fromOrdersList, fromOrdersSupplier, ingredientCardAddress, newIngredientAddress, supplierScreenAddress } from '@mise/shared/records-link';
 import { supplierLabel } from '@mise/shared/supplier-label';
@@ -24,6 +24,9 @@ import { recipeOriginOf, useBackToRecipe } from './recipeOrigin';
 import { LONG_MS, useClearQuantities } from './useClearQuantities';
 import { NO_SUPPLIER_ID } from './ordersLens';
 import { summaryFor } from './orderMoney';
+import { sayListOutcome } from './sayListOutcome';
+import { draftSendRows } from './sendFlow';
+import { useSendOrder } from './useSendOrder';
 import type { OrderRow, OrdersLens } from './ordersLens';
 import styles from './SupplierOrderScreen.module.css';
 
@@ -55,6 +58,9 @@ export function SupplierOrderScreen({ id, lens }: { id: string; lens: OrdersLens
   const leave = origin === null ? leaveToList : leaveToRecipe;
   const say = useStatusMessage();
   const [clearQuantities, clearDialog] = useClearQuantities(lens);
+  const [send, sendDialogs] = useSendOrder(lens);
+  // One send at a time: a second press while the road chooser or an editor is up does nothing.
+  const sending = useRef(false);
   // Closing the screen sends what waits for the autosave's pause at once (the iPad order of 14 Nov 2026).
   useEffect(() => () => { store.sendWaitingDraft(); }, [store]);
   // The totals box above «Order placed» is for the split only (his choice C4, 6 Nov 2026).
@@ -134,6 +140,7 @@ export function SupplierOrderScreen({ id, lens }: { id: string; lens: OrdersLens
       <section className={styles.screen} aria-label={t('section.orders')}>
         <FormBar backLabel={t('ui.back')} onBack={leave} title={t('section.orders')} titleRef={titleNode} />
         <p className={styles.nothing}>{t('ord.supplierGone')}</p>
+        {sendDialogs}
       </section>
     );
   }
@@ -163,6 +170,30 @@ export function SupplierOrderScreen({ id, lens }: { id: string; lens: OrdersLens
   // What is typed for this supplier: «Order placed…» needs some, «Clear quantities…» is offered only when there is some.
   const filled = lens.filledFor(id);
   const placing = snapshot.placing.includes(id);
+  // «Send» on this supplier's own screen: ITS lines only, through the same roads and the same editor as the send screen.
+  // ⚠️ CALLED FROM THE PRESS, with nothing awaited first (the unit check runs in that tick), and freed again whatever happens: a send
+  // that throws or rejects must not leave the button dead. The log carries the error, never the order.
+  const sendOrder = () => {
+    if (sending.current || filled === 0) return;
+    sending.current = true;
+    const failed = (err: unknown) => {
+      console.error('Sending the order failed:', err);
+      sending.current = false;
+      say(t('ord.send.failed'), LONG_MS);
+    };
+    let going: ReturnType<typeof send>;
+    try {
+      going = send({ rows: draftSendRows(lens, snapshot.draft, [id]), grouped: true, supplierRoadsOnly: false });
+    } catch (err) {
+      failed(err);
+      return;
+    }
+    void going.then(result => {
+      sending.current = false;
+      if (result?.kind === 'list') sayListOutcome(say, t, result.outcome);
+      else if (result?.kind === 'sent' && result.blocked) say(t('ord.send.nothingOpened'), LONG_MS);
+    }).catch(failed);
+  };
   const place = () => {
     // Refused offline: the record and the clear would land at two different moments of connectivity (parity X3).
     if (navigator.onLine === false) {
@@ -189,6 +220,15 @@ export function SupplierOrderScreen({ id, lens }: { id: string; lens: OrdersLens
           titleDoorLabel={t('ord.supplierDoor', { supplier: label })}
           action={(
             <div className={styles.barActions}>
+              {/* «Send» comes before «+»: the one thing this screen is for sits at the start of the row. */}
+              <Button
+                className={styles.send}
+                aria-label={t('ord.supplierSendAria', { supplier: label })}
+                isDisabled={filled === 0}
+                onPress={sendOrder}
+              >
+                <Share aria-hidden="true" />
+              </Button>
               {doors.may ? (
                 <Button
                   ref={addNode}
@@ -276,6 +316,7 @@ export function SupplierOrderScreen({ id, lens }: { id: string; lens: OrdersLens
         </>
       )}
       {clearDialog}
+      {sendDialogs}
     </section>
   );
 }

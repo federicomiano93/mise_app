@@ -4,9 +4,9 @@ import { Share } from 'lucide-react';
 import { MAX_LINES } from '@mise/shared/order-request-model';
 import { useT } from '../i18n/useT';
 import { Button } from '../ui/Button';
-import { announceAction } from '../telemetry/usage';
 import { useStatusMessage } from '../ui/StatusMessage';
 import { joinList } from './orderWords';
+import { sayListOutcome } from './sayListOutcome';
 import type { OrdersLens } from './ordersLens';
 import type { SendRow } from './sendFlow';
 import { LONG_MS } from './useClearQuantities';
@@ -29,9 +29,6 @@ type Props = {
   // offered (History's re-send).
   onListSent?: () => void;
 };
-
-// How long «List sent ✓ — Everybody who runs this place will be told.» stays: long enough to read who will be told.
-const LIST_SENT_MS = 6000;
 
 // The body both send screens share (the draft's «Send order» and History's «Send <day>»): the tick of every row, «Select all», how
 // the message is written and the one «Send» button. What happens AFTER a send that reached somebody is the screen's own (the
@@ -89,14 +86,8 @@ export function SendPicker({ lens, rows, titleId, emptyText, resend = false, onR
     });
   };
 
-  // What a list that was written (or refused) is told as, on the screen or after it was left. The statistic is counted once per list,
-  // for the two outcomes where the list is in the app (the current app announces `order-request` at the same moment).
-  const tellList = (outcome: 'sent' | 'queued' | 'failed') => {
-    if (outcome === 'sent') say(`${t('ord.request.sent')} — ${t('ord.request.sentToManagers')}`, LIST_SENT_MS);
-    else if (outcome === 'queued') say(t('ord.request.queued'), LIST_SENT_MS);
-    else say(t('ord.request.sendFailed'), LONG_MS);
-    if (outcome !== 'failed') announceAction('order-request');
-  };
+  // What a list that was written (or refused) is told as, on the screen or after it was left (sayListOutcome.ts).
+  const tellList = (outcome: 'sent' | 'queued' | 'failed') => { sayListOutcome(say, t, outcome); };
 
   const press = () => {
     if (pendingRef.current || chosen.length === 0) return;
