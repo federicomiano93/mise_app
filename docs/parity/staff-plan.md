@@ -370,3 +370,12 @@ Branch `feature/mise2-next-staff-3`, one PR into `feature/mise2-next`. No server
 **Ported to shared**: `ROLE_CHOICES` (key, role, title) into `membership.ts`; `membership.spec.ts` compares it with `js/roles.js`.
 
 **Not done here**: driving it on the emulator and on the tablet and the phone (Federico, before merge), in particular a real `createJoinCode` on the Functions emulator, the send sheet on a phone, and a person joining with the code through slice 1 or 2. D5 (a list of invitations sent, cancelling one) stays out, as today.
+
+### Staff slice 3 — checked on the PC (15 Nov 2026)
+
+- **Driven on the emulator with the real Functions emulator** (`createJoinCode`, `redeemJoinCode`): the full owner in Italian (Panificio Miano) and English (the bakery) at 1024, 360 and 296 — the row, six roles with none chosen, a tap with no role sending nothing, Head chef hiding the six digits, a double tap making ONE code stored as manager / head-chef, the result, Send (WhatsApp gets the message naming the venue), Copy, Done, six digits for an employee, leaving forgetting the result; axe, 44 px targets, nothing clipped, no console error, no code in any console line, address or storage.
+- **Everybody else** (manager, sales owner, kitchen owner, employee): no row, the typed address shows Settings, and the server refuses each of them; six digits for a manager are refused even for the owner.
+- **End to end**: a head-chef link made on screen, redeemed by an account with no venue, gives the membership `manager` with the roster title `head-chef`; the same link a second time makes nobody.
+- **Changed after the code review**: the update hold also ends a staff code's whole life after the answer arrived, on this phone's clock (a phone set hours behind held updates off for 24 hours plus its error); the time left is read from the moment the result arrives; the six digits are read to a screen reader one by one.
+- **Left as built**: a phone set more than a day ahead shows «expired» while the code still works (the owner makes another); while the invitation is made the pressed button is switched off, so the keyboard focus falls to the page until the answer (as on the sibling screens); an expected refusal is reported as an error, as on the sibling screens.
+- **Still owed**: the send sheet and a person joining, on the real phone and tablet (Federico).
