@@ -2059,7 +2059,8 @@ body[data-section="orders"] .ing-filter .view-switch-btn:not(.active) { color: v
    asks for a decision too — with two answers a full 44px tall, side by side. While this device is
    answering both are disabled and say so by fading. */
 .awaiting-banner .pending-btn { min-height: 44px; }
-.awaiting-banner .pending-btn:disabled { opacity: .55; cursor: default; }
+.awaiting-banner .pending-btn:disabled,
+.awaiting-banner .pending-btn[aria-disabled="true"] { opacity: .55; cursor: default; }
 .pending-title { font-size: 14px; font-weight: 700; }
 /* Full --warn, no opacity: faded to .85 it read 4.22:1 on --warn-bg, under 4.5. */
 .pending-sub { font-size: 12px; font-family: 'DM Mono', monospace; }

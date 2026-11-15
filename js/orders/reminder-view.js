@@ -136,23 +136,34 @@ export function renderAwaiting(container, list, { question, onYes, onNo, busy } 
   const key = JSON.stringify(list.map((e, i) => [e.supplier.id, e.at, sentences[i], Boolean(busy?.(e.supplier.id))]));
   if (container.dataset.awaitingKey === key) return;
   container.dataset.awaitingKey = key;
+  // ⚠️ FOCUS SURVIVES THE REBUILD. Tapping «Sì» flips the busy state, which changes the key, which
+  // rebuilds the row — and a keyboard or screen-reader user's focus fell to <body>. The button
+  // that had it (which supplier, which answer) is found again in the new row and focused.
+  const active = globalThis.document?.activeElement;
+  const hadFocus = active?.dataset?.awaitingSupplier
+    ? { supplier: active.dataset.awaitingSupplier, answer: active.dataset.awaitingAnswer } : null;
   container.textContent = '';
   if (!list.length) return;
 
+  let restoreFocus = null;
   list.forEach((entry, i) => {
     const { supplier } = entry;
     const id = `awaiting-q-${++awaitingSeq}`;
     const waiting = Boolean(busy?.(supplier.id));
     // The two answers are named by their own word AND described by the question, so a screen
     // reader moving from button to button hears which order «Sì» is about.
-    const answer = (label, cls, fn) => el('button', {
+    // ⚠️ aria-disabled, NOT disabled, while this device is answering: a disabled button cannot hold
+    // focus, so the one that was just tapped could never get it back after the rebuild. The tap is
+    // ignored here, and answerAwaiting's busy guard would refuse it anyway.
+    const answer = (label, cls, which, fn) => el('button', {
       type: 'button', class: `pending-btn${cls}`, 'aria-describedby': id,
-      onClick: () => fn?.(supplier.id, entry.at),
+      'aria-disabled': waiting ? 'true' : null,
+      dataset: { awaitingSupplier: supplier.id, awaitingAnswer: which },
+      onClick: () => { if (!waiting) fn?.(supplier.id, entry.at); },
     }, label);
-    const yes = answer(t('orders.awaiting.yes'), ' primary', onYes);
-    const no = answer(t('orders.awaiting.no'), '', onNo);
-    yes.disabled = waiting;
-    no.disabled = waiting;
+    const yes = answer(t('orders.awaiting.yes'), ' primary', 'yes', onYes);
+    const no = answer(t('orders.awaiting.no'), '', 'no', onNo);
+    if (hadFocus && hadFocus.supplier === supplier.id) restoreFocus = hadFocus.answer === 'yes' ? yes : no;
     container.appendChild(el('div', { class: 'pending-banner awaiting-banner' }, [
       el('div', { class: 'pending-main' }, [
         el('span', { class: 'pending-title', id, text: sentences[i] }),
@@ -160,4 +171,5 @@ export function renderAwaiting(container, list, { question, onYes, onNo, busy } 
       el('div', { class: 'pending-actions' }, [yes, no]),
     ]));
   });
+  restoreFocus?.focus();
 }
