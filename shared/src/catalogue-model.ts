@@ -1083,8 +1083,9 @@ export function scaledAmounts(recipe: unknown, targetGrams: unknown, row?: RowSc
 // ── «Use as base recipe» (NEW IN MISE 2, 14 Nov 2026: no original in js/) ──────
 // The owner: «I calculate 4500 g of a recipe and I want those 4500 g to become the default recipe». The amounts to STORE so that
 // the recipe as written reads exactly what the screen showed at that batch: each row's number as scaleCatalogue gives it to the
-// screen (already rounded in the row's own unit — whole grams, pieces and spoons, kg and l to the gram — and, for an all-grams
-// recipe, the exact-sum rounding that makes the rows add up to the total shown). ⚠️ THE SAME FUNCTION THE SCREEN DRAWS FROM, so
+// screen (a gram row on its clean step, any other row in its own unit — pieces and spoons whole, kg and l to the gram — and, for a
+// batch by its total with every weighable row in grams, the one correction that makes the rows add up to it, 16 Nov 2026). ⚠️ THE
+// SAME FUNCTION THE SCREEN DRAWS FROM, so
 // what is saved cannot drift from what was read: no second rounding rule here.
 // A «to taste» row has no number on screen and keeps the amount it has. Only the amounts are answered: the caller changes
 // `grams` and nothing else on each row. null when there is nothing to make a base of (no positive target, or nothing
@@ -1103,8 +1104,9 @@ export function rebaseAmounts(recipe: unknown, targetGrams: unknown, row?: RowSc
 }
 
 // ⚠️ THE ROWS A REBASE WOULD EMPTY: a row with an amount (not «to taste») whose number at this batch rounds to 0 — 2 g of yeast in
-// a 400 g test batch of a 1720 g recipe reads «0 g» — or below (the all-grams exact-sum rounding can push the largest row under 0
-// for an absurdly small batch). Saved, it would be gone from every batch made afterwards, so the screen refuses and names them.
+// a 400 g test batch of a 1720 g recipe reads «0 g» — or below (a number handed in from elsewhere; since 16 Nov 2026 the scaling's
+// own correction refuses to take a row to 0 or below). Saved, it would be gone from every batch made afterwards, so the screen
+// refuses and names them.
 // Their places in recipe.ingredients, in order; [] when nothing is lost.
 export function rowsLostByRebase(recipe: unknown, amounts: readonly (number | null)[] | null): number[] {
   if (amounts === null) return [];

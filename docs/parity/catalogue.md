@@ -2058,8 +2058,9 @@ The owner (14 Nov 2026): calculate the whole recipe from the amount of ONE ingre
 **Deliberate limits.**
 - The row menu is still not in the full-screen view (its rows are read-only text, as decided with item 32); the full screen SHOWS the batch
   worked out from a row, the chosen row exact.
-- A guided mix started from such a batch takes its total (`targetGrams`, the current app's session shape), so in an all-grams recipe the
-  chosen row can read a gram off inside the mix.
+- ~~A guided mix started from such a batch takes its total, so the chosen row can read a gram off inside the mix.~~ Fixed on
+  16 Nov 2026: the mix's snapshot also keeps the row (`fromRow`, an optional key the current app ignores; a batch by its total writes
+  the current app's shape unchanged), and the run draws it with the screen's own `scaledAmounts`.
 
 **Specs.** `shared/src/catalogue-model.spec.ts` («scaleFromRow: the whole recipe from one ingredient’s amount»: the owner's example, the
 chosen row exact even when largest, proportional others, pieces, ml, l and sub-recipe rows, rounding the typed amount, odd inputs → null,
@@ -2152,6 +2153,8 @@ from one place.
 - Rows in kg, l, dl, cl, mg, ml, pieces, spoons and «to taste»: as before (`roundInUnit`), never a step.
 - «Calculate from this ingredient»: the chosen row is EXACTLY the amount typed; every other gram row on its clean step; NO correction
   of the total (the owner's example, sugar 800 g → 1000 g of the brioche: eggs read 970 g).
+- The guided run started from such a batch keeps the row in its snapshot (`fromRow`) and shows the same numbers (found by the review of
+  16 Nov 2026: by its total it read up to ~20 g off on big batches, the chosen row included).
 
 **One correction of the total** (`applyTargetTotal`, scale by TOTAL weight only, and only when every WEIGHABLE row is in grams —
 pieces and «to taste» do not stop it; a kg, l or ml row does). It replaces the residual-on-the-largest-row rounding there.

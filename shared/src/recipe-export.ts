@@ -181,11 +181,11 @@ export function exportFileName(m: ExportModel, ext: string, fallback: string = '
 // time. ⚠️ THE CALCULATOR KEEPS exportFileName («Pizza_x3.pdf», «Focaccia_12000g.pdf»): several batches of one recipe are made
 // there in a day, and the suffix keeps their files apart.
 export function titleFileName(name: unknown, ext: string, fallback: string = 'recipe'): string {
-  const base = String(name ?? '')
+  const clean = String(name ?? '')
     .replace(/[\\/:*?"<>|\u0000-\u001f\u007f]/g, '-')
-    .replace(/^[.\s]+/, '')
-    .slice(0, 80)
-    .replace(/[.\s]+$/, '');
+    .replace(/^[.\s]+/, '');
+  // 80 CHARACTERS, counted as a person counts them: an emoji is one, never cut in half into a broken character.
+  const base = Array.from(clean).slice(0, 80).join('').replace(/[.\s]+$/, '');
   // A title made only of refused characters («///») would be a file called «---»: the fallback word says more.
   return `${/^[-.\s]*$/.test(base) ? fallback : base}.${ext}`;
 }

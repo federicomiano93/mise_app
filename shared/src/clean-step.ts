@@ -34,6 +34,8 @@ export function cleanStepOf(grams: unknown): number {
 }
 
 // A scaled weight in grams, rounded ONCE: first to the whole gram (half up), then that whole number to its clean step (half up).
+// The step's half is at most 1% of the WHOLE gram, so the shown weight is within 1% of it, and a hair more of the exact weight
+// where the whole gram tipped it (504.6 g reads 505, then 510: 1.07%) — the owner's order, whole gram first.
 // 12.5 → 13, 249.5 → 250, 252 → 250, 253 → 255, 499.5 → 500, 504 → 500, 505 → 510. Junk or a negative → 0, never NaN.
 export function roundToCleanStep(grams: unknown): number {
   const g = Number(grams);

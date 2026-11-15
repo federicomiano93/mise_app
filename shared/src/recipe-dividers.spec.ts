@@ -245,7 +245,24 @@ describe('the port equals the original', () => {
         expect({ ...item, y: item.y - 40 }).toStrictEqual(was);
       });
       mine.lines.forEach((line, i) => { expect(line.y - 40).toBeCloseTo(theirs.lines[i]!.y, 9); });
+      return;
     }
+    // Where the list had to shrink, the port's own page is pinned instead: every row on ONE page above the bottom margin, one size for
+    // every row, the leading never tighter than 1.25 × that size unless the size is already the smallest, the leading no looser than
+    // the original's (it has 40 pt less room), each line under the row that asked for it and above the next, the air never more than 14.
+    const ys = mine.items.slice(1).filter(i => i.bold).map(i => i.y);
+    expect(Math.max(...ys)).toBeLessThanOrEqual(portedExport.PAGE_H - 60 + EPS);
+    expect(new Set(mine.items.slice(1).map(i => i.size)).size).toBe(1);
+    expect(mine.leading >= 1.25 * mine.fontSize - EPS || mine.fontSize === 6).toBe(true);
+    expect(mine.leading).toBeLessThanOrEqual(theirs.leading + EPS);
+    const withLine = rows.map((r, i) => (i < rows.length - 1 && r.dividerAfter === true ? i : -1)).filter(i => i >= 0);
+    expect(mine.lines).toHaveLength(withLine.length);
+    // Past about 89 rows (83 with the Total row) the rows are packed tighter than the smallest font, as in the original: a line's
+    // place between its rows is pinned only while they do not overlap.
+    if (mine.leading >= 1.25 * mine.fontSize - EPS) {
+      expect(mine.lines.map(line => line.y).every((y, k) => y > ys[withLine[k]!]! && y < ys[withLine[k]! + 1]!)).toBe(true);
+    }
+    ys.slice(1).forEach((y, i) => { expect(y - ys[i]!).toBeLessThanOrEqual(mine.leading + 14 + EPS); });
   });
 
   test('moveRow, removeRow, keepRows, withoutTrailingDivider on every small case', () => {

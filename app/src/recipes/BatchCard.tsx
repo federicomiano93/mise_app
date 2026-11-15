@@ -94,9 +94,10 @@ export function BatchCard({ recipe, target, row = null, canEdit }: Props) {
         return;
       }
       const ingredients = recipe.ingredients.map((row, index) => ({ ...row, grams: amounts[index] ?? row.grams }));
-      // {new} is the total the recipe WILL have, as the screen will show it after the save: the rows as shown, added up. All in
-      // grams it is the batch itself (the rows were rounded to add up to it); with kg, litres or ml rows each row is rounded in
-      // its own unit, so it can differ from the batch typed by a gram or two — the question says what is saved, not what was typed.
+      // {new} is the total the recipe WILL have, as the screen will show it after the save: the rows as shown, added up. A batch by
+      // its total with every weighable row in grams is the batch itself (the rows were corrected to it), unless the screen says the
+      // total is off; from a row, or with kg, litres or ml rows, it can differ from the batch by a few grams — the question says
+      // what is saved, not what was typed.
       const now = recipeAmounts({ ...recipe, ingredients }, null, t, locale).total;
       const before = recipeAmounts(recipe, null, t, locale).total;
       const ok = await confirmBase({

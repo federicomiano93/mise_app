@@ -968,6 +968,11 @@ The deadline editor, the hub's Client ordering row and the ordering link on a cl
 
 ## The recipe PDF in the lab's format, as built (5 Nov 2026, port of PR #456, live in the current app as v1.136.0)
 
+> ⚠️ **Changed on 16 Nov 2026 (the owner's decision; `docs/parity/catalogue.md`, «Clean-step rounding of a scaled recipe as built»).**
+> Mise 2 no longer has `roundLabWeight`, `hasRoundableRows` or the switch «Arrotonda i pesi nel PDF»: the PDF prints what it receives
+> (the Calculator's PDF: the card's whole grams). The first row is 88 pt below the title (was 48) and every PDF ends with a bold Total
+> row («Totale impasto» here). The file name below is unchanged for the Calculator. What follows is the history as built on 5 Nov.
+
 Applies to the export from the Calculator's card and from the Recipe book's page (`docs/parity/catalogue.md`, 35a), one code path.
 
 - **Same as the current app, input for input** (`shared/src/recipe-export.spec.ts` runs against both files): title 28 pt at baseline 70,

@@ -69,10 +69,29 @@ describe('one set of numbers for every reader of a batch', () => {
     const table = recipeAmounts(PROVA, preview.target, t, 'en-GB', row);
     expect(table.values).toStrictEqual(preview.amounts);
     expect(table.values[4]).toBe(241);
+    // The guided run started from that batch keeps the row, so it shows the very same numbers (review of 16 Nov 2026: by its total
+    // it read a few grams off, the chosen row included).
+    const snapshot = snapshotOf(PROVA, preview.target, row);
+    expect(snapshot.fromRow).toStrictEqual(row);
+    expect(snapshotAmounts(snapshot), 'the guided run').toStrictEqual(preview.amounts);
     expect(recipeExportModel(PROVA, table).rows.map(r => r.value)).toStrictEqual(preview.amounts);
     expect(rebaseAmounts(PROVA, preview.target, row)).toStrictEqual(preview.amounts);
     expect(table.totalGrams).toBe(addedUp(PROVA, preview.amounts));
     expect(table.warning).toBe(null);
+  });
+
+  it('the guided run from a row agrees for every row and many typed amounts; a batch by its total keeps the saved shape as it was', () => {
+    for (let index = 0; index < PROVA.ingredients.length; index++) {
+      for (let typed = 2; typed <= 3000; typed += 37) {
+        const preview = scaleFromRow(PROVA, index, typed);
+        if (preview === null) continue;
+        const row = { index, amount: preview.amount };
+        expect(snapshotAmounts(snapshotOf(PROVA, preview.target, row)), `row ${index}, ${typed} g`)
+          .toStrictEqual(recipeAmounts(PROVA, preview.target, t, 'en-GB', row).values);
+      }
+    }
+    expect('fromRow' in snapshotOf(PROVA, 4000)).toBe(false);
+    expect('fromRow' in snapshotOf(PROVA, 4000, null)).toBe(false);
   });
 
   it('the recipe as written: the Total is its rows added up', () => {

@@ -2568,11 +2568,20 @@ describe('catalogue-model: odd inputs', () => {
   const TARGETS: readonly unknown[] = [...PRICE_VALUES.slice(0, 40), 10000, 17500, 17500000, 1, 0.4, 999.4, '2000', 4000];
   // scaleCatalogue is NOT compared any more: Mise 2 rounds a scaled gram row to a clean step and the current app to the whole gram
   // (the owner's decision, 16 Nov 2026; js/ is the rollback copy and does not change). The port's own odd inputs are below.
-  test('scaleCatalogue (the port alone): odd inputs never give NaN, and to-taste rows stay null', () => {
-    for (const [recipe, target] of product(SCALE_RECIPES, TARGETS)) {
-      let out: (number | null)[];
-      try { out = m.scaleCatalogue(recipe, target); } catch { continue; } // a null row throws, as it always did
-      expect(out.every(v => v === null || Number.isFinite(v)), JSON.stringify([recipe, target])).toBe(true);
+  test('scaleCatalogue (the port alone): it throws exactly where the original throws, never gives NaN, and keeps to-taste null', () => {
+    const attempt = (fn: AnyFn, args: unknown[]): { threw: boolean; out: unknown } => {
+      try { return { threw: false, out: fn(...args) }; } catch { return { threw: true, out: null }; }
+    };
+    for (const args of product(SCALE_RECIPES, TARGETS)) {
+      const mine = attempt(m.scaleCatalogue as AnyFn, args);
+      const theirs = attempt(l.scaleCatalogue as AnyFn, args);
+      const label = JSON.stringify(args);
+      expect(mine.threw, `${label}: throws only where the original does`).toBe(theirs.threw);
+      if (mine.threw) continue;
+      const out = mine.out as (number | null)[];
+      const was = theirs.out as (number | null)[];
+      expect(out.every(v => v === null || Number.isFinite(v)), label).toBe(true);
+      expect(out.map(v => v === null), `${label}: the same rows have no number`).toStrictEqual(was.map(v => v === null));
     }
   });
   agree('baseAmounts', m.baseAmounts, l.baseAmounts, product(SCALE_RECIPES));

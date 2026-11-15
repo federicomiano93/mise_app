@@ -531,6 +531,9 @@ describe('titleFileName: the recipe book names the file after the recipe, as wri
     const out = pdfName(long);
     expect(out.length).toBeLessThanOrEqual(80 + '.pdf'.length);
     expect(out.endsWith(' .pdf')).toBe(false);
+    // An emoji at the 80th character is kept whole or left out, never cut in half.
+    const emoji = pdfName(`${'a'.repeat(79)}🍞🍞`);
+    expect(emoji).toBe(`${'a'.repeat(79)}🍞.pdf`);
   });
 
   test('nothing usable left: the caller\'s translated word', () => {

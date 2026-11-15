@@ -1,4 +1,4 @@
-import type { CatalogueRecipe } from '@mise/shared/catalogue-model';
+import type { CatalogueRecipe, RowScale } from '@mise/shared/catalogue-model';
 import { isResumable, normalizeEndNote, normalizeSteps } from '@mise/shared/guided-model';
 import type { GuidedStep } from '@mise/shared/guided-model';
 
@@ -18,6 +18,11 @@ export interface GuidedSnapshot {
   steps: GuidedStep[];
   endNote: string;
   targetGrams: number;
+  // Mise 2 only (16 Nov 2026): the row the batch was worked out from («Calculate from this ingredient») and the amount typed for
+  // it, so the run shows the very numbers of the recipe screen — the chosen row exact, the others on their clean step, no
+  // correction of the total. Absent for a batch by its total (the current app's shape, unchanged; it ignores the key and reads
+  // `targetGrams` alone).
+  fromRow?: RowScale;
 }
 
 export interface GuidedSession {
@@ -43,9 +48,10 @@ function phoneStorage(): SessionStorage | null {
 
 // ⚠️ THE CLOSING MESSAGE TRAVELS WITH THE SNAPSHOT. Left out, a run resumed from a saved session reaches the end and shows
 // nothing, because the resume path never sees the live recipe again.
-export function snapshotOf(recipe: CatalogueRecipe, targetGrams: number | null | undefined): GuidedSnapshot {
+export function snapshotOf(recipe: CatalogueRecipe, targetGrams: number | null | undefined, row: RowScale | null = null): GuidedSnapshot {
   const target = Number(targetGrams);
   return {
+    ...(row !== null && target > 0 ? { fromRow: { index: row.index, amount: row.amount } } : {}),
     name: String(recipe.name || ''),
     ingredients: Array.isArray(recipe.ingredients) ? recipe.ingredients : [],
     steps: normalizeSteps(recipe.steps),
@@ -97,6 +103,9 @@ export function resumableSession(
 }
 
 // A fresh session for a mix about to start: step 1, no timer, started now.
-export function freshSession(recipe: CatalogueRecipe, targetGrams: number | null | undefined, nowMs: number = Date.now()): GuidedSession {
-  return { recipeId: recipe.id, snapshot: snapshotOf(recipe, targetGrams), stepIndex: 0, endsAt: 0, startedAt: nowMs };
+// `row`: the batch was worked out from that row (the recipe screen's own `scale.row`), kept in the snapshot.
+export function freshSession(
+  recipe: CatalogueRecipe, targetGrams: number | null | undefined, nowMs: number = Date.now(), row: RowScale | null = null,
+): GuidedSession {
+  return { recipeId: recipe.id, snapshot: snapshotOf(recipe, targetGrams, row), stepIndex: 0, endsAt: 0, startedAt: nowMs };
 }
