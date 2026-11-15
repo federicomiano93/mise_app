@@ -85,7 +85,7 @@ describe('the step', () => {
     expect(within(row).queryByRole('combobox')).not.toBeInTheDocument();
     expect(primary('Next')).toBeEnabled();
     await user.click(primary('Next'));
-    expect(await screen.findByRole('heading', { level: 3, name: 'Ingredients' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 3, name: 'Products' })).toBeInTheDocument();
     expect(importing.writes).toEqual([]);
   });
 
@@ -131,7 +131,7 @@ describe('⚠️ a supplier that may already exist blocks the button until it is
     expect(within(dialog).getByText('1 existing supplier will get its VAT number added.')).toBeInTheDocument();
     expect(importing.writes).toEqual([]);
     await user.click(within(dialog).getByRole('button', { name: 'Save' }));
-    expect(await screen.findByRole('heading', { level: 3, name: 'Ingredients' }, LOAD)).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 3, name: 'Products' }, LOAD)).toBeInTheDocument();
     expect(importing.writes).toEqual([{ kind: 'linkSupplierVat', supplierId: 's9', vatNumber: SUPPLIER_VAT }]);
   });
 
@@ -173,7 +173,7 @@ describe('⚠️ the new supplier is written as the model says, after a confirma
     await user.click(primary('Save 1 supplier'));
     dialog = await saveDialog();
     await user.click(within(dialog).getByRole('button', { name: 'Save' }));
-    await screen.findByRole('heading', { level: 3, name: 'Ingredients' }, LOAD);
+    await screen.findByRole('heading', { level: 3, name: 'Products' }, LOAD);
     expect(importing.writes).toEqual([{
       kind: 'createSupplier',
       id: 'sup-1',
@@ -188,7 +188,7 @@ describe('⚠️ the new supplier is written as the model says, after a confirma
     await toSuppliers(user);
     await user.click(primary('Save 1 supplier'));
     await user.click(within(await saveDialog()).getByRole('button', { name: 'Save' }));
-    await screen.findByRole('heading', { level: 3, name: 'Ingredients' }, LOAD);
+    await screen.findByRole('heading', { level: 3, name: 'Products' }, LOAD);
     expect(importing.calls.map(call => call[0])).toEqual(['loadImportLog', 'loadImportLog', 'loadDecisions', 'freshSuppliers', 'createSupplier']);
   });
 
@@ -198,7 +198,7 @@ describe('⚠️ the new supplier is written as the model says, after a confirma
     await user.selectOptions(screen.getByRole('combobox', { name: 'What should happen?' }), 'Do not import anything from this supplier (remember)');
     expect(primary('Next')).toBeEnabled();
     await user.click(primary('Next'));
-    expect(await screen.findByRole('heading', { level: 3, name: 'Ingredients' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 3, name: 'Products' })).toBeInTheDocument();
     expect(importing.writes).toEqual([]);
     expect(importing.calls.map(call => call[0])).toEqual(['loadImportLog', 'loadImportLog', 'loadDecisions']);
   });
@@ -222,7 +222,7 @@ describe('⚠️ a supplier that appeared while the owner was deciding', () => {
 
     importing.beforeFreshSuppliers = null;
     await user.click(primary('Next'));
-    expect(await screen.findByRole('heading', { level: 3, name: 'Ingredients' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 3, name: 'Products' })).toBeInTheDocument();
     expect(importing.suppliers).toHaveLength(1);
   });
 
@@ -285,7 +285,7 @@ describe('⚠️ when the write goes wrong', () => {
     // One is saved: the button counts what is left.
     await user.click(await screen.findByRole('button', { name: 'Save 1 supplier' }));
     await user.click(within(await saveDialog()).getByRole('button', { name: 'Save' }));
-    await screen.findByRole('heading', { level: 3, name: 'Ingredients' }, LOAD);
+    await screen.findByRole('heading', { level: 3, name: 'Products' }, LOAD);
     expect(importing.suppliers.map(supplierDoc => supplierDoc.name).sort()).toEqual(['ALTRO FORNITORE SPA', SUPPLIER_NAME].sort());
     expect(importing.countOf('createSupplier')).toBe(3);
   });
@@ -329,7 +329,7 @@ describe('⚠️ while the suppliers are being written', () => {
     expect(within(region).getAllByRole('status').every(node => node.closest('[aria-busy="true"]') === null)).toBe(true);
 
     release();
-    await screen.findByRole('heading', { level: 3, name: 'Ingredients' }, LOAD);
+    await screen.findByRole('heading', { level: 3, name: 'Products' }, LOAD);
     await waitFor(() => { expect(screen.getByRole('button', { name: 'Back' })).toBeEnabled(); });
   });
 
@@ -345,7 +345,7 @@ describe('⚠️ while the suppliers are being written', () => {
     expect(router.state.location.pathname).toBe('/suppliers/import');
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
     release();
-    await screen.findByRole('heading', { level: 3, name: 'Ingredients' }, LOAD);
+    await screen.findByRole('heading', { level: 3, name: 'Products' }, LOAD);
     expect(router.state.location.pathname).toBe('/suppliers/import');
   });
 });

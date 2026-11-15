@@ -313,7 +313,7 @@ describe('«Next» waits for the lists', () => {
     const { user } = await open({ suppliers });
     await chooseFiles(user, invoiceZip());
     await user.click(screen.getByRole('button', { name: 'Next' }));
-    expect(screen.getByRole('alert')).toHaveTextContent('Your suppliers and ingredients are still loading. Try again in a moment.');
+    expect(screen.getByRole('alert')).toHaveTextContent('Your suppliers and products are still loading. Try again in a moment.');
     expect(screen.getByRole('heading', { level: 3, name: 'Choose the file' })).toBeInTheDocument();
     expect(screen.getByText('Step 1 of 3')).toBeInTheDocument();
     // The server speaks: the refusal goes by itself, and Next goes on.
