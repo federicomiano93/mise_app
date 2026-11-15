@@ -15,7 +15,7 @@
 import { baseAmounts, linkOf, normalizeCatalogueRecipe, normalizeSearchText, unitOf } from './catalogue-model';
 import type { CatalogueUnit } from './catalogue-model';
 import { ingredientDisplayName, ingredientNameMatches } from './ingredient-name';
-import { isPackaging } from './ingredient-kind';
+import { isFood } from './ingredient-kind';
 import { isArchivedRecipe } from './recipe-shelf';
 
 // One recipe that uses an ingredient, and the rows that do (a recipe can list the same ingredient twice, e.g. water in two
@@ -78,8 +78,13 @@ export function ingredientBook(recipes: readonly unknown[], ingredients: readonl
   for (const raw of Array.isArray(ingredients) ? ingredients : []) {
     if (!raw || typeof raw !== 'object') continue;
     const doc = raw as Doc;
-    if (typeof doc.id !== 'string' || doc.id === '' || isPackaging(doc)) continue;
-    const uses = (usesOf.get(doc.id) ?? []).slice().sort((a, b) => (
+    if (typeof doc.id !== 'string' || doc.id === '') continue;
+    const used = usesOf.get(doc.id) ?? [];
+    // Only food belongs in the book (packaging, resale and other since 15 Nov 2026: a drinks import would otherwise fill
+    // «Not in any recipe» with dozens of bottles). An item that is no longer food but that recipes still link to is KEPT,
+    // with its uses: those recipes still weigh it, and leaving it out would hide where it is used.
+    if (!isFood(doc) && used.length === 0) continue;
+    const uses = used.slice().sort((a, b) => (
       a.archived === b.archived ? compare(a.recipeName, b.recipeName) : a.archived ? 1 : -1
     ));
     entries.push({ id: doc.id, name: ingredientDisplayName(doc).trim(), inactive: doc.active === false, uses });

@@ -39,6 +39,25 @@ describe('ingredientBook', () => {
     expect(book.find(e => e.id === 'box')).toBeUndefined();
   });
 
+  test('resale and other items are left out like packaging, unless a recipe still links to one', () => {
+    const items = [
+      ...INGREDIENTS,
+      { id: 'cola', name: 'Cola 33 cl', kind: 'resale' },
+      { id: 'soap', name: 'Floor soap', kind: 'other' },
+      { id: 'butter-now-resale', name: 'Butter for sale', kind: 'resale' },
+    ];
+    const recipes = [{ id: 'shortbread', name: 'Shortbread', ingredients: [
+      { label: 'Butter for sale', grams: 250, unit: 'g', kind: 'ingredient', refId: 'butter-now-resale' },
+    ] }];
+    const kept = ingredientBook(recipes, items);
+    expect(kept.find(e => e.id === 'cola')).toBeUndefined();
+    expect(kept.find(e => e.id === 'soap')).toBeUndefined();
+    expect(kept.find(e => e.id === 'box')).toBeUndefined();
+    expect(kept.find(e => e.id === 'butter-now-resale')?.uses).toStrictEqual([
+      { recipeId: 'shortbread', recipeName: 'Shortbread', archived: false, rows: [{ amount: 250, unit: 'g' }] },
+    ]);
+  });
+
   test('each recipe that uses it, with every row in its own unit as written (the base recipe)', () => {
     expect(entry('sugar').uses).toStrictEqual([
       { recipeId: 'brioche', recipeName: 'Brioche', archived: false, rows: [{ amount: 0.8, unit: 'kg' }] },
