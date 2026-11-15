@@ -25,7 +25,7 @@
 // ⚠️ MISE 2 ONLY (14 Nov 2026, «tutti i prodotti delle fatture in Mise»): a file entry may carry `kind` — 'packaging', 'resale'
 // or 'other' (absent: an ingredient, as every file before). A NEW item is created with that kind; an item the entry is MATCHED
 // with keeps its own, whatever the file says (the person may have corrected it by hand): nothing here ever writes `kind` on an
-// existing item. A resale or other entry may be priced per piece with no piece weight (it never needs a per-kilo cost). With
+// existing item. A packaging, resale or other entry may be priced per piece with no piece weight (it never needs a per-kilo cost). With
 // `ctx.everyKind` the entries are matched against the venue's items of every kind, packaging included. A file without `kind`
 // and a plan without `everyKind` behave exactly as the original.
 //
@@ -142,7 +142,8 @@ export interface FileIngredient {
 // Mise 2 only: the kinds a file entry may name besides an ingredient (shared/ingredient-kind.ts).
 export type FileKind = 'packaging' | 'resale' | 'other';
 const FILE_KINDS: readonly FileKind[] = ['packaging', 'resale', 'other'];
-const WEIGHTLESS_KINDS: readonly FileKind[] = ['resale', 'other'];
+// The kinds a per-piece price needs no piece weight for (packaging since 15 Nov 2026: Food cost counts it by the piece).
+const WEIGHTLESS_KINDS: readonly FileKind[] = ['packaging', 'resale', 'other'];
 
 export type ParsedImport =
   | { ok: true; file: { generatedAt: string; suppliers: FileSupplier[]; ingredients: FileIngredient[] } }
@@ -466,7 +467,7 @@ function parseIngredient(raw: unknown, seen: Set<string>): FileIngredient {
   else if (!entry.supplierKey) invalid = 'supplier-key-missing';
   else if (!entry.name) invalid = 'name-missing';
   else if (!priceUnit) invalid = 'price-unit';
-  // MISE 2: a resale or other item priced per piece needs no weight (nobody asks its cost per kilo).
+  // MISE 2: a packaging, resale or other item priced per piece needs no weight (nobody asks its cost per kilo).
   else if (priceUnit === 'pcs' && unitWeightKg === null && !(kind && WEIGHTLESS_KINDS.includes(kind))) invalid = 'unit-weight-missing';
   else if (countGiven && packCount === null) invalid = 'pack-count';
   else if (rawPrices.length === 0 && !priceCheck) invalid = 'no-prices';

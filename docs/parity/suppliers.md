@@ -1432,7 +1432,8 @@ its item kind. The current app is frozen and unchanged (it still imports ingredi
   (ingrediente → `'ingredient'`, packaging → `'packaging'`, rivendita → `'resale'`, altro → `'other'`). A resale or other product
   counted in pieces with no weight is priced per piece (`computeDocument`'s `weightlessPieces`: total ÷ pieces, reliability
   «alta», no piece weight; the price is written through the card's own `pricePatch`, `unitWeightKg: null`). Food keeps
-  «pieces-need-price-unit-and-weight»; packaging too (the brief named only resale and other).
+  «pieces-need-price-unit-and-weight»; packaging too (the brief named only resale and other) — **changed on 15 Nov 2026,
+  see the follow-up below: packaging is now priced per piece like resale and other.**
 - **Decisions** (`invoice-decisions`, rules unchanged): «skip this product» and «skip this supplier» work as before; a stored
   `'ingredient'` means «import».
 - **Matching** (`invoice-import-model`): a NEW item is created with the file's kind; an item MATCHED by the existing logic
@@ -1446,7 +1447,32 @@ its item kind. The current app is frozen and unchanged (it still imports ingredi
   skipped suppliers, the unreadable products and the skipped files are unchanged. The «do not import (remember)» choice of each
   row stays where it is (step 3).
 - **Not changed** (the brief: keep every other step as it is): steps 2 and 3, the confirmation and the summary still say
-  «ingredients» («Import 4 ingredients», «4 ingredients created») when the rows include packaging, resale or other.
+  «ingredients» («Import 4 ingredients», «4 ingredients created») when the rows include packaging, resale or other —
+  **changed on 15 Nov 2026, see the follow-up below.**
 - **Specs**: `shared/src/invoice-zip/every-kind.spec.ts` (the chain, invented invoices), `InvoiceImport.file.spec.tsx`,
   `InvoiceImport.run.spec.tsx` («every kind of product»: four new items with their kinds; an existing resale item matched by
   code stays resale), `importRun.spec.ts`, `InvoiceImport.ingredients.spec.tsx`, `importWords.spec.ts`. Not driven in a browser.
+
+**Follow-up of 15 Nov 2026** (his approval of the two open points above).
+
+- **Words: «prodotti», not «ingredienti», where the rows can be of any kind.** Step 3's title «Prodotti» / «Products», its
+  button «Importa {n} prodotti» («Importa 1 prodotto»), the chips' groups («{n} prodotti invariati», «{n} prodotti con
+  errori»), «Prima scegli cosa fare con {n} prodotti.», «Crea un nuovo prodotto», the confirmation («Vuoi importare questi
+  prodotti?», «Verranno creati {n} nuovi prodotti.», «Nessun prodotto o prezzo cambia…»), the row reasons that name an item
+  of the venue (the chosen one gone, two with the same code or name, the merge target, 20 pack codes, a similar one appeared),
+  the summary («{n} prodotti creati», «… già presenti hanno nuovi prezzi», «… non importati», «… non sono stati provati»,
+  price changes and pack codes not recorded) and «Fornitori e prodotti si stanno ancora caricando». English likewise
+  («product» / «products»). **Kept, because they are about food:** step 1's group «Ingredienti (n)» (the food group of the
+  list by kind), the first sentence of step 3's note «I nuovi ingredienti partono con gli allergeni non dichiarati» (only food
+  has allergens; its second sentence now says «I prodotti che hai già…»), and the section's name «Ingredienti e fornitori».
+  Keys unchanged (`sup.imp.*`), only the words. Specs: every import spec that pinned the old words, plus
+  `InvoiceImport.ingredients.spec.tsx` «the words for rows of every kind» (a zip with food, packaging, a drink and a detergent:
+  «Prodotti», «Importa 4 prodotti», the question, «4 prodotti creati», no «ingredient» in the dialog or the summary; English;
+  the note).
+- **Packaging counted in pieces with no weight is priced per piece**, exactly like resale and other: `WEIGHTLESS_TYPES` in
+  `build-import.ts` and `WEIGHTLESS_KINDS` in `invoice-import-model.ts` now include packaging (Food cost counts packaging by
+  the piece). E.g. «VASCHETTE ALLUMINIO», 200 pieces for 30.00 → a NEW packaging item at 0.15 per piece, `unitWeightKg: null`
+  in the price in force, none on the history point. Food keeps today's rule (still «pieces-need-price-unit-and-weight»).
+  Specs: `every-kind.spec.ts` (the reader, the file entry valid, the new packaging item and its writes; food still
+  unreadable), `InvoiceImport.run.spec.tsx` (through the screen: the new packaging item priced per piece; food without weight
+  not imported). Not driven in a browser.

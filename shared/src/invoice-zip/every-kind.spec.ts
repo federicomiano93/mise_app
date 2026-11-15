@@ -18,6 +18,8 @@ const FILM: LineSpec = { desc: 'PELLICOLA ALIMENTARE ROTOLO', code: 'PEL', qty: 
 const WATER: LineSpec = { desc: 'ACQUA SABRINELLA NAT 1/2X12', code: 'AQ', qty: 10, unit: 'CT', total: 30 };
 const SOAP: LineSpec = { desc: 'DETERSIVO PAVIMENTI', code: 'DT', qty: 4, unit: 'PZ', total: 12 };
 const COLA: LineSpec = { desc: 'COCA COLA ZERO', code: 'CZ', qty: 24, unit: 'PZ', total: 12 };
+// Packaging counted in pieces, with no weight anywhere on the line (15 Nov 2026: priced per piece like resale and other).
+const TRAYS: LineSpec = { desc: 'VASCHETTE ALLUMINIO', code: 'VA', qty: 200, unit: 'PZ', total: 30 };
 const key = (code: string): string => `${SUPPLIER}|code:${code}`;
 
 function built(lines: readonly LineSpec[], everyKind = true): ImportResult {
@@ -55,6 +57,14 @@ describe('build-import with everyKind', () => {
     expect(file.find(i => i.key === key('DT'))?.prices.map(p => p.pricePerUnit)).toStrictEqual([3]);
     expect(file.find(i => i.key === key('CZ'))).toMatchObject({ kind: 'resale', priceUnit: 'pcs', unitWeightKg: null });
     expect(file.find(i => i.key === key('CZ'))?.prices.map(p => p.pricePerUnit)).toStrictEqual([0.5]);
+  });
+
+  test('⚠️ packaging counted in pieces with no weight is priced per piece too, with no piece weight (15 Nov 2026)', () => {
+    const result = built([TRAYS]);
+    expect(result.products[0]).toMatchObject({ type: 'packaging', canImport: true, inImport: true, leftOutReason: '' });
+    const trays = result.importFile.ingredients[0];
+    expect(trays).toMatchObject({ key: key('VA'), kind: 'packaging', priceUnit: 'pcs', unitWeightKg: null });
+    expect(trays?.prices.map(p => p.pricePerUnit)).toStrictEqual([0.15]);
   });
 
   test('food keeps today\'s rule: counted in pieces with no weight is still unreadable', () => {
@@ -121,9 +131,9 @@ describe('the plan and the writes with every kind', () => {
     expect(createdKinds(file, ctx()).sort()).toStrictEqual(['ingredient', 'other', 'packaging', 'resale']);
   });
 
-  test('a per-piece resale or other entry with no weight is valid; an ingredient one is not', () => {
-    const file = fileOf(built([SOAP, COLA]));
-    expect(file.map(entry => entry.invalid)).toStrictEqual([undefined, undefined]);
+  test('a per-piece packaging, resale or other entry with no weight is valid; an ingredient one is not', () => {
+    const file = fileOf(built([SOAP, COLA, TRAYS]));
+    expect(file.map(entry => entry.invalid)).toStrictEqual([undefined, undefined, undefined]);
     const raw = JSON.parse(JSON.stringify(built([SOAP]).importFile)) as { ingredients: Record<string, unknown>[] };
     raw.ingredients = raw.ingredients.map(entry => ({ ...entry, kind: undefined }));
     const parsed = parseImportFile(JSON.stringify(raw));
@@ -141,6 +151,21 @@ describe('the plan and the writes with every kind', () => {
     const ops = ingredientWrites(rows[0], file[0], '2026-11-14T10:00:00.000Z', { language: 'it' }).flat();
     expect(ops.some(op => op.type === 'create-ingredient')).toBe(false);
     expect(ops.every(op => !('kind' in (op.data as object)))).toBe(true);
+  });
+
+  test('⚠️ a packaging line with no weight becomes a NEW packaging item priced per piece, with no piece weight', () => {
+    const file = fileOf(built([TRAYS]));
+    const rows = planIngredients(file, ctx());
+    const ops = ingredientWrites(rows[0], file[0], '2026-11-15T10:00:00.000Z', { language: 'it' }).flat();
+    const created = ops.find(op => op.type === 'create-ingredient') as { data: Record<string, unknown> } | undefined;
+    expect(created?.data).toMatchObject({ kind: 'packaging' });
+    // The price in force: per piece, the piece weight null (the card's own shape); the history point names no weight at all.
+    const current = ops.find(op => op.type === 'set-current-price') as { data: Record<string, unknown> } | undefined;
+    expect(current?.data).toMatchObject({ priceUnit: 'pcs', pricePerUnit: 0.15, unitWeightKg: null });
+    const points = ops.filter(op => op.type === 'add-price-point') as { data: Record<string, unknown> }[];
+    expect(points).toHaveLength(1);
+    expect(points[0]?.data).toMatchObject({ priceUnit: 'pcs', pricePerUnit: 0.15 });
+    expect(points[0]?.data).not.toHaveProperty('unitWeightKg');
   });
 
   test('a packaging line finds the packaging item it already is (every kind is matched)', () => {

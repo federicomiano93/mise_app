@@ -470,6 +470,23 @@ describe('every kind of product', () => {
     expect(importing.prices.get(idOf('AQ'))).toMatchObject({ priceUnit: 'l', pricePerUnit: 0.5 });
   });
 
+  it('⚠️ packaging counted in pieces with no weight becomes a NEW packaging item priced per piece (15 Nov 2026)', async () => {
+    const TRAYS = { desc: 'VASCHETTE ALLUMINIO', code: 'VA', qty: 200, unit: 'PZ', total: 30 };
+    const { user, importing } = await open({ suppliers: [] });
+    await toIngredients(user, invoiceZip([TRAYS]));
+    await importAll(user, 'Import 1 product');
+    expect(importing.ingredients).toHaveLength(1);
+    expect(importing.ingredients[0]).toMatchObject({ supplierCode: 'VA', kind: 'packaging' });
+    expect(importing.prices.get(importing.ingredients[0]?.id as string)).toMatchObject({ priceUnit: 'pcs', pricePerUnit: 0.15, unitWeightKg: null });
+  });
+
+  it('food counted in pieces with no weight is still not imported (unreadable)', async () => {
+    const { user, importing } = await open({ suppliers: [] });
+    await toIngredients(user, invoiceZip([FLOUR, { desc: 'FARINA SPECIALE', code: 'FS', qty: 4, unit: 'PZ', total: 12 }]));
+    await importAll(user, 'Import 1 product');
+    expect(importing.ingredients.map(created => created.supplierCode)).toEqual(['F00']);
+  });
+
   it('⚠️ an existing RESALE item matched by its article code is never turned into an ingredient', async () => {
     const water = item('ing-water', { name: 'Acqua naturale', supplierId: 'sup-1', supplierCode: 'AQ', kind: 'resale', weight: '0.5 l' });
     const { user, importing } = await open({ ingredients: [water] });

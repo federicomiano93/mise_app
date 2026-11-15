@@ -129,8 +129,8 @@ function computed(price: number | null, qty: number | null, reliability: string,
   return { price, qty, reliability, note, unitWeightKg: null, vatRate: null, ...extra };
 }
 
-// MISE 2 ONLY (14 Nov 2026): `weightlessPieces` — goods priced per piece that need no weight at all (resale and other:
-// a bottle sold as it arrives, a detergent): no per-kilo cost is ever asked of them. Without the option a piece with no
+// MISE 2 ONLY (14 Nov 2026): `weightlessPieces` — goods priced per piece that need no weight at all (resale, other and, since
+// 15 Nov 2026, packaging: a bottle sold as it arrives, a detergent, a box): no per-kilo cost is ever asked of them. Without the option a piece with no
 // weight has no price («no-piece-weight»), as in the original; with it, the price is the invoice's own per piece.
 export interface ComputeOptions { weightlessPieces?: boolean }
 

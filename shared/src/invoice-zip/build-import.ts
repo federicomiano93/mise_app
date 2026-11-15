@@ -19,8 +19,8 @@
 // ⚠️ A SECOND MISE-2-ONLY OPTION, `everyKind` (14 Nov 2026, «tutti i prodotti delle fatture in Mise»): EVERY product that can be
 // read goes into the import file, each carrying the `kind` its line type stands for (ingrediente → 'ingredient', packaging →
 // 'packaging', rivendita → 'resale', altro → 'other'), and a resale or other product invoiced by the piece with no weight is
-// priced per piece (it never needs a per-kilo cost). Without the option the result is the original's, key for key: only
-// ingredients in the file, no `kind` anywhere.
+// priced per piece (it never needs a per-kilo cost); so is packaging since 15 Nov 2026 (Food cost counts it by the piece).
+// Without the option the result is the original's, key for key: only ingredients in the file, no `kind` anywhere.
 
 import type { IngredientKind } from '../ingredient-kind';
 import { formatPackSize, invoiceNameOf } from './classify';
@@ -46,9 +46,9 @@ export const NOT_IMPORTED_REASON = LEFT_OUT.NOT_AN_INGREDIENT;
 const KIND_OF_TYPE: Readonly<Record<LineType, IngredientKind>> = Object.freeze({
   ingrediente: 'ingredient', packaging: 'packaging', rivendita: 'resale', altro: 'other',
 });
-// The kinds priced per piece with no weight when the invoice gives none: never food (its cost per kilo is the point), never
-// packaging (Food cost counts it by the piece but the brief kept today's rule for it).
-const WEIGHTLESS_TYPES: ReadonlySet<LineType> = new Set<LineType>(['rivendita', 'altro']);
+// The kinds priced per piece with no weight when the invoice gives none: never food (its cost per kilo is the point). Packaging
+// too since 15 Nov 2026 (his decision): Food cost counts packaging by the piece, so a box needs no weight either.
+const WEIGHTLESS_TYPES: ReadonlySet<LineType> = new Set<LineType>(['packaging', 'rivendita', 'altro']);
 export { NO_SDI_REASON };
 
 const NEEDS_CHECK = 'da verificare';
@@ -203,8 +203,8 @@ function describeProduct(catalogue: Catalogue, product: Product, everyKind = fal
   const type = typeOf(product);
   const imported = everyKind || type === IMPORTED_TYPE;
   let { params, problems } = paramsFromCells(cells.unit, cells.weight, cells.count, proposal);
-  // MISE 2 (`everyKind`): a resale or other product invoiced by the piece whose weight the description does not give (no price
-  // unit could be proposed, or a kilo/litre unit with no package size) is priced per piece, as the invoice counts it.
+  // MISE 2 (`everyKind`): a packaging, resale or other product invoiced by the piece whose weight the description does not give
+  // (no price unit could be proposed, or a kilo/litre unit with no package size) is priced per piece, as the invoice counts it.
   const weightless = everyKind && WEIGHTLESS_TYPES.has(type) && problems.length === 0 && !params.egg
     && unitClass(latestLine.unit)[0] === PIECES
     && (params.priceUnit === null || ((params.priceUnit === 'kg' || params.priceUnit === 'l') && params.pack === null));
