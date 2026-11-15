@@ -1,0 +1,53 @@
+/* The recipe's mixing procedure: a card like the others on the recipe page (a static heading over its content). */
+
+.card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s2);
+  padding: var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+.head {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.summary,
+.warn,
+.note {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.summary {
+  font-weight: 600;
+}
+
+.warn {
+  color: var(--warn-ink);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.note {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+/* The one button: its icon and words sit on one centred flex row (the Button's own rule); it never leaves the card. */
+.action {
+  max-width: 100%;
+  text-align: center;
+}
+
+.action svg {
+  flex: none;
+}

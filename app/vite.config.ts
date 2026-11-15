@@ -1,30 +1,79 @@
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
+import { miseVersion } from './build-version.ts';
+import { miseCsp } from './csp-plugin.ts';
+import { miseServiceWorker } from './sw-plugin.ts';
 
 // The address the app is served under is given at build time (`vite build --base=/mise2/`
 // on the preview), so the same source serves the preview path today and /mise_app/ at the
 // switch. Locally (`npm run dev`) it is the root.
 export default defineConfig({
-  plugins: [react()],
+  // miseServiceWorker: the build's sw.js, its precache list, and the manifest and icons the current app shares
+  // (sw-plugin.ts says why it is not Workbox). Build only: the dev server and the specs register no worker.
+  // miseCsp: the page's Content-Security-Policy, written first in <head> (csp-plugin.ts).
+  plugins: [react(), miseCsp(), miseServiceWorker()],
+  // The release stamp the telemetry carries (src/telemetry/version.ts). Computed once, when the
+  // config loads; Vitest reads this same file, so specs see the same constant.
+  define: {
+    __MISE2_VERSION__: JSON.stringify(miseVersion()),
+  },
   resolve: {
     // One React for the app AND for anything it links from ../shared: two copies would
     // break hooks with no error at build time.
     dedupe: ['react', 'react-dom'],
   },
   build: {
-    // Explicit, not Vite's moving default: the SM-T550 runs Chrome 119 and iPhones must
+    // Explicit, not Vite's moving default: the SM-T550 cannot get past Chrome 101 (measured over adb, 13 Oct 2026: the newest Google Play serves it) and iPhones must
     // work from Safari 16.4. Anything newer than these is rewritten at build time
     // (CSS nesting, for one, needs Chrome 120).
-    target: ['chrome107', 'edge107', 'firefox104', 'safari16'],
-    cssTarget: ['chrome107', 'edge107', 'firefox104', 'safari16'],
+    target: ['chrome101', 'edge101', 'firefox104', 'safari16'],
+    cssTarget: ['chrome101', 'edge101', 'firefox104', 'safari16'],
+    // Firestore's lazy chunk is ~554 KB by itself and expected (session/firebaseBackend.ts): the
+    // default 500 KB warning would print on every build and hide a real one.
+    chunkSizeWarningLimit: 600,
+    rollupOptions: {
+      output: {
+        // The libraries in chunks of their own (step 2c). A release of Mise 2 changes its own
+        // code far more often than React or Firebase: kept apart, a phone on 4G re-downloads the
+        // ~67 KB that changed, not the whole megabyte, and the browser can keep the libraries'
+        // compiled code. Firestore is not listed: it is loaded on first use
+        // (session/firebaseBackend.ts) and Vite already gives it a chunk of its own.
+        manualChunks(id: string) {
+          if (!id.includes('node_modules')) return undefined;
+          if (/[\\/]node_modules[\\/](react|react-dom|scheduler)[\\/]/.test(id)) return 'react';
+          if (/[\\/]node_modules[\\/](react-aria-components|react-aria|react-stately|@react-aria|@react-stately|@react-types|@internationalized|@swc)[\\/]/.test(id)) return 'react-aria';
+          if (/[\\/]node_modules[\\/](react-router|@remix-run|cookie-es)[\\/]/.test(id)) return 'router';
+          if (/[\\/]node_modules[\\/]@firebase[\\/](app|auth|component|logger|util)[\\/]|[\\/]node_modules[\\/]firebase[\\/](app|auth)[\\/]/.test(id)) return 'firebase-auth';
+          return undefined;
+        },
+      },
+    },
   },
+  // ⚠️ The dev server and the specs may read, outside app/, ONLY what a spec needs: shared/ (the shared modules) and the
+  // invented invoices of ../invoice-import/tests/fixtures, which shared/src/invoice-zip/testing/invoice-builders.ts reads as `?raw`
+  // text (outside the allowed folders that is "Denied ID" in a jsdom spec). Never the whole repository: its root holds files Git
+  // does not protect (P1). Nothing is served to a phone from here — `vite build` ignores it.
+  server: { fs: { allow: ['.', '../shared', '../invoice-import/tests/fixtures'] } },
   test: {
     environment: 'jsdom',
     // *.spec.*, never *.test.*: see shared/vitest.config.ts.
     include: ['src/**/*.spec.{ts,tsx}'],
     setupFiles: ['src/testing/setup.ts'],
+    // The files of the suite run side by side, and on a modest PC the first screen a file draws can
+    // take a few seconds instead of half of one (a spec that takes 0.5 s on its own timed out at the
+    // default 5 s in a full run). A test that passes finishes when it does; this only stops a slow
+    // machine from reading as a broken screen.
+    testTimeout: 20_000,
     // Vitest replaces every CSS file with an empty string unless told otherwise — `?raw`
-    // included — so src/css-modules.spec.ts would check nothing and pass.
-    css: true,
+    // included — so src/css-modules.spec.ts would be handed empty text: its var(--x) check would
+    // pass with nothing to look at, and only its class check and its «tokens.css is not empty»
+    // guards would notice. It reads the files as `?raw` text, so those are processed.
+    //
+    // ⚠️ ONLY THOSE. Applied to a screen, the real stylesheets make jsdom honour the
+    // phone-side `display: none` of the rail and the top bar (jsdom ignores the media query
+    // that shows them), so the accessibility tree a spec queries would no longer contain the
+    // rail. A module imported normally is a proxy that returns each class name, and the specs
+    // see the same DOM at any width.
+    css: { include: [/\.css\?raw$/] },
   },
 });

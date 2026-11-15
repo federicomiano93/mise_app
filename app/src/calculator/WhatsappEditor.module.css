@@ -1,0 +1,244 @@
+/* The screens of the WhatsApp lists editor: the top (the prefill window, the lists, the clients), a list, the chooser,
+   a client's lines and the picker. They share one stylesheet, as the two editors of the Dough history do. */
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+.label {
+  font-size: var(--fs-md);
+  font-weight: 650;
+}
+
+.help {
+  color: var(--ink-2);
+}
+
+/* The quiet card that stands in for a list with nothing in it. */
+.hint {
+  padding: var(--s4);
+  border: 1px dashed var(--line-2);
+  border-radius: var(--r-md);
+  color: var(--ink-2);
+}
+
+/* 18px type on purpose: a field under 16px makes iOS zoom the page in when it is focused. */
+.input {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  min-height: var(--hit);
+  padding: 0 var(--s3);
+  border: 1.5px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: 450 var(--fs-lg) var(--font);
+}
+
+.input::placeholder {
+  color: var(--ink-3);
+}
+
+.input:focus {
+  border-color: var(--accent);
+}
+
+.invalid,
+.invalid:focus {
+  border-color: var(--danger);
+  background: var(--danger-tint);
+}
+
+/* The window the order form fills itself from: the words, then the box at the end of the line. */
+.selectRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  flex-wrap: wrap;
+}
+
+.select {
+  flex: none;
+  min-height: var(--hit);
+  padding: 0 var(--s3);
+  border: 1.5px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: 450 var(--fs-lg) var(--font);
+}
+
+.select:focus {
+  border-color: var(--accent);
+}
+
+/* A group of the top screen, or of a list: a heading, its cards, the button that adds one. */
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* A card that opens something, with the low-key icon that deletes it at its end. */
+.card {
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+
+.open {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: var(--s3);
+  min-width: 0;
+  min-height: var(--hit);
+  padding: var(--s2) var(--s4);
+  border: 0;
+  border-radius: var(--r-md);
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.open[data-hovered] {
+  background: var(--bg);
+}
+
+.open[data-pressed] {
+  background: var(--sunken);
+}
+
+.text {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--s1);
+  min-width: 0;
+}
+
+.name {
+  font-weight: 600;
+  overflow-wrap: break-word;
+}
+
+.sub {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  overflow-wrap: break-word;
+}
+
+.chevron {
+  flex: none;
+  color: var(--ink-3);
+}
+
+/* Low-key: no frame, the muted colour; the target is still a thumb's. */
+.del {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: var(--hit);
+  min-height: var(--hit);
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-md);
+  background: none;
+  color: var(--ink-3);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.del[data-hovered] {
+  color: var(--danger-ink);
+}
+
+.add {
+  align-self: flex-start;
+}
+
+/* A line of text with its remove icon (a product of a client, or a line typed by hand). */
+.lineRow {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.lineName {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: var(--s2) var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  font-weight: 600;
+  overflow-wrap: break-word;
+}
+
+/* A product the picker offers: its name, and a plus at the end. */
+.pick {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  width: 100%;
+  min-height: var(--hit);
+  padding: var(--s2) var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.pick[data-hovered] {
+  background: var(--bg);
+}
+
+.pick[data-pressed] {
+  background: var(--sunken);
+}
+
+.pickName {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+
+.plus {
+  flex: none;
+  color: var(--ink-3);
+}
+
+/* The sentence under the box for a typed line that says it is already in the message. */
+.warning {
+  color: var(--danger-ink);
+}

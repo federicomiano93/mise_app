@@ -1,0 +1,253 @@
+// pricing.ts — from invoice lines to one net price per base unit (kg, l or piece).
+// A port of invoice-import/pricing.py. The price is what the goods REALLY cost: the total of every line of
+// the product on the invoice divided by everything delivered. A free-goods line (same article, total 0)
+// therefore lowers the price, which is the point. Pure.
+//
+// FULL port of js/orders/invoice-zip/pricing.js: same exported names, same values, same behaviour input for
+// input. Typing only differs (the casts are marked where they sit). parity.spec.ts compares the exports.
+
+import { pySum, roundHalfUp } from './py-compat';
+import { NOTE } from './reasons';
+
+export { roundHalfUp };
+
+type Dimension = [dimension: string, factor: number];
+
+// Invoiced unit -> [dimension, factor to the base unit]. Anything not listed is a
+// count of pieces or packages and needs a package weight from somewhere else.
+const WEIGHT_UNITS: Record<string, Dimension> = {
+  KG: ['kg', 1.0], KGM: ['kg', 1.0], KGS: ['kg', 1.0],
+  KILOGRAMMI: ['kg', 1.0], KILOGRAMMO: ['kg', 1.0],
+  GR: ['kg', 0.001], G: ['kg', 0.001], GRAMMI: ['kg', 0.001],
+  QL: ['kg', 100.0], QLI: ['kg', 100.0], QUINTALI: ['kg', 100.0], QUINTALE: ['kg', 100.0],
+  LT: ['l', 1.0], L: ['l', 1.0], LITRI: ['l', 1.0], LITRO: ['l', 1.0],
+  ML: ['l', 0.001], CL: ['l', 0.01],
+};
+export const PIECES = 'pc';
+
+// Pack size units -> [dimension, factor]
+export const PACK_UNITS: Record<string, Dimension> = {
+  kg: ['kg', 1.0], g: ['kg', 0.001], l: ['l', 1.0], ml: ['l', 0.001],
+};
+
+// A price outside these bounds is almost certainly a misread weight or pack, never a real price.
+const KG_L_PRICE_RANGE: [number, number] = [0.05, 300.0];
+const PIECE_PRICE_RANGE: [number, number] = [0.01, 50.0];
+// What one egg can plausibly cost, used to tell «the quantity counts eggs» from «counts packs».
+const EGG_PRICE_RANGE: [number, number] = [0.05, 0.90];
+// The heaviest one invoiced unit made of several packs can believably be, in kg or l.
+const MAX_PACK_KG_L = 50;
+export const OUT_OF_SCALE_NOTE = NOTE.PRICE_OUT_OF_SCALE;
+export const EGG_UNCLEAR_NOTE = NOTE.EGG_QUANTITY_UNCLEAR;
+
+const RELIABILITY_ORDER: Record<string, number> = { alta: 0, media: 1, 'da verificare': 2 };
+export const DISCOUNT_NOTE = NOTE.UNATTRIBUTED_DISCOUNT;
+
+export function unitClass(rawUnit?: unknown): Dimension {
+  const u = String(rawUnit || '').replace(/[\s.]+/g, '').toUpperCase();
+  return Object.prototype.hasOwnProperty.call(WEIGHT_UNITS, u) ? WEIGHT_UNITS[u] as Dimension : [PIECES, 1.0];
+}
+
+// One package: its size and the unit it is written in (kg, g, l, ml).
+export interface PricingPack { size: number; unit: string }
+
+// What the workbook row says about the package. The owner may have corrected it.
+export interface PricingParams {
+  priceUnit: string | null;
+  pack: PricingPack | null;
+  packCount: number | null;
+  egg: boolean;
+  eggWeightKg: number;
+}
+
+// priceUnit: 'kg' | 'l' | 'pcs' | null; pack: one package ({size, unit}) or null; packCount: int or null.
+export function params({
+  priceUnit = null, pack = null, packCount = null, egg = false, eggWeightKg = 0.05,
+}: Partial<PricingParams> = {}): PricingParams {
+  return { priceUnit, pack, packCount, egg, eggWeightKg };
+}
+
+function packBase(p: PricingParams): [number, string] | null {
+  if (!p.pack) return null;
+  // The cast is typing only: an unknown pack unit throws here, as in the original.
+  const [dim, factor] = PACK_UNITS[p.pack.unit] as Dimension;
+  return [p.pack.size * factor, dim];
+}
+
+// Weight of ONE piece, required whenever a price is per piece.
+export function unitWeightKg(p: PricingParams): number | null {
+  if (p.egg) return p.eggWeightKg;
+  const base = packBase(p);
+  if (base && base[1] === 'kg') return base[0];
+  return null;
+}
+
+const inRange = (value: number, bounds: [number, number]): boolean => bounds[0] <= value && value <= bounds[1];
+
+// One invoice line, as far as the price needs it.
+export interface PricedLine {
+  number: number;
+  unit?: string | null;
+  quantity?: number | null;
+  total?: number | null;
+  vatRate?: number | null;
+}
+
+// A product's price on one invoice and how far to trust it.
+export interface ComputedPrice {
+  price: number | null;
+  qty: number | null;
+  reliability: string;
+  note: string;
+  unitWeightKg: number | null;
+  vatRate: number | null | undefined;
+}
+
+function finish(result: ComputedPrice, mixed: boolean, discountFlag: boolean, priceUnit: string | null = null): ComputedPrice {
+  if (mixed) {
+    result.reliability = 'da verificare';
+    result.note = NOTE.MIXED_UNITS;
+  }
+  if (discountFlag) {
+    result.reliability = 'da verificare';
+    result.note = DISCOUNT_NOTE;
+  }
+  // ⚠️ NO ABSURD PRICE MAY LOOK RELIABLE: a price per kg/l or per piece outside any believable
+  // range is a misread weight or pack count, so it can never stay «alta» or «media».
+  if (result.price !== null && priceUnit !== null) {
+    const bounds = priceUnit === 'pcs' ? PIECE_PRICE_RANGE : KG_L_PRICE_RANGE;
+    if (!inRange(result.price, bounds)) {
+      result.reliability = 'da verificare';
+      result.note = OUT_OF_SCALE_NOTE;
+    }
+  }
+  return result;
+}
+
+function computed(price: number | null, qty: number | null, reliability: string, note: string,
+  extra: Partial<ComputedPrice> = {}): ComputedPrice {
+  return { price, qty, reliability, note, unitWeightKg: null, vatRate: null, ...extra };
+}
+
+// MISE 2 ONLY (14 Nov 2026): `weightlessPieces` — goods priced per piece that need no weight at all (resale, other and, since
+// 15 Nov 2026, packaging: a bottle sold as it arrives, a detergent, a box): no per-kilo cost is ever asked of them. Without the option a piece with no
+// weight has no price («no-piece-weight»), as in the original; with it, the price is the invoice's own per piece.
+//
+// MISE 2 ONLY (15 Nov 2026): `singleBottles` — a drinks supplier counts BOTTLES on the invoice («COLA ML 450 X24», 12 PZ at 0.7481: 12
+// bottles, not 12 cartons of 24). When every line of the product is in a single-piece unit (PZ, NR, N, BT, BOTT, PEZZI) and the description's
+// count is a carton composition (6 or more, not a retail multipack like «X3»), the quantity already counts single bottles, so the count
+// of the description is not multiplied in. A pack unit (CF, CT, …) or a smaller count keeps the original's reading; lines of one product in
+// both kinds of unit keep it too, and need a look. Only the price changes: what is saved on the item (weight, count) does not.
+export interface ComputeOptions { weightlessPieces?: boolean; singleBottles?: boolean }
+
+// A line counted in single pieces, as the invoice's unit of measure says it (spaces and dots ignored, like unitClass).
+const SINGLE_PIECE_UNITS: ReadonlySet<string> = new Set(['PZ', 'NR', 'N', 'BT', 'BOTT', 'PEZZI']);
+const CARTON_COUNT_MIN = 6;
+const isSinglePiece = (rawUnit?: unknown): boolean => SINGLE_PIECE_UNITS.has(String(rawUnit || '').replace(/[\s.]+/g, '').toUpperCase());
+
+// One product on one invoice -> its price, quantity and how far to trust them.
+export function computeDocument(lines: readonly PricedLine[], p: PricingParams, discountFlag = false,
+  options: ComputeOptions = {}): ComputedPrice {
+  const ordered = [...lines].sort((a, b) => a.number - b.number);
+  // The cast is typing only: an empty list throws here, as in the original.
+  const first = ordered[0] as PricedLine;
+  const cls = unitClass(first.unit)[0];
+  const same = ordered.filter((ln) => unitClass(ln.unit)[0] === cls);
+  const mixed = same.length !== ordered.length;
+  const vat = first.vatRate;
+
+  const total = pySum(same.map((ln) => ln.total ?? 0.0));
+  const pieces = pySum(same.map((ln) => ln.quantity ?? 0.0));
+
+  // Already "da verificare": the reason it has no price is the useful note.
+  const fail = (note: string): ComputedPrice => computed(null, null, 'da verificare', note, { vatRate: vat });
+
+  if (p.priceUnit === null) return fail(cls === PIECES ? NOTE.NO_WEIGHT_ON_INVOICE : NOTE.NO_PRICE_UNIT);
+
+  if (cls !== PIECES) {
+    const baseQty = pySum(same.map((ln) => (ln.quantity ?? 0.0) * unitClass(ln.unit)[1]));
+    if (baseQty <= 0) return fail(NOTE.QUANTITY_ZERO_OR_NEGATIVE);
+    if (total <= 0) return fail(NOTE.AMOUNT_ZERO_OR_NEGATIVE);
+    if (p.priceUnit !== cls) return fail(NOTE.PRICE_UNIT_DIFFERS_FROM_INVOICE);
+    const price = total / baseQty;
+    const note = cls === 'kg' ? NOTE.BY_WEIGHT : NOTE.BY_VOLUME;
+    return finish(computed(price, baseQty, 'alta', note, { vatRate: vat }), mixed, discountFlag, p.priceUnit);
+  }
+
+  // Invoiced by pieces or packages: the weight has to come from elsewhere.
+  if (pieces <= 0) return fail(NOTE.QUANTITY_ZERO_OR_NEGATIVE);
+  if (total <= 0) return fail(NOTE.AMOUNT_ZERO_OR_NEGATIVE);
+  const count = p.packCount || 1;
+
+  if (p.priceUnit === 'pcs') {
+    const weight = unitWeightKg(p);
+    if (weight === null && options.weightlessPieces === true && !p.egg) {
+      // The invoice counts what it sells and says what it cost: the price per piece is exact.
+      const qty = pieces * count;
+      return finish(computed(total / qty, qty, 'alta', '', { vatRate: vat }), mixed, discountFlag, p.priceUnit);
+    }
+    if (weight === null) return fail(NOTE.NO_PIECE_WEIGHT);
+    let result: ComputedPrice;
+    if (p.egg) {
+      let note: string = NOTE.EGG_WEIGHT_FROM_CONFIG;
+      let qty: number;
+      let reliability: string;
+      if (p.packCount === null) {
+        note += `; ${NOTE.EGG_PACK_COUNT_MISSING}`;
+        qty = pieces;
+        reliability = 'media';
+      } else {
+        // The «X 30» may be applied twice: some invoices count eggs in the quantity, others
+        // count packs. Take the reading whose price per egg is a believable egg price.
+        const priceIfEggs = total / pieces;
+        const priceIfPacks = total / (pieces * count);
+        const eggsOk = inRange(priceIfEggs, EGG_PRICE_RANGE);
+        const packsOk = inRange(priceIfPacks, EGG_PRICE_RANGE);
+        reliability = 'media';
+        if (eggsOk && !packsOk) {
+          qty = pieces;
+          note += `; ${NOTE.EGG_QUANTITY_COUNTS_EGGS}`;
+        } else {
+          qty = pieces * count;
+          if (eggsOk === packsOk) {
+            reliability = 'da verificare';
+            note = EGG_UNCLEAR_NOTE;
+          }
+        }
+      }
+      result = computed(total / qty, qty, reliability, note, { unitWeightKg: weight, vatRate: vat });
+    } else {
+      const qty = pieces * count;
+      result = computed(total / qty, qty, 'media', NOTE.PIECE_WEIGHT_FROM_DESCRIPTION,
+        { unitWeightKg: weight, vatRate: vat });
+    }
+    return finish(result, mixed, discountFlag, p.priceUnit);
+  }
+
+  const base = packBase(p);
+  if (base === null) return fail(NOTE.NO_WEIGHT_ON_INVOICE);
+  const [size, dim] = base;
+  if (dim !== p.priceUnit) return fail(NOTE.PRICE_UNIT_PACK_MISMATCH);
+  let bottleCount = count;
+  let mixedPacks = false;
+  if (options.singleBottles === true && count >= CARTON_COUNT_MIN) {
+    const singles = same.filter((ln) => isSinglePiece(ln.unit)).length;
+    if (singles === same.length) bottleCount = 1;
+    else if (singles > 0) mixedPacks = true;
+  }
+  const qty = pieces * size * bottleCount;
+  const result = finish(
+    computed(total / qty, qty, 'media', NOTE.WEIGHT_FROM_DESCRIPTION, { vatRate: vat }),
+    mixed || mixedPacks, discountFlag, p.priceUnit);
+  // ⚠️ NO CARTON WEIGHS THIS MUCH: «2Kg* 55pz» read as 55 × 2 kg gives a price that still looks believable, and the
+  // spellings of a piece weight are endless (classify.ts catches the common one). Above this it needs a look.
+  if (count > 1 && size * count > MAX_PACK_KG_L) {
+    result.reliability = 'da verificare';
+    result.note = OUT_OF_SCALE_NOTE;
+  }
+  return result;
+}
+
+export function worse(a: string, b: string): string {
+  return (RELIABILITY_ORDER[a] as number) >= (RELIABILITY_ORDER[b] as number) ? a : b;
+}

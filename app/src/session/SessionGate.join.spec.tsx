@@ -1,0 +1,460 @@
+import { afterEach, describe, expect, test, vi } from 'vitest';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { en } from '../i18n/en';
+import { I18nProvider } from '../i18n/I18nProvider';
+import { SCREEN_EVENT } from '../telemetry/usage';
+import { fakeStore } from '../testing/fakeSession';
+import { memoryStorage } from '../testing/renderWithSession';
+import { findSpokenAlert, spokenAlerts } from '../testing/spokenAlert';
+import { markBusy } from './busy';
+import { ASK_RETRY_MS } from './InviteQuestion';
+import { JoinFlowProvider } from './JoinFlowContext';
+import { createJoinFlow, PENDING_INVITE_KEY } from './joinFlow';
+import { SessionGate, joinShown } from './SessionGate';
+import { SessionProvider } from './SessionContext';
+import type { Session } from './session';
+
+// The join flow at the door (staff slice 1, docs/parity/staff-plan.md): «No venue yet» gains «I have a join code»; an
+// invitation opened with no venue fills the form in; somebody already in a venue is ASKED first, with the account named;
+// a form that has been sent stays through every status the session passes while the code is checked (fix 9e0a2dac); and
+// a pending invitation is forgotten on sign-out.
+
+const TOKEN = 'aB3dEf6hIj9lMn2pQr5tUv8xYz1CdEf4';
+const NO_ACCESS: Partial<Session> = { status: 'no-access', locationId: null, location: null, options: [] };
+
+function draw(session: Partial<Session>, { invited = '' } = {}) {
+  const storage = memoryStorage(invited ? { [PENDING_INVITE_KEY]: invited } : {});
+  const flow = createJoinFlow(storage);
+  const store = fakeStore(session);
+  const screens: string[] = [];
+  const onScreen = (event: Event) => { screens.push(String((event as CustomEvent).detail)); };
+  window.addEventListener(SCREEN_EVENT, onScreen);
+  const user = userEvent.setup();
+  render(
+    <I18nProvider initialLanguage="en" initialMessages={en}>
+      <SessionProvider store={store}>
+        <JoinFlowProvider flow={flow}>
+          <SessionGate><main><h1 tabIndex={-1}>the app</h1></main></SessionGate>
+        </JoinFlowProvider>
+      </SessionProvider>
+    </I18nProvider>,
+  );
+  return { store, flow, storage, user, screens, stop: () => { window.removeEventListener(SCREEN_EVENT, onScreen); } };
+}
+
+afterEach(() => {
+  vi.useRealTimers();
+});
+
+describe('«No venue yet» gains «I have a join code»', () => {
+  test('the button opens the empty join form; Back comes back to it, with the focus on it', async () => {
+    const { user, screens, stop } = draw(NO_ACCESS);
+    await user.click(screen.getByRole('button', { name: 'I have a join code' }));
+    expect(screen.getByRole('heading', { level: 1, name: 'Enter your code' })).toBeInTheDocument();
+    expect(screens).toContain('join');
+    await user.click(screen.getByRole('button', { name: 'Back' }));
+    expect(screen.getByRole('heading', { level: 1, name: 'No location yet' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'I have a join code' })).toHaveFocus();
+    stop();
+  });
+
+  test('the usage line names the screen `join` and nothing else', async () => {
+    const { user, screens, stop } = draw(NO_ACCESS);
+    await user.click(screen.getByRole('button', { name: 'I have a join code' }));
+    expect(screens).toEqual(['no-access', 'join']);
+    stop();
+  });
+
+  test('success: the session is asked to open the venue the server named', async () => {
+    const { user, store, flow } = draw(NO_ACCESS);
+    await user.click(screen.getByRole('button', { name: 'I have a join code' }));
+    await user.type(screen.getByLabelText('Your first name'), 'Luca');
+    await user.type(screen.getByLabelText('Your surname'), 'Rossi');
+    await user.type(screen.getByLabelText('Code'), '123456');
+    store.openJoinedVenue.mockImplementation(async () => { store.set({ status: 'ready', locationId: 'joined' }); });
+    await user.click(screen.getByRole('button', { name: 'Join' }));
+    await waitFor(() => { expect(screen.getByRole('heading', { name: 'the app' })).toBeInTheDocument(); });
+    expect(store.openJoinedVenue).toHaveBeenCalledWith('joined', 'u1');
+    expect(flow.getSnapshot().open).toBe(false);
+    // The venue's screen gets the focus, not the page.
+    await waitFor(() => { expect(screen.getByRole('heading', { name: 'the app' })).toHaveFocus(); });
+  });
+});
+
+describe('an invitation opened with no venue', () => {
+  test('goes straight to the form, the code filled in', () => {
+    draw(NO_ACCESS, { invited: TOKEN });
+    expect(screen.getByRole('heading', { level: 1, name: 'You have been invited' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Code')).toHaveValue(TOKEN);
+  });
+
+  test('Back forgets it: «No venue yet» comes back and stays', async () => {
+    const { user, flow, storage } = draw(NO_ACCESS, { invited: TOKEN });
+    await user.click(screen.getByRole('button', { name: 'Back' }));
+    expect(screen.getByRole('heading', { level: 1, name: 'No location yet' })).toBeInTheDocument();
+    expect(flow.getSnapshot().invited).toBe('');
+    expect(storage.map.has(PENDING_INVITE_KEY)).toBe(false);
+  });
+
+  test('a refusal that forgets it («already in») still stays on screen, with its words', async () => {
+    const { user, store } = draw(NO_ACCESS, { invited: TOKEN });
+    store.redeemJoinCode.mockRejectedValue(Object.assign(new Error('x'), { code: 'functions/failed-precondition', details: { reason: 'already-member' } }));
+    await user.type(screen.getByLabelText('Your first name'), 'Luca');
+    await user.type(screen.getByLabelText('Your surname'), 'Rossi');
+    await user.click(screen.getByRole('button', { name: 'Join' }));
+    expect(await findSpokenAlert()).toHaveTextContent('You are already in this business.');
+    expect(screen.getByLabelText('Your first name')).toHaveValue('Luca');
+  });
+});
+
+describe('⚠️ the form stays on screen until the server answers (fix 9e0a2dac)', () => {
+  test('the session moving to loading, an error and back while the code is checked: the same form, typing and all', async () => {
+    const { user, store } = draw(NO_ACCESS);
+    let refuse: (error: unknown) => void = () => {};
+    store.redeemJoinCode.mockImplementation(() => new Promise((_resolve, reject) => { refuse = reject; }));
+    await user.click(screen.getByRole('button', { name: 'I have a join code' }));
+    await user.type(screen.getByLabelText('Your first name'), 'Luca');
+    await user.type(screen.getByLabelText('Your surname'), 'Rossi');
+    await user.type(screen.getByLabelText('Code'), '123456');
+    await user.click(screen.getByRole('button', { name: 'Join' }));
+
+    for (const status of ['loading', 'error', 'no-access'] as const) {
+      act(() => { store.set({ status }); });
+      expect(screen.getByLabelText('Your first name'), status).toHaveValue('Luca');
+      expect(screen.getByLabelText('Code'), status).toHaveValue('123456');
+    }
+    act(() => { store.set({ status: 'loading' }); });
+    await act(async () => { refuse(Object.assign(new Error('x'), { code: 'functions/permission-denied' })); });
+    // The refusal lands on the form that asked, still on screen through the session's own move.
+    expect(await findSpokenAlert()).toHaveTextContent('That code does not work. Ask for a new one.');
+    expect(screen.getByLabelText('Code')).toHaveValue('123456');
+  });
+
+  test('a form never sent is not held: a session that starts loading draws the wait', async () => {
+    const { user, store } = draw(NO_ACCESS);
+    await user.click(screen.getByRole('button', { name: 'I have a join code' }));
+    act(() => { store.set({ status: 'loading' }); });
+    expect(screen.queryByLabelText('Code')).not.toBeInTheDocument();
+  });
+
+  test('signed out mid-check is somewhere real: the sign-in form, not the held one', async () => {
+    const { user, store } = draw(NO_ACCESS);
+    let refuse: (error: unknown) => void = () => {};
+    store.redeemJoinCode.mockImplementation(() => new Promise((_resolve, reject) => { refuse = reject; }));
+    await user.click(screen.getByRole('button', { name: 'I have a join code' }));
+    await user.type(screen.getByLabelText('Your first name'), 'Luca');
+    await user.type(screen.getByLabelText('Your surname'), 'Rossi');
+    await user.type(screen.getByLabelText('Code'), '123456');
+    await user.click(screen.getByRole('button', { name: 'Join' }));
+    act(() => { store.set({ status: 'signed-out', user: null }); });
+    expect(screen.getByLabelText('Email')).toBeInTheDocument();
+    // The answer still arrives (and the hold on reloads ends with it), on a form nobody sees any more.
+    await act(async () => { refuse(new Error('late')); });
+    expect(screen.getByLabelText('Email')).toBeInTheDocument();
+  });
+});
+
+describe('somebody already in a venue who opens a link is asked first, with the account named', () => {
+  test('the question names the account; «Not now» keeps the app and forgets the link', async () => {
+    const { user, flow, storage } = draw({}, { invited: TOKEN });
+    const dialog = await screen.findByRole('alertdialog', { name: 'You opened an invitation' });
+    expect(dialog).toHaveTextContent('Add this business to owner@club.test?');
+    // The app is there behind the question (hidden from assistive technology while the dialog is modal).
+    expect(screen.getByRole('heading', { name: 'the app', hidden: true })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Not now' }));
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'the app' })).toBeInTheDocument();
+    expect(flow.getSnapshot().invited).toBe('');
+    expect(storage.map.has(PENDING_INVITE_KEY)).toBe(false);
+    await waitFor(() => { expect(screen.getByRole('heading', { name: 'the app' })).toHaveFocus(); });
+  });
+
+  test('Escape is «Not now»', async () => {
+    const { user, flow } = draw({}, { invited: TOKEN });
+    await screen.findByRole('alertdialog');
+    await user.keyboard('{Escape}');
+    expect(flow.getSnapshot().invited).toBe('');
+  });
+
+  test('«Add it» opens the form for that account, the code filled in; Back returns to the app', async () => {
+    const { user, flow } = draw({}, { invited: TOKEN });
+    await screen.findByRole('alertdialog');
+    await user.click(screen.getByRole('button', { name: 'Add it' }));
+    expect(await screen.findByRole('heading', { level: 1, name: 'You have been invited' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Code')).toHaveValue(TOKEN);
+    expect(screen.getByText('owner@club.test')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'the app' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Back' }));
+    expect(screen.getByRole('heading', { name: 'the app' })).toBeInTheDocument();
+    expect(flow.getSnapshot().invited).toBe('');
+    await waitFor(() => { expect(screen.getByRole('heading', { name: 'the app' })).toHaveFocus(); });
+  });
+
+  // Joining ends in a switch of venue, which clears this phone's copy: the same check as switching venue.
+  test('«Add it» with something not sent yet: «Not sent yet» first; «Stay» forgets the link and keeps the app', async () => {
+    const { user, store, flow } = draw({}, { invited: TOKEN });
+    store.changesStillWaiting.mockResolvedValue(true);
+    await screen.findByRole('alertdialog');
+    await user.click(screen.getByRole('button', { name: 'Add it' }));
+    expect(await screen.findByRole('alertdialog', { name: 'Not sent yet' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Stay' }));
+    expect(screen.getByRole('heading', { name: 'the app' })).toBeInTheDocument();
+    expect(flow.getSnapshot()).toMatchObject({ invited: '', open: false });
+  });
+
+  test('on a joined venue, the session opens it (a switch: session.spec.ts)', async () => {
+    const { user, store } = draw({}, { invited: TOKEN });
+    await screen.findByRole('alertdialog');
+    await user.click(screen.getByRole('button', { name: 'Add it' }));
+    await user.type(await screen.findByLabelText('Your first name'), 'Luca');
+    await user.type(screen.getByLabelText('Your surname'), 'Rossi');
+    await user.click(screen.getByRole('button', { name: 'Join' }));
+    await waitFor(() => { expect(store.openJoinedVenue).toHaveBeenCalledWith('joined', 'u1'); });
+    expect(store.redeemJoinCode).toHaveBeenCalledWith(TOKEN, 'link', 'Luca', 'Rossi');
+  });
+
+  test('the account with no email is «this account»', async () => {
+    draw({ user: { uid: 'u9', email: null, isAnonymous: false } }, { invited: TOKEN });
+    expect(await screen.findByRole('alertdialog')).toHaveTextContent('Add this business to this account?');
+  });
+
+  test('on the venue picker too; Back from the form returns to the picker with the focus on it', async () => {
+    const { user } = draw({ status: 'choose-location', locationId: null, options: ['a', 'b'], optionNames: { a: 'A', b: 'B' } }, { invited: TOKEN });
+    expect(await screen.findByRole('alertdialog', { name: 'You opened an invitation' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Add it' }));
+    await user.click(await screen.findByRole('button', { name: 'Back' }));
+    await waitFor(() => { expect(document.activeElement).not.toBe(document.body); });
+    expect(screen.getByRole('main')).toContainElement(document.activeElement as HTMLElement);
+  });
+
+  // ⚠️ The form replaces the app: an editor's unsaved typing would go with it.
+  test('while somebody is typing, the question waits until they are not', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const release = markBusy();
+    draw({}, { invited: TOKEN });
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    await act(async () => { vi.advanceTimersByTime(ASK_RETRY_MS); });
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    release();
+    await act(async () => { vi.advanceTimersByTime(ASK_RETRY_MS); });
+    expect(screen.getByRole('alertdialog', { name: 'You opened an invitation' })).toBeInTheDocument();
+  });
+
+  test('no invitation: no question', () => {
+    draw({});
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+  });
+});
+
+describe('a pending invitation is forgotten on sign-out', () => {
+  test('signed in, then signed out (this tab or another): forgotten', async () => {
+    const { store, flow, storage } = draw(NO_ACCESS, { invited: TOKEN });
+    act(() => { store.set({ status: 'signed-out', user: null }); });
+    expect(flow.getSnapshot().invited).toBe('');
+    expect(storage.map.has(PENDING_INVITE_KEY)).toBe(false);
+  });
+
+  // Another person taking the place of the signed-in one with no sign-out step (an expired session, the form, a different account).
+  test('another person signed in with no sign-out between: forgotten too', async () => {
+    const { store, flow, storage } = draw(NO_ACCESS, { invited: TOKEN });
+    act(() => { store.set({ status: 'loading', user: { uid: 'somebody-else', email: 'else@club.test', isAnonymous: false } }); });
+    expect(flow.getSnapshot().invited).toBe('');
+    expect(storage.map.has(PENDING_INVITE_KEY)).toBe(false);
+  });
+
+  // The person a link is for may open it signed out: it must wait for the sign-in.
+  test('a window that OPENS signed out keeps it, and offers it once signed in', async () => {
+    const { store, flow } = draw({ status: 'loading', user: null }, { invited: TOKEN });
+    act(() => { store.set({ status: 'signed-out', user: null }); });
+    expect(flow.getSnapshot().invited).toBe(TOKEN);
+    act(() => { store.set({ status: 'loading', user: { uid: 'u1', email: 'new@club.test', isAnonymous: false } }); });
+    act(() => { store.set({ ...NO_ACCESS }); });
+    expect(screen.getByLabelText('Code')).toHaveValue(TOKEN);
+  });
+});
+
+describe('joinShown', () => {
+  const flow = { invited: '', open: false, sent: null, formKey: 0, returned: false, signInFirst: false, signInEmail: '', parked: false };
+  // Staff slice 2: signed out, the form for a NEW account.
+  test('signed out: opened, or an invitation — unless the person stepped over to sign in', () => {
+    expect(joinShown('signed-out', flow)).toBe(false);
+    expect(joinShown('signed-out', { ...flow, open: true })).toBe(true);
+    expect(joinShown('signed-out', { ...flow, invited: TOKEN })).toBe(true);
+    expect(joinShown('signed-out', { ...flow, invited: TOKEN, signInFirst: true })).toBe(false);
+  });
+  test('in a venue or on the picker: only once opened', () => {
+    expect(joinShown('ready', { ...flow, invited: TOKEN })).toBe(false);
+    expect(joinShown('ready', { ...flow, open: true })).toBe(true);
+    expect(joinShown('choose-location', { ...flow, open: true })).toBe(true);
+  });
+  test('no venue: opened, an invitation, or an answer still on screen', () => {
+    expect(joinShown('no-access', flow)).toBe(false);
+    expect(joinShown('no-access', { ...flow, invited: TOKEN })).toBe(true);
+    expect(joinShown('no-access', { ...flow, sent: { busy: false, invited: '' } })).toBe(true);
+  });
+  test('no venue: an invitation held but PARKED does not open the form by itself, an opened one does', () => {
+    expect(joinShown('no-access', { ...flow, invited: TOKEN, parked: true })).toBe(false);
+    expect(joinShown('no-access', { ...flow, invited: TOKEN, parked: true, open: true })).toBe(true);
+  });
+
+  test('loading or error: only a form that has been sent', () => {
+    expect(joinShown('loading', { ...flow, open: true })).toBe(false);
+    expect(joinShown('error', { ...flow, sent: { busy: true, invited: '' } })).toBe(true);
+  });
+});
+
+describe('signed out: the form for a NEW account (staff slice 2)', () => {
+  const SIGNED_OUT: Partial<Session> = { status: 'signed-out', user: null, locationId: null, location: null, options: [] };
+  const NEWBIE = { uid: 'new-uid', email: 'anna.b@club.test', isAnonymous: false };
+
+  async function fillNew(user: ReturnType<typeof draw>['user'], code = '') {
+    await user.type(screen.getByLabelText('Your first name'), 'Anna');
+    await user.type(screen.getByLabelText('Your surname'), 'Bianchi');
+    await user.type(screen.getByLabelText('Your email'), 'anna.b@club.test');
+    await user.type(screen.getByLabelText('Repeat your email'), 'anna.b@club.test');
+    await user.type(screen.getByLabelText('Choose a password (at least 10 characters)'), 'Tr1cky-Secret-42');
+    await user.type(screen.getByLabelText('Repeat the password'), 'Tr1cky-Secret-42');
+    if (code) await user.type(screen.getByLabelText('Code'), code);
+  }
+
+  test('the sign-in screen\'s «I have a join code» opens it; Back comes back to sign-in', async () => {
+    const { user, screens, stop } = draw(SIGNED_OUT);
+    await user.click(screen.getByRole('button', { name: 'I have a join code' }));
+    expect(screen.getByRole('heading', { level: 1, name: 'Join with a code' })).toBeInTheDocument();
+    expect(screens).toContain('join');
+    await user.click(screen.getByRole('button', { name: 'Back' }));
+    expect(screen.getByLabelText('Email')).toBeInTheDocument();
+    stop();
+  });
+
+  // The plan's «works on its own»: a brand-new person joins from a link with no account.
+  test('a link opened with nobody signed in goes straight to it, the code filled in', () => {
+    draw(SIGNED_OUT, { invited: TOKEN });
+    expect(screen.getByRole('heading', { level: 1, name: 'You have been invited' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Your email')).toBeInTheDocument();
+    expect(screen.getByLabelText('Code')).toHaveValue(TOKEN);
+  });
+
+  // ⚠️ fix 9e0a2dac: the sign-up moves the session (signed-out → loading → no-access) while the code is still checked.
+  test('the form stays through every move its own sign-up causes, and the refusal lands on it, for that account', async () => {
+    const { user, store } = draw(SIGNED_OUT, { invited: TOKEN });
+    let refuse: (error: unknown) => void = () => {};
+    store.signUp.mockImplementation(async () => {
+      store.set({ status: 'loading', user: NEWBIE });
+      return NEWBIE;
+    });
+    store.redeemJoinCode.mockImplementation(() => new Promise((_resolve, reject) => { refuse = reject; }));
+    await fillNew(user);
+    await user.click(screen.getByRole('button', { name: 'Join' }));
+    await waitFor(() => { expect(store.redeemJoinCode).toHaveBeenCalled(); });
+    act(() => { store.set({ ...NO_ACCESS, user: NEWBIE }); });
+    expect(screen.getByLabelText('Code')).toHaveValue(TOKEN);
+    await act(async () => { refuse(Object.assign(new Error('x'), { code: 'functions/permission-denied' })); });
+    expect(await findSpokenAlert()).toHaveTextContent('That code does not work. Ask for a new one.');
+    expect(screen.getByText('anna.b@club.test')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Your email')).not.toBeInTheDocument();
+    // A late answer of the session does not wipe it either.
+    act(() => { store.set({ status: 'loading', user: NEWBIE }); });
+    act(() => { store.set({ ...NO_ACCESS, user: NEWBIE }); });
+    expect(spokenAlerts()).toHaveLength(1);
+  });
+
+  // The account was made and its code refused; then somebody else signs in (another tab). The first person's form must not stay
+  // up for the second, and nothing may be sent again — no second account, no second code check.
+  test('the made account is refused, then a different person signs in: the form closes and nothing is called again', async () => {
+    const { user, store } = draw(SIGNED_OUT, { invited: TOKEN });
+    store.signUp.mockImplementation(async () => {
+      store.set({ status: 'loading', user: NEWBIE });
+      return NEWBIE;
+    });
+    store.redeemJoinCode.mockRejectedValueOnce(Object.assign(new Error('x'), { code: 'functions/permission-denied' }));
+    await fillNew(user);
+    await user.click(screen.getByRole('button', { name: 'Join' }));
+    act(() => { store.set({ ...NO_ACCESS, user: NEWBIE }); });
+    await findSpokenAlert();
+    expect(screen.getByText('anna.b@club.test')).toBeInTheDocument();
+    const other = { uid: 'other-uid', email: 'other@club.test', isAnonymous: false };
+    act(() => { store.set({ status: 'loading', user: other }); });
+    act(() => { store.set({ ...NO_ACCESS, user: other }); });
+    expect(screen.queryByLabelText('Code')).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'No location yet' })).toBeInTheDocument();
+    expect(screen.getByText('other@club.test')).toBeInTheDocument();
+    expect(store.signUp).toHaveBeenCalledOnce();
+    expect(store.redeemJoinCode).toHaveBeenCalledOnce();
+  });
+
+  test('Back on a link: to sign-in, which says the invitation waits; after the sign-in, it is offered', async () => {
+    const { user, store, flow } = draw(SIGNED_OUT, { invited: TOKEN });
+    await user.click(screen.getByRole('button', { name: 'Back' }));
+    expect(screen.getByLabelText('Email')).toBeInTheDocument();
+    expect(screen.getByText('Sign in, and we will add the business to your account.')).toBeInTheDocument();
+    expect(flow.getSnapshot().invited).toBe(TOKEN);
+    act(() => { store.set({ status: 'loading', user: { uid: 'u1', email: 'owner@club.test', isAnonymous: false } }); });
+    act(() => { store.set({ ...NO_ACCESS }); });
+    expect(screen.getByRole('heading', { level: 1, name: 'You have been invited' })).toBeInTheDocument();
+    expect(screen.getByText('owner@club.test')).toBeInTheDocument();
+  });
+
+  test('on the sign-in screen, «I have a join code» opens the form again with the waiting invitation', async () => {
+    const { user } = draw(SIGNED_OUT, { invited: TOKEN });
+    await user.click(screen.getByRole('button', { name: 'Back' }));
+    await user.click(screen.getByRole('button', { name: 'I have a join code' }));
+    expect(screen.getByLabelText('Code')).toHaveValue(TOKEN);
+    expect(screen.getByLabelText('Your email')).toBeInTheDocument();
+  });
+});
+
+// The invitation link is kept in two places, both the current app's behaviour (his decision pending, taken as recommended,
+// 13 Nov 2026): after Back from an account that was made but whose code was refused, and through «Sign in with a different
+// account» (that button only).
+describe('the invitation is kept in two places', () => {
+  const NEWBIE = { uid: 'new-uid', email: 'anna.b@club.test', isAnonymous: false };
+
+  test('Back from the made-but-refused form: «No location yet» for that account, and «I have a join code» has the link filled in', async () => {
+    const { user, store, flow, storage } = draw({ ...NO_ACCESS, user: NEWBIE }, { invited: TOKEN });
+    act(() => { flow.leave(); });
+    expect(screen.getByRole('heading', { level: 1, name: 'No location yet' })).toBeInTheDocument();
+    expect(flow.getSnapshot().invited).toBe(TOKEN);
+    expect(storage.map.get(PENDING_INVITE_KEY)).toBe(TOKEN);
+    await user.click(screen.getByRole('button', { name: 'I have a join code' }));
+    expect(screen.getByLabelText('Code')).toHaveValue(TOKEN);
+    expect(store.signOut).not.toHaveBeenCalled();
+  });
+
+  test('a join forgets it; so does a plain sign-out', async () => {
+    const { store, flow, storage } = draw({ ...NO_ACCESS, user: NEWBIE }, { invited: TOKEN });
+    act(() => { flow.leave(); });
+    act(() => { store.set({ status: 'signed-out', user: null }); });
+    expect(flow.getSnapshot().invited).toBe('');
+    expect(storage.map.has(PENDING_INVITE_KEY)).toBe(false);
+  });
+
+  test('«Sign in with a different account» keeps it: the sign-out is asked to, and the new-account form comes with the code filled in', async () => {
+    const { user, store, flow, storage } = draw(NO_ACCESS, { invited: TOKEN });
+    await user.click(screen.getByRole('button', { name: 'Sign in with a different account' }));
+    await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Log out' }));
+    await waitFor(() => { expect(store.signOut).toHaveBeenCalledWith({ keepInvitation: true }); });
+    act(() => { store.set({ status: 'signed-out', user: null }); });
+    expect(flow.getSnapshot().invited).toBe(TOKEN);
+    expect(storage.map.get(PENDING_INVITE_KEY)).toBe(TOKEN);
+    expect(screen.getByRole('heading', { level: 1, name: 'You have been invited' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Code')).toHaveValue(TOKEN);
+    // Back is the way to sign in, with the link still held.
+    await user.click(screen.getByRole('button', { name: 'Back' }));
+    expect(screen.getByLabelText('Email')).toBeInTheDocument();
+    expect(screen.getByText('Sign in, and we will add the business to your account.')).toBeInTheDocument();
+    expect(flow.getSnapshot().invited).toBe(TOKEN);
+  });
+
+  test('the keeping is for that one sign-out: a later one forgets the link', async () => {
+    const { user, store, flow } = draw(NO_ACCESS, { invited: TOKEN });
+    store.signOut.mockRejectedValueOnce(new Error('offline'));
+    await user.click(screen.getByRole('button', { name: 'Sign in with a different account' }));
+    await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Log out' }));
+    await waitFor(() => { expect(store.signOut).toHaveBeenCalledTimes(1); });
+    // It failed, so nobody signed out the way the button meant; a sign-out from anywhere else now forgets the link.
+    act(() => { store.set({ status: 'signed-out', user: null }); });
+    expect(flow.getSnapshot().invited).toBe('');
+  });
+});

@@ -1,0 +1,713 @@
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { act, screen, waitFor, within } from '@testing-library/react';
+import { INGREDIENT_DRAINED_FIELDS } from '@mise/shared/price-model';
+import { isBusy } from '../session/busy';
+import { fakeSuppliersSource } from '../testing/fakeSuppliersSource';
+import type { FakeSuppliersSource } from '../testing/fakeSuppliersSource';
+import { LOAD, item, renderSuppliers, supplier } from '../testing/renderSuppliers';
+
+// «Ingredients & suppliers», step 3e-2: the ingredient card's Save — every refusal and where it points, the question, the exact
+// payload written, the order line it freezes, «+ New supplier…» in a dialog above the card, and the way out.
+
+beforeAll(async () => { await import('./SuppliersSection'); }, 60_000);
+
+afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+
+const SUPPLIERS = [
+  supplier('s-alp', { name: 'Alpine Mills Ltd', shortName: 'Alpine' }),
+  supplier('s-zed', { name: 'Zed Dairy' }),
+];
+const FLOUR = item('i-flour', {
+  name: 'Flour 00', shortName: 'Flour', supplierId: 's-alp', brand: 'Caputo', weight: '25 kg', category: 'Bakery', unit: 'kg',
+  invoiceName: 'FARINA 00 25KG', supplierCodes: ['A1'], allergens: ['milk'], allergensCheckedAt: '2026-01-01', pricePerUnit: 3, priceUnit: 'kg',
+});
+const CASE = item('i-case', { name: 'Passata', packCount: 4, packUnit: 'bag', unit: 'case', weight: '2.5 kg', supplierId: 's-zed' });
+const BOX = item('i-box', { name: 'Cake box', kind: 'packaging', supplierId: 's-alp' });
+
+const seeded = (): FakeSuppliersSource => fakeSuppliersSource({ suppliers: SUPPLIERS, ingredients: [FLOUR, CASE, BOX] });
+const main = () => within(screen.getByRole('main'));
+const dialogOf = (name: string) => screen.findByRole('alertdialog', { name });
+const drained = Object.fromEntries(INGREDIENT_DRAINED_FIELDS.map(key => [key, null]));
+
+async function open(path: string, source = seeded(), options = {}) {
+  const view = renderSuppliers(path, { source, ...options });
+  const region = within(await screen.findByRole('region', { name: /^(Edit|New|Modifica|Nuovo) (ingredient|ingrediente|packaging|imballaggio|resale item|other item)$/ }, LOAD));
+  return { ...view, source, region };
+}
+type Region = Awaited<ReturnType<typeof open>>['region'];
+const nameBox = (region: Region) => region.getByRole('textbox', { name: 'Name in the message' });
+
+async function saveAndConfirm(view: { user: Awaited<ReturnType<typeof open>>['user']; region: Region }) {
+  await view.user.click(view.region.getByRole('button', { name: 'Save' }));
+  await view.user.click(within(await dialogOf('Save ingredient?')).getByRole('button', { name: 'Save' }));
+}
+
+describe('the refusals', () => {
+  it('⚠️ an empty name is marked, said under the box, takes the focus, asks nothing and writes nothing', async () => {
+    const { region, user, source } = await open('/suppliers/ingredient/new');
+    await user.click(region.getByRole('button', { name: 'Save' }));
+    const box = nameBox(region);
+    expect(box).toHaveAttribute('aria-invalid', 'true');
+    expect(box).toHaveFocus();
+    expect(region.getByText('Enter the ingredient’s name.')).toBeInTheDocument();
+    expect(box.getAttribute('aria-describedby')).toContain(region.getByText('Enter the ingredient’s name.').id);
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(source.writes).toEqual([]);
+    // Typing clears it.
+    await user.type(box, 'S');
+    expect(box).not.toHaveAttribute('aria-invalid');
+    expect(region.queryByText('Enter the ingredient’s name.')).not.toBeInTheDocument();
+  });
+
+  it('says it in Italian', async () => {
+    const { region, user } = await open('/suppliers/ingredient/new', seeded(), { lang: 'it', session: { language: 'it' } });
+    await user.click(region.getByRole('button', { name: 'Salva' }));
+    expect(region.getByText('Scrivi il nome dell’ingrediente.')).toBeInTheDocument();
+  });
+
+  it('⚠️ an unusable weight is refused on its box, with its sentence; an empty box is fine', async () => {
+    const { region, user, source } = await open('/suppliers/ingredient/i-flour');
+    const amount = region.getByRole('textbox', { name: 'Weight amount' });
+    for (const typed of ['2.27kg', 'abc', '0']) {
+      await user.clear(amount);
+      await user.type(amount, typed);
+      await user.click(region.getByRole('button', { name: 'Save' }));
+      expect(amount).toHaveAttribute('aria-invalid', 'true');
+      expect(amount).toHaveFocus();
+      expect(region.getByText('Write a number, e.g. 2.5')).toBeInTheDocument();
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    }
+    await user.type(amount, '5');
+    expect(amount).not.toHaveAttribute('aria-invalid');
+    await user.clear(amount);
+    await user.click(region.getByRole('button', { name: 'Save' }));
+    expect(await dialogOf('Save ingredient?')).toBeInTheDocument();
+    expect(source.writes).toEqual([]);
+  });
+
+  it('a «+ New category…» box left empty is refused on that box', async () => {
+    const { region, user } = await open('/suppliers/ingredient/i-flour');
+    await user.selectOptions(region.getByRole('combobox', { name: 'Category' }), '+ New category…');
+    const typed = region.getByRole('textbox', { name: 'New category name' });
+    expect(typed).toHaveFocus();
+    expect(typed).toHaveAttribute('maxlength', '200');
+    await user.click(region.getByRole('button', { name: 'Save' }));
+    expect(typed).toHaveAttribute('aria-invalid', 'true');
+    expect(typed).toHaveFocus();
+    expect(region.getByText('Write the new category’s name')).toBeInTheDocument();
+  });
+
+  it('the order: the name first, then the weight', async () => {
+    const { region, user } = await open('/suppliers/ingredient/i-flour');
+    await user.clear(nameBox(region));
+    await user.clear(region.getByRole('textbox', { name: 'Weight amount' }));
+    await user.type(region.getByRole('textbox', { name: 'Weight amount' }), 'abc');
+    await user.click(region.getByRole('button', { name: 'Save' }));
+    expect(nameBox(region)).toHaveFocus();
+    expect(region.getByRole('textbox', { name: 'Weight amount' })).not.toHaveAttribute('aria-invalid');
+  });
+
+  it('⚠️ a Case being written needs a whole count, then a word', async () => {
+    const { region, user, source } = await open('/suppliers/ingredient/i-flour');
+    await user.selectOptions(region.getByRole('combobox', { name: 'Comes as' }), 'carton');
+    const count = region.getByRole('textbox', { name: 'How many in the case' });
+    await user.click(region.getByRole('button', { name: 'Save' }));
+    expect(count).toHaveAttribute('aria-invalid', 'true');
+    expect(count).toHaveFocus();
+    expect(region.getByText('Write a whole number, e.g. 4')).toBeInTheDocument();
+    await user.type(count, '2.5');
+    expect(count).not.toHaveAttribute('aria-invalid');
+    await user.click(region.getByRole('button', { name: 'Save' }));
+    expect(count).toHaveAttribute('aria-invalid', 'true');
+
+    await user.clear(count);
+    await user.type(count, '3');
+    await user.selectOptions(region.getByRole('combobox', { name: 'What is inside the case' }), '— none —');
+    await user.click(region.getByRole('button', { name: 'Save' }));
+    const menu = region.getByRole('combobox', { name: 'What is inside the case' });
+    expect(menu).toHaveAttribute('aria-invalid', 'true');
+    expect(menu).toHaveFocus();
+    expect(region.getByText('Choose what is inside the case')).toBeInTheDocument();
+
+    await user.selectOptions(menu, '+ New…');
+    const typed = region.getByRole('textbox', { name: 'New package name' });
+    expect(typed).toHaveAttribute('maxlength', '40');
+    await user.click(region.getByRole('button', { name: 'Save' }));
+    expect(typed).toHaveAttribute('aria-invalid', 'true');
+    expect(region.getByText('Write the new package’s name')).toBeInTheDocument();
+    expect(source.writes).toEqual([]);
+  });
+
+  it('⚠️ a Case nobody touched is not refused: an old product with no count saves as it was', async () => {
+    const source = fakeSuppliersSource({ suppliers: SUPPLIERS, ingredients: [item('i-old', { name: 'Old cartons', unit: 'cartone', packUnit: 'busta' })] });
+    const view = await open('/suppliers/ingredient/i-old', source);
+    expect(view.region.getByRole('combobox', { name: 'Comes as' })).toHaveValue('carton');
+    await view.user.type(view.region.getByRole('textbox', { name: 'Brand' }), 'X');
+    await saveAndConfirm(view);
+    await waitFor(() => { expect(source.writes).toHaveLength(1); });
+    expect(source.writes[0]).toMatchObject({ data: { brand: 'X' } });
+    expect(source.writes[0]).not.toMatchObject({ data: { packCount: expect.anything() } });
+  });
+});
+
+describe('the question and the payload', () => {
+  it('asks «Save “name”?» with the name shown in lists; Cancel writes nothing and keeps the card', async () => {
+    const view = await open('/suppliers/ingredient/i-flour');
+    await view.user.click(view.region.getByRole('button', { name: 'Save' }));
+    const dialog = await dialogOf('Save ingredient?');
+    expect(within(dialog).getByText('Save “Flour”?')).toBeInTheDocument();
+    await view.user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    expect(view.source.writes).toEqual([]);
+    expect(view.router.state.location.pathname).toBe('/suppliers/ingredient/i-flour');
+  });
+
+  it('⚠️ a rename writes the product data and the six drained nulls — no format key, no price, allergen or nutrition key, no invoice name', async () => {
+    const view = await open('/suppliers/ingredient/i-flour');
+    await view.user.clear(nameBox(view.region));
+    await view.user.type(nameBox(view.region), '  Flour 000  ');
+    await saveAndConfirm(view);
+    await waitFor(() => { expect(view.source.writes).toHaveLength(1); });
+    expect(view.source.writes[0]).toEqual({
+      op: 'ingredient-save',
+      id: 'i-flour',
+      data: {
+        name: 'Flour 000', shortName: 'Flour', supplierId: 's-alp', brand: 'Caputo', weight: '25 kg', category: 'Bakery', kind: 'ingredient',
+        ...drained,
+      },
+      // The card of a person who may not write prices carries no money (step 3e-3: the fake records the money of the batch).
+      price: null,
+    });
+  });
+
+  it('«Not in use at the moment»: a NEW ingredient has no switch', async () => {
+    const fresh = await open('/suppliers/ingredient/new');
+    expect(fresh.region.queryByRole('switch', { name: 'Not in use at the moment' })).not.toBeInTheDocument();
+  });
+
+  it('⚠️ «Not in use at the moment»: moving the switch writes `active` on Save, and nothing before', async () => {
+    const view = await open('/suppliers/ingredient/i-flour');
+    const toggle = view.region.getByRole('switch', { name: 'Not in use at the moment' });
+    expect(toggle).not.toBeChecked();
+    expect(toggle).toHaveAccessibleDescription(/under “Not in use”/);
+    await view.user.click(toggle);
+    expect(toggle).toBeChecked();
+    expect(view.source.writes).toEqual([]);
+    await saveAndConfirm(view);
+    await waitFor(() => { expect(view.source.writes).toHaveLength(1); });
+    expect(view.source.writes[0]).toMatchObject({ op: 'ingredient-save', id: 'i-flour', data: { active: false } });
+  });
+
+  it('a blank short name is sent as an empty string, a blank category as «Other», the weight joined from its two boxes', async () => {
+    const view = await open('/suppliers/ingredient/i-flour');
+    await view.user.clear(view.region.getByRole('textbox', { name: 'Name in lists' }));
+    await view.user.selectOptions(view.region.getByRole('combobox', { name: 'Category' }), '— none —');
+    await view.user.clear(view.region.getByRole('textbox', { name: 'Weight amount' }));
+    await view.user.type(view.region.getByRole('textbox', { name: 'Weight amount' }), '2,5');
+    await view.user.selectOptions(view.region.getByRole('combobox', { name: 'Weight unit' }), 'l');
+    await saveAndConfirm(view);
+    await waitFor(() => { expect(view.source.writes).toHaveLength(1); });
+    expect(view.source.writes[0]).toMatchObject({ data: { shortName: '', category: 'Other', weight: '2.5 l' } });
+  });
+
+  it('a new category is saved as typed, trimmed', async () => {
+    const view = await open('/suppliers/ingredient/i-flour');
+    await view.user.selectOptions(view.region.getByRole('combobox', { name: 'Category' }), '+ New category…');
+    await view.user.type(view.region.getByRole('textbox', { name: 'New category name' }), '  Dairy ');
+    await saveAndConfirm(view);
+    await waitFor(() => { expect(view.source.writes).toHaveLength(1); });
+    expect(view.source.writes[0]).toMatchObject({ data: { category: 'Dairy' } });
+  });
+
+  it('⚠️ an unreadable weight is saved untouched unless a usable number is typed', async () => {
+    const source = fakeSuppliersSource({ suppliers: SUPPLIERS, ingredients: [item('i-odd', { name: 'Odd', weight: '6x1kg' })] });
+    const view = await open('/suppliers/ingredient/i-odd', source);
+    await saveAndConfirm(view);
+    await waitFor(() => { expect(source.writes).toHaveLength(1); });
+    expect(source.writes[0]).toMatchObject({ data: { weight: '6x1kg' } });
+  });
+
+  it('Single → Case writes the count, the word and the venue\'s carton word, and freezes the open order line in the old unit', async () => {
+    const source = seeded();
+    source.draft = { 'i-flour': { qty: 3 } };
+    const view = await open('/suppliers/ingredient/i-flour', source);
+    await view.user.selectOptions(view.region.getByRole('combobox', { name: 'Comes as' }), 'carton');
+    await view.user.type(view.region.getByRole('textbox', { name: 'How many in the case' }), '4');
+    expect(view.region.getByText('Case of 4 bags of 25 kg (100 kg)')).toBeInTheDocument();
+    await saveAndConfirm(view);
+    await waitFor(() => { expect(source.writes.some(write => write.op === 'draft-unit')).toBe(true); });
+    expect(source.writes[0]).toMatchObject({ op: 'ingredient-save', data: { packCount: 4, packUnit: 'bag', unit: 'case' } });
+    expect(source.draft?.['i-flour']).toEqual({ qty: 3, unit: 'kg' });
+  });
+
+  it('Case → Single writes no count, and the unit the line meant stays: the open line is frozen in «case»', async () => {
+    const source = seeded();
+    source.draft = { 'i-case': { qty: 2 } };
+    const view = await open('/suppliers/ingredient/i-case', source);
+    await view.user.selectOptions(view.region.getByRole('combobox', { name: 'Comes as' }), 'single');
+    await saveAndConfirm(view);
+    await waitFor(() => { expect(source.writes.some(write => write.op === 'draft-unit')).toBe(true); });
+    expect(source.writes[0]).toMatchObject({ op: 'ingredient-save', data: { packCount: null, unit: 'bag' } });
+    expect(source.draft?.['i-case']).toEqual({ qty: 2, unit: 'case' });
+  });
+
+  it('a Case in an Italian venue writes the Italian words, whatever the screen says', async () => {
+    const view = await open('/suppliers/ingredient/new', seeded(), { session: { location: { country: 'IT' }, language: 'en' } });
+    await view.user.type(nameBox(view.region), 'Passata');
+    await view.user.selectOptions(view.region.getByRole('combobox', { name: 'Comes as' }), 'carton');
+    await view.user.type(view.region.getByRole('textbox', { name: 'How many in the case' }), '6');
+    expect(view.region.getByRole('combobox', { name: 'What is inside the case' })).toHaveValue('busta');
+    await saveAndConfirm(view);
+    await waitFor(() => { expect(view.source.writes).toHaveLength(1); });
+    expect(view.source.writes[0]).toMatchObject({ data: { packCount: 6, packUnit: 'busta', unit: 'cartone' } });
+  });
+
+  it('a NEW ingredient', async () => {
+    const view = await open('/suppliers/ingredient/new');
+    await view.user.type(nameBox(view.region), 'Salt');
+    await view.user.selectOptions(view.region.getByRole('combobox', { name: 'Comes as' }), 'single');
+    await saveAndConfirm(view);
+    await waitFor(() => { expect(view.source.writes).toHaveLength(1); });
+    expect(view.source.writes[0]).toEqual({
+      op: 'ingredient-save',
+      id: expect.stringMatching(/^new-ingredient-/),
+      data: {
+        name: 'Salt', shortName: '', supplierId: 'no-supplier', brand: '', weight: '', category: 'Other', unit: '', active: true, kind: 'ingredient',
+        ...drained,
+        allergens: [], mayContain: [], allergensCheckedAt: '', packIngredients: '',
+        nutrition: { kj: null, kcal: null, fat: null, saturates: null, carbs: null, sugars: null, protein: null, salt: null },
+      },
+      price: null,
+    });
+  });
+
+  it('a NEW packaging item, started on a supplier', async () => {
+    const view = await open('/suppliers/ingredient/new?kind=packaging&supplier=s-zed');
+    expect(view.region.getByRole('combobox', { name: 'Supplier' })).toHaveValue('s-zed');
+    await view.user.type(nameBox(view.region), 'Box 30x40');
+    await view.user.selectOptions(view.region.getByRole('combobox', { name: 'Comes as' }), 'single');
+    await view.user.click(view.region.getByRole('button', { name: 'Save' }));
+    await view.user.click(within(await dialogOf('Save packaging?')).getByRole('button', { name: 'Save' }));
+    await waitFor(() => { expect(view.source.writes).toHaveLength(1); });
+    expect(view.source.writes[0]).toMatchObject({ data: { name: 'Box 30x40', supplierId: 's-zed', unit: '', active: true, kind: 'packaging' } });
+  });
+
+  it('an existing packaging item stays packaging', async () => {
+    const view = await open('/suppliers/ingredient/i-box');
+    await view.user.type(view.region.getByRole('textbox', { name: 'Brand' }), 'X');
+    await view.user.click(view.region.getByRole('button', { name: 'Save' }));
+    await view.user.click(within(await dialogOf('Save packaging?')).getByRole('button', { name: 'Save' }));
+    await waitFor(() => { expect(view.source.writes).toHaveLength(1); });
+    expect(view.source.writes[0]).toMatchObject({ data: { kind: 'packaging', brand: 'X' } });
+  });
+
+  it('an employee saves the same card', async () => {
+    const view = await open('/suppliers/ingredient/i-flour', seeded(), { session: { canManage: false, role: 'staff', isOwner: false } });
+    await view.user.type(view.region.getByRole('textbox', { name: 'Brand' }), 'X');
+    await saveAndConfirm(view);
+    await waitFor(() => { expect(view.source.writes).toHaveLength(1); });
+  });
+
+  it('goes back to the list, says it was saved, and the row owes the focus', async () => {
+    const view = await open('/suppliers/ingredient/new');
+    await view.user.type(nameBox(view.region), 'Salt');
+    await view.user.selectOptions(view.region.getByRole('combobox', { name: 'Comes as' }), 'single');
+    await saveAndConfirm(view);
+    await waitFor(() => { expect(view.router.state.location.pathname).toBe('/suppliers'); });
+    expect(await screen.findByText('Ingredient saved.')).toBeInTheDocument();
+    expect(await main().findByRole('button', { name: /^Salt/ })).toBeInTheDocument();
+    await waitFor(() => { expect(screen.queryByRole('region', { name: 'New ingredient' })).not.toBeInTheDocument(); });
+  });
+
+  it('saves while the network is away: on screen at once, busy until the server answers', async () => {
+    const source = seeded();
+    const release = source.holdWrites();
+    const view = await open('/suppliers/ingredient/i-flour', source);
+    await view.user.type(view.region.getByRole('textbox', { name: 'Brand' }), 'X');
+    await saveAndConfirm(view);
+    await waitFor(() => { expect(view.router.state.location.pathname).toBe('/suppliers'); });
+    expect(isBusy()).toBe(true);
+    release();
+    await waitFor(() => { expect(isBusy()).toBe(false); });
+  });
+
+  it('a refused write is said, by the store\'s sentence', async () => {
+    const source = seeded();
+    source.refuseWrites.ingredientSave = true;
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const view = await open('/suppliers/ingredient/i-flour', source);
+    await view.user.type(view.region.getByRole('textbox', { name: 'Brand' }), 'X');
+    await saveAndConfirm(view);
+    expect(await screen.findByText('Could not save “Flour”. Check your network and try again.')).toBeInTheDocument();
+  });
+
+  it('ignores a second tap on Save while the question is open', async () => {
+    const view = await open('/suppliers/ingredient/i-flour');
+    await view.user.type(view.region.getByRole('textbox', { name: 'Brand' }), 'X');
+    const save = view.region.getByRole('button', { name: 'Save' });
+    await view.user.click(save);
+    await dialogOf('Save ingredient?');
+    await act(async () => { save.click(); });
+    expect(screen.getAllByRole('alertdialog')).toHaveLength(1);
+  });
+});
+
+describe('«+ New supplier…» in a dialog above the card', () => {
+  const NEW = '+ New supplier…';
+
+  it('offers it last in the menu, after «No supplier» first and the suppliers by the name shown', async () => {
+    const { region } = await open('/suppliers/ingredient/i-flour');
+    const options = within(region.getByRole('combobox', { name: 'Supplier' })).getAllByRole('option').map(option => option.textContent);
+    expect(options).toEqual(['— No supplier —', 'Alpine', 'Zed Dairy', NEW]);
+  });
+
+  it('⚠️ opens the supplier card in a dialog, keeps every keystroke underneath, and selects the new supplier', async () => {
+    const view = await open('/suppliers/ingredient/new');
+    await view.user.type(nameBox(view.region), 'Ricotta');
+    await view.user.selectOptions(view.region.getByRole('combobox', { name: 'Supplier' }), NEW);
+    const dialog = within(await screen.findByRole('dialog', { name: 'New supplier' }));
+    // The address did not change.
+    expect(view.router.state.location.pathname).toBe('/suppliers/ingredient/new');
+    await view.user.type(dialog.getByRole('textbox', { name: 'Name on invoices' }), 'Latteria Rossi');
+    await view.user.click(dialog.getByRole('button', { name: 'Save' }));
+    await view.user.click(within(await dialogOf('Save supplier?')).getByRole('button', { name: 'Save' }));
+    await waitFor(() => { expect(screen.queryByRole('dialog', { name: 'New supplier' })).not.toBeInTheDocument(); });
+    expect(view.router.state.location.pathname).toBe('/suppliers/ingredient/new');
+    expect(nameBox(view.region)).toHaveValue('Ricotta');
+    const menu = view.region.getByRole('combobox', { name: 'Supplier' });
+    expect(within(menu).getByRole('option', { name: 'Latteria Rossi' })).toBeInTheDocument();
+    const made = [...view.source.suppliers.keys()].find(key => key.startsWith('new-supplier-'));
+    expect(menu).toHaveValue(made);
+
+    await view.user.selectOptions(view.region.getByRole('combobox', { name: 'Comes as' }), 'single');
+    await saveAndConfirm(view);
+    await waitFor(() => { expect(view.source.writes.some(write => write.op === 'ingredient-save')).toBe(true); });
+    const saved = view.source.writes.find(write => write.op === 'ingredient-save');
+    expect(saved).toMatchObject({ data: { name: 'Ricotta', supplierId: made } });
+  });
+
+  it('⚠️ cancelled, the previous value comes back and the marker is never saved', async () => {
+    const view = await open('/suppliers/ingredient/i-flour');
+    await view.user.selectOptions(view.region.getByRole('combobox', { name: 'Supplier' }), NEW);
+    const dialog = within(await screen.findByRole('dialog', { name: 'New supplier' }));
+    await view.user.click(dialog.getByRole('button', { name: 'Back' }));
+    await waitFor(() => { expect(screen.queryByRole('dialog', { name: 'New supplier' })).not.toBeInTheDocument(); });
+    expect(view.region.getByRole('combobox', { name: 'Supplier' })).toHaveValue('s-alp');
+    // Nothing was typed on the card: leaving it asks nothing.
+    expect(isBusy()).toBe(false);
+    await view.user.type(view.region.getByRole('textbox', { name: 'Brand' }), 'X');
+    await saveAndConfirm(view);
+    await waitFor(() => { expect(view.source.writes).toHaveLength(1); });
+    expect(view.source.writes[0]).toMatchObject({ data: { supplierId: 's-alp' } });
+  });
+
+  it('a supplier card with typing asks «Discard changes?» before it closes, and Escape does not close it', async () => {
+    const view = await open('/suppliers/ingredient/i-flour');
+    await view.user.selectOptions(view.region.getByRole('combobox', { name: 'Supplier' }), NEW);
+    const dialog = within(await screen.findByRole('dialog', { name: 'New supplier' }));
+    await view.user.type(dialog.getByRole('textbox', { name: 'Name on invoices' }), 'Rossi');
+    await view.user.keyboard('{Escape}');
+    expect(screen.getByRole('dialog', { name: 'New supplier' })).toBeInTheDocument();
+    await view.user.click(dialog.getByRole('button', { name: 'Back' }));
+    await view.user.click(within(await dialogOf('Discard changes?')).getByRole('button', { name: 'Discard' }));
+    await waitFor(() => { expect(screen.queryByRole('dialog', { name: 'New supplier' })).not.toBeInTheDocument(); });
+    expect(view.source.writes).toEqual([]);
+  });
+});
+
+describe('leaving the card', () => {
+  it('with nothing typed leaves in silence, to the list', async () => {
+    const view = await open('/suppliers/ingredient/new');
+    await view.user.click(view.region.getByRole('button', { name: 'Back' }));
+    await waitFor(() => { expect(view.router.state.location.pathname).toBe('/suppliers'); });
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+  });
+
+  it('⚠️ choosing a menu word and choosing it back is not a change', async () => {
+    const view = await open('/suppliers/ingredient/i-flour');
+    await view.user.selectOptions(view.region.getByRole('combobox', { name: 'Comes as' }), 'carton');
+    await view.user.selectOptions(view.region.getByRole('combobox', { name: 'Comes as' }), 'single');
+    await view.user.click(view.region.getByRole('button', { name: 'Back' }));
+    await waitFor(() => { expect(view.router.state.location.pathname).toBe('/suppliers'); });
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+  });
+
+  it('with something typed asks «Discard changes?»: Cancel stays, Discard leaves and writes nothing', async () => {
+    const view = await open('/suppliers/ingredient/i-flour');
+    await view.user.type(nameBox(view.region), '!');
+    await view.user.click(view.region.getByRole('button', { name: 'Back' }));
+    const dialog = await dialogOf('Discard changes?');
+    expect(within(dialog).getByText(/What you typed on this card is not saved/)).toBeInTheDocument();
+    await view.user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    expect(view.router.state.location.pathname).toBe('/suppliers/ingredient/i-flour');
+    expect(nameBox(view.region)).toHaveValue('Flour 00!');
+    await view.user.click(view.region.getByRole('button', { name: 'Back' }));
+    await view.user.click(within(await dialogOf('Discard changes?')).getByRole('button', { name: 'Discard' }));
+    await waitFor(() => { expect(view.router.state.location.pathname).toBe('/suppliers'); });
+    expect(view.source.writes).toEqual([]);
+  });
+
+  it('asks on the browser\'s Back and on the rail too, and holds the app busy while something is unsaved', async () => {
+    const view = await open('/suppliers/ingredient/i-flour');
+    expect(isBusy()).toBe(false);
+    await view.user.type(nameBox(view.region), '!');
+    expect(isBusy()).toBe(true);
+    act(() => { void view.router.navigate('/suppliers/packaging'); });
+    await view.user.click(within(await dialogOf('Discard changes?')).getByRole('button', { name: 'Cancel' }));
+    expect(view.router.state.location.pathname).toBe('/suppliers/ingredient/i-flour');
+    await view.user.click(within(screen.getByRole('navigation', { name: 'All sections' })).getByRole('link', { name: 'Recipes' }));
+    expect(await dialogOf('Discard changes?')).toBeInTheDocument();
+  });
+
+  it('⚠️ copies ONCE: the item changed on another phone afterwards never replaces what is on the card', async () => {
+    const view = await open('/suppliers/ingredient/i-flour');
+    await view.user.type(view.region.getByRole('textbox', { name: 'Brand' }), '!');
+    view.source.ingredients.set('i-flour', { ...FLOUR, brand: 'Other', name: 'Renamed' });
+    act(() => { view.source.push(); });
+    expect(view.region.getByRole('textbox', { name: 'Brand' })).toHaveValue('Caputo!');
+    expect(nameBox(view.region)).toHaveValue('Flour 00');
+  });
+});
+
+// Mise 2, 14 Nov 2026: the card's «Type» menu — ingredient, packaging, resale, other — on the working copy, written by Save.
+describe('the «Type» menu', () => {
+  const typeMenu = (region: Region) => region.getByRole('combobox', { name: 'Type' });
+
+  it('offers the four kinds and opens on the item’s own', async () => {
+    const { region } = await open('/suppliers/ingredient/i-flour');
+    expect(within(typeMenu(region)).getAllByRole('option').map(node => node.textContent)).toEqual(['Ingredient', 'Packaging', 'Resale', 'Other']);
+    expect(typeMenu(region)).toHaveValue('ingredient');
+  });
+
+  it('⚠️ a change of type is an unsaved edit: Save asks (with the new kind’s words) and writes it, the allergens untouched', async () => {
+    const view = await open('/suppliers/ingredient/i-flour');
+    expect(view.region.getByRole('button', { name: /^Allergens/ })).toBeInTheDocument();
+    await view.user.selectOptions(typeMenu(view.region), 'resale');
+    expect(isBusy()).toBe(true);
+    // Resale hides what packaging hides: no allergens to declare.
+    expect(view.region.queryByRole('button', { name: /^Allergens/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Edit resale item' })).toBeInTheDocument();
+    // The bin follows the menu too, so the title and the bin never name two different kinds.
+    expect(view.region.getByRole('button', { name: 'Delete resale item' })).toBeInTheDocument();
+    await view.user.click(view.region.getByRole('button', { name: 'Save' }));
+    await view.user.click(within(await dialogOf('Save resale item?')).getByRole('button', { name: 'Save' }));
+    await waitFor(() => { expect(view.source.writes).toHaveLength(1); });
+    expect(view.source.writes[0]).toMatchObject({ op: 'ingredient-save', id: 'i-flour', data: { kind: 'resale' } });
+    const data = (view.source.writes[0] as { data: Record<string, unknown> }).data;
+    for (const key of ['allergens', 'mayContain', 'allergensCheckedAt', 'nutrition', 'packIngredients']) expect(data, key).not.toHaveProperty(key);
+  });
+
+  it('back to the kind it opened as is no edit at all: Back asks nothing', async () => {
+    const view = await open('/suppliers/ingredient/i-box');
+    await view.user.selectOptions(typeMenu(view.region), 'other');
+    expect(isBusy()).toBe(true);
+    await view.user.selectOptions(typeMenu(view.region), 'packaging');
+    expect(isBusy()).toBe(false);
+  });
+
+  it('a packaging item turned into an ingredient shows the allergens again', async () => {
+    const view = await open('/suppliers/ingredient/i-box');
+    expect(view.region.queryByRole('button', { name: /^Allergens/ })).not.toBeInTheDocument();
+    await view.user.selectOptions(typeMenu(view.region), 'ingredient');
+    expect(view.region.getByRole('button', { name: /^Allergens/ })).toBeInTheDocument();
+  });
+
+  it('says the four kinds in Italian', async () => {
+    const { region } = await open('/suppliers/ingredient/i-flour', seeded(), { lang: 'it', session: { language: 'it' } });
+    const menu = region.getByRole('combobox', { name: 'Tipo' });
+    expect(within(menu).getAllByRole('option').map(node => node.textContent)).toEqual(['Ingrediente', 'Imballaggio', 'Rivendita', 'Altro']);
+  });
+});
+
+// Mise 2, 15 Nov 2026: a FOOD item saved as packaging, resale or other while recipes use it — the Save question says so first,
+// with the delete's own count. A warning, not a refusal.
+describe('⚠️ a food item that recipes use, turned into another kind', () => {
+  const typeMenu = (region: Region) => region.getByRole('combobox', { name: /^(Type|Tipo)$/ });
+  const WARNING_1 = 'It is used in 1 recipe: it can no longer be chosen as an ingredient in recipes and its allergens will no longer be shown. Save anyway?';
+
+  it('used in 1 recipe: the question says so (singular), and Save writes the new kind', async () => {
+    const source = seeded();
+    source.usage = { recipes: 1, products: 4 };
+    const view = await open('/suppliers/ingredient/i-flour', source);
+    await view.user.selectOptions(typeMenu(view.region), 'resale');
+    await view.user.click(view.region.getByRole('button', { name: 'Save' }));
+    const dialog = await dialogOf('Save resale item?');
+    expect(within(dialog).getByText(WARNING_1)).toBeInTheDocument();
+    expect(source.usageCalls).toEqual(['i-flour']);
+    await view.user.click(within(dialog).getByRole('button', { name: 'Save' }));
+    await waitFor(() => { expect(source.writes).toHaveLength(1); });
+    expect(source.writes[0]).toMatchObject({ op: 'ingredient-save', id: 'i-flour', data: { kind: 'resale' } });
+  });
+
+  it.each(['packaging', 'other'] as const)('used in several recipes: the plural (to %s)', async next => {
+    const source = seeded();
+    source.usage = { recipes: 3, products: 0 };
+    const view = await open('/suppliers/ingredient/i-flour', source);
+    await view.user.selectOptions(typeMenu(view.region), next);
+    await view.user.click(view.region.getByRole('button', { name: 'Save' }));
+    const dialog = await screen.findByRole('alertdialog');
+    expect(within(dialog).getByText(/^It is used in 3 recipes: it can no longer be chosen as an ingredient in recipes/)).toBeInTheDocument();
+  });
+
+  it.each([[1, 'È usato in 1 ricetta:'], [2, 'È usato in 2 ricette:']] as const)('says it in Italian (%i)', async (n, words) => {
+    const source = seeded();
+    source.usage = { recipes: n, products: 0 };
+    const view = await open('/suppliers/ingredient/i-flour', source, { lang: 'it', session: { language: 'it' } });
+    await view.user.selectOptions(typeMenu(view.region), 'other');
+    await view.user.click(view.region.getByRole('button', { name: 'Salva' }));
+    const dialog = await screen.findByRole('alertdialog');
+    expect(within(dialog).getByText(
+      `${words} non si potrà più scegliere come ingrediente nelle ricette e i suoi allergeni non verranno più mostrati. Salvare comunque?`,
+    )).toBeInTheDocument();
+  });
+
+  it('used in no recipe: the plain question, no warning', async () => {
+    const source = seeded();
+    source.usage = { recipes: 0, products: 2 };
+    const view = await open('/suppliers/ingredient/i-flour', source);
+    await view.user.selectOptions(typeMenu(view.region), 'packaging');
+    await view.user.click(view.region.getByRole('button', { name: 'Save' }));
+    const dialog = await dialogOf('Save packaging?');
+    expect(within(dialog).getByText('Save “Flour”?')).toBeInTheDocument();
+    expect(within(dialog).queryByText(/recipe/)).not.toBeInTheDocument();
+  });
+
+  it('⚠️ the count could not be made (offline): it says it MAY be used, never nothing', async () => {
+    const source = seeded();
+    source.usage = { recipes: null, products: null };
+    const view = await open('/suppliers/ingredient/i-flour', source);
+    await view.user.selectOptions(typeMenu(view.region), 'resale');
+    await view.user.click(view.region.getByRole('button', { name: 'Save' }));
+    const dialog = await dialogOf('Save resale item?');
+    expect(within(dialog).getByText(
+      'It may be used in some recipes: it can no longer be chosen as an ingredient in recipes and its allergens will no longer be shown. Save anyway?',
+    )).toBeInTheDocument();
+  });
+
+  it('Italian «may be used» words', async () => {
+    const source = seeded();
+    source.usage = { recipes: null, products: null };
+    const view = await open('/suppliers/ingredient/i-flour', source, { lang: 'it', session: { language: 'it' } });
+    await view.user.selectOptions(typeMenu(view.region), 'resale');
+    await view.user.click(view.region.getByRole('button', { name: 'Salva' }));
+    const dialog = await screen.findByRole('alertdialog');
+    expect(within(dialog).getByText(/^Potrebbe essere usato in alcune ricette: non si potrà più scegliere come ingrediente nelle ricette/)).toBeInTheDocument();
+  });
+
+  it('while the count runs, Save is busy and nothing is asked yet', async () => {
+    const source = seeded();
+    source.usage = { recipes: 1, products: 0 };
+    const release = source.holdUsage();
+    const view = await open('/suppliers/ingredient/i-flour', source);
+    await view.user.selectOptions(typeMenu(view.region), 'resale');
+    await view.user.click(view.region.getByRole('button', { name: 'Save' }));
+    await waitFor(() => { expect(source.usageCalls).toEqual(['i-flour']); });
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(view.region.getByRole('button', { name: /^Save/ })).toHaveAttribute('aria-disabled', 'true');
+    act(() => { release(); });
+    expect(within(await dialogOf('Save resale item?')).getByText(WARNING_1)).toBeInTheDocument();
+  });
+
+  it('⚠️ what is typed while the count runs is what is saved (the card is read again after it)', async () => {
+    const source = seeded();
+    source.usage = { recipes: 1, products: 0 };
+    const release = source.holdUsage();
+    const view = await open('/suppliers/ingredient/i-flour', source);
+    await view.user.selectOptions(typeMenu(view.region), 'resale');
+    await view.user.click(view.region.getByRole('button', { name: 'Save' }));
+    await waitFor(() => { expect(source.usageCalls).toEqual(['i-flour']); });
+    await view.user.clear(nameBox(view.region));
+    await view.user.type(nameBox(view.region), 'Flour 00 Caputo');
+    act(() => { release(); });
+    await view.user.click(within(await dialogOf('Save resale item?')).getByRole('button', { name: 'Save' }));
+    await waitFor(() => { expect(source.writes).toHaveLength(1); });
+    expect(source.writes[0]).toMatchObject({ op: 'ingredient-save', id: 'i-flour', data: { name: 'Flour 00 Caputo', kind: 'resale' } });
+  });
+
+  it('the type put back to Ingredient while the count runs: the plain question, saved as an ingredient', async () => {
+    const source = seeded();
+    source.usage = { recipes: 2, products: 0 };
+    const release = source.holdUsage();
+    const view = await open('/suppliers/ingredient/i-flour', source);
+    await view.user.selectOptions(typeMenu(view.region), 'other');
+    await view.user.type(nameBox(view.region), ' B');
+    await view.user.click(view.region.getByRole('button', { name: 'Save' }));
+    await waitFor(() => { expect(source.usageCalls).toEqual(['i-flour']); });
+    await view.user.selectOptions(typeMenu(view.region), 'ingredient');
+    act(() => { release(); });
+    const dialog = await dialogOf('Save ingredient?');
+    expect(within(dialog).queryByText(/recipe/)).not.toBeInTheDocument();
+    await view.user.click(within(dialog).getByRole('button', { name: 'Save' }));
+    await waitFor(() => { expect(source.writes).toHaveLength(1); });
+    expect(source.writes[0]).toMatchObject({ data: { name: 'Flour 00 B', kind: 'ingredient' } });
+  });
+
+  it('⚠️ a way out taken while the count runs wins: «Discard changes?» stays, Save asks nothing', async () => {
+    const source = seeded();
+    source.usage = { recipes: 1, products: 0 };
+    const release = source.holdUsage();
+    const view = await open('/suppliers/ingredient/i-flour', source);
+    await view.user.selectOptions(typeMenu(view.region), 'resale');
+    await view.user.click(view.region.getByRole('button', { name: 'Save' }));
+    await waitFor(() => { expect(source.usageCalls).toEqual(['i-flour']); });
+    await view.user.click(within(screen.getByRole('navigation', { name: 'All sections' })).getByRole('link', { name: 'Recipes' }));
+    const discard = await dialogOf('Discard changes?');
+    act(() => { release(); });
+    await act(async () => { await new Promise(resolve => { setTimeout(resolve, 50); }); });
+    expect(screen.getAllByRole('alertdialog')).toEqual([discard]);
+    expect(screen.queryByRole('alertdialog', { name: 'Save resale item?' })).not.toBeInTheDocument();
+    expect(source.writes).toEqual([]);
+  });
+
+  it('a change between two non-food kinds asks no count and says nothing of recipes', async () => {
+    const source = seeded();
+    source.usage = { recipes: 5, products: 0 };
+    const view = await open('/suppliers/ingredient/i-box', source);
+    await view.user.selectOptions(typeMenu(view.region), 'other');
+    await view.user.click(view.region.getByRole('button', { name: 'Save' }));
+    const dialog = await dialogOf('Save item?');
+    expect(within(dialog).getByText('Save “Cake box”?')).toBeInTheDocument();
+    expect(source.usageCalls).toEqual([]);
+  });
+
+  it('a food item saved as food asks no count', async () => {
+    const source = seeded();
+    source.usage = { recipes: 5, products: 0 };
+    const view = await open('/suppliers/ingredient/i-flour', source);
+    await view.user.clear(nameBox(view.region));
+    await view.user.type(nameBox(view.region), 'Flour 0');
+    await saveAndConfirm(view);
+    await waitFor(() => { expect(source.writes).toHaveLength(1); });
+    expect(source.usageCalls).toEqual([]);
+  });
+
+  it('a NEW item made as resale asks no count (no recipe can name it yet)', async () => {
+    const source = seeded();
+    source.usage = { recipes: 5, products: 0 };
+    const view = await open('/suppliers/ingredient/new', source);
+    await view.user.type(nameBox(view.region), 'Cola');
+    await view.user.selectOptions(view.region.getByRole('combobox', { name: 'Comes as' }), 'single');
+    await view.user.selectOptions(typeMenu(view.region), 'resale');
+    await view.user.click(view.region.getByRole('button', { name: 'Save' }));
+    const dialog = await dialogOf('Save resale item?');
+    expect(within(dialog).getByText('Save “Cola”?')).toBeInTheDocument();
+    expect(source.usageCalls).toEqual([]);
+  });
+
+  it('⚠️ Cancel keeps the edit on screen, unsaved: nothing written, the menu still on the new kind, leaving still asks', async () => {
+    const source = seeded();
+    source.usage = { recipes: 2, products: 0 };
+    const view = await open('/suppliers/ingredient/i-flour', source);
+    await view.user.selectOptions(typeMenu(view.region), 'resale');
+    await view.user.click(view.region.getByRole('button', { name: 'Save' }));
+    await view.user.click(within(await dialogOf('Save resale item?')).getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => { expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument(); });
+    expect(source.writes).toEqual([]);
+    expect(typeMenu(view.region)).toHaveValue('resale');
+    expect(screen.getByRole('heading', { name: 'Edit resale item' })).toBeInTheDocument();
+    expect(isBusy()).toBe(true);
+    // Save again asks again, and counts again.
+    await view.user.click(view.region.getByRole('button', { name: 'Save' }));
+    expect(within(await dialogOf('Save resale item?')).getByText(/^It is used in 2 recipes:/)).toBeInTheDocument();
+    expect(source.usageCalls).toEqual(['i-flour', 'i-flour']);
+  });
+});

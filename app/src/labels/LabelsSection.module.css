@@ -1,0 +1,233 @@
+/* «Labels»: one readable column (the Home's width), full width on a phone. Each screen is a card with the form bar on top,
+   drawn like the Recipe catalogue's HACCP list.
+
+   ⚠️ NOTHING ON A CARD MAY CLIP (no `overflow`): the form bar sticks to the top of the shell's scrolling area, and a clipping
+   ancestor would turn it into an ordinary row. */
+
+.column {
+  width: 100%;
+  max-width: 40rem;
+}
+
+.card {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+  padding: var(--s4);
+}
+
+/* ── The two choices: big tiles, one under the other, the whole tile the target. ── */
+
+.choices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  margin: 0;
+  padding: var(--s4);
+  list-style: none;
+}
+
+.choice {
+  display: flex;
+  align-items: center;
+  gap: var(--s4);
+  box-sizing: border-box;
+  width: 100%;
+  min-height: calc(var(--hit-lg) * 2);
+  padding: var(--s4);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  color: var(--ink);
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.choice:active {
+  background: var(--sunken);
+}
+
+.choice:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (hover: hover) {
+  /* The colour again: base.css's `a:hover` would otherwise outweigh `.choice` and tint the words. */
+  .choice:hover {
+    border-color: var(--accent);
+    background: var(--bg);
+    color: var(--ink);
+  }
+}
+
+/* The icon in its tinted square, centred on the text beside it. */
+.choiceIcon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: var(--hit);
+  height: var(--hit);
+  border-radius: var(--r-md);
+  background: var(--accent-tint);
+  color: var(--accent-ink);
+}
+
+.choiceIcon svg {
+  width: 24px;
+  height: 24px;
+}
+
+.choiceText {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--s1);
+  min-width: 0;
+}
+
+.choiceTitle {
+  font-size: var(--fs-lg);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.choiceSub {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  overflow-wrap: anywhere;
+}
+
+/* ── The recipes ── */
+
+/* Which recipes are shown (the HACCP list's category). */
+.scope {
+  margin: 0;
+  color: var(--ink-2);
+  font-weight: 600;
+}
+
+.quiet {
+  margin: 0;
+  color: var(--ink-2);
+}
+
+/* The search: the icon and the box on one line, centred. */
+.search {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  min-height: var(--hit);
+  padding: 0 var(--s3);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink-3);
+}
+
+.search:focus-within {
+  border-color: var(--accent);
+}
+
+.search svg {
+  flex: none;
+  width: 18px;
+  height: 18px;
+}
+
+.input {
+  flex: 1;
+  min-width: 0;
+  min-height: var(--hit);
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: none;
+  color: var(--ink);
+  font: var(--fs-md)/1.2 var(--font);
+}
+
+.input::placeholder {
+  color: var(--ink-3);
+}
+
+.rows {
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  list-style: none;
+}
+
+.item {
+  border-bottom: 1px solid var(--line);
+}
+
+.item:last-child {
+  border-bottom: 0;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  width: 100%;
+  min-height: var(--hit-lg);
+  padding: var(--s2) var(--s3);
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.row:active {
+  background: var(--sunken);
+}
+
+.row:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
+}
+
+@media (hover: hover) {
+  .row:hover {
+    background: var(--sunken);
+  }
+}
+
+.name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: var(--fs-lg);
+  font-weight: 600;
+}
+
+/* Qualified, so it outranks base.css's `svg.lucide` size of 20px. */
+.row .chevron,
+.choice .chevron {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  color: var(--ink-3);
+}
+
+@media (min-width: 1000px) {
+  .body,
+  .choices {
+    padding: var(--s6);
+  }
+}

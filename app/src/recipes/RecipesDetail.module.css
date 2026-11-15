@@ -1,0 +1,35 @@
+/* The right-hand side of the Recipe catalogue. With nothing chosen: a quiet card that says what to do.
+   While a recipe is awaited, or missing: the same card as a recipe, so the pane does not jump. */
+
+.prompt {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s2);
+  min-height: 240px;
+  padding: var(--s6);
+  border: 1px dashed var(--line-2);
+  border-radius: var(--r-lg);
+  color: var(--ink-2);
+  text-align: center;
+}
+
+.promptTitle {
+  color: var(--ink);
+  font-size: var(--fs-lg);
+  font-weight: 650;
+}
+
+.waiting,
+.missing {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+.loading {
+  padding: var(--s6);
+  color: var(--ink-2);
+}

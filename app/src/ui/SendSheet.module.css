@@ -1,0 +1,55 @@
+/* The two roads of the send sheet: big rows, stacked. A mis-tap here sends something real down a road nobody
+   chose, so the targets are the large touch height. Icon and text sit on one flex row, centred on each other. */
+
+.roads {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+.road {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  width: 100%;
+  min-height: var(--hit-lg);
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.road[data-hovered] {
+  background: var(--bg);
+}
+
+.road[data-pressed] {
+  background: var(--sunken);
+}
+
+.road[data-focus-visible] {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.text {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.name {
+  font-weight: 600;
+}
+
+/* What the road costs, said before it is taken. */
+.note {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}

@@ -245,6 +245,25 @@ test('the devices create/update rule costs exactly 1 read — member()\'s users 
   assert.equal(costOf('member') + accessesIn(block).length, 1, 'the devices rule must cost exactly 1 document read');
 });
 
+test('the todos rules cost exactly 1 read — member() reads users/{uid}, nothing else (Mise 2 «Da fare»)', () => {
+  const MATCH = 'match /todos/{id}';
+  const start = CODE.indexOf(MATCH);
+  assert.notEqual(start, -1, 'firestore.rules has no match /todos/{id} — this test is checking nothing');
+  const open = CODE.indexOf('{', start + MATCH.length);
+  let depth = 0;
+  let end = -1;
+  for (let i = open; i < CODE.length; i++) {
+    if (CODE[i] === '{') depth++;
+    else if (CODE[i] === '}' && --depth === 0) { end = i; break; }
+  }
+  const block = CODE.slice(open + 1, end);
+  // The block's own shape helper is inside it, so this counts it too.
+  assert.deepEqual(accessesIn(block), [], 'the todos rules must not read a document themselves');
+  assert.match(block, /\bmember\(lid\)/, 'the todos rules must go through member(lid)');
+  assert.doesNotMatch(block, /\bcanUse\(|\bcanManage\(/, 'the to-do list is every member\'s, behind no section or role');
+  assert.equal(costOf('member') + accessesIn(block).length, 1, 'every todos rule must cost exactly 1 document read');
+});
+
 test('the errors create rule costs exactly 1 read — member()\'s users get, nothing else', () => {
   const MATCH = 'match /errors/{id}';
   const start = CODE.indexOf(MATCH);

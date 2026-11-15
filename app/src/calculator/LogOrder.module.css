@@ -1,0 +1,29 @@
+/* A log's order: the client's name, the products under it with their quantities in bold. */
+
+.order {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+}
+
+.customer {
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.item {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  overflow-wrap: anywhere;
+}
+
+.item strong {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}

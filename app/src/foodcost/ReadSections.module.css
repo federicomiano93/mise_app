@@ -1,0 +1,132 @@
+/* The read view's rows: the label on the left (muted), the value on the right — the summary panel's rows. A long value wraps
+   (296px), it never overflows. */
+
+.list {
+  align-self: stretch;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s1) var(--s3);
+  padding: var(--s2) 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.row:last-child {
+  border-bottom: 0;
+}
+
+.row dt {
+  flex: 1 1 8rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.row dd {
+  min-width: 0;
+  max-width: 100%;
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* A line whose recipe or item no longer exists. ⚠️ `.row dt.missing`, not `.missing`: the bare class lost to `.row dt` and stayed grey. */
+.row dt.missing {
+  color: var(--danger-ink);
+}
+
+/* A wrong cooked weight: the same red as the form's box, with no box to frame. */
+.invalid {
+  color: var(--danger-ink);
+}
+
+/* A line of «Made of» or of the packaging (step 3b, 11 Nov 2026): the name on a line of its own, then the amount with the money at
+   the right-hand end — the form's own layout — then the note. */
+.lineRow dt {
+  flex: 1 0 100%;
+  color: var(--ink);
+  font-size: var(--fs-md);
+  font-weight: 600;
+}
+
+.row dd.amount {
+  display: flex;
+  flex: 1 0 100%;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s1) var(--s3);
+  font-weight: 400;
+  text-align: left;
+}
+
+/* The rate and what the amount costs (lineCost.ts): bold, tabular, pushed right; under the amount at 296px, never sideways. */
+.money {
+  min-width: 0;
+  margin-left: auto;
+  overflow-wrap: anywhere;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* A line's own words (only part priced, no longer exists, no piece weight) under its row, left-aligned on a line of their own; they
+   wrap at 296px. */
+.row dd.note {
+  flex: 1 0 100%;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  font-weight: 400;
+  text-align: left;
+}
+
+.empty {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  font-weight: 400;
+}
+
+.line {
+  margin: 0;
+  color: var(--ink);
+}
+
+.block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  align-self: stretch;
+}
+
+.block .note {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.warn {
+  margin: 0;
+  color: var(--danger-ink);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+/* The cooking warning's live region, always on the page. Empty, it takes no room: it cancels the block's gap, and the warning
+   puts the gap back above itself. */
+.live {
+  margin-top: calc(-1 * var(--s2));
+}
+
+.live > .warn {
+  padding-top: var(--s2);
+}

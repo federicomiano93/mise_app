@@ -1,0 +1,24 @@
+/* The foot of «Made of»: «Raw dough» on the left, weight and money on the right, on the page's own ground so it reads as a total
+   and not as one more line. At 296px the figures drop under the label (wrap), right-aligned; never sideways. */
+
+.foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  align-self: stretch;
+  gap: var(--s1) var(--s3);
+  margin: 0;
+  padding: var(--s3);
+  border-radius: var(--r-md);
+  background: var(--bg);
+  color: var(--ink);
+  font-weight: 650;
+}
+
+.value {
+  min-width: 0;
+  margin-left: auto;
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}

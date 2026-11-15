@@ -1,0 +1,38 @@
+/* The boxes of the Calculator: a number read down a column, so same-width digits in the mono face and
+   right-aligned; and the selects that sit beside them. 48px tall (`--hit`), about 96px wide. The type is
+   18px: a field under 16px makes iOS zoom the page in when it is focused. */
+
+.box,
+.select {
+  flex: none;
+  min-height: var(--hit);
+  padding: 0 var(--s3);
+  border: 1.5px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: 450 var(--fs-lg) var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.box {
+  width: 96px;
+  text-align: right;
+}
+
+.select {
+  min-width: 72px;
+  cursor: pointer;
+}
+
+.box:focus,
+.select:focus {
+  border-color: var(--accent);
+}
+
+.box:disabled,
+.select:disabled {
+  border-color: var(--line);
+  background: var(--sunken);
+  color: var(--ink-2);
+}

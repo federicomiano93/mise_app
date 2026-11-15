@@ -1,0 +1,47 @@
+/* The date box of the holiday dialog: a label, the platform's own date field, and a line for what is wrong with it. */
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  margin-top: var(--s4);
+}
+
+.label {
+  font-weight: 600;
+}
+
+.date {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: var(--hit);
+  padding: 0 var(--s3);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+}
+
+.date:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Empty until there is something to say (the live region is on the page before it speaks): it takes no room then, and is not
+   `display: none`, which would take it out of the accessibility tree. */
+.problem {
+  margin: 0;
+  color: var(--danger-ink);
+  font-size: var(--fs-sm);
+}
+
+.problem:empty {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  clip-path: inset(50%);
+}

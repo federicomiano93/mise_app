@@ -1,0 +1,22 @@
+/* One section of the product's screen: a card of its own, the heading (with its «?») on top and what the section is filled with
+   under it. Nothing here clips (no `overflow`): the form bar above sticks to the top of the scroll area. */
+
+.card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s3);
+  min-width: 0;
+  padding: var(--s1) var(--s4) var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--sunken);
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  align-self: stretch;
+  gap: var(--s3);
+  min-width: 0;
+}

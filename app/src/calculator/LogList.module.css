@@ -1,0 +1,18 @@
+/* The Dough history's list: the Add button on its own line at the top, then the cards. */
+
+.add {
+  display: flex;
+}
+
+.add svg {
+  flex: none;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}

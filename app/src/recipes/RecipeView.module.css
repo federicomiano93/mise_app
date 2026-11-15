@@ -1,0 +1,365 @@
+/* One recipe's screen: a card holding the form bar and the cards of the recipe. On the split it is the
+   right-hand pane; below 1000px it replaces the list.
+
+   ⚠️ NOTHING ON THE SCREEN MAY CLIP (no `overflow`): the form bar sticks to the top of the scrolling
+   area, and a clipping ancestor would turn it into an ordinary row. */
+
+.screen {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+  padding: var(--s4);
+}
+
+@media (min-width: 1000px) {
+  .body {
+    padding: var(--s6);
+  }
+}
+
+/* A block of the screen: a static heading over its content. The heading is an h3, never a button —
+   there is nothing behind it to open. */
+.card {
+  padding: var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+.cardHeadRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  margin-bottom: var(--s2);
+}
+
+.cardHead {
+  margin-bottom: var(--s2);
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.cardHeadRow .cardHead {
+  margin-bottom: 0;
+}
+
+/* The way into the full-screen view: the only way (a tap on a row opens the row's menu). */
+.fullScreen {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: var(--hit);
+  height: var(--hit);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.fullScreen:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.fullScreen svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* Two aligned columns: the numbers end on the same edge whatever the length of the name, and the units
+   start on the same one. */
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+/* A tap anywhere on a row presses its name (RecipeView). */
+.table tbody tr {
+  cursor: pointer;
+}
+
+/* The second line of a split row has no click handler of its own. */
+.table tbody tr.splitSecond {
+  cursor: default;
+}
+
+.table tr {
+  border-bottom: 1px solid var(--line);
+}
+
+.table tbody tr:last-child {
+  border-bottom: 0;
+}
+
+/* A divider line under an ingredient: 2px in the ink, in place of the 1px separator. With border-collapse the row's own
+   border is the one drawn between its cells and the next row. Never under the last ingredient row (the model never says so). */
+.table tbody tr.divided {
+  border-bottom: 2px solid var(--ink-2);
+}
+
+/* The name of an ingredient is a button (RowMenu) that fills the cell and brings its own height and padding. */
+.rowHead {
+  padding: 0 var(--s3) 0 0;
+  font-weight: 500;
+  text-align: left;
+}
+
+.label {
+  padding: var(--s2) var(--s3) var(--s2) 0;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+
+.num {
+  padding: var(--s2) 0;
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.unit {
+  width: 4.5em;
+  padding: var(--s2) 0 var(--s2) var(--s2);
+  color: var(--ink-2);
+  text-align: left;
+  white-space: nowrap;
+}
+
+/* A row split in two parts (display only): its first line has no rule, the second line carries it. */
+.table tbody tr.noRule {
+  border-bottom: 0;
+}
+
+.splitLine {
+  padding: 0 0 var(--s2);
+  color: var(--accent-ink);
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.totalRow {
+  border-top: 2px solid var(--line-2);
+  border-bottom: 0;
+}
+
+.totalRow .label,
+.totalRow .num {
+  font-weight: 700;
+}
+
+/* Export, and Import into the Calculator under it: full width, secondary. Icon and label on one centred flex row. */
+.export,
+.importAction {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s2);
+  width: 100%;
+  min-height: var(--hit);
+  padding: 0 var(--s4);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .export:hover,
+  .importAction:hover {
+    background: var(--sunken);
+  }
+}
+
+/* A write in the air: the button looks asleep and the pointer says «wait» (a second tap does nothing). */
+.importAction[aria-busy='true'] {
+  background: var(--sunken);
+  color: var(--ink-3);
+  cursor: progress;
+}
+
+.importAction:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* The button and the sentence that explains it stay together; the page's gap goes around the pair. */
+.importBlock {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+/* A short sentence under a card's heading or a button. */
+.note {
+  margin: 0 0 var(--s3);
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  overflow-wrap: anywhere;
+}
+
+.importBlock .note {
+  margin: 0;
+}
+
+/* The archived notice: calm and neutral (no red, amber or green), the same card shape as the others on a sunken ground. */
+.banner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  padding: var(--s4);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-lg);
+  background: var(--sunken);
+}
+
+.bannerTitle {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--fs-md);
+  font-weight: 650;
+}
+
+.bannerTitle svg {
+  flex: none;
+  width: 20px;
+  height: 20px;
+}
+
+.bannerText {
+  margin: 0 0 var(--s2);
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  overflow-wrap: anywhere;
+}
+
+/* The batch: the box in grams and its button on one line (wrapping on the narrowest phone). */
+.batchRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s3);
+}
+
+.field {
+  display: flex;
+  flex: 1 1 140px;
+  align-items: center;
+  gap: var(--s2);
+  min-height: var(--hit);
+  padding: 0 var(--s3);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+
+.field:focus-within {
+  border-color: var(--accent);
+}
+
+.grams {
+  flex: 1;
+  min-width: 0;
+  min-height: var(--hit);
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: none;
+  color: var(--ink);
+  font: var(--fs-md)/1.2 var(--font);
+  font-variant-numeric: tabular-nums;
+}
+
+.gUnit {
+  flex: none;
+  color: var(--ink-2);
+}
+
+.clear {
+  margin-top: var(--s3);
+}
+
+/* «Calculated from Sugar: 1000 g» under the ingredient table, with its quiet Undo: one wrapping line, the button still 48px. */
+.fromRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 var(--s2);
+  margin-top: var(--s3);
+}
+
+.fromRowText {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  overflow-wrap: anywhere;
+}
+
+.fromRowUndo {
+  flex: none;
+}
+
+/* «Use as base recipe», right under Clear: a quiet, link-like button (it changes the recipe, so it does not compete with
+   Calculate), still the full touch height. Wrapped in a block of its own, so it is always on its own line, left-aligned like
+   Clear and only as wide as its words. */
+.useAsBase {
+  margin-top: var(--s2);
+}
+
+/* Delete, the very end of the page: a small icon on the right, as low-key as it can be and still a 48px target. */
+.deleteIcon {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  align-self: flex-end;
+  width: var(--hit);
+  height: var(--hit);
+  border: 0;
+  border-radius: var(--r-md);
+  background: none;
+  color: var(--ink-3);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.deleteIcon:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.deleteIcon svg {
+  width: 18px;
+  height: 18px;
+}
+
+@media (hover: hover) {
+  .deleteIcon:hover {
+    background: var(--danger-tint);
+    color: var(--danger-ink);
+  }
+}

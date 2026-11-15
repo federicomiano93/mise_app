@@ -1,0 +1,16 @@
+/* The left column: the month bar over the list, or over the one sentence an employee gets where a
+   month cannot be opened for them. */
+
+.column {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+}
+
+.unavailable {
+  padding: var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--sunken);
+  color: var(--ink);
+}

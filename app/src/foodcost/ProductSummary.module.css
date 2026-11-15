@@ -1,0 +1,9 @@
+/* The summary at the top of the card: the figures that decide the price, in a frame of their own above the card's
+   sections. Nothing here clips. */
+
+.summary {
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--sunken);
+}

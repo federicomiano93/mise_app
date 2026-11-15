@@ -1,0 +1,519 @@
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { cleanup, screen, waitFor, within } from '@testing-library/react';
+import { fakeSuppliersSource } from '../../testing/fakeSuppliersSource';
+import { item, supplier } from '../../testing/renderSuppliers';
+import { fakeImportSource } from './testing/fakeImportSource';
+import type { FakeImportSource } from './testing/fakeImportSource';
+import {
+  FLOUR, FLOUR_BY_SACK, LOAD, findImportScreen, invoiceZip, invoicesZip, renderImport, toIngredients,
+} from './testing/renderImport';
+
+// «Import from invoices», part B3b, slice 2: the confirmation, the run row by row, the remembered decisions, the price changes and
+// the summary — against a fake database that really applies what is written, so a second load sees what the first one left.
+//
+// PORTS (tests/invoice-import-flow.test.mjs), the zip path: «a file goes through every step and writes suppliers and ingredients,
+// each behind a confirmation», «loading the same file again plans no write at all», «while rows are being written Back is off and
+// does nothing», «a refusal stops the run at once…», «losing the connection stops the run too», «any other failure is recorded
+// with its reason and the run goes on», «a row that matches an ingredient created moments ago becomes a question, never a
+// duplicate», «two NEW products with different article codes are both created», «a write that failed DOES say to load the same
+// file again», «the decision is written BEFORE the rows», «declining the question on Done keeps the screen and writes nothing»,
+// «a failure while remembering stops nothing else and is reported in the summary», «three invoices at 1.00 → 1.10 → 1.10 write
+// exactly ONE price change, and the same file again writes nothing new», «nothing is written without a confirmation: Done only
+// closes, the price-change button asks first», «the progress line never says 1 of 0», «a renamed product writes nothing by
+// default; choosing “Save the new name” is a write of the primary action, and the summary says so», «a renamed product left on
+// “Keep the old name” is never written», «a skipped supplier makes its ingredients errors that say why» (slice 1's spec: they are not offered).
+// NOT PORTED, F6: «a file that is not an import file…», «one .json beside zips…», «a .json file still takes the old path…», and
+// every assertion about the workbook advice (summary.fixFile / summary.remember). The rest of the flow file (the held price with
+// a chosen rename, a held price that loses its reason, the shared price written by another pack) is model behaviour: it is
+// pinned in shared/src/invoice-import-*.spec.ts and in ingredientsRun.spec.ts, which also holds «a row that matches an ingredient
+// created moments ago» (an invoice reader never hands two products with such names).
+
+beforeAll(async () => {
+  await import('../SuppliersSection');
+  await import('./InvoiceImportScreen');
+}, 60_000);
+
+afterEach(() => { vi.restoreAllMocks(); });
+
+const SUPPLIER = supplier('sup-1', { name: 'Fornitore Esempio', vatNumber: 'IT00000000001' });
+const SUGAR = { desc: 'ZUCCHERO VELO KG 10', code: 'Z1', qty: 10, unit: 'KG', total: 12 };
+const SALT = { desc: 'SALE MARINO KG 25', code: 'S1', qty: 25, unit: 'KG', total: 5 };
+const stored = (fields: Record<string, unknown> = {}) =>
+  item('ing-1', { name: 'Farina tipo 00', supplierId: 'sup-1', supplierCode: 'F00', weight: '25 kg', kind: 'ingredient', ...fields });
+
+type Venue = { ingredients?: ReturnType<typeof item>[]; prices?: Record<string, Record<string, unknown>>; suppliers?: ReturnType<typeof supplier>[] };
+
+async function open(venue: Venue = {}, importing?: FakeImportSource) {
+  const suppliers = venue.suppliers ?? [SUPPLIER];
+  const source = fakeSuppliersSource({ suppliers, ingredients: venue.ingredients ?? [] });
+  for (const [id, doc] of Object.entries(venue.prices ?? {})) source.prices.set(id, doc);
+  const server = importing ?? fakeImportSource({ suppliers, ingredients: venue.ingredients ?? [], prices: venue.prices });
+  const view = renderImport('/suppliers/import', { suppliers: source, importing: server });
+  await findImportScreen();
+  return { ...view, importing: server };
+}
+
+const button = (name: string | RegExp) => screen.getByRole('button', { name });
+const dialog = () => screen.findByRole('alertdialog', undefined, LOAD);
+const summaryText = () => screen.getByRole('heading', { level: 3, name: 'Import finished' }).parentElement?.textContent ?? '';
+const batchesOf = (importing: FakeImportSource) => importing.writes.filter(write => write.kind === 'batches');
+
+// Drives to the end: chooses «Import n products», confirms, waits for the summary.
+async function importAll(user: Parameters<typeof toIngredients>[0], label: string) {
+  await user.click(button(label));
+  await user.click(within(await dialog()).getByRole('button', { name: 'Import' }));
+  await screen.findByRole('heading', { level: 3, name: 'Import finished' }, LOAD);
+}
+
+describe('the confirmation', () => {
+  it('asks first, in words, and Cancel writes nothing and keeps the screen', async () => {
+    const { user, importing } = await open({ suppliers: [] });
+    await toIngredients(user, invoiceZip([FLOUR, SUGAR]));
+    await user.click(button('Import 2 products'));
+    const box = await dialog();
+    expect(within(box).getByText('Import these products?')).toBeInTheDocument();
+    expect(within(box).getByText('2 new products will be created.')).toBeInTheDocument();
+    expect(within(box).getByText('2 prices will be added.')).toBeInTheDocument();
+    expect(within(box).getByText('Price changes are recorded too.')).toBeInTheDocument();
+    await user.click(within(box).getByRole('button', { name: 'Cancel' }));
+    expect(screen.getByRole('heading', { level: 3, name: 'Products' })).toBeInTheDocument();
+    expect(batchesOf(importing)).toEqual([]);
+    expect(importing.writes.filter(write => write.kind !== 'createSupplier')).toEqual([]);
+  });
+
+  it('says «no connection» before asking anything when the browser is offline', async () => {
+    const { user, importing } = await open({ suppliers: [] });
+    await toIngredients(user, invoiceZip([FLOUR]));
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    await user.click(button('Import 1 product'));
+    const box = await dialog();
+    expect(within(box).getByText(/^There is no connection\./)).toBeInTheDocument();
+    await user.click(within(box).getByRole('button', { name: 'OK' }));
+    expect(screen.queryByText('Import these products?')).not.toBeInTheDocument();
+    expect(batchesOf(importing)).toEqual([]);
+  });
+
+  it('says how many remembered choices will be written', async () => {
+    const { user } = await open({ suppliers: [] });
+    await toIngredients(user, invoiceZip([FLOUR, SUGAR]));
+    await user.selectOptions(within(screen.getByRole('listitem', { name: 'Zucchero velo' })).getByRole('combobox'), 'Do not import (remember)');
+    await user.click(button('Import 1 product'));
+    expect(within(await dialog()).getByText('1 choice will be remembered for the next imports.')).toBeInTheDocument();
+  });
+});
+
+describe('a file goes through every step', () => {
+  it('writes the ingredients as the model says, ends on the summary, and «Done» leaves to the list with the focus on the door', async () => {
+    const { user, importing, router } = await open({ suppliers: [] });
+    await toIngredients(user, invoiceZip([FLOUR, SUGAR]));
+    await importAll(user, 'Import 2 products');
+    expect(summaryText()).toContain('2 products created');
+    expect(summaryText()).toContain('2 prices added');
+    expect(summaryText()).toContain('Price changes recorded: 0');
+    expect(screen.queryByText(/Step \d of 3/)).not.toBeInTheDocument();
+    await waitFor(() => { expect(screen.getByRole('heading', { level: 3, name: 'Import finished' })).toHaveFocus(); });
+    expect(importing.ingredients).toHaveLength(2);
+    for (const created of importing.ingredients) {
+      expect(created.supplierId).toBe('sup-1');
+      for (const key of ['allergens', 'mayContain', 'allergensCheckedAt', 'nutrition', 'packIngredients']) expect(created).not.toHaveProperty(key);
+    }
+    expect(importing.prices.size).toBe(2);
+
+    await user.click(screen.getByRole('button', { name: 'Done' }));
+    await waitFor(() => { expect(router.state.location.pathname).toBe('/suppliers'); });
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    await waitFor(() => { expect(screen.getByRole('button', { name: 'Import from invoices' })).toHaveFocus(); });
+  });
+
+  it('Back after the import is over leaves without a question', async () => {
+    const { user, router } = await open({ suppliers: [] });
+    await toIngredients(user, invoiceZip([FLOUR]));
+    await importAll(user, 'Import 1 product');
+    await user.click(screen.getByRole('button', { name: 'Back' }));
+    await waitFor(() => { expect(router.state.location.pathname).toBe('/suppliers'); });
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+  });
+
+  it('⚠️ loading the same file again plans no write at all: everything is Unchanged', async () => {
+    const first = await open({ suppliers: [] });
+    await toIngredients(first.user, invoiceZip([FLOUR, SUGAR]));
+    await importAll(first.user, 'Import 2 products');
+    const importing = first.importing;
+    cleanup();
+    // ⚠️ The import log is emptied on purpose: these specs pin the SECOND guard (create-only price points) for a file the log does not
+    // know — a record that failed to save. With the log in place the same file is stopped earlier (InvoiceImport.log.spec.tsx).
+    importing.importLog = [];
+    const written = importing.writes.length;
+
+    const venue = { ingredients: [...importing.ingredients], prices: Object.fromEntries(importing.prices), suppliers: [SUPPLIER] };
+    const second = await open(venue, importing);
+    await toIngredients(second.user, invoiceZip([FLOUR, SUGAR]));
+    expect(screen.getByText('2 unchanged products', { selector: 'summary' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Import \d/ })).not.toBeInTheDocument();
+    expect(screen.getByText('Nothing to import: everything is already in Mise, skipped or has an error.')).toBeInTheDocument();
+    await second.user.click(button('Done'));
+    await waitFor(() => { expect(second.router.state.location.pathname).toBe('/suppliers'); });
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    // «Done» adds the file to the log (the log was emptied above); no ingredient, price or decision is written.
+    expect(importing.writes.slice(written).map(write => write.kind)).toEqual(['importLog']);
+    expect(importing.ingredients).toHaveLength(2);
+  });
+});
+
+describe('while the rows are written', () => {
+  it('Back is off, the router refuses without asking, the bar moves, and the live line counts', async () => {
+    const { user, importing, router } = await open({ suppliers: [] });
+    await toIngredients(user, invoiceZip([FLOUR, SUGAR]));
+    const release = importing.hold('runImportBatches');
+    await user.click(button('Import 2 products'));
+    await user.click(within(await dialog()).getByRole('button', { name: 'Import' }));
+    const heading = await screen.findByRole('heading', { level: 3, name: 'Importing…' });
+    await waitFor(() => { expect(heading).toHaveFocus(); });
+    expect(screen.getByRole('button', { name: 'Back' })).toBeDisabled();
+    const bar = screen.getByRole('progressbar', { name: 'Importing…' });
+    expect(bar).toHaveAttribute('max', '2');
+    expect(screen.getAllByRole('status').some(region => region.textContent === 'Importing 1 of 2…')).toBe(true);
+    expect(screen.queryByRole('group', { name: 'Show' })).not.toBeInTheDocument();
+
+    await router.navigate('/orders');
+    expect(router.state.location.pathname).toBe('/suppliers/import');
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+
+    release();
+    await screen.findByRole('heading', { level: 3, name: 'Import finished' }, LOAD);
+    expect(screen.getByRole('button', { name: 'Back' })).toBeEnabled();
+  });
+});
+
+describe('what goes wrong', () => {
+  const THREE = () => invoiceZip([FLOUR, SUGAR, SALT]);
+
+  it('⚠️ a refusal stops the run at once, says so, and says how many were not tried', async () => {
+    const { user, importing } = await open({ suppliers: [] });
+    await toIngredients(user, THREE());
+    importing.failWith('runImportBatches', 'permission-denied');
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    await importAll(user, 'Import 3 products');
+    expect(importing.countOf('runImportBatches')).toBe(1);
+    expect(importing.ingredients).toHaveLength(0);
+    const alert = screen.getByRole('alert');
+    expect(alert).toHaveTextContent('Mise was not allowed to save this');
+    expect(alert).toHaveTextContent('2 products were not tried.');
+    expect(summaryText()).toContain('1 product not imported');
+    expect(summaryText()).toContain('Load the same file again to finish');
+  });
+
+  it('losing the connection stops the run too; the row before it stays', async () => {
+    const { user, importing } = await open({ suppliers: [] });
+    await toIngredients(user, THREE());
+    importing.failWith('runImportBatches', 'unavailable', 1);
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    await importAll(user, 'Import 3 products');
+    expect(importing.ingredients).toHaveLength(1);
+    expect(screen.getByRole('alert')).toHaveTextContent('There is no connection.');
+    expect(screen.getByRole('alert')).toHaveTextContent('1 product was not tried.');
+    expect(summaryText()).toContain('1 product created');
+  });
+
+  it('any other failure is recorded with its reason and the run goes on with the next row', async () => {
+    const { user, importing } = await open({ suppliers: [] });
+    await toIngredients(user, THREE());
+    importing.failWith('runImportBatches', 'invalid-argument');
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    await importAll(user, 'Import 3 products');
+    expect(importing.countOf('runImportBatches')).toBe(3);
+    expect(summaryText()).toContain('3 products not imported');
+    expect(screen.getAllByText('Could not be saved (invalid-argument).')).toHaveLength(3);
+    expect(summaryText()).toContain('Load the same file again to finish');
+    expect(screen.queryByText(/were not tried/)).not.toBeInTheDocument();
+  });
+
+  it('⚠️ two NEW products with different article codes are both created, however alike their names', async () => {
+    const { user, importing } = await open({ suppliers: [] });
+    await toIngredients(user, invoiceZip([
+      { desc: 'ACETO BIANCO 1 L', code: 'AC-B', qty: 10, unit: 'LT', total: 8 },
+      { desc: 'ACETO ROSSO 1 L', code: 'AC-R', qty: 10, unit: 'LT', total: 9 },
+    ]));
+    await importAll(user, 'Import 2 products');
+    expect(importing.ingredients.map(created => created.supplierCode).sort()).toEqual(['AC-B', 'AC-R']);
+    expect(screen.queryByText(/A similar product appeared/)).not.toBeInTheDocument();
+  });
+});
+
+describe('the usage count', () => {
+  it('counts an import that ran to the end', async () => {
+    const names: string[] = [];
+    const listener = (event: Event) => { names.push(String((event as CustomEvent).detail)); };
+    window.addEventListener('mise:action', listener);
+    const { user } = await open({ suppliers: [] });
+    await toIngredients(user, invoiceZip([FLOUR]));
+    await importAll(user, 'Import 1 product');
+    window.removeEventListener('mise:action', listener);
+    expect(names).toContain('invoice-imported');
+  });
+
+  it('does not count an import the rules stopped', async () => {
+    const names: string[] = [];
+    const listener = (event: Event) => { names.push(String((event as CustomEvent).detail)); };
+    window.addEventListener('mise:action', listener);
+    const { user, importing } = await open({ suppliers: [] });
+    await toIngredients(user, invoiceZip([FLOUR]));
+    importing.failWith('runImportBatches', 'permission-denied');
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    await importAll(user, 'Import 1 product');
+    window.removeEventListener('mise:action', listener);
+    expect(names).not.toContain('invoice-imported');
+  });
+});
+
+describe('the remembered choices', () => {
+  const SKIP = 'Do not import (remember)';
+
+  it('⚠️ are written BEFORE the rows, and the summary counts them', async () => {
+    const { user, importing } = await open({ suppliers: [] });
+    await toIngredients(user, invoiceZip([FLOUR, SUGAR]));
+    await user.selectOptions(within(screen.getByRole('listitem', { name: 'Zucchero velo' })).getByRole('combobox'), SKIP);
+    await importAll(user, 'Import 1 product');
+    const kinds = importing.writes.map(write => write.kind);
+    expect(kinds.indexOf('decisions')).toBeGreaterThanOrEqual(0);
+    expect(kinds.indexOf('decisions')).toBeLessThan(kinds.indexOf('batches'));
+    expect(importing.decisions).toHaveLength(1);
+    expect(summaryText()).toContain('Choices remembered: 1');
+  });
+
+  it('a failure while remembering stops nothing else and is reported in the summary', async () => {
+    const { user, importing } = await open({ suppliers: [] });
+    await toIngredients(user, invoiceZip([FLOUR, SUGAR]));
+    await user.selectOptions(within(screen.getByRole('listitem', { name: 'Zucchero velo' })).getByRole('combobox'), SKIP);
+    importing.failWith('writeDecisions', 'invalid-argument');
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    await importAll(user, 'Import 1 product');
+    expect(importing.ingredients).toHaveLength(1);
+    expect(screen.getByText('Your choices could not be remembered. The import itself is not affected.')).toBeInTheDocument();
+    expect(summaryText()).not.toContain('Choices remembered');
+  });
+
+  it('«Done» with nothing to import and nothing to remember just leaves: no question, no write', async () => {
+    const { user, importing, router } = await open({ suppliers: [] });
+    await toIngredients(user, invoiceZip([FLOUR]));
+    await user.selectOptions(within(screen.getByRole('listitem', { name: 'Farina tipo 00' })).getByRole('combobox'), SKIP);
+    // The «do not import» answer is a remembered choice, so this one asks; declining writes nothing.
+    await user.click(button('Done'));
+    const box = await dialog();
+    expect(within(box).getByText('Remember your choices?')).toBeInTheDocument();
+    expect(within(box).getByText('1 choice will be remembered for the next imports.')).toBeInTheDocument();
+    await user.click(within(box).getByRole('button', { name: 'Cancel' }));
+    expect(screen.getByRole('heading', { level: 3, name: 'Products' })).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe('/suppliers/import');
+    expect(importing.writes.filter(write => write.kind === 'decisions')).toEqual([]);
+
+    await user.click(button('Done'));
+    await user.click(within(await dialog()).getByRole('button', { name: 'Save' }));
+    await waitFor(() => { expect(router.state.location.pathname).toBe('/suppliers'); });
+    expect(importing.decisions).toHaveLength(1);
+    expect(batchesOf(importing)).toEqual([]);
+  });
+
+  it('a failure on «Done» is said in an alert and the screen stays', async () => {
+    const { user, importing, router } = await open({ suppliers: [] });
+    await toIngredients(user, invoiceZip([FLOUR]));
+    await user.selectOptions(within(screen.getByRole('listitem', { name: 'Farina tipo 00' })).getByRole('combobox'), SKIP);
+    importing.failWith('writeDecisions', 'invalid-argument');
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    await user.click(button('Done'));
+    await user.click(within(await dialog()).getByRole('button', { name: 'Save' }));
+    const box = await dialog();
+    expect(within(box).getByText('Your choices could not be remembered. The import itself is not affected.')).toBeInTheDocument();
+    await user.click(within(box).getByRole('button', { name: 'OK' }));
+    expect(router.state.location.pathname).toBe('/suppliers/import');
+    expect(screen.getByRole('button', { name: 'Back' })).toBeEnabled();
+  });
+});
+
+describe('price changes', () => {
+  const invoiceOn = (date: string, total: number, sdi: number) =>
+    ({ lines: [{ ...FLOUR, total }], spec: { date, number: String(sdi) } });
+
+  it('⚠️ three invoices at 1.00 → 1.10 → 1.10 write exactly ONE price change, and the same file again writes nothing new', async () => {
+    const zip = () => invoicesZip([invoiceOn('2026-09-01', 25, 1), invoiceOn('2026-09-10', 27.5, 2), invoiceOn('2026-09-20', 27.5, 3)]);
+    const first = await open({ suppliers: [] });
+    await toIngredients(first.user, zip());
+    await importAll(first.user, 'Import 1 product');
+    const importing = first.importing;
+    expect(summaryText()).toContain('3 prices added');
+    expect(summaryText()).toContain('Price changes recorded: 1');
+    expect(importing.priceChanges.size).toBe(1);
+    cleanup();
+    // ⚠️ The import log is emptied on purpose: these specs pin the SECOND guard (create-only price points) for a file the log does not
+    // know — a record that failed to save. With the log in place the same file is stopped earlier (InvoiceImport.log.spec.tsx).
+    importing.importLog = [];
+
+    const written = importing.writes.length;
+    const second = await open({ ingredients: [...importing.ingredients], prices: Object.fromEntries(importing.prices), suppliers: [SUPPLIER] }, importing);
+    await toIngredients(second.user, zip());
+    expect(screen.getByRole('button', { name: 'Record price changes' })).toBeEnabled();
+    await second.user.click(button('Record price changes'));
+    await second.user.click(within(await dialog()).getByRole('button', { name: 'Record' }));
+    await screen.findByRole('heading', { level: 3, name: 'Import finished' }, LOAD);
+    expect(summaryText()).toContain('Price changes recorded: 0');
+    expect(importing.priceChanges.size).toBe(1);
+    expect(importing.writes.slice(written).filter(write => write.kind === 'batches')).toEqual([]);
+  });
+
+  it('⚠️ nothing is written without a confirmation: the price-change button asks first, and Cancel writes nothing', async () => {
+    const first = await open({ suppliers: [] });
+    await toIngredients(first.user, invoiceZip([FLOUR]));
+    await importAll(first.user, 'Import 1 product');
+    const importing = first.importing;
+    cleanup();
+    // ⚠️ The import log is emptied on purpose: these specs pin the SECOND guard (create-only price points) for a file the log does not
+    // know — a record that failed to save. With the log in place the same file is stopped earlier (InvoiceImport.log.spec.tsx).
+    importing.importLog = [];
+    const second = await open({ ingredients: [...importing.ingredients], prices: Object.fromEntries(importing.prices), suppliers: [SUPPLIER] }, importing);
+    await toIngredients(second.user, invoiceZip([FLOUR]));
+    const written = importing.writes.length;
+    await second.user.click(button('Record price changes'));
+    const box = await dialog();
+    expect(within(box).getByText('Record the price changes?')).toBeInTheDocument();
+    expect(within(box).getByText('No product or price changes: only the price changes found in the invoices are recorded.')).toBeInTheDocument();
+    await second.user.click(within(box).getByRole('button', { name: 'Cancel' }));
+    expect(importing.writes).toHaveLength(written);
+    expect(screen.getByRole('heading', { level: 3, name: 'Products' })).toBeInTheDocument();
+  });
+
+  it('the live line never says «of 0» when only rows already in Mise are looked at (the counts themselves are pinned in ingredientsRun.spec.ts)', async () => {
+    const importing = fakeImportSource({ suppliers: [SUPPLIER], ingredients: [stored({ invoiceName: 'FARINA TIPO 00 SACCO KG 25' })] });
+    importing.points.set('ing-1', { ids: new Set(['inv-9000000001-1']), points: [] });
+    const { user } = await open({ ingredients: [stored({ invoiceName: 'FARINA TIPO 00 SACCO KG 25' })], prices: { 'ing-1': { priceUnit: 'kg', pricePerUnit: 0.57, priceUpdatedAt: '2026-09-01T12:00:00.000Z' } } }, importing);
+    await toIngredients(user, invoiceZip([FLOUR]));
+    const lines: string[] = [];
+    const watcher = new MutationObserver(() => { lines.push(...screen.getAllByRole('status').map(region => region.textContent ?? '')); });
+    watcher.observe(document.body, { childList: true, subtree: true, characterData: true });
+    await user.click(button('Record price changes'));
+    await user.click(within(await dialog()).getByRole('button', { name: 'Record' }));
+    await screen.findByRole('heading', { level: 3, name: 'Import finished' }, LOAD);
+    watcher.disconnect();
+    expect(lines.some(line => /of 0…/.test(line))).toBe(false);
+  });
+});
+
+describe('a renamed product', () => {
+  const venue = () => ({
+    ingredients: [stored({ invoiceName: 'FARINA 00 VECCHIO NOME' })],
+    prices: { 'ing-1': { priceUnit: 'kg', pricePerUnit: 0.57, priceUpdatedAt: '2026-09-01T12:00:00.000Z' } },
+  });
+  const seeded = (): FakeImportSource => {
+    const importing = fakeImportSource({ suppliers: [SUPPLIER], ingredients: venue().ingredients, prices: venue().prices });
+    importing.points.set('ing-1', { ids: new Set(['inv-9000000001-1']), points: [] });
+    return importing;
+  };
+
+  it('⚠️ writes nothing by default; «Save the new name» is a write of the primary action, and the summary says so', async () => {
+    const importing = seeded();
+    const { user } = await open(venue(), importing);
+    await toIngredients(user, invoiceZip([FLOUR]));
+    expect(screen.getByText(/^The name on the invoice has changed: «FARINA 00 VECCHIO NOME» → «/)).toBeInTheDocument();
+    expect(button('Done')).toBeEnabled();
+    const choice = within(screen.getByRole('listitem', { name: 'Farina tipo 00' })).getByRole('combobox', { name: 'Name on the invoice' });
+    expect(choice).toHaveValue('keep');
+    await user.selectOptions(choice, 'Save the new name');
+    await user.click(button('Import 1 product'));
+    expect(within(await dialog()).getByText('1 name on the invoice will be saved')).toBeInTheDocument();
+    await user.click(within(await dialog()).getByRole('button', { name: 'Import' }));
+    await screen.findByRole('heading', { level: 3, name: 'Import finished' }, LOAD);
+    expect(summaryText()).toContain('1 name on the invoice saved');
+    expect(importing.ingredients[0]?.invoiceName).toBe('FARINA TIPO 00 SACCO KG 25');
+  });
+
+  it('left on «Keep the old name» it is never written', async () => {
+    const importing = seeded();
+    const { user } = await open(venue(), importing);
+    await toIngredients(user, invoiceZip([FLOUR]));
+    await user.click(button('Done'));
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(batchesOf(importing)).toEqual([]);
+    expect(importing.ingredients[0]?.invoiceName).toBe('FARINA 00 VECCHIO NOME');
+  });
+});
+
+describe('a held price', () => {
+  it('is not written until «Use this price» is chosen', async () => {
+    const importing = fakeImportSource({ suppliers: [SUPPLIER], ingredients: [stored({ weight: '20 kg' })] });
+    const { user } = await open({ ingredients: [stored({ weight: '20 kg' })] }, importing);
+    await toIngredients(user, invoiceZip([FLOUR_BY_SACK]));
+    expect(button('Done')).toBeEnabled();
+    await user.selectOptions(screen.getByRole('combobox', { name: 'This price?' }), 'Use this price');
+    await importAll(user, 'Import 1 product');
+    expect(summaryText()).toContain('1 existing product got new prices');
+    expect(importing.prices.get('ing-1')?.pricePerUnit).toBe(0.7125);
+  });
+});
+
+// Mise 2, 14 Nov 2026 («tutti i prodotti delle fatture in Mise»): every product is imported with its item kind. Invented invoices only.
+describe('every kind of product', () => {
+  const FILM = { desc: 'PELLICOLA ALIMENTARE ROTOLO', code: 'PEL', qty: 3, unit: 'KG', total: 15 };
+  const WATER = { desc: 'ACQUA SABRINELLA NAT 1/2X12', code: 'AQ', qty: 10, unit: 'CT', total: 30 };
+  const SOAP = { desc: 'DETERSIVO PAVIMENTI', code: 'DT', qty: 4, unit: 'PZ', total: 12 };
+
+  it('⚠️ one line of each kind ends with four NEW items with the right kinds, none with an allergen key', async () => {
+    const { user, importing } = await open({ suppliers: [] });
+    await toIngredients(user, invoiceZip([FLOUR, FILM, WATER, SOAP]));
+    await importAll(user, 'Import 4 products');
+    const kinds = Object.fromEntries(importing.ingredients.map(created => [created.supplierCode, created.kind]));
+    expect(kinds).toEqual({ F00: 'ingredient', PEL: 'packaging', AQ: 'resale', DT: 'other' });
+    for (const created of importing.ingredients) {
+      for (const key of ['allergens', 'mayContain', 'allergensCheckedAt', 'nutrition', 'packIngredients']) expect(created).not.toHaveProperty(key);
+    }
+    // The detergent is priced per piece, with no piece weight (3.00 each); the water per litre (0.50).
+    const idOf = (code: string) => importing.ingredients.find(created => created.supplierCode === code)?.id as string;
+    expect(importing.prices.get(idOf('DT'))).toMatchObject({ priceUnit: 'pcs', pricePerUnit: 3, unitWeightKg: null });
+    expect(importing.prices.get(idOf('AQ'))).toMatchObject({ priceUnit: 'l', pricePerUnit: 0.5 });
+  });
+
+  it('⚠️ packaging counted in pieces with no weight becomes a NEW packaging item priced per piece (15 Nov 2026)', async () => {
+    const TRAYS = { desc: 'VASCHETTE ALLUMINIO', code: 'VA', qty: 200, unit: 'PZ', total: 30 };
+    const { user, importing } = await open({ suppliers: [] });
+    await toIngredients(user, invoiceZip([TRAYS]));
+    await importAll(user, 'Import 1 product');
+    expect(importing.ingredients).toHaveLength(1);
+    expect(importing.ingredients[0]).toMatchObject({ supplierCode: 'VA', kind: 'packaging' });
+    expect(importing.prices.get(importing.ingredients[0]?.id as string)).toMatchObject({ priceUnit: 'pcs', pricePerUnit: 0.15, unitWeightKg: null });
+  });
+
+  it('food counted in pieces with no weight is still not imported (unreadable)', async () => {
+    const { user, importing } = await open({ suppliers: [] });
+    await toIngredients(user, invoiceZip([FLOUR, { desc: 'FARINA SPECIALE', code: 'FS', qty: 4, unit: 'PZ', total: 12 }]));
+    await importAll(user, 'Import 1 product');
+    expect(importing.ingredients.map(created => created.supplierCode)).toEqual(['F00']);
+  });
+
+  it('⚠️ an existing PACKAGING item matched by its article code is updated, never written again as a new item', async () => {
+    const film = item('ing-film', { name: 'Pellicola alimentare', supplierId: 'sup-1', supplierCode: 'PEL', kind: 'packaging', weight: '1 kg' });
+    const { user, importing } = await open({ ingredients: [film] });
+    await toIngredients(user, invoiceZip([FILM]));
+    await importAll(user, 'Import 1 product');
+    expect(importing.ingredients).toHaveLength(1);
+    expect(importing.ingredients[0]).toMatchObject({ id: 'ing-film', supplierCode: 'PEL' });
+    expect(importing.ingredients[0]).toMatchObject({ kind: 'packaging' });
+    expect(importing.prices.get('ing-film')?.pricePerUnit).toBe(5);
+  });
+
+  it('⚠️ a drink counted in single bottles is priced per litre of what was bought, not times the carton count (15 Nov 2026)', async () => {
+    const CHINOTTO = { desc: 'CHINOTTO BRAND ML 450 X24', code: 'CH', qty: 12, unit: 'PZ', total: 8.98 };
+    const { user, importing } = await open({ suppliers: [] });
+    await toIngredients(user, invoiceZip([CHINOTTO]));
+    await importAll(user, 'Import 1 product');
+    expect(importing.ingredients[0]).toMatchObject({ supplierCode: 'CH', kind: 'resale', packCount: 24 });
+    expect(importing.prices.get(importing.ingredients[0]?.id as string)).toMatchObject({ priceUnit: 'l', pricePerUnit: 1.663 });
+  });
+
+  it('⚠️ an existing RESALE item matched by its article code is never turned into an ingredient', async () => {
+    const water = item('ing-water', { name: 'Acqua naturale', supplierId: 'sup-1', supplierCode: 'AQ', kind: 'resale', weight: '0.5 l' });
+    const { user, importing } = await open({ ingredients: [water] });
+    // This month the line no longer names a drink: the reader takes it for an ingredient. The code still finds the water.
+    await toIngredients(user, invoiceZip([{ ...WATER, desc: 'SABRINELLA NATURALE 1/2 LT X 12' }]));
+    await importAll(user, 'Import 1 product');
+    expect(importing.ingredients).toHaveLength(1);
+    expect(importing.ingredients[0]).toMatchObject({ id: 'ing-water', kind: 'resale', name: 'Acqua naturale' });
+  });
+});

@@ -1,0 +1,5 @@
+/* Which version a version screen shows: the same words as its row in the list. */
+
+.version {
+  font-weight: 650;
+}

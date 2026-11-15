@@ -1,0 +1,58 @@
+/* The send editor: what the supplier will get (a quiet box, scrolling when long), and the box to correct it in. It sits inside the
+   shared dialog (440px wide at most, 24px of padding): at 296px the text still has 248px. Fixed pixel heights, never dvh: the lab
+   tablet's Chrome 101 has no dynamic viewport units. */
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  min-width: 0;
+}
+
+.label {
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.hint {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+/* The message as WhatsApp draws it: a bordered box, a long order scrolls inside it instead of pushing the buttons away. */
+.preview {
+  box-sizing: border-box;
+  max-height: 180px;
+  overflow-y: auto;
+  padding: var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--sunken);
+  color: var(--ink);
+  font: 450 var(--fs-md)/1.45 var(--font);
+  overflow-wrap: anywhere;
+}
+
+.line {
+  min-height: 1.45em;
+}
+
+.text {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 120px;
+  padding: var(--s3);
+  border: 1.5px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: 450 var(--fs-md)/1.45 var(--font);
+  resize: vertical;
+}
+
+.text:focus-visible {
+  border-color: var(--accent);
+}

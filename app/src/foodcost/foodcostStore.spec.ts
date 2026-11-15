@@ -1,0 +1,630 @@
+import { describe, expect, test, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { normalizeProduct } from '@mise/shared/foodcost-model';
+import { productFromRecipe } from '@mise/shared/from-recipes';
+import type { Product } from '@mise/shared/foodcost-model';
+import type { KeyValueStorage } from '../session/backend';
+import type { FoodcostSource, ProductsMeta, RecipeLossPatch, StoredDoc } from './foodcostSource';
+import { INGREDIENTS_KEY, PRODUCTS_KEY, RECIPES_KEY, createFoodcostStore, toProductDocument } from './foodcostStore';
+import type { FoodcostDeps, FoodcostMessage } from './foodcostStore';
+
+// The store against a fake source and a fake browser: every decision of the current app's
+// js/foodcost/foodcost-store.js, one test each, plus the two Mise 2 differences (an empty cached
+// answer is not believed over a local copy that had products; a refusal rolls back only its own save).
+
+type Pending = { resolve: () => void; reject: (err: unknown) => void };
+
+function fakeSource() {
+  let products: { onChange: (list: StoredDoc[], meta: ProductsMeta) => void; onError: (err: unknown) => void } | null = null;
+  let recipes: { onChange: (list: StoredDoc[], meta?: ProductsMeta) => void; onError: (err: unknown) => void } | null = null;
+  let ingredients: { onChange: (list: StoredDoc[]) => void; onError: (err: unknown) => void } | null = null;
+  let suppliers: { onChange: (list: StoredDoc[]) => void; onError: (err: unknown) => void } | null = null;
+  let settings: ((data: Record<string, unknown> | null, meta: { fromServer: boolean }) => void) | null = null;
+  const stopped: string[] = [];
+  const writes: { kind: string; args: unknown[]; pending: Pending }[] = [];
+  // The transactions that create a product from the recipe book, each waiting for the test to answer it.
+  const creates: { id: string; data: Readonly<Record<string, unknown>>; resolve: (created: boolean) => void; reject: (err: unknown) => void }[] = [];
+  let ids = 0;
+
+  function write(kind: string, ...args: unknown[]): Promise<void> {
+    return new Promise<void>((resolve, reject) => { writes.push({ kind, args, pending: { resolve, reject } }); });
+  }
+
+  const source: FoodcostSource = {
+    newProductId: () => `new-${++ids}`,
+    watchProducts: vi.fn((onChange, onError) => { products = { onChange, onError }; return () => stopped.push('products'); }),
+    watchRecipes: vi.fn((onChange, onError) => { recipes = { onChange, onError }; return () => stopped.push('recipes'); }),
+    watchIngredients: vi.fn((onChange, onError) => { ingredients = { onChange, onError }; return () => stopped.push('ingredients'); }),
+    watchSuppliers: vi.fn((onChange, onError) => { suppliers = { onChange, onError }; return () => stopped.push('suppliers'); }),
+    watchSettings: vi.fn(onChange => { settings = onChange; return () => stopped.push('settings'); }),
+    saveProduct: (id, data, snapshot) => write('product', id, data, snapshot),
+    createProductIfAbsent: (id, data) => new Promise<boolean>((resolve, reject) => { creates.push({ id, data, resolve, reject }); }),
+    saveRecipeLoss: (id: string, patch: RecipeLossPatch) => write('loss', id, patch),
+    removeProduct: id => write('remove', id),
+    getProductHistory: vi.fn(async () => [{ id: 'h1', foodCostPct: 30 }]),
+    saveLabourCostPerHour: (rate, updatedAt) => write('rate', rate, updatedAt),
+  };
+  return {
+    source, writes, stopped, creates,
+    products: (list: StoredDoc[], fromServer = true) => products!.onChange(list, { fromServer }),
+    productsFail: () => products!.onError(new Error('permission-denied')),
+    recipes: (list: StoredDoc[], fromServer?: boolean) => recipes!.onChange(list, fromServer === undefined ? undefined : { fromServer }),
+    recipesFail: () => recipes!.onError(new Error('refused')),
+    ingredients: (list: StoredDoc[]) => ingredients!.onChange(list),
+    suppliers: (list: StoredDoc[]) => suppliers!.onChange(list),
+    suppliersFail: () => suppliers!.onError(new Error('permission-denied')),
+    settings: (data: Record<string, unknown> | null, fromServer = true) => settings!(data, { fromServer }),
+  };
+}
+
+function fakeStorage(seed: Record<string, unknown> = {}): KeyValueStorage & { data: Map<string, string> } {
+  const data = new Map(Object.entries(seed).map(([k, v]) => [k, JSON.stringify(v)] as const));
+  return {
+    data,
+    getItem: key => data.get(key) ?? null,
+    setItem: (key, value) => { data.set(key, value); },
+    removeItem: key => { data.delete(key); },
+  };
+}
+
+function setup({ canManage = true, storage = fakeStorage() }: { canManage?: boolean; storage?: KeyValueStorage | null } = {}) {
+  const fake = fakeSource();
+  const deps: FoodcostDeps = { storage, now: () => Date.UTC(2026, 9, 12, 9, 0), warn: vi.fn() };
+  const store = createFoodcostStore(fake.source, { canManage }, deps);
+  const messages: FoodcostMessage[] = [];
+  store.onMessage(m => messages.push(m));
+  return { fake, store, messages, storage };
+}
+
+const settle = () => new Promise(resolve => setTimeout(resolve, 0));
+
+function product(fields: Partial<Product> & { name: string }): Product {
+  return normalizeProduct({ id: '', components: [], packaging: [], ...fields }) as Product;
+}
+
+describe('the Food cost store', () => {
+  test('nothing is listened to until start(), and stop() ends every listener', () => {
+    const { fake, store } = setup();
+    expect(fake.source.watchProducts).not.toHaveBeenCalled();
+    store.start();
+    expect(fake.source.watchProducts).toHaveBeenCalledTimes(1);
+    store.stop();
+    expect(fake.stopped.sort()).toEqual(['ingredients', 'products', 'recipes', 'settings', 'suppliers']);
+  });
+
+  // POST-SWITCH (step 4 of the Food cost plan): the suppliers, for the names under an ingredient. Memory only, quiet, never waited for.
+  test('the suppliers: {} until they arrive, then by id; never written to the phone; a failure keeps them and says nothing', () => {
+    const { fake, store, messages, storage } = setup();
+    store.start();
+    expect(store.getSnapshot().suppliers).toEqual({});
+    const before = store.getSnapshot();
+    fake.suppliers([{ id: 's1', name: 'Molino Rossi S.r.l.', shortName: 'Molino Rossi' }]);
+    expect(store.getSnapshot()).not.toBe(before);
+    expect(store.getSnapshot().suppliers).toEqual({ s1: { id: 's1', name: 'Molino Rossi S.r.l.', shortName: 'Molino Rossi' } });
+    // Names only: the cost tables are the SAME object, so nothing memoised on them recomputes.
+    expect(store.getSnapshot().tables).toBe(before.tables);
+    expect([...(storage as ReturnType<typeof fakeStorage>).data.keys()].some(key => key.includes('supplier'))).toBe(false);
+    fake.suppliersFail();
+    expect(store.getSnapshot().suppliers).toHaveProperty('s1');
+    expect(messages).toEqual([]);
+  });
+
+  test('start → stop → start listens again, once (React development mode)', () => {
+    const { fake, store } = setup();
+    store.start();
+    store.start();
+    store.stop();
+    store.start();
+    expect(fake.source.watchProducts).toHaveBeenCalledTimes(2);
+  });
+
+  test('⚠️ the labour rate is asked for ONLY for whoever runs the place', () => {
+    const employee = setup({ canManage: false });
+    employee.store.start();
+    expect(employee.fake.source.watchSettings).not.toHaveBeenCalled();
+    expect(employee.store.getSnapshot().labourCostPerHour).toBeNull();
+    // Nothing to wait for: Settings is not theirs.
+    expect(employee.store.getSnapshot().settingsLoaded).toBe(true);
+
+    const manager = setup({ canManage: true });
+    manager.store.start();
+    expect(manager.store.getSnapshot().settingsLoaded).toBe(false);
+    manager.fake.settings({ labourCostPerHour: 14.5 });
+    expect(manager.store.getSnapshot().labourCostPerHour).toBe(14.5);
+    expect(manager.store.getSnapshot().settingsLoaded).toBe(true);
+    expect(manager.store.getSnapshot().tables.labourCostPerHour).toBe(14.5);
+  });
+
+  test('⚠️ the labour rate is never written to the phone’s storage', () => {
+    const { fake, store, storage } = setup();
+    store.start();
+    fake.settings({ labourCostPerHour: 14.5 });
+    store.saveLabourRate(16);
+    const everything = [...(storage as ReturnType<typeof fakeStorage>).data.values()].join(' ');
+    expect(everything).not.toContain('14.5');
+    expect(everything).not.toContain('16');
+  });
+
+  test('a rate that is not a positive number reads as none', () => {
+    const { fake, store } = setup();
+    store.start();
+    fake.settings({ labourCostPerHour: 0 });
+    expect(store.getSnapshot().labourCostPerHour).toBeNull();
+    fake.settings(null);
+    expect(store.getSnapshot().labourCostPerHour).toBeNull();
+  });
+
+  test('the products arrive normalised, and the raw list is the local copy (the current app’s key)', () => {
+    const { fake, store, storage } = setup();
+    store.start();
+    expect(store.getSnapshot().productsLoaded).toBe(false);
+    fake.products([{ id: 'p1', name: ' Loaf ', vatRate: 0 }]);
+    const snap = store.getSnapshot();
+    expect(snap.productsLoaded).toBe(true);
+    expect(snap.productsFromServer).toBe(true);
+    expect(snap.products[0]!.name).toBe('Loaf');
+    // A stored zero VAT rate survives: zero-rated is a real answer.
+    expect(snap.products[0]!.vatRate).toBe(0);
+    expect(JSON.parse(storage!.getItem(PRODUCTS_KEY)!)).toEqual([{ id: 'p1', name: ' Loaf ', vatRate: 0 }]);
+  });
+
+  test('the local copy is painted before the network answers', () => {
+    const storage = fakeStorage({
+      [PRODUCTS_KEY]: [{ id: 'p1', name: 'Loaf' }],
+      [RECIPES_KEY]: [{ id: 'r1', name: 'Dough' }],
+      [INGREDIENTS_KEY]: [{ id: 'i1', name: 'Flour' }],
+    });
+    const { store } = setup({ storage });
+    const snap = store.getSnapshot();
+    expect(snap.productsLoaded).toBe(true);
+    expect(snap.productsFromServer).toBe(false);
+    expect(snap.products.map(p => p.id)).toEqual(['p1']);
+    expect(Object.keys(snap.recipes)).toEqual(['r1']);
+    expect(Object.keys(snap.ingredients)).toEqual(['i1']);
+    expect(snap.recipesLoaded && snap.ingredientsLoaded).toBe(true);
+  });
+
+  test('a corrupt local copy, or no storage at all, reads as none and throws nothing', () => {
+    const storage = fakeStorage();
+    storage.data.set(PRODUCTS_KEY, '{not json');
+    expect(setup({ storage }).store.getSnapshot().productsLoaded).toBe(false);
+    const none = setup({ storage: null });
+    none.store.start();
+    none.fake.products([{ id: 'p1', name: 'Loaf' }]);
+    expect(none.store.getSnapshot().products).toHaveLength(1);
+  });
+
+  test('⚠️ an EMPTY answer from the browser’s own database is not believed over a copy that had products', () => {
+    const storage = fakeStorage({ [PRODUCTS_KEY]: [{ id: 'p1', name: 'Loaf' }] });
+    const { fake, store } = setup({ storage });
+    store.start();
+    fake.products([], false);
+    expect(store.getSnapshot().products.map(p => p.id)).toEqual(['p1']);
+    // The server's word is the truth, empty or not.
+    fake.products([], true);
+    expect(store.getSnapshot().products).toEqual([]);
+  });
+
+  test('⚠️ …nor on a phone with no copy at all: the list keeps waiting', () => {
+    const { fake, store } = setup();
+    store.start();
+    fake.products([], false);
+    expect(store.getSnapshot().productsLoaded).toBe(false);
+    fake.products([{ id: 'p1', name: 'Loaf' }], false);
+    expect(store.getSnapshot().productsLoaded).toBe(true);
+  });
+
+  test('an empty cached answer stands when the copy itself said there were none', () => {
+    const { fake, store } = setup({ storage: fakeStorage({ [PRODUCTS_KEY]: [] }) });
+    store.start();
+    expect(store.getSnapshot().productsLoaded).toBe(true);
+    fake.products([], false);
+    expect(store.getSnapshot().products).toEqual([]);
+  });
+
+  test('a dead products stream ends the wait and says so', () => {
+    const { fake, store, messages } = setup();
+    store.start();
+    fake.productsFail();
+    expect(store.getSnapshot().productsLoaded).toBe(true);
+    expect(messages).toEqual([{ kind: 'products-stream-broken' }]);
+  });
+
+  test('the borrowed collections fail quietly: only the wait ends', () => {
+    const { fake, store, messages } = setup();
+    store.start();
+    expect(store.getSnapshot().recipesFailed).toBe(false);
+    fake.recipesFail();
+    expect(store.getSnapshot().recipesLoaded).toBe(true);
+    // …and says the server's word about a recipe will never come (a legacy product stops waiting for it).
+    expect(store.getSnapshot().recipesFailed).toBe(true);
+    expect(store.getSnapshot().recipesFromServer).toBe(false);
+    expect(messages).toEqual([]);
+  });
+
+  test('⚠️ the recipes are «from the server» only when the server said so', () => {
+    const { fake, store } = setup();
+    store.start();
+    expect(store.getSnapshot().recipesFromServer).toBe(false);
+    fake.recipes([{ id: 'r1', name: 'Loaf' }]);
+    expect(store.getSnapshot().recipesFromServer).toBe(false);
+    fake.recipes([{ id: 'r1', name: 'Loaf' }], false);
+    expect(store.getSnapshot().recipesFromServer).toBe(false);
+    fake.recipes([{ id: 'r1', name: 'Loaf' }], true);
+    expect(store.getSnapshot().recipesFromServer).toBe(true);
+  });
+
+  test('the tables are the SAME object until one of their parts changes', () => {
+    const { fake, store } = setup();
+    store.start();
+    const before = store.getSnapshot().tables;
+    fake.products([{ id: 'p1', name: 'Loaf' }]);
+    expect(store.getSnapshot().tables).toBe(before);
+    fake.recipes([{ id: 'r1', name: 'Dough' }]);
+    expect(store.getSnapshot().tables).not.toBe(before);
+    expect(store.getSnapshot().tables.recipes).toBe(store.getSnapshot().recipes);
+    expect(store.getSnapshot().recipes.r1!.name).toBe('Dough');
+  });
+
+  test('⚠️ a save is local-first: on screen at once under the id made on the phone, the SAME id written', () => {
+    const { fake, store } = setup();
+    store.start();
+    fake.products([]);
+    const id = store.saveProduct({ product: product({ name: 'Focaccia' }), snapshot: null, lossPatches: {} });
+    expect(id).toBe('new-1');
+    expect(store.getSnapshot().products.map(p => p.id)).toEqual(['new-1']);
+    expect(store.getSnapshot().unsent).toBe(true);
+    expect(fake.writes).toHaveLength(1);
+    expect(fake.writes[0]!.args[0]).toBe('new-1');
+  });
+
+  test('⚠️ the document carries exactly the whitelisted fields and the product model, never the id', () => {
+    const doc = toProductDocument(product({ id: 'p1', name: 'Loaf', sellingPrice: 2.5, vatRate: 0 } as Product & { name: string }));
+    expect(Object.keys(doc).sort()).toEqual([
+      'components', 'foodCostTarget', 'labourMinutes', 'labourPeople', 'model', 'name', 'packSize', 'packUnit',
+      'packaging', 'piecesPerBatch', 'sellingMode', 'sellingPrice', 'vatRate',
+    ]);
+    expect(doc.model).toBe(3);
+    expect(doc.vatRate).toBe(0);
+    expect(doc).not.toHaveProperty('id');
+  });
+
+  test('⚠️ rawGrams and cookedGrams are written only when they are numbers (the rules refuse a null); noWeightLoss never again', () => {
+    const none = toProductDocument(product({ id: 'p1', name: 'Loaf' } as Product & { name: string }));
+    expect(none).not.toHaveProperty('rawGrams');
+    expect(none).not.toHaveProperty('cookedGrams');
+    const both = toProductDocument(product({ id: 'p1', name: 'Loaf', rawGrams: 1000, cookedGrams: 880 } as Product & { name: string }));
+    expect(both).toMatchObject({ rawGrams: 1000, cookedGrams: 880, model: 3 });
+    const cookedOnly = toProductDocument(product({ id: 'p1', name: 'Loaf', cookedGrams: 880 } as Product & { name: string }));
+    expect(cookedOnly).not.toHaveProperty('rawGrams');
+    expect(cookedOnly.cookedGrams).toBe(880);
+    // A product the current app saved with the flag on: the next save drops it from the document.
+    const flagged = toProductDocument(product({ id: 'p1', name: 'Loaf', noWeightLoss: true } as Product & { name: string }));
+    expect(flagged).not.toHaveProperty('noWeightLoss');
+  });
+
+  test('the margin point travels with the product', () => {
+    const { fake, store } = setup();
+    store.start();
+    store.saveProduct({ product: product({ id: 'p1', name: 'Loaf' } as Product & { name: string }), snapshot: { recordedAt: 'x' }, lossPatches: {} });
+    expect(fake.writes[0]!.args[2]).toEqual({ recordedAt: 'x' });
+  });
+
+  test('⚠️ a refused save of a NEW product removes it, and names it (no live stream to revert it)', async () => {
+    const { fake, store, messages } = setup({ storage: fakeStorage({ [PRODUCTS_KEY]: [] }) });
+    store.start();
+    store.saveProduct({ product: product({ name: 'Focaccia' }), snapshot: null, lossPatches: {} });
+    fake.writes[0]!.pending.reject(new Error('permission-denied'));
+    await settle();
+    expect(store.getSnapshot().products).toEqual([]);
+    expect(store.getSnapshot().unsent).toBe(false);
+    expect(messages).toEqual([{ kind: 'product-not-saved', name: 'Focaccia' }]);
+  });
+
+  test('a refused save of an existing product puts the old one back (no live stream to revert it)', async () => {
+    const { fake, store } = setup({ storage: fakeStorage({ [PRODUCTS_KEY]: [{ id: 'p1', name: 'Loaf', sellingPrice: 2 }] }) });
+    store.start();
+    store.saveProduct({ product: product({ id: 'p1', name: 'Loaf', sellingPrice: 3 } as Product & { name: string }), snapshot: null, lossPatches: {} });
+    expect(store.getSnapshot().products[0]!.sellingPrice).toBe(3);
+    fake.writes[0]!.pending.reject(new Error('refused'));
+    await settle();
+    expect(store.getSnapshot().products[0]!.sellingPrice).toBe(2);
+  });
+
+  test('⚠️ a refusal never rolls back over a LATER save of the same product', async () => {
+    const { fake, store } = setup({ storage: fakeStorage({ [PRODUCTS_KEY]: [{ id: 'p1', name: 'Loaf', sellingPrice: 2 }] }) });
+    store.start();
+    store.saveProduct({ product: product({ id: 'p1', name: 'Loaf', sellingPrice: 3 } as Product & { name: string }), snapshot: null, lossPatches: {} });
+    store.saveProduct({ product: product({ id: 'p1', name: 'Loaf', sellingPrice: 4 } as Product & { name: string }), snapshot: null, lossPatches: {} });
+    fake.writes[0]!.pending.reject(new Error('refused'));
+    await settle();
+    expect(store.getSnapshot().products[0]!.sellingPrice).toBe(4);
+  });
+
+  test('⚠️ with the stream alive, a refusal is left to the stream: the store puts back nothing older', async () => {
+    const { fake, store, messages } = setup();
+    store.start();
+    fake.products([{ id: 'p1', name: 'Loaf', sellingPrice: 2 }]);
+    store.saveProduct({ product: product({ id: 'p1', name: 'Loaf', sellingPrice: 3 } as Product & { name: string }), snapshot: null, lossPatches: {} });
+    // Another phone saved 5 meanwhile; the SDK shows the server's version, without the refused write.
+    fake.products([{ id: 'p1', name: 'Loaf', sellingPrice: 5 }]);
+    fake.writes[0]!.pending.reject(new Error('refused'));
+    await settle();
+    expect(store.getSnapshot().products[0]!.sellingPrice).toBe(5);
+    expect(messages).toEqual([{ kind: 'product-not-saved', name: 'Loaf' }]);
+  });
+
+  test('a dead stream hands the rollback back to the store', async () => {
+    const { fake, store } = setup();
+    store.start();
+    fake.products([]);
+    fake.productsFail();
+    store.saveProduct({ product: product({ name: 'Focaccia' }), snapshot: null, lossPatches: {} });
+    fake.writes[0]!.pending.reject(new Error('refused'));
+    await settle();
+    expect(store.getSnapshot().products).toEqual([]);
+  });
+
+  describe("firstSave: a new product's first save, in the air or refused", () => {
+    const loaf = (fields: object = {}) => ({ product: product({ id: 'p1', name: 'Loaf', ...fields } as Product & { name: string }), snapshot: null, lossPatches: {} });
+
+    test('is sending while the write is in the air and cleared when it succeeds', async () => {
+      const { fake, store } = setup();
+      store.start();
+      expect(store.firstSave('p1')).toBeNull();
+      store.saveProduct(loaf());
+      expect(store.firstSave('p1')).toBe('sending');
+      fake.writes[0]!.pending.resolve();
+      await settle();
+      expect(store.firstSave('p1')).toBeNull();
+    });
+
+    test('stays refused after a refused first save, with the product taken back', async () => {
+      const { fake, store } = setup();
+      store.start();
+      store.saveProduct(loaf());
+      fake.writes[0]!.pending.reject(new Error('refused'));
+      await settle();
+      expect(store.firstSave('p1')).toBe('refused');
+    });
+
+    test('a second save in the air keeps it sending when the first one lands; the second one clears it', async () => {
+      const { fake, store } = setup();
+      store.start();
+      store.saveProduct(loaf());
+      store.saveProduct(loaf({ sellingPrice: 3 }));
+      fake.writes[0]!.pending.resolve();
+      await settle();
+      expect(store.firstSave('p1')).toBe('sending');
+      fake.writes[1]!.pending.resolve();
+      await settle();
+      expect(store.firstSave('p1')).toBeNull();
+    });
+
+    test('a delete after the save clears it', async () => {
+      const { fake, store } = setup();
+      store.start();
+      store.saveProduct(loaf());
+      fake.writes[0]!.pending.reject(new Error('refused'));
+      await settle();
+      store.deleteProduct('p1');
+      expect(store.firstSave('p1')).toBeNull();
+    });
+
+    test('⚠️ the refused save of an EXISTING product does not flag it (it rolls back; a later remote delete is a real one)', async () => {
+      const { fake, store } = setup({ storage: fakeStorage({ [PRODUCTS_KEY]: [{ id: 'p1', name: 'Loaf', sellingPrice: 2 }] }) });
+      store.start();
+      store.saveProduct(loaf({ sellingPrice: 3 }));
+      expect(store.firstSave('p1')).toBeNull();
+      fake.writes[0]!.pending.reject(new Error('refused'));
+      await settle();
+      expect(store.firstSave('p1')).toBeNull();
+    });
+  });
+
+  test('⚠️ offline, a «missing» settings document from the phone’s own database is not an answer', () => {
+    const { fake, store } = setup();
+    store.start();
+    fake.settings(null, false);
+    expect(store.getSnapshot().settingsLoaded).toBe(false);
+    // A cached copy that exists is an answer; so is the server saying there is none.
+    fake.settings({ labourCostPerHour: 12 }, false);
+    expect(store.getSnapshot().labourCostPerHour).toBe(12);
+    fake.settings(null, true);
+    expect(store.getSnapshot().labourCostPerHour).toBeNull();
+    expect(store.getSnapshot().settingsLoaded).toBe(true);
+  });
+
+  test('a landed save leaves the product and clears the unsent mark', async () => {
+    const { fake, store } = setup();
+    store.start();
+    store.saveProduct({ product: product({ name: 'Focaccia' }), snapshot: null, lossPatches: {} });
+    fake.writes[0]!.pending.resolve();
+    await settle();
+    expect(store.getSnapshot().unsent).toBe(false);
+    expect(store.getSnapshot().products).toHaveLength(1);
+  });
+
+  test('a weighing is written onto its recipe, apart from the product, and shows at once', () => {
+    const { fake, store } = setup();
+    store.start();
+    fake.recipes([{ id: 'r1', name: 'Dough', lossPct: 0 }]);
+    store.saveProduct({
+      product: product({ id: 'p1', name: 'Loaf' } as Product & { name: string }), snapshot: null,
+      lossPatches: { r1: { lossPct: 12, rawGrams: 1000, cookedGrams: 880 } },
+    });
+    expect(fake.writes.map(w => w.kind)).toEqual(['loss', 'product']);
+    expect(fake.writes[0]!.args).toEqual(['r1', { lossPct: 12, rawGrams: 1000, cookedGrams: 880 }]);
+    expect(store.getSnapshot().recipes.r1!.lossPct).toBe(12);
+  });
+
+  test('a weighing for a recipe that is not here is not written', () => {
+    const { fake, store } = setup();
+    store.start();
+    store.saveProduct({
+      product: product({ name: 'Loaf' }), snapshot: null,
+      lossPatches: { gone: { lossPct: 12, rawGrams: 1000, cookedGrams: 880 } },
+    });
+    expect(fake.writes.map(w => w.kind)).toEqual(['product']);
+  });
+
+  test('⚠️ a refused weighing puts back only its own fields — and removes one the recipe never had', async () => {
+    const { fake, store, messages } = setup();
+    store.start();
+    fake.recipes([{ id: 'r1', name: 'Dough', lossPct: 5 }]);
+    store.saveProduct({
+      product: product({ name: 'Loaf' }), snapshot: null,
+      lossPatches: { r1: { lossPct: 12, rawGrams: 1000, cookedGrams: 880 } },
+    });
+    fake.writes[0]!.pending.reject(new Error('refused'));
+    await settle();
+    expect(store.getSnapshot().recipes.r1).toEqual({ id: 'r1', name: 'Dough', lossPct: 5 });
+    expect(messages).toContainEqual({ kind: 'loss-not-saved', name: 'Dough' });
+  });
+
+  test('a refused weighing is NOT put back over somebody else’s newer weighing', async () => {
+    const { fake, store } = setup();
+    store.start();
+    fake.recipes([{ id: 'r1', name: 'Dough', lossPct: 5 }]);
+    store.saveProduct({
+      product: product({ name: 'Loaf' }), snapshot: null,
+      lossPatches: { r1: { lossPct: 12, rawGrams: 1000, cookedGrams: 880 } },
+    });
+    fake.recipes([{ id: 'r1', name: 'Dough', lossPct: 9, rawGrams: 500, cookedGrams: 455 }]);
+    fake.writes[0]!.pending.reject(new Error('refused'));
+    await settle();
+    expect(store.getSnapshot().recipes.r1!.lossPct).toBe(9);
+  });
+
+  test('a delete is local-first; a refused one puts the product back and says so (no live stream)', async () => {
+    const { fake, store, messages } = setup({ storage: fakeStorage({ [PRODUCTS_KEY]: [{ id: 'p1', name: 'Loaf' }] }) });
+    store.start();
+    store.deleteProduct('p1');
+    expect(store.getSnapshot().products).toEqual([]);
+    fake.writes[0]!.pending.reject(new Error('refused'));
+    await settle();
+    expect(store.getSnapshot().products.map(p => p.id)).toEqual(['p1']);
+    expect(messages).toEqual([{ kind: 'product-not-deleted' }]);
+  });
+
+  test('the labour rate is local-first; null clears it; a refusal puts the old one back', async () => {
+    const { fake, store, messages } = setup();
+    store.start();
+    fake.settings({ labourCostPerHour: 14 });
+    store.saveLabourRate(16);
+    expect(store.getSnapshot().labourCostPerHour).toBe(16);
+    expect(fake.writes[0]!.args).toEqual([16, '2026-10-12T09:00:00.000Z']);
+    fake.writes[0]!.pending.reject(new Error('refused'));
+    await settle();
+    expect(store.getSnapshot().labourCostPerHour).toBe(14);
+    expect(messages).toEqual([{ kind: 'rate-not-saved' }]);
+
+    store.saveLabourRate(null);
+    expect(fake.writes[1]!.args[0]).toBeNull();
+    expect(store.getSnapshot().labourCostPerHour).toBeNull();
+  });
+
+  test('the margin history is read through the source, on demand', async () => {
+    const { fake, store } = setup();
+    expect(await store.getProductHistory('p1')).toEqual([{ id: 'h1', foodCostPct: 30 }]);
+    expect(fake.source.getProductHistory).toHaveBeenCalledWith('p1');
+  });
+
+  test('a subscriber is told of every change, and the snapshot is the same object in between', () => {
+    const { fake, store } = setup();
+    store.start();
+    const seen = vi.fn();
+    const unsubscribe = store.subscribe(seen);
+    const before = store.getSnapshot();
+    expect(store.getSnapshot()).toBe(before);
+    fake.ingredients([{ id: 'i1', name: 'Flour' }]);
+    expect(seen).toHaveBeenCalledTimes(1);
+    unsubscribe();
+    fake.ingredients([]);
+    expect(seen).toHaveBeenCalledTimes(1);
+  });
+
+  describe('products made from the recipe book (item 29)', () => {
+    const recipe = (id: string, name: string, extra: Record<string, unknown> = {}): StoredDoc =>
+      ({ id, name, ingredients: [{ label: 'Flour', grams: 1000, unit: 'g' }], ...extra });
+    // Answers every create waiting, in order: true = created, false = the server already had it, an Error = refused / offline.
+    const answer = (fake: ReturnType<typeof setup>['fake'], ...answers: (boolean | Error)[]) => {
+      answers.forEach((a, i) => (a instanceof Error ? fake.creates[i]!.reject(a) : fake.creates[i]!.resolve(a)));
+    };
+
+    test('⚠️⚠️ each product is created through the SERVER-checked create, never saveProduct, with the document saveProduct would write', async () => {
+      const { fake, store } = setup();
+      store.start();
+      fake.products([]);
+      const done = store.createProductsFromRecipes([recipe('r1', ' Brioche ', { lossPct: 10 })]);
+      await settle();
+      expect(fake.writes.filter(w => w.kind === 'product')).toHaveLength(0);
+      expect(fake.creates).toHaveLength(1);
+      expect(fake.creates[0]!.id).toBe('recipe-r1');
+      expect(fake.creates[0]!.data).toEqual(toProductDocument(product({ id: 'recipe-r1', name: 'Brioche', components: [{ recipeId: 'r1', qtyKg: 1 }], cookedGrams: 900 })));
+      expect(fake.creates[0]!.data).toMatchObject({ name: 'Brioche', model: 3, sellingMode: null, sellingPrice: null, vatRate: null, packaging: [] });
+      answer(fake, true);
+      expect(await done).toEqual({ made: 1, skipped: 0, failed: 0 });
+    });
+
+    test('⚠️ the fields written are all in the rules whitelist of products (firestore.rules, allow create, update)', () => {
+      const rules = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'firestore.rules'), 'utf8').replace(/\r\n/g, '\n');
+      const block = rules.slice(rules.indexOf('match /products/{id}'));
+      const list = block.slice(block.indexOf('hasOnly(['), block.indexOf('])'));
+      const made = productFromRecipe(recipe('r1', 'Pane')) as unknown as Product;
+      for (const key of Object.keys(toProductDocument(made))) expect(list, key).toContain("'" + key + "'");
+    });
+
+    test('a product this phone already has is not asked about; one the server already has is skipped; the rest are made', async () => {
+      const { fake, store } = setup();
+      store.start();
+      fake.products([{ id: 'recipe-r1', name: 'Brioche', components: [], packaging: [], model: 2 }]);
+      const done = store.createProductsFromRecipes([recipe('r1', 'Brioche'), recipe('r2', 'Focaccia'), recipe('r3', 'Pizza')]);
+      await settle();
+      expect(fake.creates.map(c => c.id)).toEqual(['recipe-r2', 'recipe-r3']);
+      answer(fake, false, true);
+      expect(await done).toEqual({ made: 1, skipped: 2, failed: 0 });
+    });
+
+    test('⚠️ offline or refused: counted as failed, said in the log, NOTHING queued — and the others are still made', async () => {
+      const { fake, store } = setup();
+      store.start();
+      fake.products([]);
+      const done = store.createProductsFromRecipes([recipe('r1', 'A'), recipe('r2', 'B'), recipe('r3', 'C')]);
+      await settle();
+      answer(fake, true, new Error('unavailable'), new Error('permission-denied'));
+      expect(await done).toEqual({ made: 1, skipped: 0, failed: 2 });
+      expect(fake.writes).toHaveLength(0);
+    });
+
+    test('⚠️ a recipe given twice, a recipe with no name or an id Firestore refuses make one product, or none', async () => {
+      const { fake, store } = setup();
+      store.start();
+      fake.products([]);
+      const done = store.createProductsFromRecipes([recipe('r1', 'Brioche'), recipe('r1', 'Brioche'), recipe('r2', '  '), recipe('a/b', 'Slash'), null, 'x']);
+      await settle();
+      expect(fake.creates.map(c => c.id)).toEqual(['recipe-r1']);
+      answer(fake, true);
+      expect(await done).toEqual({ made: 1, skipped: 0, failed: 0 });
+      expect(await store.createProductsFromRecipes([])).toEqual({ made: 0, skipped: 0, failed: 0 });
+      expect(await store.createProductsFromRecipes(undefined as unknown as unknown[])).toEqual({ made: 0, skipped: 0, failed: 0 });
+    });
+
+    test('no local copy is touched (the live list brings the products in) and the section counts it as unsent while it runs', async () => {
+      const { fake, store } = setup();
+      store.start();
+      fake.products([]);
+      const seen: boolean[] = [];
+      store.subscribe(() => seen.push(store.getSnapshot().unsent));
+      const done = store.createProductsFromRecipes([recipe('r1', 'Brioche')]);
+      await settle();
+      expect(store.getSnapshot().unsent).toBe(true);
+      answer(fake, true);
+      await done;
+      expect(store.getSnapshot().unsent).toBe(false);
+      expect(store.getSnapshot().products).toEqual([]);
+    });
+  });
+});

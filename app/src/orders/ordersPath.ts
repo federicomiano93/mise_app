@@ -1,0 +1,156 @@
+// The addresses of «Orders», in one place so the section, the list's rows and the screens one level down cannot disagree
+// (docs/parity/orders.md, decision T1). Slice 3f-1 drew the first three; slice 3f-2 adds the placing and clearing screens.
+//
+//   /orders                         the supplier list
+//   /orders/ingredients             the flat view, «by ingredient» (slice 3f-8b), at the list's level: every ingredient A→Z
+//   /orders/supplier/<id>           one supplier's order screen (`no-supplier` is a valid id: the pseudo-supplier)
+//   /orders/supplier/<id>/items     «What they sell», read-only, one level below that screen
+//   /orders/supplier/<id>/summary   the order summary (slice 3f-8c), read-only, one level below that screen
+//   /orders/supplier/<id>/confirm   «This is what will be recorded» for one supplier, one level below its screen
+//   /orders/place-all               the picker of the suppliers to record together, one level below the list
+//   /orders/place-all/confirm       the same confirm screen for the ticked suppliers (their ids travel in the navigation state)
+//   /orders/clear                   the picker of the suppliers whose quantities to clear, one level below the list
+//   /orders/send                    the send screen (slice 3f-3): the suppliers to send to, one level below the list
+//   /orders/settings                the Orders settings (slice 3f-4), one level below the list
+//   /orders/settings/supplier-order the order of the supplier list (slice 3f-8a), one level below the settings
+//   /orders/history                 History, one level below the list (its door is beside the gear)
+//   /orders/history/day/<date>      sending a whole day of recorded orders again, one level below History
+//   /orders/history/<recordId>      correcting one recorded order, one level below History (`day` is not a record id)
+//   /orders/incoming                «Incoming» (slice 3f-5), one level below the list
+//   /orders/incoming/<recordId>     «What arrived?» for one order, one level below Incoming
+//   /orders/reorder                 «To re-order», one level below the list
+//   /orders/lists                   «Order lists» (slice 3f-7): the lists somebody sent, one level below the list
+//   /orders/lists/<id>              one order list, open, one level below that
+//   anything else                   unknown: the section goes back to /orders
+
+export const ORDERS_PATH = '/orders';
+
+export type OrdersView =
+  | { readonly kind: 'list' }
+  | { readonly kind: 'ingredients' }
+  | { readonly kind: 'supplier'; readonly id: string }
+  | { readonly kind: 'items'; readonly id: string }
+  | { readonly kind: 'summary'; readonly id: string }
+  | { readonly kind: 'confirm'; readonly id: string }
+  | { readonly kind: 'place-all' }
+  | { readonly kind: 'place-all-confirm' }
+  | { readonly kind: 'clear' }
+  | { readonly kind: 'send' }
+  | { readonly kind: 'settings' }
+  | { readonly kind: 'supplier-order' }
+  | { readonly kind: 'history' }
+  | { readonly kind: 'history-day'; readonly date: string }
+  | { readonly kind: 'history-edit'; readonly id: string }
+  | { readonly kind: 'incoming' }
+  | { readonly kind: 'incoming-missing'; readonly id: string }
+  | { readonly kind: 'reorder' }
+  | { readonly kind: 'lists' }
+  | { readonly kind: 'request'; readonly id: string }
+  | { readonly kind: 'unknown' };
+
+export const INGREDIENTS_PATH = `${ORDERS_PATH}/ingredients`;
+export const supplierPath = (id: string): string => `${ORDERS_PATH}/supplier/${encodeURIComponent(id)}`;
+export const supplierItemsPath = (id: string): string => `${supplierPath(id)}/items`;
+export const supplierSummaryPath = (id: string): string => `${supplierPath(id)}/summary`;
+export const supplierConfirmPath = (id: string): string => `${supplierPath(id)}/confirm`;
+export const PLACE_ALL_PATH = `${ORDERS_PATH}/place-all`;
+export const PLACE_ALL_CONFIRM_PATH = `${PLACE_ALL_PATH}/confirm`;
+export const CLEAR_PATH = `${ORDERS_PATH}/clear`;
+export const SEND_PATH = `${ORDERS_PATH}/send`;
+export const SETTINGS_PATH = `${ORDERS_PATH}/settings`;
+export const SUPPLIER_ORDER_PATH = `${SETTINGS_PATH}/supplier-order`;
+export const HISTORY_PATH = `${ORDERS_PATH}/history`;
+export const historyDayPath = (date: string): string => `${HISTORY_PATH}/day/${encodeURIComponent(date)}`;
+export const historyEditPath = (id: string): string => `${HISTORY_PATH}/${encodeURIComponent(id)}`;
+export const INCOMING_PATH = `${ORDERS_PATH}/incoming`;
+export const incomingMissingPath = (id: string): string => `${INCOMING_PATH}/${encodeURIComponent(id)}`;
+export const REORDER_PATH = `${ORDERS_PATH}/reorder`;
+export const LISTS_PATH = `${ORDERS_PATH}/lists`;
+export const requestPath = (id: string): string => `${LISTS_PATH}/${encodeURIComponent(id)}`;
+
+// A segment as it was typed, back to the id it stands for; null when it is not valid percent-encoding.
+function decoded(segment: string): string | null {
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    return null;
+  }
+}
+
+// `rest` is what follows /orders in the address AS IT IS WRITTEN: each segment is split first and decoded after, so an id
+// with a slash, a percent sign or a space in it comes back whole.
+export function parseOrdersPath(rest: string | undefined): OrdersView {
+  const parts = (rest ?? '').split('/').filter(part => part !== '');
+  if (parts.length === 0) return { kind: 'list' };
+  const [first, second, third] = parts;
+  if (first === 'place-all') {
+    if (parts.length === 1) return { kind: 'place-all' };
+    return parts.length === 2 && second === 'confirm' ? { kind: 'place-all-confirm' } : { kind: 'unknown' };
+  }
+  if (first === 'ingredients') return parts.length === 1 ? { kind: 'ingredients' } : { kind: 'unknown' };
+  if (first === 'clear') return parts.length === 1 ? { kind: 'clear' } : { kind: 'unknown' };
+  if (first === 'send') return parts.length === 1 ? { kind: 'send' } : { kind: 'unknown' };
+  if (first === 'settings') {
+    if (parts.length === 1) return { kind: 'settings' };
+    return parts.length === 2 && second === 'supplier-order' ? { kind: 'supplier-order' } : { kind: 'unknown' };
+  }
+  if (first === 'reorder') return parts.length === 1 ? { kind: 'reorder' } : { kind: 'unknown' };
+  if (first === 'lists') {
+    if (parts.length === 1) return { kind: 'lists' };
+    const id = second === undefined ? null : decoded(second);
+    return parts.length === 2 && id !== null && id !== '' ? { kind: 'request', id } : { kind: 'unknown' };
+  }
+  if (first === 'incoming') {
+    if (parts.length === 1) return { kind: 'incoming' };
+    const id = second === undefined ? null : decoded(second);
+    return parts.length === 2 && id !== null && id !== '' ? { kind: 'incoming-missing', id } : { kind: 'unknown' };
+  }
+  if (first === 'history') {
+    if (parts.length === 1) return { kind: 'history' };
+    if (second === undefined) return { kind: 'unknown' };
+    // ⚠️ `day` IS NOT A RECORD ID: /orders/history/day alone is nothing, and /orders/history/day/<date> is the day screen.
+    if (second === 'day') {
+      const date = parts.length === 3 && third !== undefined ? decoded(third) : null;
+      return date !== null && date !== '' ? { kind: 'history-day', date } : { kind: 'unknown' };
+    }
+    const id = decoded(second);
+    return parts.length === 2 && id !== null && id !== '' ? { kind: 'history-edit', id } : { kind: 'unknown' };
+  }
+  if (first !== 'supplier' || second === undefined) return { kind: 'unknown' };
+  const id = decoded(second);
+  if (id === null || id === '') return { kind: 'unknown' };
+  if (parts.length === 2) return { kind: 'supplier', id };
+  if (parts.length === 3 && third === 'items') return { kind: 'items', id };
+  if (parts.length === 3 && third === 'summary') return { kind: 'summary', id };
+  if (parts.length === 3 && third === 'confirm') return { kind: 'confirm', id };
+  return { kind: 'unknown' };
+}
+
+// What the usage record calls the screen at an address (shell/sections.ts screenNameFor): `orders`, `orders-ingredients`, `orders-supplier`,
+// `orders-supplier-items`, `orders-supplier-summary`, `orders-confirm`, `orders-place-all`, `orders-place-all-confirm`, `orders-clear`, `orders-send`, `orders-settings`, `orders-settings-supplier-order`,
+// `orders-history`, `orders-history-day`, `orders-history-edit`, `orders-incoming`, `orders-incoming-missing`, `orders-reorder`, `orders-lists` and `orders-list`.
+// ⚠️ ONLY AN ADDRESS THE SECTION DRAWS counts as its screen: an unknown one is sent back to the list, and logging it as a
+// screen would put one nobody saw in the owner's statistics.
+export function ordersScreenName(rest: string): string {
+  const view = parseOrdersPath(rest);
+  if (view.kind === 'ingredients') return 'orders-ingredients';
+  if (view.kind === 'supplier') return 'orders-supplier';
+  if (view.kind === 'items') return 'orders-supplier-items';
+  if (view.kind === 'summary') return 'orders-supplier-summary';
+  if (view.kind === 'confirm') return 'orders-confirm';
+  if (view.kind === 'place-all') return 'orders-place-all';
+  if (view.kind === 'place-all-confirm') return 'orders-place-all-confirm';
+  if (view.kind === 'clear') return 'orders-clear';
+  if (view.kind === 'send') return 'orders-send';
+  if (view.kind === 'settings') return 'orders-settings';
+  if (view.kind === 'supplier-order') return 'orders-settings-supplier-order';
+  if (view.kind === 'history') return 'orders-history';
+  if (view.kind === 'history-day') return 'orders-history-day';
+  if (view.kind === 'history-edit') return 'orders-history-edit';
+  if (view.kind === 'incoming') return 'orders-incoming';
+  if (view.kind === 'incoming-missing') return 'orders-incoming-missing';
+  if (view.kind === 'reorder') return 'orders-reorder';
+  if (view.kind === 'lists') return 'orders-lists';
+  if (view.kind === 'request') return 'orders-list';
+  return 'orders';
+}

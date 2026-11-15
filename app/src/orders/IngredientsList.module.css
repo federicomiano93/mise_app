@@ -1,0 +1,94 @@
+/* The flat view, «by ingredient»: the head (OrdersHead.module.css) over one sheet of rows. Nothing in the chain from the scroll
+   area down to the sticky head, the column names and the letters clips (no `overflow` here), or they would stop sticking. */
+
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+}
+
+.loading {
+  padding: var(--s6);
+  color: var(--ink-2);
+}
+
+.count {
+  margin: 0;
+  padding: 0 var(--s1);
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.nothing {
+  padding: var(--s3);
+  color: var(--ink-2);
+}
+
+.sheet {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+/* ⚠️ THE COLUMN NAMES STICK RIGHT UNDER THE HEAD, and the letters right under them: their `top` is the measured height of what is above,
+   set inline by IngredientsList.tsx. The same columns as a row (OrderLine.module.css). */
+.columns {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 104px 64px;
+  gap: var(--s2);
+  padding: var(--s2);
+  border-bottom: 1px solid var(--line);
+  border-radius: var(--r-lg) var(--r-lg) 0 0;
+  background: var(--surface);
+}
+
+.columns[data-stock="false"] {
+  grid-template-columns: minmax(0, 1fr) 104px;
+}
+
+@media (min-width: 480px) {
+  .columns {
+    grid-template-columns: minmax(0, 1fr) 104px 88px;
+    gap: var(--s3);
+    padding: var(--s2) var(--s3);
+  }
+}
+
+.columnName {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  font-weight: 650;
+  text-align: center;
+}
+
+/* One run per letter: its divider sticks while ITS rows scroll, and the next letter pushes it out. */
+.run {
+  min-width: 0;
+}
+
+.letter {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin: 0;
+  padding: var(--s1) var(--s3);
+  border-bottom: 1px solid var(--line);
+  background: var(--sunken);
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  font-weight: 650;
+}
+
+.rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.folded {
+  padding: var(--s3);
+}

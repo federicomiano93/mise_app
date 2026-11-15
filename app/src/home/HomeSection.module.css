@@ -1,0 +1,6 @@
+/* The Home: one readable column, as wide as a list is comfortable to read, full width on a phone. */
+
+.column {
+  width: 100%;
+  max-width: 40rem;
+}

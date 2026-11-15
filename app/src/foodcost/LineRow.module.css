@@ -1,0 +1,146 @@
+/* One line of «Made of» or of the packaging. Name and bin on the first row, the amount on the second,
+   the note under them. Targets are 48px; the name wraps instead of pushing the bin off a 296px phone. */
+
+.line {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  padding: var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+
+.top {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}
+
+/* The amount row wraps: at 296px the money drops under the box and the unit, still right-aligned, never sideways. */
+.amount {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.name {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  min-width: 0;
+  min-height: var(--hit);
+  padding: 0 var(--s3);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: 600 var(--fs-md) var(--font);
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.name[data-missing="true"] {
+  border-color: var(--danger);
+  color: var(--danger-ink);
+}
+
+.name:focus-visible,
+.remove:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.remove {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: var(--hit);
+  height: var(--hit);
+  border: 0;
+  border-radius: var(--r-md);
+  background: none;
+  color: var(--ink-2);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (hover: hover) {
+  .remove:hover {
+    background: var(--danger-tint);
+    color: var(--danger-ink);
+  }
+}
+
+/* 18px type on purpose: a field under 16px makes iOS zoom the page in when it is focused. */
+/* ⚠️ SIZED IN `ch`, NOT IN PIXELS (owner, Nov 2026: «nella casella composto da il peso non si vede tutto», current app df7e6313): nine digits
+   ("12345.678", exactly nine characters) are 9ch in the box's own tabular figures, plus its padding and its 2 × 1.5px border. */
+.qty {
+  flex: none;
+  width: calc(9ch + 2 * var(--s3) + 3px);
+  max-width: 100%;
+  min-height: var(--hit);
+  padding: 0 var(--s3);
+  border: 1.5px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: 450 var(--fs-lg) var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.qty::placeholder {
+  color: var(--ink-3);
+}
+
+.qty:focus {
+  border-color: var(--accent);
+}
+
+.unit {
+  min-height: var(--hit);
+  padding: 0 var(--s3);
+  border: 1.5px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: 450 var(--fs-md) var(--font);
+}
+
+.fixedUnit {
+  color: var(--ink-2);
+}
+
+/* Whom an ingredient is bought from (step 4), under the name: indented to the name's own text, smaller, --ink-2 on --surface
+   (above 4.5:1). One line with «…»: a long legal name never makes the card scroll sideways at 296px. */
+.supplier {
+  margin-top: calc(-1 * var(--s1));
+  padding: 0 var(--s3);
+  overflow: hidden;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.note {
+  color: var(--warn-ink);
+  font-size: var(--fs-sm);
+  overflow-wrap: anywhere;
+}
+
+/* The rate and what the amount typed costs (Federico, 7 Nov 2026), at the right-hand end of the amount row (step 3b, 11 Nov 2026):
+   the row's figure, so bold, with figures that keep their width (tabular). It wraps under the box at 296px, never sideways. */
+.cost {
+  min-width: 0;
+  margin-left: auto;
+  color: var(--ink);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  overflow-wrap: anywhere;
+}

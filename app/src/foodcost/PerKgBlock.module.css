@@ -1,0 +1,127 @@
+/* «Cost breakdown»: the last section of the screen, closed until pressed, one line per ingredient. */
+
+.block {
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--sunken);
+}
+
+.block[hidden] {
+  display: none;
+}
+
+/* A real button, so it carries aria-expanded (a bare ui/Button has no look of its own: the browser's grey box and border come off here). */
+.toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  width: 100%;
+  min-height: var(--hit);
+  padding: 0 var(--s4);
+  border: 0;
+  border-radius: var(--r-md);
+  background: none;
+  color: var(--ink);
+  font: 650 var(--fs-md)/1.3 var(--font);
+  text-align: left;
+}
+
+.toggle[data-focus-visible] {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.caption {
+  margin: 0 0 var(--s2);
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.num {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+}
+
+.chevron {
+  flex: none;
+  color: var(--ink-2);
+}
+
+.toggle[aria-expanded="true"] .chevron {
+  transform: rotate(180deg);
+}
+
+.body {
+  padding: 0 var(--s4) var(--s3);
+}
+
+.body[hidden] {
+  display: none;
+}
+
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s1) var(--s3);
+  padding: var(--s2) 0;
+  border-top: 1px solid var(--line);
+}
+
+.name {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font-size: var(--fs-sm);
+}
+
+.cost {
+  color: var(--ink);
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.detail {
+  flex: 1 0 100%;
+  overflow-wrap: anywhere;
+  color: var(--ink-2);
+  font-size: var(--fs-xs);
+}
+
+.total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  padding-top: var(--s3);
+  border-top: 1px solid var(--line);
+  color: var(--ink);
+  font-size: var(--fs-md);
+  font-weight: 650;
+}
+
+.partial,
+.note {
+  margin-top: var(--s2);
+  font-size: var(--fs-sm);
+}
+
+.partial {
+  color: var(--warn-ink);
+  font-weight: 600;
+}
+
+.note {
+  color: var(--ink-2);
+}

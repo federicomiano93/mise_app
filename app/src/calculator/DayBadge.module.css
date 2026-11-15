@@ -1,0 +1,28 @@
+/* The day a log is for. The words tell the story, the colour answers «do I need this now?»: green for today (done /
+   in hand), amber for tomorrow (to check), muted for a day that has passed so a stale log never reads as urgent.
+   Each pair is a tint with its own ink, at 4.5:1 or more. */
+
+.badge {
+  display: inline-block;
+  padding: var(--s1) var(--s3);
+  border-radius: var(--r-pill);
+  background: var(--sunken);
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  font-weight: 650;
+  line-height: 1.3;
+}
+
+.badge[data-tone="today"] {
+  background: var(--ok-tint);
+  color: var(--ok-ink);
+}
+
+.badge[data-tone="tomorrow"] {
+  background: var(--warn-tint);
+  color: var(--warn-ink);
+}
+
+.under {
+  margin-top: var(--s1);
+}

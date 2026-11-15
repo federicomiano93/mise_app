@@ -1,0 +1,126 @@
+/* The send screen: a master tick, a tick per supplier with its number of lines, the message format and the one button. Each
+   row is a 48px target. The card does not clip (no `overflow`), so the bar above keeps sticking. */
+
+.screen {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+.empty {
+  padding: var(--s6) var(--s3);
+  color: var(--ink-2);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+  padding: var(--s3);
+}
+
+.rows {
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  list-style: none;
+}
+
+.item {
+  border-bottom: 1px solid var(--line);
+}
+
+.item:last-child {
+  border-bottom: 0;
+}
+
+.tick {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  min-height: var(--hit);
+  padding: var(--s2) var(--s3);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.tick input {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.tick:focus-within {
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
+}
+
+/* «Select all suppliers» stands apart from the rows it ticks. */
+.all {
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--bg);
+  font-weight: 650;
+}
+
+.name {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-weight: 600;
+}
+
+.count {
+  flex: none;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+/* «By supplier / One list»: a radio group (it chooses ONE way to write the message), a frame and a tint for the chosen one. */
+.format {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+}
+
+.radio {
+  flex: 1 1 auto;
+  min-height: var(--hit);
+  padding: 0 var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.radio:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
+}
+
+.radio[aria-checked="true"] {
+  border-color: var(--accent);
+  background: var(--accent-tint);
+  color: var(--accent-ink);
+}
+
+@media (hover: hover) {
+  .radio[aria-checked="false"]:hover {
+    background: var(--sunken);
+  }
+}
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}

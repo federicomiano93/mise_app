@@ -21,6 +21,12 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
+    # ⚠️ THE SWITCH CHECK (tests/mise2-port-owed.test.mjs): on a pull request INTO main — the Mise 2 release PR — and on a
+    # push to main, the root suite fails while docs/mise2-port-owed.md has an unticked line or a spec holds a «PORT OWED»
+    # marker he did not defer. PRs into the release branch run without it: nothing there reaches a phone. That test also
+    # refuses this file if the line goes while Mise 2 has a service worker.
+    env:
+      MISE2_SWITCH: ${{ (github.base_ref == 'main' || github.ref == 'refs/heads/main') && '1' || '0' }}
     steps:
       # No git credential left in the workspace: the tests need none, and the Python
       # packages installed below must find no token in .git/config.
@@ -192,6 +198,11 @@ jobs:
         working-directory: app
       - name: app/ — build
         run: npm run build
+        working-directory: app
+      # The built service worker against the built files: every precached file there with its fingerprint, every
+      # built file precached (the alarm, the manifest and icons included). A miss would fail every phone's install.
+      - name: app/ — the service worker matches the build
+        run: node sw/verify-build.mjs dist
         working-directory: app
 
       # Same level and reasoning as the two audits in the `test` job.

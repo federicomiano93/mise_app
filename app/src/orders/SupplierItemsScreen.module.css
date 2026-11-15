@@ -1,0 +1,64 @@
+/* «What they sell»: a plain read-only list under the bar. The card does not clip (no `overflow`), so the bar sticks. */
+
+.screen {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+.sub {
+  margin-top: 2px;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  padding: var(--s4) var(--s3);
+}
+
+.count {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  font-weight: 650;
+}
+
+.items {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  min-height: var(--hit);
+  padding: var(--s2) 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.item:last-child {
+  border-bottom: 0;
+}
+
+.name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-weight: 600;
+}
+
+.unit {
+  flex: none;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.nothing {
+  padding: var(--s3);
+  color: var(--ink-2);
+}

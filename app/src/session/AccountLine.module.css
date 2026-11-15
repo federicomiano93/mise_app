@@ -1,0 +1,7 @@
+.account {
+  max-width: 100%;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}

@@ -1,0 +1,62 @@
+/* The fallback of one failing part (the design's `.part-failed`): a dashed, sunken box that
+   reads as «something is missing here», not as an alarm. Colours, radii and type sizes are
+   tokens; only layout measures are written here. */
+
+.failed {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s4);
+  padding: var(--s5);
+  border: 1.5px dashed var(--line-2);
+  border-radius: var(--r-lg);
+  background: var(--sunken);
+  color: var(--ink-2);
+}
+
+/* Qualified by .failed so it outranks base.css's `svg.lucide` size of 20px. */
+.failed .icon {
+  width: 24px;
+  height: 24px;
+}
+
+/* Grows to fill the row and wraps the button under it on a narrow screen. */
+.text {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+
+.title {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.body {
+  font-size: var(--fs-sm);
+}
+
+/* The secondary button. React Aria exposes state as data attributes, not :hover / :active,
+   so a touch screen never keeps a stuck hover after a tap. Icon and text sit on one flex row,
+   centred on each other. */
+.reload {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  min-height: var(--hit);
+  padding: 0 var(--s5);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: 600 var(--fs-md)/1 var(--font);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.reload[data-hovered] {
+  background: var(--bg);
+}
+
+.reload[data-pressed] {
+  background: var(--sunken);
+}

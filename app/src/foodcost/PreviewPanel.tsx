@@ -1,0 +1,244 @@
+import { useId, useState } from 'react';
+import { ChevronDown, TriangleAlert } from 'lucide-react';
+import { BLOCKER_TEXT, unpricedReasonText } from '@mise/shared/foodcost-model';
+import type { ProductPreview, SaleUnit } from '@mise/shared/foodcost-model';
+import { fcMoney, fcNumber } from '@mise/shared/fc-number';
+import type { Money } from '@mise/shared/currency';
+import type { MessageKey } from '../i18n/en';
+import { useT } from '../i18n/useT';
+import { Button } from '../ui/Button';
+import { HelpHead } from '../ui/HelpToggle';
+import { foodcostTranslate } from './foodcostWords';
+import { statusWord } from './productRowModel';
+import type { SummaryExtras } from './summaryExtras';
+import styles from './PreviewPanel.module.css';
+
+// Keys, resolved when the panel is drawn: a `t()` here at module load would freeze the language the page
+// booted in.
+const UNIT_TEXT = {
+  piece: 'fc.perPiece',
+  kg: 'fc.perKg',
+  pack: 'fc.perPack',
+} as const satisfies Record<SaleUnit, MessageKey>;
+
+const PER_TEXT = {
+  piece: 'fc.help.sumPer.piece',
+  kg: 'fc.help.sumPer.kg',
+  pack: 'fc.help.sumPer.pack',
+} as const satisfies Record<SaleUnit, MessageKey>;
+
+const DASH = '—';
+
+// «per piece» / «per kg» / «per pack» — what every figure of the panel is per; «Summary» alone while the
+// product has no way of selling yet.
+export function previewCaption(t: (key: MessageKey, params?: Record<string, string>) => string, preview: ProductPreview): string {
+  return preview.unit === null
+    ? t('fc.preview.captionNoUnit')
+    : t('fc.preview.caption', { unit: t(UNIT_TEXT[preview.unit]) });
+}
+
+type Props = {
+  preview: ProductPreview;
+  money: Money;
+  // The kilo, the whole batch and the other figures productPreview() does not carry; null leaves those rows out.
+  extras?: SummaryExtras | null;
+  // The heading with its «?» (the card). The phone's dialog says the caption as its description instead and has no «?».
+  caption?: boolean;
+  // Whether «Details» is open, when the CALLER keeps it (the card draws this panel afresh when nothing is costed and
+  // again when something is; a box that snapped shut meanwhile would be one more thing to fight with). Left out, the
+  // panel keeps it itself.
+  detailsOpen?: boolean;
+  onDetailsToggle?: (open: boolean) => void;
+  // The same for the «Which?» list under the partial-price warning (current app PR #485).
+  whichOpen?: boolean;
+  onWhichToggle?: (open: boolean) => void;
+};
+
+// The figures of one product at a glance (Federico, 7 Nov 2026; current app preview-view.js after 39080577 and
+// 56b2c90c), in the dialog a tap on the list opens on a phone and at the top of the product's card.
+//
+// His choice on the lab tablet («ci sono troppe voci»): FIVE rows in sight — selling price, cost, margin, food cost
+// against its target, ideal price (with VAT, and without it underneath) — then the cost of a kilo, and the rest (raw
+// materials, packaging, labour, the whole batch) behind a closed «Details».
+//
+// ⚠️ EVERY FIGURE COMES FROM productPreview() (shared/foodcost-model) and summaryExtras() and nothing is added up here, so the
+// panel can never disagree with the list or the card. This file only chooses the words and the format.
+// ⚠️ UNKNOWN IS A DASH, NEVER 0: a product with no price or no cost shows «—», because a zero would read as
+// «free» or «no margin». The labour row is the one exception: it is owner/manager-only data (null for
+// everybody else) and the whole row is left out then.
+// ⚠️ A PARTIAL COST NEVER LOOKS COMPLETE (11 Nov 2026): while a line has no cost, every figure that is too LOW says «more than»,
+// and the margin, which is too HIGH, says «less than»; one short line says how many lines have none.
+// ⚠️ THE LIGHT IS A DOT AND A WORD, NEVER COLOUR ALONE (P18): the status word follows the food cost, as in
+// the list's rows; the dot is hidden from a screen reader because the word already says it.
+// ⚠️ «DETAILS» IS A BUTTON, NOT <details>: the phone shows this panel inside the app's dialog, whose focus trap
+// walks buttons, fields and links — a <summary> there could not be reached from a keyboard. aria-expanded tells a
+// screen reader whether it is open.
+export function PreviewPanel({
+  preview, money, extras = null, caption = false, detailsOpen, onDetailsToggle, whichOpen, onWhichToggle,
+}: Props) {
+  const { t } = useT();
+  const moreId = useId();
+  const headId = useId();
+  const [ownOpen, setOwnOpen] = useState(false);
+  const open = detailsOpen ?? ownOpen;
+  const toggle = () => {
+    setOwnOpen(!open);
+    onDetailsToggle?.(!open);
+  };
+  const whichId = useId();
+  const [ownWhich, setOwnWhich] = useState(false);
+  const whichShown = whichOpen ?? ownWhich;
+  const toggleWhich = () => {
+    setOwnWhich(!whichShown);
+    onWhichToggle?.(!whichShown);
+  };
+  // What has no price, only under the warning that says something has none, and only with something to name.
+  const unpriced = preview.partial ? preview.unpriced : [];
+  const hasLabour = preview.labourUnitCost !== null;
+  const partial = preview.partial;
+  const shown = (value: number | null): string => (value === null ? DASH : fcMoney(value, money));
+  // A figure that is too LOW while a line has no cost: «more than 4,00 €».
+  const atLeast = (value: number | null): string => (value === null || !partial ? shown(value) : t('fc.preview.moreThan', { value: fcMoney(value, money) }));
+
+  let foodCostText = DASH;
+  if (preview.foodCostPct !== null) {
+    const text = preview.targetPct === null
+      ? t('fc.preview.noTarget', { pct: fcNumber(preview.foodCostPct, money) })
+      : t('fc.preview.vsTarget', { pct: fcNumber(preview.foodCostPct, money), target: fcNumber(preview.targetPct, money) });
+    foodCostText = partial ? t('fc.preview.moreThan', { value: text }) : text;
+  }
+
+  const idealSub = preview.idealNet !== null && preview.targetPct !== null
+    ? t('fc.preview.idealSub', { net: fcMoney(preview.idealNet, money), target: fcNumber(preview.targetPct, money) })
+    : '';
+
+  const help = `${preview.unit === null ? '' : `${t('fc.help.sumFor', { per: t(PER_TEXT[preview.unit]) })} `}${t('fc.help.sum')}`;
+
+  const kilo = extras?.perKg ?? null;
+
+  return (
+    <div className={styles.panel}>
+      {caption ? <HelpHead title={previewCaption(t, preview)} help={help} titleId={headId} quiet /> : null}
+      <dl className={styles.list}>
+        <Row label={t('fc.preview.price')} value={shown(preview.sellingPrice)} />
+        {/* Materials and packaging, plus the work where there is a figure for it. */}
+        <Row label={t('fc.preview.cost')} value={atLeast(preview.totalUnitCost)} />
+        {/* The app's margin: net price less materials and packaging — so, where a labour row exists in «Details», the
+            label says the labour is left out of it. Too HIGH while the cost is too low. */}
+        <Row
+          label={hasLabour ? t('fc.preview.marginNoLabour') : t('fc.preview.margin')}
+          value={preview.margin === null ? DASH : partial ? t('fc.preview.lessThan', { value: fcMoney(preview.margin, money) }) : shown(preview.margin)}
+        />
+        <div className={styles.row} data-status={preview.status ?? 'none'}>
+          <dt>{t('fc.preview.foodCost')}</dt>
+          <dd className={styles.foodCost}>
+            {preview.foodCostPct === null ? null : <span className={styles.dot} aria-hidden="true" />}
+            <span>{foodCostText}</span>
+            {preview.foodCostPct === null || preview.status === null
+              ? null
+              : <span className={styles.word}>{statusWord(t, preview.status)}</span>}
+          </dd>
+        </div>
+        <Row label={t('fc.preview.ideal')} value={atLeast(preview.idealGross)} ideal />
+      </dl>
+      {/* Under the ideal price: the same price without VAT, and the target it is for — or nothing, while there is no
+          net figure to give. */}
+      {idealSub === '' ? null : <p className={styles.sub}>{partial ? t('fc.preview.moreThan', { value: idealSub }) : idealSub}</p>}
+      {/* What the DOUGH costs per kilo of what the oven gives back, packaging left out — the SAME figure «Baking» and «Cost
+          breakdown» show (POST-SWITCH, 11 Nov 2026, «solo l'impasto»). «more than» only when a line of «Made of» has no cost:
+          an unpriced packaging makes the summary partial, never the kilo. */}
+      {extras === null ? null : (
+        <div className={styles.kgRow}>
+          <span>{extras.cooked ? t('fc.cooking.cookedKgCost') : t('fc.preview.kgNoLoss')}</span>
+          <b>
+            {kilo === null
+              ? DASH
+              : extras.perKgPartial ? t('fc.preview.moreThan', { value: fcMoney(kilo, money) }) : fcMoney(kilo, money)}
+          </b>
+        </div>
+      )}
+      {/* ⚠️ A PARTIAL COST MUST NEVER LOOK COMPLETE: every figure above is too LOW. How many lines, and «Which?» names them. */}
+      {unpriced.length > 0 ? (
+        <p className={styles.partial}>
+          <TriangleAlert aria-hidden="true" />
+          <span>{t('fc.preview.partialLines', { n: unpriced.length })}</span>
+        </p>
+      ) : null}
+      {/* «Which?»: what has no price, closed until pressed (Federico, 7 Nov 2026). The list is the model's (preview.unpriced); this
+          only words it. A BUTTON for the same reason as «Details» below, and it keeps its state the same way. */}
+      {unpriced.length > 0 ? (
+        <div className={styles.which}>
+          <Button variant="bare" className={styles.whichButton} aria-expanded={whichShown} aria-controls={whichId} onPress={toggleWhich}>
+            {t('fc.preview.which')}
+          </Button>
+          <ul id={whichId} className={styles.whichList} hidden={!whichShown}>
+            {unpriced.map(item => {
+              const reason = unpricedReasonText(item.reason, foodcostTranslate(t));
+              return (
+                <li key={`${item.name}|${item.inRecipe}|${item.reason}`}>
+                  <span className={styles.whichName}>{item.name}</span>
+                  <span className={styles.whichWhy}>
+                    {item.inRecipe ? t('fc.unpriced.reasonIn', { reason, name: item.inRecipe }) : t('fc.unpriced.reason', { reason })}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ) : null}
+      <MissingList missing={preview.missing} />
+      <div className={styles.more}>
+        <Button variant="bare" className={styles.moreButton} aria-expanded={open} aria-controls={moreId} onPress={toggle}>
+          <span>{t('fc.preview.details')}</span>
+          <ChevronDown aria-hidden="true" className={styles.chevron} />
+        </Button>
+        <div id={moreId} className={styles.moreBody} hidden={!open}>
+          <dl className={styles.list}>
+            <Row label={t('fc.preview.materials')} value={atLeast(preview.materialsUnitCost)} />
+            <Row
+              label={t('fc.preview.packaging')}
+              value={preview.hasPackaging ? shown(preview.packagingUnitCost) : t('fc.preview.noPackaging')}
+            />
+            {hasLabour ? <Row label={t('fc.preview.labour')} value={shown(preview.labourUnitCost)} /> : null}
+            {extras === null || extras.netPrice === null ? null : <Row label={t('fc.preview.netPrice')} value={fcMoney(extras.netPrice, money)} />}
+            {extras === null ? null : (
+              <Row
+                label={extras.batchPieces === null ? t('fc.preview.batch') : t('fc.preview.batchPieces', { n: extras.batchPieces })}
+                value={atLeast(extras.batchCost)}
+              />
+            )}
+          </dl>
+          {extras === null || extras.labourPct === null || extras.totalCostPct === null ? null : (
+            <p className={styles.note}>
+              {t('fc.labourPctLine', { labour: fcNumber(extras.labourPct, money), total: fcNumber(extras.totalCostPct, money) })}
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// «Still missing:» and its checklist, in the order a person would fill it in. Drawn by the panel, and alone (in a card of its own)
+// while nothing is costed yet.
+export function MissingList({ missing }: { missing: ProductPreview['missing'] }) {
+  const { t } = useT();
+  if (missing.length === 0) return null;
+  return (
+    <div className={styles.missingBox}>
+      <p className={styles.missingTitle}>{t('fc.preview.missing')}</p>
+      <ul className={styles.missing}>
+        {missing.map(key => <li key={key}>{t(BLOCKER_TEXT[key])}</li>)}
+      </ul>
+    </div>
+  );
+}
+
+function Row({ label, value, ideal = false }: { label: string; value: string; ideal?: boolean }) {
+  return (
+    <div className={styles.row} data-ideal={ideal}>
+      <dt>{label}</dt>
+      <dd>{value}</dd>
+    </div>
+  );
+}

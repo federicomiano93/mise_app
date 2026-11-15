@@ -90,3 +90,77 @@ test('a label may ask for a few copies, never a roll', () => {
   // And the app never makes one the agent would refuse.
   assert.equal(isSingleLabel(zpl({}, {}, { copies: 5000 })), true);
 });
+
+// ── The «with logo» label of Mise 2: a picture, as Z64 ───────────────────────
+//
+// ⚠️ ^GF, ^PO and ^PR are on the list for the image label (shared/src/zpl-z64.ts), and each
+// only in the one shape that label writes. The payload here is built the way that module
+// builds it — zlib, Base64, CRC-16/XMODEM — so the agent's half is pinned without
+// importing TypeScript; shared/src/print-queue-model.spec.ts feeds the real writer's output
+// to this same function.
+import { deflateSync } from 'node:zlib';
+
+const crc16 = (text) => {
+  let crc = 0;
+  for (let i = 0; i < text.length; i++) {
+    crc ^= (text.charCodeAt(i) & 0xff) << 8;
+    for (let b = 0; b < 8; b++) crc = crc & 0x8000 ? ((crc << 1) ^ 0x1021) & 0xffff : (crc << 1) & 0xffff;
+  }
+  return crc.toString(16).toUpperCase().padStart(4, '0');
+};
+const z64 = (bytes) => {
+  const b64 = deflateSync(bytes).toString('base64');
+  return `:Z64:${b64}:${crc16(b64)}`;
+};
+const imageJob = ({ field = z64(Buffer.alloc(80 * 480)), po = 'I', pr = '2', copies = 1 } = {}) => [
+  '^XA', '^PW640', '^LL480', '^LH0,0', `^PO${po}`, `^PR${pr}`, `^PQ${copies}`,
+  `^FO0,0^GFA,38400,38400,80,${field}^FS`, '^XZ',
+].join('\n') + '\n';
+
+test('the image label passes, turned round or not, with copies', () => {
+  const dots = Buffer.alloc(80 * 480);
+  for (let i = 0; i < dots.length; i += 7) dots[i] = 0xa5;
+  assert.equal(isSingleLabel(imageJob({ field: z64(dots) })), true);
+  assert.equal(isSingleLabel(imageJob({ po: 'N' })), true);
+  assert.equal(isSingleLabel(imageJob({ copies: 99 })), true);
+});
+
+test('…and a ^GF, ^PO or ^PR in any other shape is refused', () => {
+  for (const [what, payload] of [
+    ['a picture in plain hex', imageJob({ field: 'FFFF00' })],
+    ['a picture as raw bytes', '^XA^FO0,0^GFB,2,2,1,ab^FS^XZ'],
+    ['a picture with no check digits', imageJob({ field: ':Z64:eJwDAAAAAAE=' })],
+    ['a picture with something after it', imageJob({ field: `${z64(Buffer.alloc(8))}JUS` })],
+    ['a stored graphic (^GFA is never a download)', '^XA^GFA,1,1,1,:Z64:AA==:0000,R:LOGO.GRF^FS^XZ'],
+    ['an orientation the app never writes', imageJob({ po: 'R' })],
+    ['an orientation with more after it', imageJob({ po: 'I,JUS' })],
+    ['a speed that is not a number', imageJob({ pr: 'A' })],
+    ['a speed with a command tucked behind it', imageJob({ pr: '2JUS' })],
+    ['the darkness, which belongs to the agent', `~SD28\n${imageJob()}`],
+  ]) assert.equal(isSingleLabel(payload), false, `${what} was let through`);
+});
+
+// ── Code review, 26 Oct 2026 ─────────────────────────────────────────────────
+
+test('⚠️ copies split across line breaks are refused (a printer that skips them reads 999)', () => {
+  assert.equal(isSingleLabel('^XA^FDx^FS^PQ9\n9\n9^XZ'), false);
+  assert.equal(isSingleLabel('^XA^FDx^FS^PQ1\r\n00^XZ'), false);
+  assert.equal(isSingleLabel('^XA^FDx^FS^PQ3\n^XZ'), true, 'a line break AFTER the count is how the app writes it');
+});
+
+test('⚠️ one picture per label, of a size a label can be', () => {
+  const one = imageJob();
+  const field = one.slice(one.indexOf('^FO0,0^GFA'), one.indexOf('^FS') + 3);
+  assert.equal(isSingleLabel(one.replace('^XZ', `${field}\n^XZ`)), false, 'two pictures');
+  assert.equal(isSingleLabel(one.replace('^GFA,38400,38400,80,', '^GFA,38400,38401,80,')), false, 'counts that disagree');
+  assert.equal(isSingleLabel(one.replace('^GFA,38400,38400,80,', '^GFA,38400,38400,0,')), false, 'no row');
+  assert.equal(isSingleLabel(one.replace('^GFA,38400,38400,80,', '^GFA,38401,38401,80,')), false, 'a part row');
+  assert.equal(isSingleLabel(one.replace('^GFA,38400,38400,80,', '^GFA,999999,999999,111,')), false, 'too long a picture');
+  assert.equal(isSingleLabel(one.replace('^GFA,38400,38400,80,', '^GFA,2600,2600,130,')), false, 'too wide a picture');
+});
+
+test('⚠️ the standard label says it is upright, so it never inherits the image label\'s ^POI', () => {
+  const out = zpl({}, {}, { copies: 2 });
+  assert.match(out, /\n\^PON\n/);
+  assert.equal(isSingleLabel(out), true);
+});

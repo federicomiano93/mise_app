@@ -1,0 +1,194 @@
+/* The recipes: an accordion of cards. A head as tall as a thumb's target opens the row in place; the small delete icon
+   sits beside it; the open row holds the list's own settings. */
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+}
+
+.card {
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+
+.isOpen {
+  border-color: var(--line-2);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: var(--s1);
+}
+
+.open {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: var(--s3);
+  min-width: 0;
+  min-height: var(--hit);
+  padding: var(--s2) var(--s4);
+  border: 0;
+  border-radius: var(--r-md);
+  background: none;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.open[data-hovered] {
+  background: var(--bg);
+}
+
+.open[data-pressed] {
+  background: var(--sunken);
+}
+
+.text {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--s1);
+  min-width: 0;
+}
+
+.name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.sub {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  overflow-wrap: anywhere;
+}
+
+.chevron {
+  flex: none;
+  color: var(--ink-3);
+  transition: transform 120ms ease;
+}
+
+.isOpen .chevron {
+  transform: rotate(90deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chevron {
+    transition: none;
+  }
+}
+
+/* Low-key: no frame, the muted colour; the target is still a thumb's. */
+.del {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: var(--hit);
+  min-height: var(--hit);
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-md);
+  background: none;
+  color: var(--ink-3);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.del[data-hovered] {
+  color: var(--danger-ink);
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  padding: var(--s2) var(--s4) var(--s4);
+  border-top: 1px solid var(--line);
+}
+
+/* A display set above would beat the hidden attribute. */
+.panel[hidden] {
+  display: none;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+.label {
+  font-weight: 600;
+}
+
+/* 18px type on purpose: a field under 16px makes iOS zoom the page in when it is focused. */
+.input {
+  width: 100%;
+  min-width: 0;
+  min-height: var(--hit);
+  padding: 0 var(--s3);
+  border: 1.5px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: 450 var(--fs-lg) var(--font);
+}
+
+.input:focus {
+  border-color: var(--accent);
+}
+
+.invalid,
+.invalid:focus {
+  border-color: var(--danger);
+  background: var(--danger-tint);
+}
+
+.hint {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.error {
+  color: var(--danger-ink);
+  font-size: var(--fs-sm);
+}
+
+.withUnit {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.unit {
+  flex: none;
+  color: var(--ink-2);
+}
+
+.switchRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  min-height: var(--hit);
+}
+
+.switchName {
+  min-width: 0;
+  font-weight: 600;
+  overflow-wrap: break-word;
+}
+
+.edit {
+  align-self: flex-start;
+}
+
+.add {
+  align-self: flex-start;
+}

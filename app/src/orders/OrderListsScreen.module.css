@@ -1,0 +1,130 @@
+/* «Order lists»: a card per list, each a 48px button. The screen does not clip (no `overflow`), so the bar above keeps sticking.
+   Names wrap anywhere, so a 296px phone never scrolls sideways. */
+
+.screen {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+.screen[hidden] {
+  display: none;
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  padding: var(--s3);
+}
+
+.loading {
+  margin: 0;
+  padding: var(--s3);
+  color: var(--ink-2);
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  padding: var(--s3);
+}
+
+.emptyTitle {
+  margin: 0;
+  font-weight: 600;
+}
+
+.emptyHint {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  min-width: 0;
+}
+
+.card {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  width: 100%;
+  min-height: var(--hit);
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* A finished list is a record, an unfinished one is somebody waiting: the finished ones sit back. */
+.card[data-done="true"] {
+  background: var(--bg);
+  color: var(--ink-2);
+}
+
+.card:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
+}
+
+.card:active {
+  background: var(--sunken);
+}
+
+@media (hover: hover) {
+  .card:hover {
+    background: var(--bg);
+  }
+}
+
+.main {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--s1);
+  min-width: 0;
+}
+
+.from {
+  overflow-wrap: anywhere;
+  font-weight: 600;
+}
+
+.when {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.count {
+  flex: none;
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+/* Green means done (tokens.css): text as well as colour says it. */
+.count[data-done="true"] {
+  color: var(--ok-ink);
+}
+
+.chevron {
+  flex: none;
+  color: var(--ink-3);
+}

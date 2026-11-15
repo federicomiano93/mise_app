@@ -119,6 +119,10 @@ export function toZpl(resolved, { copies = 1 } = {}) {
     `^LL${dots(resolved.heightMm, dpi)}`,           // label length
     '^LH0,0',                                       // no extra home offset
     '^LT0',
+    // ⚠️ UPRIGHT, SAID OUT LOUD (code review, 26 Oct 2026). A Zebra keeps the last
+    // orientation it was given, and Mise 2's image label is printed turned round (^POI)
+    // on the same printer: a label that said nothing would come out upside down after it.
+    '^PON',
   ];
 
   let yMm = resolved.marginMm;

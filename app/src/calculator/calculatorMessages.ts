@@ -1,0 +1,54 @@
+import type { MessageKey } from '../i18n/en';
+import type { MessageParams } from '../i18n/i18n';
+import type { CalculatorMessage } from './calculatorStore';
+import type { TabResult } from './calculatorResult';
+
+type Say = (key: MessageKey, params?: MessageParams) => string;
+
+// What the store reports, in the person's language. null: nothing to say out loud.
+//
+// ⚠️ A STREAM THAT DIED SAYS NOTHING HERE. With nothing on this phone to work from, the Calculator's empty
+// state already says it could not be loaded; with the phone's own copy on screen the work goes on, and the
+// offline banner of the shell is the place that speaks of the connection.
+export function messageText(t: Say, message: CalculatorMessage): string | null {
+  switch (message.kind) {
+    case 'log-not-saved':
+      return t('calc.logNotSaved', { dough: message.dough });
+    case 'log-full':
+      return t('calc.logFull', { dough: message.dough });
+    case 'log-history-not-saved':
+      return t('calc.logHistoryNotSaved', { dough: message.dough });
+    case 'log-history-full':
+      return t('calc.logHistoryFull', { dough: message.dough });
+    case 'log-not-deleted':
+      return t('calc.logNotDeleted', { dough: message.dough });
+    case 'config-stream-broken':
+    case 'logs-stream-broken':
+      return null;
+  }
+}
+
+// Why a tab with something to make cannot be calculated, in a sentence; null when it can be. The same sentence
+// the result card shows and the dialog Confirm refuses with.
+export function problemSentence(t: Say, result: TabResult): string | null {
+  switch (result.kind) {
+    case 'loading':
+      return recipeProblemSentence(t, { problem: 'loading' });
+    case 'problem':
+      return recipeProblemSentence(t, result);
+    default:
+      return null;
+  }
+}
+
+// Why a recipe cannot be used, whoever asks: the work view's result card and Confirm, and «Add dough» when it is
+// saved. ONE place for the four sentences.
+export type RecipeProblem =
+  | { readonly problem: 'loading' }
+  | { readonly problem: 'missing' | 'empty' | 'unweighable'; readonly row: string };
+
+export function recipeProblemSentence(t: Say, found: RecipeProblem): string {
+  if (found.problem === 'loading') return t('calc.sourceLoading');
+  if (found.problem === 'unweighable') return t('calc.sourceUnweighable', { row: found.row });
+  return t(found.problem === 'missing' ? 'calc.sourceMissing' : 'calc.sourceEmpty');
+}

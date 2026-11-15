@@ -1,0 +1,122 @@
+/* «Incoming»: a group per heading, a row per order as tall as a thumb's target. The screen does not clip (no `overflow`), so the
+   bar above keeps sticking. Names wrap anywhere, so a 296px phone never scrolls sideways. */
+
+.screen {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+  padding: var(--s3);
+}
+
+.empty {
+  padding: var(--s3);
+  color: var(--ink-2);
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+.groupTitle {
+  padding: 0 var(--s1);
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  font-weight: 650;
+}
+
+.rows {
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  list-style: none;
+}
+
+.item {
+  border-bottom: 1px solid var(--line);
+}
+
+.item:last-child {
+  border-bottom: 0;
+}
+
+/* Late and owed rows are marked by a stripe AND by the heading above them («Late», «From before this week»): never by colour
+   alone. */
+.item[data-tone="late"] {
+  box-shadow: inset 4px 0 0 var(--danger);
+}
+
+.item[data-tone="owed"] {
+  box-shadow: inset 4px 0 0 var(--warn);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  width: 100%;
+  min-height: var(--hit-lg);
+  padding: var(--s2) var(--s3);
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.row:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
+}
+
+.row[data-pressed] {
+  background: var(--sunken);
+}
+
+@media (hover: hover) {
+  .row[data-hovered] {
+    background: var(--bg);
+  }
+}
+
+.main {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+}
+
+.name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: var(--fs-lg);
+  font-weight: 600;
+}
+
+.meta {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.chevron {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  color: var(--ink-3);
+}

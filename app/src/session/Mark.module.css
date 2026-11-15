@@ -1,0 +1,15 @@
+/* The mark. The rail shows it light on dark; on the page's light ground the same tile is dark
+   with the light letter, so it reads as the same object. */
+
+.mark {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--r-md);
+  background: var(--rail);
+  color: var(--rail-ink-strong);
+  font-size: 20px;
+  font-weight: 700;
+}

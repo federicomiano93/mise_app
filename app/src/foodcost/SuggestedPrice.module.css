@@ -1,0 +1,69 @@
+/* The price to sell it at, from the cost, the VAT and the target. Nothing here clips: the form bar above sticks. */
+
+.suggestion {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+  padding: var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--sunken);
+}
+
+.suggestionWrap:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s2);
+}
+
+.label {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.value {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s2);
+}
+
+.num {
+  font-size: var(--fs-xl);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.unit {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.basis {
+  overflow-wrap: anywhere;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.partial {
+  color: var(--warn-ink);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.note {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.use {
+  align-self: flex-start;
+  margin-top: var(--s2);
+}

@@ -3,6 +3,8 @@
 //
 //   node scripts/sw-hashes.mjs          write them (run after changing any cached file)
 //   node scripts/sw-hashes.mjs --check  exit 1 if sw.js is out of date, change nothing
+//   node scripts/sw-hashes.mjs --bump   a new CACHE_NAME even if nothing changed — ONLY for the revert of the Mise 2
+//                                       switch (docs/switch-runbook.md, «Rollback»)
 //
 // ⚠️⚠️ WHY IT EXISTS (speed audit, 23 Sep 2026). sw.js used to serve a cached file AND
 // fetch it again behind every request (stale-while-revalidate): dozens of requests on
@@ -85,6 +87,11 @@ export function currentHashes(swSource) {
 
 function main() {
   const check = process.argv.includes('--check');
+  // ⚠️ --bump: a new CACHE_NAME although no fingerprint changed. For ONE case: reverting the Mise 2 switch
+  // (docs/switch-runbook.md, «Rollback»). The revert puts back files byte-identical to the last release, so nothing
+  // would bump, and the phones running Mise 2 would get back the very worker they left — a release with the number
+  // they already had. One higher, the current app's sw.js is plainly a new release on every phone.
+  const bump = process.argv.includes('--bump');
   let sw = readFileSync(SW_PATH, 'utf8').replace(/\r\n/g, '\n');
   const assets = readAssets(sw);
   const hashes = computeHashes(assets);
@@ -92,13 +99,16 @@ function main() {
   const changed = assets.filter(a => !before || before[a] !== hashes[a]);
   const extra = before ? Object.keys(before).filter(a => !assets.includes(a)) : [];
 
-  if (!changed.length && !extra.length) {
-    console.log(`sw.js is up to date: ${assets.length} fingerprints match.`);
-    return;
-  }
+  const upToDate = !changed.length && !extra.length;
   if (check) {
+    // --check never writes, --bump or not.
+    if (upToDate) { console.log(`sw.js is up to date: ${assets.length} fingerprints match.`); return; }
     console.error(`sw.js is OUT OF DATE: ${changed.length} changed, ${extra.length} no longer cached. Run: node scripts/sw-hashes.mjs`);
     process.exit(1);
+  }
+  if (upToDate && !bump) {
+    console.log(`sw.js is up to date: ${assets.length} fingerprints match.`);
+    return;
   }
 
   const block = hashBlock(hashes);
@@ -125,7 +135,7 @@ function main() {
   // Written beside and renamed over, never truncated in place.
   writeFileSync(`${SW_PATH}.tmp`, sw);
   renameSync(`${SW_PATH}.tmp`, SW_PATH);
-  console.log(`sw.js: ${changed.length} fingerprint(s) changed${extra.length ? `, ${extra.length} removed` : ''} → CACHE_NAME v${version}.`);
+  console.log(`sw.js: ${changed.length} fingerprint(s) changed${extra.length ? `, ${extra.length} removed` : ''}${bump && !changed.length && !extra.length ? ' (--bump)' : ''} → CACHE_NAME v${version}.`);
   changed.slice(0, 20).forEach(a => console.log(`  ${a}`));
   if (changed.length > 20) console.log(`  … and ${changed.length - 20} more`);
 }

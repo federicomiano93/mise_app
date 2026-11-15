@@ -1,0 +1,74 @@
+/* The month bar: the arrow to the month before, the month's name with its badge, the arrow to the
+   month after. 48px targets (`--hit`). The name takes what is left, and wraps rather than pushing an
+   arrow off a 296px phone. */
+
+.bar {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}
+
+/* An icon button, the same family as the secondary button. `bare` gives it the keyboard and press
+   behaviour and none of the look, which is all here. Icon centred on the box by flex. */
+.arrow {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: var(--hit);
+  min-height: var(--hit);
+  padding: 0;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.arrow[data-hovered] {
+  background: var(--bg);
+}
+
+.arrow[data-pressed] {
+  background: var(--sunken);
+}
+
+.arrow[data-disabled] {
+  border-color: var(--line);
+  color: var(--ink-3);
+  cursor: default;
+}
+
+.centre {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s1);
+  text-align: center;
+}
+
+.month {
+  overflow-wrap: anywhere;
+  font-size: var(--fs-lg);
+  font-weight: 650;
+}
+
+/* Open or closed, in words; the tint only backs it up. */
+.badge {
+  padding: 2px var(--s3);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  color: var(--ink-2);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+}
+
+.badge[data-closed="true"] {
+  border-color: var(--line);
+  background: var(--sunken);
+  color: var(--ink);
+}

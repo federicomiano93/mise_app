@@ -1,0 +1,194 @@
+/* «Price changes»: a card holding the form bar and the report, in the look of the import. Full width at every size (the section
+   draws no list beside it).
+
+   ⚠️ NOTHING ON THE OUTER CARD MAY CLIP (no `overflow`): the form bar sticks to the top of the shell's scrolling area. */
+
+.screen {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+  padding: var(--s4);
+}
+
+@media (min-width: 1000px) {
+  .body {
+    padding: var(--s6);
+  }
+}
+
+/* Week / Month: one choice of two, each a thumb's height. The chosen one is told apart by colour AND the frame
+   (and by aria-pressed for a screen reader). */
+.segments {
+  display: flex;
+  gap: var(--s2);
+}
+
+.segment {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: var(--hit);
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.segment[data-selected="true"] {
+  border-color: var(--accent);
+  background: var(--accent-tint);
+  box-shadow: inset 0 0 0 1px var(--accent);
+  color: var(--accent-ink);
+}
+
+.segment[data-focus-visible="true"] {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Previous, the period, Next. The label stays between the arrows and takes the focus when «Next» goes off. */
+.nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+}
+
+.arrow {
+  flex: none;
+  width: var(--hit);
+  padding: 0;
+}
+
+.arrow svg {
+  width: 22px;
+  height: 22px;
+}
+
+.period {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--fs-lg);
+  font-weight: 650;
+  text-align: center;
+  overflow-wrap: break-word;
+}
+
+.period:focus:not(:focus-visible) {
+  outline: none;
+}
+
+.block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s4);
+}
+
+.note {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  overflow-wrap: break-word;
+}
+
+.error {
+  color: var(--danger-ink);
+  font-weight: 600;
+  overflow-wrap: break-word;
+}
+
+.summary {
+  color: var(--ink-2);
+  font-weight: 600;
+}
+
+.section {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+.sectionTitle {
+  font-size: var(--fs-md);
+  font-weight: 650;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+
+.top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s3);
+}
+
+.main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.name {
+  font-weight: 600;
+  overflow-wrap: break-word;
+}
+
+.meta {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  overflow-wrap: break-word;
+}
+
+.price {
+  font-size: var(--fs-sm);
+  overflow-wrap: break-word;
+}
+
+/* The sign is a WORD in a pill; the colour only repeats it (P18). */
+.pct {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  padding: var(--s1) var(--s3);
+  border-radius: var(--r-pill);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.pct[data-tone="ok"] {
+  background: var(--ok-tint);
+  color: var(--ok-ink);
+}
+
+.pct[data-tone="warn"] {
+  background: var(--warn-tint);
+  color: var(--warn-ink);
+}

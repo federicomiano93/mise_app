@@ -1,0 +1,63 @@
+/* Sections for employees: the intro, one row per section (its name, its state in words, the switch), and the two sentences that are
+   always on the screen. */
+
+.text,
+.note {
+  margin: 0;
+}
+
+.note {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  min-height: var(--hit);
+  padding: var(--s1) 0;
+  border-top: 1px solid var(--line);
+}
+
+.row:first-child {
+  border-top: 0;
+}
+
+.name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-weight: 600;
+  overflow-wrap: break-word;
+}
+
+.state {
+  flex: none;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+/* Empty until it speaks; on the page before that so a screen reader announces it. Not `display: none`. */
+.status {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.status:empty {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  clip-path: inset(50%);
+}

@@ -1,0 +1,42 @@
+/* A form in a modal (FormDialog.tsx): a card on a scrim, scrolling inside the overlay so the form bar can stick to its top.
+   Above the skip link and everything else, as Dialog is. */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  padding: var(--s4);
+  overflow-y: auto;
+  background: var(--scrim);
+}
+
+.modal {
+  width: 100%;
+  margin: auto;
+  max-width: 560px;
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-3);
+}
+
+.dialog:focus-visible {
+  outline: none;
+}
+
+/* The phone variant (FormDialog's `phoneFull`): below 700px the form takes the whole screen, with no scrim showing round it;
+   from 700px it is the card above. The height is the one token (--vh100), never a viewport unit of its own. */
+@media (max-width: 699.98px) {
+  /* Edge to edge, but inside the notch and the home indicator (index.html has viewport-fit=cover). */
+  .overlayFull {
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+
+  .modalFull {
+    max-width: none;
+    min-height: calc(var(--vh100) - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    margin: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+}

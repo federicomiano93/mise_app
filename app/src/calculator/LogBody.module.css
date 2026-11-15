@@ -1,0 +1,33 @@
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+}
+
+.meta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+}
+
+/* The calendar icon and the date sit on one flex row, centred on each other (a bare svg in a block sits on the
+   text baseline). */
+.stamp {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.stamp svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+
+.by {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}

@@ -1,0 +1,172 @@
+// Unit tests for the link between a recipe and its Food cost (P15 — the owner cannot read code, so these tests
+// are the safety net), run against BOTH implementations: the TypeScript port in shared/ and js/recipe-link.js,
+// which the live app uses today. Ported from tests/foodcost-from-recipe.test.mjs: the id-from-address tests and
+// the two «who is shown the button» tests (the others read the screens' source or the Food cost model).
+//
+// recipe-link.ts is a PARTIAL port, so parity.spec.ts does not pair it: the original also builds the page
+// addresses of the current app (`recipeHash`, `foodCostHref`, `recipeHref`, `recipeSpotFromHash`, `ordersHref`,
+// `ordersIngredientHref`, `catalogueOriginFromHash`, `orderIngredientFromHash`; the last four came with the recipe row's «Order»,
+// PR #481, item 32). The last block of this file stands in for what pairing would have checked.
+// The builders and `recipeIdParam` are new in Mise 2 and have no original: they are tested on their own.
+
+import { describe, expect, test } from 'vitest';
+import * as ported from './recipe-link';
+import * as legacyJs from '../../js/recipe-link.js';
+
+const legacy = legacyJs as unknown as typeof ported & { recipeHash: (id: unknown) => string };
+
+describe.each([
+  ['shared/ (TypeScript)', ported],
+  ['js/ (current app)', legacy],
+] as const)('%s', (_name, m) => {
+  test('anything that is not a usable id reads as no recipe at all', () => {
+    for (const hash of ['', '#', '#recipe=', '#other=abc', '#recipe=a/b', `#recipe=${'x'.repeat(201)}`, null, undefined]) {
+      expect(m.recipeIdFromHash(hash), String(hash)).toBe(null);
+    }
+  });
+
+  test('an id is read from the address, with or without the #', () => {
+    expect(m.recipeIdFromHash('#recipe=abc123')).toBe('abc123');
+    expect(m.recipeIdFromHash('recipe=abc123')).toBe('abc123');
+    expect(m.recipeIdFromHash('#recipe=a%20b%26c%3Dd')).toBe('a b&c=d');
+    expect(m.recipeIdFromHash(`#recipe=${'x'.repeat(200)}`)).toBe('x'.repeat(200));
+    expect(m.recipeIdFromHash('#recipe=%20abc%20'), 'trimmed').toBe('abc');
+  });
+
+  test('⚠️ the button is offered exactly to whoever the Food cost page lets in', () => {
+    const venue = { sections: {} };
+    expect(m.mayOpenFoodCost(venue, true), 'an owner or a manager').toBe(true);
+    expect(m.mayOpenFoodCost(venue, false), 'an employee: the Food cost card is hidden from staff until the venue shows it').toBe(false);
+    expect(m.mayOpenFoodCost({ sections: {}, staffShownCards: { foodcost: true } }, false),
+      'an employee in a venue that chose to show them Food cost').toBe(true);
+    expect(m.mayOpenFoodCost({ sections: { foodcost: false } }, true), 'nobody, in a venue that does not use Food cost at all').toBe(false);
+  });
+
+  test('⚠️ before a venue is open, nobody is shown it', () => {
+    // allowedSections() alone would answer «allowed» for a document that is not there.
+    for (const loc of [null, undefined, 'bakery']) {
+      expect(m.mayOpenFoodCost(loc, true), String(loc)).toBe(false);
+      expect(m.mayOpenOrders(loc, true), String(loc)).toBe(false);
+    }
+    expect(m.mayOpenFoodCost({ sections: {} }, 'true'), 'only a real true is a manager').toBe(false);
+  });
+
+  test('Orders is judged the same way, by its section and its card', () => {
+    expect(m.mayOpenOrders({ sections: {} }, true)).toBe(true);
+    expect(m.mayOpenOrders({ sections: { orders: false } }, true)).toBe(false);
+    expect(m.mayOpenOrders({ sections: {} }, 'true')).toBe(m.mayOpenOrders({ sections: {} }, false));
+  });
+
+  // ⚠️ The role is the third question. A partial owner can manage, so without it the sales owner would be offered
+  // Orders and the kitchen owner Food cost: doors that bounce their user straight back Home.
+  test('⚠️ the role narrows the doors: sales has Food cost not Orders, the kitchen the other way round', () => {
+    const venue = { sections: {} };
+    expect(m.mayOpenFoodCost(venue, true, 'owner-sales')).toBe(true);
+    expect(m.mayOpenOrders(venue, true, 'owner-sales')).toBe(false);
+    expect(m.mayOpenFoodCost(venue, true, 'owner-kitchen')).toBe(false);
+    expect(m.mayOpenOrders(venue, true, 'owner-kitchen')).toBe(true);
+    for (const role of ['owner', 'manager']) {
+      expect(m.mayOpenFoodCost(venue, true, role), role).toBe(true);
+      expect(m.mayOpenOrders(venue, true, role), role).toBe(true);
+    }
+  });
+});
+
+describe('the new builders and the parameter reader (Mise 2 only)', () => {
+  // A recipe row's «Order» (item 32): the address of the supplier screen, the recipe to go back to and the ingredient to focus.
+  test('the Order address names the supplier, the recipe and the ingredient, each encoded', () => {
+    expect(ported.ordersForIngredientPath('mill', 'r1', 'i1')).toBe('/orders/supplier/mill?recipe=r1&ingredient=i1');
+    expect(ported.ordersForIngredientPath('a b', 'x y&z', 'crème#1')).toBe(
+      `/orders/supplier/a%20b?recipe=x%20y%26z&ingredient=${encodeURIComponent('crème#1')}`);
+  });
+
+  test('⚠️ one unusable id and there is no address at all, never half of one', () => {
+    const bad = ['', '   ', 'a/b', 'x'.repeat(201), null, undefined];
+    for (const id of bad) {
+      expect(ported.ordersForIngredientPath(id, 'r1', 'i1'), `supplier ${String(id)}`).toBe(null);
+      expect(ported.ordersForIngredientPath('mill', id, 'i1'), `recipe ${String(id)}`).toBe(null);
+      expect(ported.ordersForIngredientPath('mill', 'r1', id), `ingredient ${String(id)}`).toBe(null);
+    }
+  });
+
+  test('the two ids come back out of the address as strictly as the original read them out of its hash', () => {
+    for (const [recipe, ingredient] of [['r1', 'i1'], ['a b&c', 'x y&z'], ['crème#1', '100%'], ['x'.repeat(200), 'y'.repeat(200)]]) {
+      const path = ported.ordersForIngredientPath('mill', recipe, ingredient) as string;
+      const search = path.slice(path.indexOf('?'));
+      expect(ported.recipeIdParam(search, 'recipe'), recipe).toBe(recipe);
+      expect(ported.recipeIdParam(search, 'ingredient'), ingredient).toBe(ingredient);
+    }
+    // What the original's strictId refuses and a query can carry, the reader refuses too: empty, blank, a slash, too long.
+    for (const bad of ['', '%20', 'x%2Fy', 'x'.repeat(201)]) {
+      expect(ported.recipeIdParam(`?recipe=r1&ingredient=${bad}`, 'ingredient'), bad).toBe(null);
+    }
+  });
+
+  test('a recipe\'s Food cost and its own address, with the id encoded', () => {
+    expect(ported.foodCostForRecipePath('abc123')).toBe('/food-cost?recipe=abc123');
+    expect(ported.recipeAddress('abc123')).toBe('/recipes/abc123');
+    expect(ported.foodCostForRecipePath('a b%c')).toBe('/food-cost?recipe=a%20b%25c');
+    expect(ported.recipeAddress('a b%c')).toBe('/recipes/a%20b%25c');
+    expect(ported.foodCostForRecipePath('crème#1&x=2')).toBe(`/food-cost?recipe=${encodeURIComponent('crème#1&x=2')}`);
+  });
+
+  test('an id that cannot be a document id gives no address', () => {
+    for (const bad of ['', '   ', 'a/b', 'x'.repeat(201), null, undefined]) {
+      expect(ported.foodCostForRecipePath(bad), String(bad)).toBe(null);
+      expect(ported.recipeAddress(bad), String(bad)).toBe(null);
+    }
+    expect(ported.foodCostForRecipePath('x'.repeat(200))).toBe(`/food-cost?recipe=${'x'.repeat(200)}`);
+  });
+
+  test('an id survives the trip, whatever it contains', () => {
+    for (const id of ['abc123', 'a b&c=d', 'crème#1', '100%', 'x'.repeat(200)]) {
+      const path = ported.foodCostForRecipePath(id) as string;
+      expect(ported.recipeIdParam(path.slice(path.indexOf('?')), 'recipe'), id).toBe(id);
+      expect(decodeURIComponent((ported.recipeAddress(id) as string).split('/')[2] as string), id).toBe(id);
+    }
+  });
+
+  test('recipeIdParam reads one parameter, with or without ? or #, and cleans it', () => {
+    expect(ported.recipeIdParam('?recipe=abc', 'recipe')).toBe('abc');
+    expect(ported.recipeIdParam('#recipe=abc', 'recipe')).toBe('abc');
+    expect(ported.recipeIdParam('recipe=abc', 'recipe')).toBe('abc');
+    expect(ported.recipeIdParam('?x=1&recipe=a%2Fb', 'recipe'), 'a slash is refused').toBe(null);
+    expect(ported.recipeIdParam('?other=abc', 'recipe')).toBe(null);
+    expect(ported.recipeIdParam('?other=abc', 'other')).toBe('abc');
+    expect(ported.recipeIdParam('?recipe=', 'recipe')).toBe(null);
+    expect(ported.recipeIdParam('?recipe=%20%20', 'recipe')).toBe(null);
+    expect(ported.recipeIdParam(`?recipe=${'x'.repeat(201)}`, 'recipe')).toBe(null);
+    expect(ported.recipeIdParam('', 'recipe')).toBe(null);
+    expect(ported.recipeIdParam(null, 'recipe')).toBe(null);
+    expect(ported.recipeIdParam(undefined, 'recipe')).toBe(null);
+  });
+
+  test('the state the recipe screen hands Food cost is a fixed, frozen marker', () => {
+    expect(ported.FROM_RECIPE_LINK).toStrictEqual({ fromRecipeLink: true });
+    expect(Object.isFrozen(ported.FROM_RECIPE_LINK)).toBe(true);
+  });
+});
+
+describe('the port against the original', () => {
+  const LEFT_OUT = ['recipeHash', 'foodCostHref', 'recipeHref', 'recipeSpotFromHash', 'ordersHref', 'ordersIngredientHref',
+    'catalogueOriginFromHash', 'orderIngredientFromHash'];
+  const ADDED = ['FROM_RECIPE_LINK', 'foodCostForRecipePath', 'ordersForIngredientPath', 'recipeAddress', 'recipeIdParam'];
+  const original = legacyJs as unknown as Record<string, unknown>;
+  const port = ported as unknown as Record<string, unknown>;
+  const shared = Object.keys(original).filter(name => !LEFT_OUT.includes(name)).sort();
+
+  test('the original still exports everything this port leaves out', () => {
+    for (const name of LEFT_OUT) expect(typeof original[name], name).toBe('function');
+  });
+
+  test('exports exactly the same names, except those', () => {
+    expect(Object.keys(port).sort()).toStrictEqual([...shared, ...ADDED].sort());
+  });
+
+  test('every function has the same name and the same number of required parameters', () => {
+    for (const name of shared) {
+      expect((port[name] as { name: string }).name, name).toBe((original[name] as { name: string }).name);
+      expect((port[name] as { length: number }).length, `${name}: arity`).toBe((original[name] as { length: number }).length);
+    }
+  });
+});

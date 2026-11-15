@@ -1,0 +1,40 @@
+/* The empty-state card of a section that is not built yet. */
+
+.card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s3);
+  max-width: 560px;
+  padding: var(--s6);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+.disc {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  margin-bottom: var(--s1);
+  border-radius: var(--r-pill);
+  background: var(--sunken);
+  color: var(--ink-2);
+}
+
+/* Qualified by .disc so it outranks base.css's `svg.lucide` size of 20px. */
+.disc .icon {
+  width: 28px;
+  height: 28px;
+}
+
+.title {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.body {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
