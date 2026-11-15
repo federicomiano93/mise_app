@@ -48,7 +48,7 @@ const byName = (locale: string) => {
   return (a: string, b: string) => collator.compare(a, b);
 };
 
-// The whole book: every FOOD ingredient (packaging never goes in a recipe), by name in the interface language's order, each
+// The whole book: every FOOD ingredient, plus any packaging, resale or other item a recipe still links to (with its uses), by name in the interface language's order, each
 // with the recipes that use it. `locale` is the interface's (useT().locale), for the alphabetical order only.
 export function ingredientBook(recipes: readonly unknown[], ingredients: readonly unknown[], locale = 'en'): IngredientEntry[] {
   const compare = byName(locale);

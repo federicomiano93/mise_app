@@ -173,9 +173,11 @@
 
 /* A recipe: the whole line is the button (48px): the name, the amounts at the right, a chevron. On a narrow phone the amounts go
    under the name rather than squeezing it. */
+/* Three columns, so the amount and the arrow stay on the first line and a long recipe name wraps inside its own column
+   (a wrapping flex row put the arrow alone on a second line at 296 px). */
 .use {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 0 var(--s3);
   width: 100%;

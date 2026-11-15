@@ -2089,8 +2089,8 @@ turned out to be full, **a door in the Recipe book** rather than an item of the 
   THE MENU: when this was decided the tablet's rail held nine items, the most that fit the lab tablet's 648px at 48px an item. The
   «Labels» entry (#547) has since taken a tenth place by hiding the brand letter on short windows (`shell/railHeight.spec.ts`); an
   eleventh would need 668px, so the rail is full.
-- **What it shows** (`shared/src/ingredient-usage.ts`, `ingredientBook` / `searchBook`): every FOOD ingredient (packaging never goes
-  in a recipe) by its display name (short name, else name), alphabetical in the interface language. The ones used in a recipe are a
+- **What it shows** (`shared/src/ingredient-usage.ts`, `ingredientBook` / `searchBook`): every FOOD ingredient (and, since 15 Nov 2026,
+  any packaging, resale or other item that a recipe still links to — with no tag; one no recipe uses is left out) by its display name (short name, else name), alphabetical in the interface language. The ones used in a recipe are a
   list of disclosure buttons («Butter · 3 recipes», `aria-expanded`); opened, each shows the recipes that use it with the amount of
   every row as written (the base recipe, never a batch; the Recipe book's own number rule, `amountNumber`: «0,8 kg», «200 g + 20 g»
   for a recipe listing it twice), archived recipes last and marked «archived». The ones no recipe uses are folded into «Not in any
@@ -2122,3 +2122,14 @@ ingredient, kilos in Italian, the fold, the search, Back from a recipe to the sa
 Edit not taken for «from the list», live changes, an empty venue, the amount as the recipe screen rounds it, the search kept across a
 recipe, the open counted, the door beside a recipe on the split, unreadable ingredients, Italian, the CSS); `recipesPath.spec.ts` (the reserved word) and
 `shell/sections.spec.ts` (the screen name). Not driven on the emulator or a device yet.
+
+### Ingredient book — checked on the PC (15 Nov 2026)
+
+- Driven on the emulator at 1024 (split), 360 and 296 in Italian and 360 in English: the door, the counts, the fold, a recipe opened
+  from the book and Back to the same line with the focus on it, the search, «no match»; axe clean, targets ≥44px, no sideways scroll.
+- Changed while checking: resale, other and packaging items are left out unless a recipe still links to one (a drinks import would
+  otherwise fill «Not in any recipe»); a recipe row keeps its amount and arrow on the first line at 296px (three-column grid), a long
+  recipe name wraps inside its own column.
+- Left as built, for the owner to hear: a use of an ingredient that was deleted but is still linked from a recipe is not shown here
+  (the recipe screen itself marks that row); the search and the open ingredients are remembered until the page reloads, so on the lab
+  tablet the next person may find the previous search applied.
