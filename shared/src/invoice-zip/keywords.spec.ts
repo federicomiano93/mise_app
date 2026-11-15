@@ -33,7 +33,8 @@ const portPattern = (name: (typeof NAMES)[number]): RegExp => (name === 'PACKAGI
 // ⚠️ MISE 2 (14 Nov 2026): the two deliberate differences from the frozen current app's source, undone before the source texts are
 // compared — the NONFOOD_RE split above, and six soft drinks added to BEVERAGE_RE (also in classify.py). Anything else that differs
 // still fails.
-const MISE2_SOFT_DRINKS = "'limonata', 'tonica', 'gassosa', 'spuma', 'cedrata', 'ginger', ";
+const MISE2_SOFT_DRINKS = '`${B_START}limonata${B_END}`, `${B_START}tonica${B_END}`, `${B_START}gassosa${B_END}`, `${B_START}spuma${B_END}`, '
+  + '`${B_START}cedrata${B_END}`, `${B_START}ginger\\\\s+(?:ale|beer)${B_END}`, `${B_START}gingerino${B_END}`, ';
 const MISE2_SPLIT = "', 'iu'); const NONFOOD_RE = new RegExp( `alluminio";
 function withoutMise2Changes(block: string): string {
   if (!block.includes(MISE2_SOFT_DRINKS) || !block.includes(MISE2_SPLIT)) throw new Error('the Mise 2 differences are not where this check looks for them');

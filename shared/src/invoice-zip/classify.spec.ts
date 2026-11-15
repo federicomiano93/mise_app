@@ -313,6 +313,18 @@ describe('Mise 2 only: non-food, soft drinks and the bare «1/2» of a drink', (
     expect(kind('LATTE SPUMA LT 1')[0]).toBe('ingrediente');
   });
 
+  test('the soft-drink words are whole words: candied ginger and sparkling wine are not soft drinks', () => {
+    expect(kind('GINGER CANDITO KG 1')[0]).toBe('ingrediente');
+    expect(kind('GINGERINO ESEMPIO')[0]).toBe('rivendita');
+    expect(kind('GINGER ALE CL 20X24')[0]).toBe('rivendita');
+    expect(kind('GINGER BEER CL 20X24')[0]).toBe('rivendita');
+    expect(kind('TONICA SCHWEPPES CL 18X24')[0]).toBe('rivendita');
+    // «spuma» is no longer found inside «spumante» (it is the same class as in the frozen current app).
+    expect(kind('SPUMANTE BRUT ESEMPIO CL 75')[0]).toBe('ingrediente');
+    expect(legacy.classify('SPUMANTE BRUT ESEMPIO CL 75', 1, 1.0)[0]).toBe('ingrediente');
+    expect(kind('TONICHETTO ESEMPIO')[0]).toBe('ingrediente');
+  });
+
   test('«1/2X12» on a drink is half a litre, twelve bottles; «LT 1/2X24» too (it read as one litre)', () => {
     expect(ported.parsePack('ACQUA SABRINELLA NAT 1/2X12')).toStrictEqual(ported.packInfo(0.5, 'l', 12));
     expect(ported.parsePack('ACQUA VERA NAT.1/2X24')).toStrictEqual(ported.packInfo(0.5, 'l', 24));

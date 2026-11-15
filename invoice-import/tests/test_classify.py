@@ -142,6 +142,14 @@ class ClassifyTest(unittest.TestCase):
         self.assertEqual(self.kind("CORNETTO ALLA CREMA")[0], "ingrediente")
         self.assertEqual(self.kind("FECOLA DI PATATE")[0], "ingrediente")
 
+    def test_soft_drink_words_are_whole_words(self):
+        # Mise 2 (15 Nov 2026): candied ginger is a pastry ingredient, sparkling wine is not «spuma».
+        self.assertEqual(self.kind("GINGER CANDITO KG 1")[0], "ingrediente")
+        self.assertEqual(self.kind("SPUMANTE BRUT ESEMPIO CL 75")[0], "ingrediente")
+        self.assertEqual(self.kind("TONICHETTO ESEMPIO")[0], "ingrediente")
+        for text in ("GINGER ALE CL 20X24", "GINGER BEER CL 20X24", "GINGERINO ESEMPIO", "TONICA SCHWEPPES CL 18X24"):
+            self.assertEqual(self.kind(text)[0], "rivendita", text)
+
     def test_ready_made_food_is_an_ingredient_and_a_potato_peeler_is_packaging(self):
         # Mirrored word for word in tests/invoice-zip-classify.test.mjs.
         for text in ("CR.VUOTO 85gr* 50pz", "PATATE FETTE 2,5kg* 4pz", "CIPOLLE FETTE 2,5kg* 4pz",

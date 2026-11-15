@@ -84,7 +84,9 @@ BEVERAGE_RE = re.compile(
     r"coca cola|\bacqua\b|birra|redbull|succo|\bthe\b|fanta|sprite|lemonsoda|aranciata|chinotto"
     # Soft drinks proposed as ingredients on a real invoice (14 Nov 2026: «LIMONATA TOM LATTINA CL 33X24»,
     # «TONICA SCHWEPPES LEMON CL 18X24»), and their kin.
-    r"|limonata|tonica|gassosa|spuma|cedrata|ginger"
+    # Whole words only: «GINGER CANDITO» is candied ginger, a pastry ingredient (so is «SPUMANTE», no soft drink).
+    r"|\blimonata\b|\btonica\b|\bgassosa\b|\bspuma\b|\bcedrata\b"
+    r"|\bginger\s+(?:ale|beer)\b|\bgingerino\b"
     r"|prosecco|\bvino\b",
     re.I,
 )

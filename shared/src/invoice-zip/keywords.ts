@@ -53,6 +53,8 @@ export const BEVERAGE_RE = new RegExp(
   ['coca cola', `${B_START}acqua${B_END}`, 'birra', 'redbull', 'succo', `${B_START}the${B_END}`, 'fanta', 'sprite',
     'lemonsoda', 'aranciata', 'chinotto',
     // Soft drinks proposed as ingredients on a real invoice (14 Nov 2026: «LIMONATA TOM LATTINA CL 33X24», «TONICA SCHWEPPES
-    // LEMON CL 18X24»), and their kin. Also in invoice-import/classify.py; NOT in the frozen current app.
-    'limonata', 'tonica', 'gassosa', 'spuma', 'cedrata', 'ginger',
+    // LEMON CL 18X24»), and their kin. Also in invoice-import/classify.py; NOT in the frozen current app. Whole words only («GINGER
+    // CANDITO» is candied ginger, a pastry ingredient): ginger is a drink only as «ginger ale», «ginger beer» or «gingerino».
+    `${B_START}limonata${B_END}`, `${B_START}tonica${B_END}`, `${B_START}gassosa${B_END}`, `${B_START}spuma${B_END}`,
+    `${B_START}cedrata${B_END}`, `${B_START}ginger\\s+(?:ale|beer)${B_END}`, `${B_START}gingerino${B_END}`,
     'prosecco', `${B_START}vino${B_END}`].join('|'), 'iu');
