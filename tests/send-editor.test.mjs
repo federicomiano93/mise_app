@@ -100,6 +100,7 @@ test('the preview draws *bold* bold, as WhatsApp does, and follows the typing', 
   type(box(), '*Nuovo*\n- Burro: 1');
   assert.deepEqual(walk(preview()).filter(n => n.tagName === 'STRONG').map(n => n.textContent), ['Nuovo']);
   assert.match(preview().textContent, /Burro: 1/);
+  type(box(), MESSAGE);                // back as opened: closing asks nothing
   click(otherButton());
 });
 
@@ -139,6 +140,78 @@ test('Escape cancels (nothing sent), and the listener goes with the dialog', asy
   listeners.keydown.at(-1)({ key: 'Escape', preventDefault() {} });
   assert.equal((await answer).outcome, 'cancelled');
   assert.equal((listeners.keydown || []).length, before - 1);
+});
+
+// ── ⚠️ leaving with edited text asks first (review, 15 Nov 2026) ──────────────────────
+
+const questionBox = () => nodes().find(n => n.classList?.contains('app-dialog-backdrop') && !n.classList.contains('send-chooser'));
+const questionButton = which => walk(questionBox()).find(n => n.tagName === 'BUTTON'
+  && n.classList.contains(which === 'ok' ? 'app-dialog-btn-solid' : 'app-dialog-btn-ghost'));
+const pressEscape = () => [...(listeners.keydown || [])].reverse().forEach(fn => fn({ key: 'Escape', preventDefault() {} }));
+const flush = () => new Promise(r => setImmediate(r));
+const openEditor = (n = 1) => sendEditorDialog({ job: { name: 'Bruno', text: MESSAGE, open: () => { throw new Error('nothing may open'); } },
+  i: 0, n, photo: false });
+
+test('⚠️ Cancel on EDITED text asks «Discard your changes?»; Keep editing returns to the box, nothing lost', async () => {
+  let outcome = null;
+  const answer = openEditor().then(r => { outcome = r; return r; });
+  type(box(), `${MESSAGE}\n- Sale: 3`);
+  const focusedBefore = box().focused;
+  click(otherButton());
+  assert.ok(questionBox(), 'the question is on screen');
+  assert.equal(walk(questionBox()).find(n => n.classList?.contains('app-dialog-title')).textContent, 'Discard your changes?');
+  assert.equal(questionButton('ok').textContent, 'Discard');
+  assert.equal(questionButton('cancel').textContent, 'Keep editing');
+  click(questionButton('cancel'));
+  await flush();
+  assert.equal(outcome, null, 'the editor is still open');
+  assert.equal(box().value, `${MESSAGE}\n- Sale: 3`, 'the edit is intact');
+  assert.equal(box().focused, focusedBefore + 1, 'focus is back in the textarea');
+  assert.equal(questionBox(), undefined);
+  click(otherButton());
+  click(questionButton('ok'));
+  assert.deepEqual(await answer, { outcome: 'cancelled', text: `${MESSAGE}\n- Sale: 3` });
+});
+
+test('Escape on edited text asks too, and the editor stands aside while the question is up', async () => {
+  let outcome = null;
+  const answer = openEditor().then(r => { outcome = r; return r; });
+  type(box(), 'changed');
+  pressEscape();                       // the editor's own Escape: asks
+  assert.ok(questionBox());
+  pressEscape();                       // Escape belongs to the question now: Keep editing, no second question
+  await flush();
+  assert.equal(outcome, null, 'Escape on the question must not also cancel the editor');
+  assert.equal(questionBox(), undefined);
+  click(otherButton());
+  click(questionButton('ok'));
+  assert.equal((await answer).outcome, 'cancelled');
+});
+
+test('«Skip» with several suppliers asks the same; unchanged text (or typed and put back) closes at once', async () => {
+  const many = openEditor(2);
+  type(box(), 'x');
+  click(otherButton());
+  assert.ok(questionBox(), 'Skip throws the edited text away too');
+  click(questionButton('ok'));
+  assert.equal((await many).outcome, 'skipped');
+  const same = openEditor();
+  type(box(), 'x');
+  type(box(), MESSAGE);
+  click(otherButton());
+  assert.equal(questionBox(), undefined, 'the text is as it was opened: nothing to lose');
+  assert.equal((await same).outcome, 'cancelled');
+});
+
+test('the discard words, both languages, and the shell stands aside while the question is up', async () => {
+  const d = (await import('../js/i18n.js'))._dictionaries();
+  assert.deepEqual(['title', 'body', 'yes', 'no'].map(k => d.it[`orders.sendEditor.discard.${k}`]),
+    ['Scartare le modifiche?', 'Il testo che hai cambiato non verrà inviato.', 'Scarta', 'Continua a modificare']);
+  assert.deepEqual(['title', 'body', 'yes', 'no'].map(k => d.en[`orders.sendEditor.discard.${k}`]),
+    ['Discard your changes?', 'The text you changed will not be sent.', 'Discard', 'Keep editing']);
+  const src = read('js/orders/send-editor.js');
+  assert.match(src, /suspended: \(\) => asking/);
+  assert.match(src, /if \(suspended\(\)\) return;/);
 });
 
 test('a picture that cannot be drawn: «Invia» answers «failed» with the edited text (the caller offers the text)', async () => {

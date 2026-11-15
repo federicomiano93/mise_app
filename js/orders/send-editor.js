@@ -20,6 +20,7 @@
 import { t } from '../i18n.js';
 import { el } from './dom.js';
 import { parseBold, sharePhoto } from './order-image.js';
+import { confirmDialog } from './confirm-dialog.js';
 
 const RENDER_DELAY_MS = 350;
 
@@ -94,7 +95,9 @@ let dialogSeq = 0;
 // The shell every send question shares: named by its title, Escape cancels, Tab stays inside,
 // focus goes back where it was (copied from confirm-dialog.js, which the roads chooser lacks).
 // `focus` is the element to start on; the first live button otherwise.
-export function modalShell({ title, body, actions, onCancel, boxClass = '', focus = null }) {
+// `suspended()` true = another dialog sits on top (the «discard your changes?» question): this
+// shell leaves Escape and Tab to it.
+export function modalShell({ title, body, actions, onCancel, boxClass = '', focus = null, suspended = () => false }) {
   const prevFocus = document.activeElement;
   const titleId = `send-chooser-title-${++dialogSeq}`;
   const heading = el('h2', { class: 'app-dialog-title', id: titleId, text: title, tabindex: '-1' });
@@ -108,6 +111,7 @@ export function modalShell({ title, body, actions, onCancel, boxClass = '', focu
   ]);
   const overlay = el('div', { class: 'app-dialog-backdrop send-chooser' }, [box]);
   const onKey = e => {
+    if (suspended()) return;
     if (e.key === 'Escape') { e.preventDefault(); onCancel(); return; }
     if (e.key !== 'Tab') return;
     // The box comes before the buttons in the dialog, so the two lists keep the page's order.
@@ -253,7 +257,29 @@ export function sendEditorDialog({ job, i = 0, n = 1, language = null, photo = f
         done({ outcome: next, text });
       });
     });
-    otherBtn.addEventListener('click', () => done({ outcome: n > 1 ? 'skipped' : 'cancelled', text: area.value }));
+    // ⚠️ LEAVING WITH EDITS ASKS FIRST (project rule: confirm before discarding edits). Annulla,
+    // Salta and Escape all come here; text still as it was opened closes at once. While the
+    // question is up the shell stands aside (`suspended`) so Escape and Tab belong to it, and a
+    // second tap on «Annulla» does not open a second question.
+    const original = job.text;
+    let asking = false;
+    const leave = async outcome => {
+      if (asking) return;
+      const text = area.value;
+      if (text !== original) {
+        asking = true;
+        const discard = await confirmDialog({
+          title: t('orders.sendEditor.discard.title'),
+          message: t('orders.sendEditor.discard.body'),
+          okLabel: t('orders.sendEditor.discard.yes'),
+          cancelLabel: t('orders.sendEditor.discard.no'),
+        });
+        asking = false;
+        if (!discard) { area.focus(); return; }
+      }
+      done({ outcome, text });
+    };
+    otherBtn.addEventListener('click', () => leave(n > 1 ? 'skipped' : 'cancelled'));
     document.addEventListener('visibilitychange', onVisible);
 
     shell = modalShell({
@@ -267,7 +293,8 @@ export function sendEditorDialog({ job, i = 0, n = 1, language = null, photo = f
         area,
       ])],
       actions: [otherBtn, sendBtn],
-      onCancel: () => done({ outcome: 'cancelled', text: area.value }),
+      onCancel: () => leave('cancelled'),
+      suspended: () => asking,
       focus: sendBtn,
     });
     if (pictures) pictures.update(area.value, { now: true });
