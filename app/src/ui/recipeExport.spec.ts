@@ -72,8 +72,8 @@ const ONLY_PIECES: ExportModel = {
   ],
 };
 
-async function pdfText(model: ExportModel, options?: { rounded?: boolean }): Promise<string> {
-  const blob = await buildPdfBlob(model, options);
+async function pdfText(model: ExportModel): Promise<string> {
+  const blob = await buildPdfBlob(model);
   expect(blob.type).toBe('application/pdf');
   return Buffer.from(await blob.arrayBuffer()).toString('latin1');
 }
@@ -141,7 +141,7 @@ describe('a real PDF', () => {
     expect(await pdfText(model)).toContain('(0,727 kg)');
   });
 
-  it('rounded: the lab rule in the PDF, the screen’s text without it, and the spreadsheet keeps exact numbers', async () => {
+  it('prints what it receives: the Calculator card\'s whole grams, never a rounding of its own, and the spreadsheet keeps exact numbers', async () => {
     const model: ExportModel = {
       name: 'Pizza di prova',
       trays: 3,
@@ -151,15 +151,24 @@ describe('a real PDF', () => {
     const plain = await pdfText(model);
     expect(plain).toContain('(14405 g)');
     expect(plain).toContain('(293 g)');
-    const round = await pdfText(model, { rounded: true });
-    expect(round).toContain('(14410 g)');
-    expect(round).toContain('(290 g)');
-    expect(round).not.toContain('(14405 g)');
-    expect(round).not.toContain('(293 g)');
+    expect(plain).not.toContain('(14410 g)');
+    expect(plain).not.toContain('(290 g)');
     const { sheet } = await sheetFiles(await buildXlsxBlob(model, 'Totale'));
     const values = [...sheet.matchAll(/<c r="B([3-4])"[^>]*><v>([^<]+)<\/v>/g)].map(m => Number(m[2]));
     expect(values).toEqual([14404.9, 293]);
     expect(sheet).toMatch(/<f>SUM\(B3:B4\)<\/f>/);
+  });
+
+  it('a recipe-book row on its clean step prints as it is: 1597 g stays 1597 g', async () => {
+    const model: ExportModel = {
+      name: 'Pane di prova',
+      trays: 0,
+      totalG: 1602,
+      rows: [{ name: 'Farina di prova', value: 1597, unit: 'g', factor: 1, text: '1597' }, { name: 'Sale di prova', value: 5, unit: 'g', factor: 1, text: '5' }],
+    };
+    const pdf = await pdfText(model);
+    expect(pdf).toContain('(1597 g)');
+    expect(pdf).toContain('(5 g)');
   });
 });
 

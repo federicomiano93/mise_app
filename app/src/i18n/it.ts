@@ -916,8 +916,6 @@ export const it: Messages = {
   'export.pdfNote': 'Da stampare o condividere',
   'export.excel': 'Excel',
   'export.excelNote': 'Si salva sul dispositivo',
-  'export.roundWeights': 'Arrotonda i pesi nel PDF',
-  'export.roundNote': 'Sotto 10 g al grammo, sotto 100 g ai 5 g, sopra ai 10 g',
   'export.preparing': 'Preparo il file…',
   'export.ready': 'File pronto',
   'export.download': 'Scarica',

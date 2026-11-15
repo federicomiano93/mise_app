@@ -7,13 +7,15 @@
 // with the js/ file itself. It is NOT paired in parity.spec.ts, because of what is left out.
 //
 // LEFT OUT: `buildPdfBlob` and `buildXlsxBlob` (they `import()` the vendored libraries, which belong to the
-// app: shared/ has no runtime dependency) and the private loader that wraps a failed `import()`. What the
+// app: shared/ has no runtime dependency) and the private loader that wraps a failed `import()`. And, ON PURPOSE since
+// 16 Nov 2026 (the owner's decision), the PDF's «round the weights» rule `roundLabWeight` and its question `hasRoundableRows`:
+// the recipe book rounds once, to a clean step (clean-step.ts), and `rowTextOf` prints what it receives. What the
 // app's loader needs from here to make the SAME error the two functions below recognise is `LIBRARY_ERROR`
 // and `libraryError(cause)` (new in the port: in the original they are private to the loader).
 //
 // The model: { name, trays, totalG, rows } (trays and totalG name the FILE only). A row is EITHER the Calculator's { name, grams } (the
-// UNROUNDED grams it holds: the PDF shows them as the card does, Math.round + « g», unless the person
-// asked for the lab rounding; the spreadsheet keeps them exact so a formula over them is right) OR the Recipe catalogue's
+// UNROUNDED grams it holds: the PDF shows them as the card does, Math.round + « g»; the spreadsheet keeps them exact so a formula over
+// them is right) OR the Recipe catalogue's
 // { name, value, unit, factor }: `value` in the row's OWN unit (null = «to taste»), `unit` the text
 // the screen prints after the number, `factor` the grams in one unit (0 = not weighable: pieces,
 // spoons, a pinch). exportRow() turns both into the second shape, so every builder reads one.
@@ -168,31 +170,12 @@ export function exportFileName(m: ExportModel, ext: string, fallback: string = '
 // The weight as the result card prints it (js/calc.js renderIngredients).
 export const rowText = (grams: unknown): string => `${Math.round(grams as number)} g`;
 
-// The owner's lab rule for a weight in grams: to the gram under 10 g, to 5 g under 100 g, else to
-// 10 g; half always UP. The step is chosen on the unrounded value. Junk or negative -> 0, never NaN.
-export function roundLabWeight(grams: unknown): number {
-  const g = Number(grams);
-  if (!Number.isFinite(g) || g < 0) return 0;
-  const step = g < 10 ? 1 : g < 100 ? 5 : 10;
-  return Math.floor(g / step + 0.5) * step;
-}
-
-// A row the lab rounding applies to: exactly grams (not ml, which also has factor 1) with a value.
-const isRoundable = (r: ExportRow): boolean => r.unit === 'g' && r.value !== null;
-
-// True when at least one row is in grams with a value, so the «round the weights» switch means something.
-export function hasRoundableRows(m: ExportModel | null | undefined): boolean {
-  return !!m && Array.isArray(m.rows) && m.rows.some(r => isRoundable(exportRow(r)));
-}
-
 // A row as the PDF prints it: «14400 g», «500 ml», «3 pz», or just the unit word for «to taste».
-// `rounded` applies the lab rule to rows in grams only; every other unit prints as ever.
-export function rowTextOf(row: ExportRowInput | null | undefined, { rounded = false }: { rounded?: boolean } = {}): string {
+// ⚠️ IT PRINTS WHAT IT RECEIVES (Mise 2, the owner's decision of 16 Nov 2026): no rounding option. The recipe book hands rows already
+// rounded once, to a clean step, by its scaling; the Calculator's unrounded grams print as its card shows them (Math.round).
+export function rowTextOf(row: ExportRowInput | null | undefined): string {
   const r = exportRow(row);
   if (r.value === null) return r.unit;
-  // ⚠️ THE RULE ROUNDS THE NUMBER THE SCREEN SHOWS, so the Calculator's unrounded 104.6 g (card: 105 g)
-  // prints 110 g, like the same row from the Recipe book, and never disagrees with its own card.
-  if (rounded && isRoundable(r)) return `${roundLabWeight(Math.round(r.value))} g`;
   // The screen's own number when the caller has it («1,846» in Italian): kg and l keep decimals.
   return `${r.text ?? Math.round(r.value)} ${r.unit}`;
 }

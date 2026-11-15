@@ -2173,6 +2173,12 @@ model's `totalG` is that same number. Scaled by its total with every weighable r
 under it says it is off); from a row, or with kg, l or ml rows, it can be a few grams from the batch. ⚠️ The batch box still shows the
 batch («Calculate from this ingredient»: box 5469, Total 5470 on the owner's brioche example).
 
+**The export prints what it receives.** The «Round the weights in the PDF» switch is gone (the dialog, its state, the `rounded`
+option of `buildPdfBlob` and `rowTextOf`, `hasRoundableRows`, `roundLabWeight` in the port, the keys `export.roundWeights` and
+`export.roundNote`). The PDF and the Excel file print the amounts the screen hands them; nothing is worked out again. The Calculator's
+PDF prints the card's whole grams. `js/recipe-export.js` keeps its switch (rollback copy): `recipe-export.spec.ts` runs the lab-rounding
+tests against it alone and lists the two functions as left out of the port on purpose.
+
 **No longer compared with `js/`:** `scaleCatalogue` (`catalogue-model.spec.ts`, its three whole-gram tests now run against `js/` only;
 `odd-inputs.spec.ts`) and `amountsFor` (`odd-inputs.spec.ts`), which draws with it. `baseAmounts` is still compared.
 

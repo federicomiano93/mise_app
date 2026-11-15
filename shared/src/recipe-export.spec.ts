@@ -35,7 +35,7 @@ describe.each([
 ] as const)('%s', (_name, m) => {
   const {
     exportTitle, exportFileName, rowText, pdfLayout, rowTextOf, exportRow, pdfSafe, pdfMeasurer, sheetNameOf, xlsxSheet,
-    exportErrorKey, exportErrorCode, roundLabWeight, hasRoundableRows, PAGE_W, PAGE_H,
+    exportErrorKey, exportErrorCode, PAGE_W, PAGE_H,
   } = m;
 
   const doc = new (jsPDF as Loose)({ unit: 'pt', format: 'a4' });
@@ -344,7 +344,55 @@ describe.each([
     expect(((data[2] as Loose)[1]).format).toBe('0 "g"');
   });
 
-  // ── The lab rounding (PDF only) ──────────────────────────────────────────────────────────
+  test('the PDF prints a row as it receives it: the number, or the screen\'s own text, and its unit', () => {
+    expect(rowTextOf({ name: 'a', value: 293, unit: 'g', factor: 1, text: '293' })).toBe('293 g');
+    expect(rowTextOf({ name: 'a', value: 1597, unit: 'g', factor: 1 })).toBe('1597 g');
+    expect(rowTextOf({ name: 'Farina di prova', grams: 104.6 }), 'the Calculator card\'s whole gram').toBe('105 g');
+  });
+
+  // ── Library failures ─────────────────────────────────────────────────────────────────────
+
+  test('only a library that would not load WHILE OFFLINE asks for a connection', () => {
+    const lib = { code: 'export/library' };
+    expect(exportErrorKey(lib, false)).toBe('export.needsConnection');
+    expect(exportErrorKey(lib, true)).toBe('export.failed');
+    expect(exportErrorKey(lib)).toBe('export.failed');
+    expect(exportErrorKey(new Error('boom'), false)).toBe('export.failed');
+    expect(exportErrorKey(null, false)).toBe('export.failed');
+  });
+
+  test('the code that goes into the error report is one of two fixed words', () => {
+    expect(exportErrorCode({ code: 'export/library' })).toBe('library');
+    expect(exportErrorCode(new Error('Torta di prova secret'))).toBe('build');
+    expect(exportErrorCode(undefined)).toBe('build');
+  });
+});
+
+// ── What the port adds ───────────────────────────────────────────────────────────────────
+
+describe('the error the app\'s loader makes', () => {
+  test('libraryError is what both error functions recognise, and keeps the cause', () => {
+    const cause = new Error('network');
+    const err = ported.libraryError(cause);
+    expect(err).toBeInstanceOf(Error);
+    expect(err.message).toBe(ported.LIBRARY_ERROR);
+    expect(err.code).toBe('export/library');
+    expect(err.cause).toBe(cause);
+    expect(ported.exportErrorKey(err, false)).toBe('export.needsConnection');
+    expect(ported.exportErrorKey(err, true)).toBe('export.failed');
+    expect(ported.exportErrorCode(err)).toBe('library');
+    // The original's functions recognise it too, so the two apps agree on one error.
+    expect(legacy.exportErrorKey(err, false)).toBe('export.needsConnection');
+    expect(legacy.exportErrorCode(err)).toBe('library');
+  });
+});
+
+// ── The current app's lab rounding (js/ only) ────────────────────────────────────────────────────────────────────────────
+// Mise 2 has no rounding option any more: the recipe book's scaling rounds each row once to a clean step and the file prints what
+// it receives (the owner's decision, 16 Nov 2026). js/ is the rollback copy and keeps its switch, so these run against it alone.
+
+describe('js/ (current app): the lab rounding of the PDF', () => {
+  const { rowTextOf, roundLabWeight, hasRoundableRows } = legacyJs as Loose;
 
   test('roundLabWeight: 1 g under 10, 5 g under 100, else 10 g; half always up; never NaN', () => {
     const cases = [[6, 6], [44, 45], [59, 60], [110, 110], [220, 220], [293, 290], [769, 770], [1979, 1980],
@@ -393,48 +441,14 @@ describe.each([
     expect(hasRoundableRows(null)).toBe(false);
   });
 
-  // ── Library failures ─────────────────────────────────────────────────────────────────────
-
-  test('only a library that would not load WHILE OFFLINE asks for a connection', () => {
-    const lib = { code: 'export/library' };
-    expect(exportErrorKey(lib, false)).toBe('export.needsConnection');
-    expect(exportErrorKey(lib, true)).toBe('export.failed');
-    expect(exportErrorKey(lib)).toBe('export.failed');
-    expect(exportErrorKey(new Error('boom'), false)).toBe('export.failed');
-    expect(exportErrorKey(null, false)).toBe('export.failed');
-  });
-
-  test('the code that goes into the error report is one of two fixed words', () => {
-    expect(exportErrorCode({ code: 'export/library' })).toBe('library');
-    expect(exportErrorCode(new Error('Torta di prova secret'))).toBe('build');
-    expect(exportErrorCode(undefined)).toBe('build');
-  });
-});
-
-// ── What the port adds ───────────────────────────────────────────────────────────────────
-
-describe('the error the app\'s loader makes', () => {
-  test('libraryError is what both error functions recognise, and keeps the cause', () => {
-    const cause = new Error('network');
-    const err = ported.libraryError(cause);
-    expect(err).toBeInstanceOf(Error);
-    expect(err.message).toBe(ported.LIBRARY_ERROR);
-    expect(err.code).toBe('export/library');
-    expect(err.cause).toBe(cause);
-    expect(ported.exportErrorKey(err, false)).toBe('export.needsConnection');
-    expect(ported.exportErrorKey(err, true)).toBe('export.failed');
-    expect(ported.exportErrorCode(err)).toBe('library');
-    // The original's functions recognise it too, so the two apps agree on one error.
-    expect(legacy.exportErrorKey(err, false)).toBe('export.needsConnection');
-    expect(legacy.exportErrorCode(err)).toBe('library');
-  });
 });
 
 // ── What pairing would have checked ──────────────────────────────────────────
 
 describe('the port against the original', () => {
-  // The two builders that load the libraries.
-  const LEFT_OUT = ['buildPdfBlob', 'buildXlsxBlob'];
+  // The two builders that load the libraries; and the PDF's «round the weights» rule and its question, which Mise 2 no longer has
+  // (the owner's decision, 16 Nov 2026: the recipe book rounds once, to a clean step, and the file prints what it receives).
+  const LEFT_OUT = ['buildPdfBlob', 'buildXlsxBlob', 'roundLabWeight', 'hasRoundableRows'];
   const ADDED = ['LIBRARY_ERROR', 'libraryError'];
   const original = legacyJs as unknown as Record<string, unknown>;
   const port = ported as unknown as Record<string, unknown>;

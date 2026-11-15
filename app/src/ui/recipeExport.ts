@@ -24,9 +24,9 @@ async function loadLibrary<T>(importer: () => Promise<T>): Promise<T> {
   }
 }
 
-// -> Blob (application/pdf). One A4 page: the title, then «name ........ weight» per row.
-// `rounded` rounds the printed gram weights (roundLabWeight); the model itself is never changed.
-export async function buildPdfBlob(model: ExportModel, { rounded = false }: { rounded?: boolean } = {}): Promise<Blob> {
+// -> Blob (application/pdf). One A4 page: the title, then «name ........ weight» per row. It prints the amounts it is handed: nothing
+// is rounded or worked out again here.
+export async function buildPdfBlob(model: ExportModel): Promise<Blob> {
   const { jsPDF } = await loadLibrary(() => import('jspdf'));
   const doc = new jsPDF({ unit: 'pt', format: 'a4', compress: false });
   const title = pdfSafe(exportTitle(model));
@@ -34,7 +34,7 @@ export async function buildPdfBlob(model: ExportModel, { rounded = false }: { ro
   const measure = pdfMeasurer(doc);
   const { items, lines } = pdfLayout({
     title,
-    rows: model.rows.map(row => ({ name: pdfSafe(exportRow(row).name), text: pdfSafe(rowTextOf(row, { rounded })), dividerAfter: row.dividerAfter === true })),
+    rows: model.rows.map(row => ({ name: pdfSafe(exportRow(row).name), text: pdfSafe(rowTextOf(row)), dividerAfter: row.dividerAfter === true })),
   }, measure);
   for (const item of items) {
     doc.setFont('helvetica', item.bold ? 'bold' : 'normal');
