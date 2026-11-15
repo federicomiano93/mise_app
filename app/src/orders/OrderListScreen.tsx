@@ -19,7 +19,7 @@ import { FormBar } from '../ui/FormBar';
 import { useStatusMessage } from '../ui/StatusMessage';
 import { useConfirm } from '../ui/useConfirm';
 import { joinList } from './orderWords';
-import { senderOf } from './OrderListsScreen';
+import { senderOf, useRosterForSenders } from './OrderListsScreen';
 import { useOrders, useOrdersStore } from './OrdersContext';
 import { dayTranslate } from './dayWords';
 import { listOpener, useHandBack } from './handBack';
@@ -28,7 +28,7 @@ import { LISTS_PATH, supplierConfirmPath } from './ordersPath';
 import { sendTranslate } from './sendFlow';
 import type { SendRow } from './sendFlow';
 import type { OrdersLens } from './ordersLens';
-import type { StoredDoc } from './ordersSource';
+import type { RosterRow, StoredDoc } from './ordersSource';
 import { LONG_MS } from './useClearQuantities';
 import { useSendOrder } from './useSendOrder';
 import styles from './OrderListScreen.module.css';
@@ -45,6 +45,7 @@ import styles from './OrderListScreen.module.css';
 export function OrderListScreen({ id, lens }: { id: string; lens: OrdersLens }) {
   const { t } = useT();
   const { requests, requestsLoaded, requestsBroken } = useOrders();
+  const rosterByUid = useRosterForSenders();
   const handBack = useHandBack();
   const leave = useLeave(LISTS_PATH, useCallback(() => { handBack.expect(listOpener(id)); }, [handBack, id]));
   const request = useMemo(() => requests.find(candidate => candidate.id === id), [requests, id]);
@@ -72,7 +73,7 @@ export function OrderListScreen({ id, lens }: { id: string; lens: OrdersLens }) 
       </section>
     );
   }
-  return <Open request={request} lens={lens} leave={leave} left={left} titleId={titleId} />;
+  return <Open request={request} lens={lens} leave={leave} left={left} titleId={titleId} rosterByUid={rosterByUid} />;
 }
 
 type OpenProps = {
@@ -81,9 +82,10 @@ type OpenProps = {
   leave: () => void;
   left: { current: boolean };
   titleId: string;
+  rosterByUid: ReadonlyMap<string, RosterRow> | null;
 };
 
-function Open({ request, lens, leave, left, titleId }: OpenProps) {
+function Open({ request, lens, leave, left, titleId, rosterByUid }: OpenProps) {
   const { t } = useT();
   const { state } = useLocation();
   const navigate = useNavigate();
@@ -284,7 +286,7 @@ function Open({ request, lens, leave, left, titleId }: OpenProps) {
       />
       <div className={styles.body}>
         <div className={styles.head}>
-          <span className={styles.from}>{t('ord.request.from', { who: senderOf(request, t('ord.request.someone')) })}</span>
+          <span className={styles.from}>{t('ord.request.from', { who: senderOf(request, t('ord.request.someone'), rosterByUid) })}</span>
           <span className={styles.when}>{dayLabel(date, new Date(), dt)}</span>
         </div>
 

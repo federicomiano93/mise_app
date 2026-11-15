@@ -39,6 +39,28 @@ describe.each([
     if (req === null) throw new Error('a list was expected');
     return req;
   };
+  // ── Who is named on a received list (security audit; tests/security-audit-insiders.test.mjs) ──
+  const roster = new Map<unknown, unknown>([
+    ['u-marco', { firstName: 'Marco', lastName: 'Rossi', email: 'marco@example.com' }],
+    ['u-noname', { firstName: '', lastName: '', email: 'anna@example.com' }],
+  ]);
+
+  test('⚠️ the roster name wins over the name the sender typed', () => {
+    expect(m.shownSender({ fromUid: 'u-marco', fromName: 'Federico (owner)' }, roster)).toBe('Marco Rossi');
+  });
+
+  test('a roster row with no name still beats the typed one, by its address', () => {
+    expect(m.shownSender({ fromUid: 'u-noname', fromName: 'Federico' }, roster)).toBe('anna@example.com');
+  });
+
+  test('the typed name is only the fallback: no roster yet, or a sender it no longer has', () => {
+    expect(m.shownSender({ fromUid: 'u-marco', fromName: 'Marco' }, null)).toBe('Marco');
+    expect(m.shownSender({ fromUid: 'u-gone', fromName: '  Ex worker ' }, roster)).toBe('Ex worker');
+    expect(m.shownSender({ fromUid: 'u-marco', fromName: 'Marco' }, { 'u-marco': { firstName: 'X' } })).toBe('Marco');
+    expect(m.shownSender(null, roster)).toBe('');
+    expect(m.shownSender({ fromUid: 'u-gone' }, roster)).toBe('');
+  });
+
   const buildWith = (entries: unknown) => {
     const req = m.buildOrderRequest({
       suppliers: SUPPLIERS, ingredients: [BAG_CARD, INGREDIENTS[1], INGREDIENTS[2]], entries, date: '2026-08-14', from: FROM, now: NOW,

@@ -56,6 +56,25 @@ export function senderName(member?: unknown): string {
     .join(' ');
 }
 
+// The name a received list is shown under. A byte-faithful port of the original's (a8500872).
+//
+// ⚠️ THE ROSTER WINS OVER WHAT THE SENDER WROTE (security audit, 2 Nov 2026). The rules tie `fromUid` to the account that
+// wrote the list, but `fromName` is free text they can only measure — so an employee could send a list «from Federico». The
+// roster row for `fromUid` is written by the server when the person joined, so it is the name shown whenever it is there.
+// `fromName` is only the fallback for a sender the roster no longer has, or a roster that could not be read. '' when there
+// is nothing at all: the screen supplies the word. (Mise 2's roster rows carry no address, and its screen never prints one —
+// app/src/orders/OrderListsScreen.tsx senderOf.)
+export function shownSender(request: unknown, rosterByUid: unknown): string {
+  const req = request as { fromUid?: unknown; fromName?: unknown } | null | undefined;
+  const row = (req && rosterByUid instanceof Map ? rosterByUid.get(req.fromUid) : null) as
+    { firstName?: unknown; lastName?: unknown; email?: unknown } | null | undefined;
+  const fromRoster = row
+    ? ([row.firstName, row.lastName].map(part => String(part || '').trim()).filter(Boolean).join(' ')
+      || String(row.email || '').trim())
+    : '';
+  return fromRoster || String((req && req.fromName) || '').trim();
+}
+
 // ── Freezing the list ─────────────────────────────────────────────────────────
 
 export interface BuiltOrderRequest {
