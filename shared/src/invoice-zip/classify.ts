@@ -128,7 +128,8 @@ const withFractions = (description: unknown): string => String(description || ''
 
 // «1/2X12»: a fraction of a litre, then how many — never inside a longer number («11/2», «1,1/2») or a date. «NAT.1/2X24»: a dot
 // after a word is fine.
-const BARE_FRACTION_X = /(?<![\d/]|\d[.,])(\d)\s*\/\s*(\d)\s*[X×*]\s*(\d+)(?!\d)/u;
+// «ACQUA NAT 1 1/2X6» is a litre and a half (15 Nov 2026): a single digit and a space may come before the fraction.
+const BARE_FRACTION_X = /(?<![\d/]|\d[.,])(?:(\d)\s+)?(\d)\s*\/\s*(\d)\s*[X×*]\s*(\d+)(?!\d)/u;
 
 // MISE 2 (15 Nov 2026): a drinks supplier writes «CL» for millilitres on the big sizes, «SUCCO … CL 200X24» is 200 ml, not two litres
 // (the frozen app and classify.py read 2000 ml). On a line the beverage words name, a «CL» number above 100 is millilitres; up to 100
@@ -147,9 +148,10 @@ export function parsePack(description?: unknown): PackInfo | null {
   // beverage words name: elsewhere a bare «1/2» means nothing certain.
   if (BEVERAGE_RE.test(d)) {
     const bare = BARE_FRACTION_X.exec(d);
-    if (bare && Number(bare[2]) > 0) {
-      const count = Number(bare[3]);
-      return packInfo(Number(fractionText(Number(bare[1]), Number(bare[2]))), 'l', count > 1 ? count : null);
+    if (bare && Number(bare[3]) > 0) {
+      const count = Number(bare[4]);
+      const size = Number(bare[1] || 0) + Number(fractionText(Number(bare[2]), Number(bare[3])));
+      return packInfo(size, 'l', count > 1 ? count : null);
     }
   }
 

@@ -337,6 +337,16 @@ describe('Mise 2 only: non-food, soft drinks and the bare «1/2» of a drink', (
     expect(ported.parsePack('ACQUA NAT 11/2X12')).toBeNull();
   });
 
+  test('«1 1/2X6» on a drink is a litre and a half, six bottles (it read half a litre); «0/2» is still no size', () => {
+    expect(ported.parsePack('ACQUA NAT 1 1/2X6')).toStrictEqual(ported.packInfo(1.5, 'l', 6));
+    expect(ported.parsePack('ACQUA NAT. 2  1/2X6')).toStrictEqual(ported.packInfo(2.5, 'l', 6));
+    expect(ported.parsePack('ACQUA NAT 1/2X6')).toStrictEqual(ported.packInfo(0.5, 'l', 6));
+    expect(ported.parsePack('ACQUA NAT 0/2X6')).toStrictEqual(ported.packInfo(0, 'l', 6));
+    expect(ported.parsePack('ACQUA NAT 1 0/2X6')).toStrictEqual(ported.packInfo(1, 'l', 6));
+    // A decimal in front is not a whole part.
+    expect(ported.parsePack('ACQUA NAT 1,1 1/2X6')).toStrictEqual(ported.packInfo(0.5, 'l', 6));
+  });
+
   test('«CL» above 100 on a drink is millilitres («CL 200X24» is 200 ml); up to 100 it stays centilitres', () => {
     for (const [text, ml] of [
       ['SUCCO BRAND PERA CL 200X24', 200], ['SUCCO BRAND CL 250X24', 250], ['THE BRAND LIMONE CL 400X12', 400],
