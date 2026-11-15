@@ -14,8 +14,16 @@
 //
 // FULL port of js/orders/invoice-zip/selection.js: same exported names, same values, same behaviour input for
 // input. Typing only differs. parity.spec.ts compares the exports.
+// ⚠️ ONE MISE-2-ONLY OPTION, `everyKind` (14 Nov 2026), for a build made with build-import's own `everyKind`: every product that
+// can be read is imported (packaging, resale and other too — nothing is «not imported» for what it was taken for), and the
+// result adds `groups.byKind` and `counts.byKind`, what goes in, by item kind. «Skip this product» and «skip this supplier» work
+// as before; a stored 'ingredient' means «import», and the new item's kind is 'ingredient' (the owner's past correction wins over the
+// reader's guess). The line type «altro», the soft drinks, `TYPE_ORDER` and the «1/2X» reading are NOT behind the option: they
+// apply in the port without it (deliberate, pinned by classify.spec.ts, keywords.spec.ts and parity.spec.ts).
 
 import { normalizeVat } from '../vat-number';
+import { INGREDIENT_KINDS, kindOf } from '../ingredient-kind';
+import type { IngredientKind } from '../ingredient-kind';
 import { IMPORTED_TYPE } from './build-import';
 import type { ImportFile, ImportIngredient, ImportResult } from './build-import';
 import { sha256Hex } from './sha256';
@@ -93,6 +101,8 @@ export interface SelectOptions {
   existingIngredients?: readonly (ExistingIngredient | null | undefined)[] | null;
   overrides?: Record<string, string>;
   supplierOverrides?: Record<string, string>;
+  // Mise 2 only: see the head of this file.
+  everyKind?: boolean;
 }
 
 // A product the person can still decide about.
@@ -104,6 +114,8 @@ export interface SelectionItem {
   canImport: boolean;
   checked: boolean;
   reason: string;
+  // Mise 2 only (`everyKind`): what the product is imported as.
+  kind?: IngredientKind;
 }
 
 export interface SelectionByKey {
@@ -124,6 +136,8 @@ export interface Selection {
     unreadable: SelectionItem[];
     toCheck: { key: string; name: string; supplierName: string; reason: string }[];
     skippedFiles: { name: string; reason: string }[];
+    // Mise 2 only (`everyKind`): what goes in, by kind, in the order of INGREDIENT_KINDS.
+    byKind?: Record<IngredientKind, SelectionItem[]>;
   };
   counts: {
     invoices: number;
@@ -133,6 +147,8 @@ export interface Selection {
     salesSkipped: number;
     suppliers: number;
     ingredients: number;
+    // Mise 2 only (`everyKind`): how many go in, by kind.
+    byKind?: Record<IngredientKind, number>;
   };
   byKey: Map<string, SelectionByKey>;
 }
@@ -152,6 +168,8 @@ export function selectImport(built: ImportResult, options: SelectOptions = {}): 
   const overrides = options.overrides || {};
   const supplierOverrides = options.supplierOverrides || {};
   const known = knownCodes(options.existingSuppliers, options.existingIngredients);
+  const everyKind = options.everyKind === true;
+  const byKind = Object.fromEntries(INGREDIENT_KINDS.map(kind => [kind, [] as SelectionItem[]])) as Record<IngredientKind, SelectionItem[]>;
   const entryByKey = new Map((built.candidates || []).map((entry): [string, ImportIngredient] => [entry.key, entry]));
 
   const groups: Selection['groups'] = {
@@ -162,17 +180,22 @@ export function selectImport(built: ImportResult, options: SelectOptions = {}): 
   const taken: { row: ImportResult['products'][number]; entry: ImportIngredient }[] = [];
 
   for (const row of built.products || []) {
-    const entry = entryByKey.get(row.key) || null;
+    const found = entryByKey.get(row.key) || null;
     const stored = decisions.get(decisionId(row.key));
+    // MISE 2 (`everyKind`, 15 Nov 2026): a stored 'ingredient' is what the owner answered «import this as an ingredient» to in the
+    // current app, on a line the reader took for packaging, resale or other. That correction still wins over the reader's guess for
+    // a NEW item (an existing item never changes kind: the plan never names it).
+    const entry = everyKind && found && stored === DECISION_INGREDIENT && kindOf(found) !== 'ingredient' ? { ...found, kind: 'ingredient' as const } : found;
     const supplierStored = decisions.get(decisionId(supplierDecisionKey(row.supplierKey))) === DECISION_SKIP;
     const supplierSkipped = supplierStored && supplierOverrides[row.supplierKey] !== 'import';
     const vat = normalizeVat(row.vatNumber);
     const promoted = Boolean(entry) && Boolean(vat) && codeOf(row.supplierCode) !== ''
       && Boolean(known.get(vat)?.has(codeOf(row.supplierCode)));
-    const natural = row.type === IMPORTED_TYPE || promoted;
+    // MISE 2 (`everyKind`): whatever it was taken for, a product that can be read is imported unless somebody said not to.
+    const natural = everyKind ? Boolean(entry) : (row.type === IMPORTED_TYPE || promoted);
 
     let base: string;
-    if (!entry) base = row.type === IMPORTED_TYPE ? 'unreadable' : 'notImported';
+    if (!entry) base = everyKind || row.type === IMPORTED_TYPE ? 'unreadable' : 'notImported';
     else if (stored === DECISION_INGREDIENT) base = 'import';
     else if (supplierSkipped) base = 'skippedSupplier';
     else if (stored === DECISION_SKIP) base = 'skippedByYou';
@@ -189,6 +212,7 @@ export function selectImport(built: ImportResult, options: SelectOptions = {}): 
       canImport: Boolean(entry), checked: ticked,
       // Why a product that cannot be turned into an ingredient is not offered (build-import.ts `unreadableReason`).
       reason: entry ? '' : (row.unreadableReason || ''),
+      ...(everyKind && entry ? { kind: kindOf(entry) } : {}),
     };
     if (base === 'notImported') groups.notImported.push(item);
     else if (base === 'skippedByYou') groups.skippedByYou.push(item);
@@ -201,6 +225,7 @@ export function selectImport(built: ImportResult, options: SelectOptions = {}): 
       supplierGroup.set(row.supplierKey, group);
     }
     if (included) taken.push({ row, entry: entry as ImportIngredient });
+    if (everyKind && included) byKind[kindOf(entry)].push(item);
   }
   groups.skippedSuppliers = [...supplierGroup.values()].sort((a, b) => a.name.localeCompare(b.name) || a.key.localeCompare(b.key));
 
@@ -223,7 +248,7 @@ export function selectImport(built: ImportResult, options: SelectOptions = {}): 
       suppliers: [...suppliers.values()].sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0)),
       ingredients,
     },
-    groups,
+    groups: everyKind ? { ...groups, byKind } : groups,
     counts: {
       invoices: documents.length,
       excludedDocuments: documents.filter((d) => d.status === 'excluded').length,
@@ -232,6 +257,7 @@ export function selectImport(built: ImportResult, options: SelectOptions = {}): 
       salesSkipped: built.salesSkipped || 0,
       suppliers: suppliers.size,
       ingredients: ingredients.length,
+      ...(everyKind ? { byKind: Object.fromEntries(INGREDIENT_KINDS.map(kind => [kind, byKind[kind].length])) as Record<IngredientKind, number> } : {}),
     },
     byKey,
   };

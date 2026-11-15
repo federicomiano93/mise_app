@@ -4,7 +4,7 @@ import { ChevronRight, FileUp, Plus, Search, Settings, TrendingUp } from 'lucide
 import { dueFirst } from '@mise/shared/due-first';
 import { favouriteGroups } from '@mise/shared/favourite-suppliers';
 import { ingredientDisplayName, ingredientNameMatches } from '@mise/shared/ingredient-name';
-import { isPackaging } from '@mise/shared/ingredient-kind';
+import { kindOf } from '@mise/shared/ingredient-kind';
 import { normalizeText } from '@mise/shared/ingredient-search';
 import { supplierLabel, supplierMatches } from '@mise/shared/supplier-label';
 import type { MessageKey } from '../i18n/en';
@@ -19,6 +19,7 @@ import { FoldedGroup, useFoldedOpen } from '../ui/FoldedGroup';
 import { suppliersFromInvoices } from './invoiceTag';
 import { useMayImport } from './invoiceImport/useMayImport';
 import { IMPORT_OPENER, NEW_OPENER, PRICE_CHANGES_OPENER, SEARCH_OPENER, SETTINGS_OPENER, itemOpener, supplierOpener, useHandBack } from './handBack';
+import { TAB_OF_KIND } from './suppliersPath';
 import type { SuppliersTab } from './suppliersPath';
 import { useSuppliers } from './SuppliersContext';
 import type { StoredDoc } from './suppliersSource';
@@ -30,42 +31,55 @@ import styles from './SuppliersList.module.css';
 export const SEARCH_DEBOUNCE_MS = 140;
 
 // Ingredients first (parity S45: «this list IS the work»): the default, the DOM order and the order on screen agree.
-const TABS: readonly SuppliersTab[] = ['ingredients', 'suppliers', 'packaging'];
+// Mise 2 (14 Nov 2026): Resale and Other after Packaging, one tab per kind. The tabs wrap onto a second row on a phone.
+const TABS: readonly SuppliersTab[] = ['ingredients', 'suppliers', 'packaging', 'resale', 'other'];
 
 const TAB_KEY = {
   ingredients: 'sup.tab.ingredients',
   suppliers: 'sup.tab.suppliers',
   packaging: 'sup.tab.packaging',
+  resale: 'sup.tab.resale',
+  other: 'sup.tab.other',
 } as const satisfies Record<SuppliersTab, MessageKey>;
 
 const SEARCH_KEY = {
   ingredients: 'sup.search.ingredients',
   suppliers: 'sup.search.suppliers',
   packaging: 'sup.search.packaging',
+  resale: 'sup.search.resale',
+  other: 'sup.search.other',
 } as const satisfies Record<SuppliersTab, MessageKey>;
 
 const EMPTY_TITLE_KEY = {
   ingredients: 'sup.empty.ingredients.title',
   suppliers: 'sup.empty.suppliers.title',
   packaging: 'sup.empty.packaging.title',
+  resale: 'sup.empty.resale.title',
+  other: 'sup.empty.other.title',
 } as const satisfies Record<SuppliersTab, MessageKey>;
 
 const EMPTY_SUB_KEY = {
   ingredients: 'sup.empty.ingredients.sub',
   suppliers: 'sup.empty.suppliers.sub',
   packaging: 'sup.empty.packaging.sub',
+  resale: 'sup.empty.resale.sub',
+  other: 'sup.empty.other.sub',
 } as const satisfies Record<SuppliersTab, MessageKey>;
 
 const NO_MATCH_KEY = {
   ingredients: 'sup.noMatch.ingredients',
   suppliers: 'sup.noMatch.suppliers',
   packaging: 'sup.noMatch.packaging',
+  resale: 'sup.noMatch.resale',
+  other: 'sup.noMatch.other',
 } as const satisfies Record<SuppliersTab, MessageKey>;
 
 const NEW_KEY = {
   ingredients: 'sup.newIngredient',
   suppliers: 'sup.newSupplier',
   packaging: 'sup.newPackaging',
+  resale: 'sup.newResale',
+  other: 'sup.newOther',
 } as const satisfies Record<SuppliersTab, MessageKey>;
 
 const tabId = (tab: SuppliersTab): string => `sup-tab-${tab}`;
@@ -413,17 +427,17 @@ type ItemListProps = {
   onOpenItem: (id: string) => void;
 };
 
-// The Ingredients and Packaging tabs: every item of that kind, A–Z, whoever sells it (parity S57–S60).
+// The Ingredients, Packaging, Resale and Other tabs: every item of that kind, A–Z, whoever sells it (parity S57–S60). An item whose
+// kind is absent (every old item) is an ingredient.
 function ItemList({ tab, items, suppliers, query, broken, openItemId, onOpenItem }: ItemListProps) {
   const { t } = useT();
   const handBack = useHandBack();
-  const packaging = tab === 'packaging';
 
   const all = useMemo(
     () => items
-      .filter(item => isPackaging(item) === packaging)
+      .filter(item => TAB_OF_KIND[kindOf(item)] === tab)
       .sort((a, b) => ingredientDisplayName(a).localeCompare(ingredientDisplayName(b))),
-    [items, packaging],
+    [items, tab],
   );
   const visible = useMemo(() => {
     const q = normalizeText(query);

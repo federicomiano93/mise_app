@@ -35,7 +35,7 @@ const seeded = (): FakeSuppliersSource => fakeSuppliersSource({
   },
 });
 
-const CARD = /^(Edit|Modifica) (ingredient|packaging|ingrediente|confezione)$/;
+const CARD = /^(Edit|Modifica) (ingredient|packaging|ingrediente|confezione|resale item|other item)$/;
 const CHOOSER = /^(Merge another pack|Unisci un’altra confezione)$/;
 const DOOR = /^(Merge another pack…|Unisci un’altra confezione…)$/;
 
@@ -417,5 +417,29 @@ describe('in Italian', () => {
     expect(dialog).toHaveTextContent('2 prezzi e 1 codice fattura di «Flour 00 25kg» passano a «Flour». «Flour 00 25kg» viene eliminato. Non si può annullare.');
     await view.user.click(within(dialog).getByRole('button', { name: 'Unisci' }));
     expect(await screen.findByText('Unito ✓')).toBeInTheDocument();
+  });
+});
+
+// Mise 2, 14 Nov 2026: resale and other are merged like packaging — never. No door, no chooser, never a candidate.
+describe('resale and other items', () => {
+  const WATER = item('i-water', { name: 'Flour water', kind: 'resale', supplierId: 's-alp' });
+  const SOAP = item('i-soap', { name: 'Flour soap', kind: 'other', supplierId: 's-alp' });
+  const withKinds = (): FakeSuppliersSource => fakeSuppliersSource({ suppliers: [ALPINE], ingredients: [FLOUR, FLOUR_BIG, WATER, SOAP] });
+
+  it.each([['resale', 'i-water'], ['other', 'i-soap']])('a %s item has no door, and its typed chooser address goes to its card', async (_kind, id) => {
+    const card = await openCard(`/suppliers/ingredient/${id}`, {}, withKinds());
+    expect(card.region.queryByRole('button', { name: DOOR })).not.toBeInTheDocument();
+    cleanup();
+    const merge = fakeMergeSource();
+    const view = renderSuppliers(`/suppliers/ingredient/${id}/merge`, { source: withKinds(), data: { merge: () => merge } });
+    await screen.findByRole('region', { name: CARD }, LOAD);
+    expect(view.router.state.location.pathname).toBe(`/suppliers/ingredient/${id}`);
+    expect(merge.calls).toHaveLength(0);
+  });
+
+  it('the chooser of an ingredient never offers them, even from the same supplier and alike in name', async () => {
+    const { chooser } = await openChooser({}, withKinds());
+    expect(chooser.getByRole('button', { name: /^Flour 00 25kg/ })).toBeInTheDocument();
+    expect(chooser.queryByRole('button', { name: /Flour water|Flour soap/ })).not.toBeInTheDocument();
   });
 });

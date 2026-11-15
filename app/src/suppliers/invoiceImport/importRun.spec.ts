@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { noVatKey } from '@mise/shared/invoice-zip/fatturapa';
 import { decisionId } from '@mise/shared/invoice-zip/selection';
 import { parseXmlTree } from '@mise/shared/invoice-zip/testing/xml-tree';
-import { FLOUR, K_FLOUR, invoiceZip } from './testing/renderImport';
+import { FLOUR, K_COLA, K_FLOUR, invoiceZip } from './testing/renderImport';
 import { NO_TICKS, browserParseXml, chooseFrom, failureKey, readInvoiceFiles } from './importRun';
 
 // The pure steps behind the import screen (part B3a): reading the files (with the venue's id as the salt), choosing from what was
@@ -45,7 +45,11 @@ describe('choosing from what was read', () => {
     const built = await readInvoiceFiles([invoiceZip()], 'bakery', parseXmlTree);
     const run = chooseFrom(built, [], NO_TICKS, { suppliers: [], ingredients: [] });
     expect(run.file.suppliers.map(supplier => supplier.name)).toEqual(['FORNITORE ESEMPIO SRL']);
-    expect(run.file.ingredients).toHaveLength(2);
+    // Mise 2 (14 Nov 2026): every product the reader can price goes in with its kind — the cola too, as resale.
+    expect(run.file.ingredients.map(entry => [entry.key, entry.kind ?? 'ingredient'])).toEqual([
+      [K_COLA, 'resale'], [K_FLOUR, 'ingredient'], ['IT00000000001|code:SP', 'ingredient'],
+    ]);
+    expect(run.selection.counts.byKind).toEqual({ ingredient: 2, packaging: 0, resale: 1, other: 0 });
     expect(run.selection.counts.invoices).toBe(1);
     expect(run.ticks).toBe(NO_TICKS);
   });
@@ -54,9 +58,10 @@ describe('choosing from what was read', () => {
     const built = await readInvoiceFiles([invoiceZip()], 'bakery', parseXmlTree);
     const stored = [{ id: decisionId(K_FLOUR), decision: 'skip' }];
     const without = chooseFrom(built, stored, NO_TICKS, { suppliers: [], ingredients: [] });
-    expect(without.file.ingredients).toHaveLength(1);
+    expect(without.file.ingredients).toHaveLength(2);
+    expect(without.file.ingredients.map(entry => entry.key)).not.toContain(K_FLOUR);
     const back = chooseFrom(built, stored, { overrides: { [K_FLOUR]: 'ingredient' }, supplierOverrides: {} }, { suppliers: [], ingredients: [] });
-    expect(back.file.ingredients).toHaveLength(2);
+    expect(back.file.ingredients).toHaveLength(3);
   });
 });
 

@@ -52,7 +52,7 @@ export const fromListTab = (tab: SuppliersTab) => ({ ...FROM_LIST, tab }) as con
 export function tabOfState(state: unknown): SuppliersTab | null {
   if (typeof state !== 'object' || state === null || !('tab' in state)) return null;
   const tab = (state as { tab: unknown }).tab;
-  return tab === 'ingredients' || tab === 'suppliers' || tab === 'packaging' ? tab : null;
+  return tab === 'ingredients' || tab === 'suppliers' || tab === 'packaging' || tab === 'resale' || tab === 'other' ? tab : null;
 }
 
 // The same card, opened from a supplier's own screen («What they sell», «Add ingredient»): Back is the browser's Back, which

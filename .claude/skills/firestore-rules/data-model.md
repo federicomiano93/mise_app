@@ -74,7 +74,10 @@ both halves.
   `packIngredients` (≤4000 chars, the supplier's pack list) only pre-ticks allergen boxes and never
   writes `allergensCheckedAt` — a suggestion is inert until a person confirms. `kind` =
   `'ingredient' | 'packaging'` (absent = ingredient): packaging has its own tab, is never offered to
-  a recipe row, and neither shows nor writes allergens. `packUnit` stays whitelisted for good.
+  a recipe row, and neither shows nor writes allergens. Since 14 Nov 2026 also `'resale'` (sold as it
+  arrives: drinks) and `'other'` (cleaning, tools, clothing) — written only by Mise 2 — with packaging's
+  behaviour: own tab, never offered to a recipe row or as a Food cost ingredient, no allergens.
+  `packUnit` stays whitelisted for good.
 - `ingredient-prices/{ingredientId}` — `{ priceUnit, pricePerUnit (NET), unitWeightKg,
   priceUpdatedAt, vatRate }`, behind `canManage(lid,'foodcost')`. `vatRate` ∈ 0/4/5/10/20/22 or
   null = «not stated», never read as 0. ⚠️ **`vatRate` lives ONLY here** — `splitPriceFields` drains

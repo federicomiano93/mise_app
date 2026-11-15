@@ -54,6 +54,8 @@ export function chooseFrom(built: ImportResult, storedDecisions: readonly Stored
     existingIngredients: existing.ingredients,
     overrides: { ...ticks.overrides },
     supplierOverrides: { ...ticks.supplierOverrides },
+    // Mise 2 (14 Nov 2026): every readable product goes in, with its kind (the reader below is asked for the same).
+    everyKind: true,
   });
   const parsed = parseImportFile(JSON.stringify(selection.importFile));
   // The reader makes this file itself, so a refusal here is a bug, not a bad file: the screen says the plain «could not be read».
@@ -78,7 +80,10 @@ export async function readInvoiceFiles(
 ): Promise<ImportResult> {
   const inputs: { name: string; bytes: Uint8Array }[] = [];
   for (const file of files) inputs.push({ name: file.name, bytes: new Uint8Array(await file.arrayBuffer()) });
-  return buildImportFromInvoices(inputs, { parseXml, now: new Date(), salt: venueId, ...(alreadyImported ? { alreadyImported } : {}) });
+  // `everyKind` (Mise 2, 14 Nov 2026): every product the reader can price is proposed, each with its item kind (build-import.ts).
+  return buildImportFromInvoices(inputs, {
+    parseXml, now: new Date(), salt: venueId, everyKind: true, ...(alreadyImported ? { alreadyImported } : {}),
+  });
 }
 
 // Which sentence tells a person why a call failed: a refusal and a lost connection (a timeout counts as one) have their own;

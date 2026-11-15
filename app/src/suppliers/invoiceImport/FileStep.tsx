@@ -1,5 +1,6 @@
 import { useId } from 'react';
 import type { ReactNode, Ref } from 'react';
+import type { IngredientKind } from '@mise/shared/ingredient-kind';
 import type { SelectionItem } from '@mise/shared/invoice-zip/selection';
 import type { MessageKey } from '../../i18n/en';
 import { useT } from '../../i18n/useT';
@@ -12,10 +13,19 @@ import { dayWord, elided, invoicesWord, momentWord } from './logWords';
 import styles from './InvoiceImportScreen.module.css';
 
 // The groups that stay closed until opened (parity I86): [selection group, title, the tick-box that puts a product back].
+// Mise 2 (14 Nov 2026): no «Packaging and resale» group with «Import as an ingredient» any more — every product is imported, with
+// its kind (the groups by kind below).
 const PRODUCT_GROUPS = [
-  ['notImported', 'sup.imp.zip.group.notImported', 'sup.imp.zip.importAsIngredient'],
   ['skippedByYou', 'sup.imp.zip.group.skippedByYou', 'sup.imp.zip.importAgain'],
 ] as const satisfies readonly (readonly [string, MessageKey, MessageKey])[];
+
+// Mise 2 (14 Nov 2026): what goes in, by item kind, each a group that stays closed until opened, in the order of the kinds.
+const KIND_GROUPS = [
+  ['ingredient', 'sup.imp.zip.kind.ingredient'],
+  ['packaging', 'sup.imp.zip.kind.packaging'],
+  ['resale', 'sup.imp.zip.kind.resale'],
+  ['other', 'sup.imp.zip.kind.other'],
+] as const satisfies readonly (readonly [IngredientKind, MessageKey])[];
 
 type Props = {
   headingRef: Ref<HTMLHeadingElement>;
@@ -91,7 +101,7 @@ export function FileStep({
           says how many invoices were set aside. */}
       {run ? (
         <p ref={resultRef} role="status" tabIndex={-1} aria-describedby={mixed ? verdictId : undefined} className={`${styles.status} ${styles.ok}`}>
-          {`${t('sup.imp.zip.invoices', { n: run.selection.counts.invoices })} · ${t('sup.imp.file.found.suppliers', { n: run.file.suppliers.length })} · ${t('sup.imp.file.found.ingredients', { n: run.file.ingredients.length })}`}
+          {`${t('sup.imp.zip.invoices', { n: run.selection.counts.invoices })} · ${t('sup.imp.file.found.suppliers', { n: run.file.suppliers.length })} · ${t('sup.imp.file.found.products', { n: run.file.ingredients.length })}`}
         </p>
       ) : null}
       {run ? <Selection run={run} open={open} onToggle={onToggle} onTick={onTick} onSupplierTick={onSupplierTick} /> : null}
@@ -145,9 +155,23 @@ function Selection({ run, open, onToggle, onTick, onSupplierTick }: {
     </details>
   );
 
+  const byKind = groups.byKind;
+  const kindGroups = byKind ? KIND_GROUPS.filter(([kind]) => byKind[kind].length > 0) : [];
+
   return (
     <>
       {facts.length > 0 ? <p className={styles.note}>{facts.join(' · ')}</p> : null}
+      {/* What goes in, by kind (Mise 2). The type is only a proposal: one sentence says where it is changed. */}
+      {byKind && kindGroups.length > 0 ? (
+        <>
+          <p className={styles.note}>{t('sup.imp.zip.kinds.hint')}</p>
+          <div className={styles.groups}>
+            {kindGroups.map(([kind, titleKey]) => group(`kind-${kind}`, t(titleKey, { n: byKind[kind].length }), byKind[kind].map(item => (
+              <Row key={item.key} name={item.name || item.key} meta={[item.supplierName, item.description].filter(Boolean).join(' · ')} />
+            ))))}
+          </div>
+        </>
+      ) : null}
       <div className={styles.groups}>
         {PRODUCT_GROUPS.map(([id, titleKey, tickKey]) => {
           const list = groups[id];
@@ -167,7 +191,8 @@ function Selection({ run, open, onToggle, onTick, onSupplierTick }: {
         {groups.unreadable.length > 0
           ? group('unreadable', t('sup.imp.zip.group.unreadable', { n: groups.unreadable.length }),
             groups.unreadable.map(item => (
-              <ProductRow key={item.key} item={item} tick={t('sup.imp.zip.importAsIngredient')} onTick={on => { onTick(item.key, on); }} />
+              // Never ticked: a product that cannot be read is not offered (canImport is false), it only says why.
+              <ProductRow key={item.key} item={item} tick="" onTick={() => { /* nothing to tick */ }} />
             )))
           : null}
         {groups.skippedFiles.length > 0

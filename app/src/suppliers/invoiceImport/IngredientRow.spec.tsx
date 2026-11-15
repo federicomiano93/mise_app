@@ -9,7 +9,7 @@ import { IngredientRow } from './IngredientRow';
 
 // One ingredient row of step 3 drawn alone: the cases the zip cannot reach (the zip path never writes an «unisci con» name).
 //
-// PORTS (tests/invoice-import-flow.test.mjs): «a “unisci con” row offers no “Create a new ingredient”» (the original's
+// PORTS (tests/invoice-import-flow.test.mjs): «a “unisci con” row offers no “Create a new product”» (the original's
 // `if (!planned.mergeWith) options.push(…)`), and the rename choice of tests/invoice-import-review.test.mjs.
 
 const planned = (over: Record<string, unknown> = {}) => ({
@@ -32,11 +32,11 @@ function draw(entry: PlanEntry, lang: 'en' | 'it' = 'en') {
 }
 
 describe('a question row', () => {
-  it('offers «Create a new ingredient» unless the row names the ingredient it belongs to («unisci con»)', () => {
+  it('offers «Create a new product» unless the row names the ingredient it belongs to («unisci con»)', () => {
     const open = planned();
     draw({ planned: open, row: open, waiting: true });
     expect(within(screen.getByRole('combobox')).getAllByRole('option').map(option => option.textContent))
-      .toEqual(['Choose…', 'Same as Burro A', 'Same as Burro B', 'Create a new ingredient', 'Skip']);
+      .toEqual(['Choose…', 'Same as Burro A', 'Same as Burro B', 'Create a new product', 'Skip']);
   });
 
   it('… and does not offer it on a «unisci con» row', () => {

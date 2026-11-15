@@ -153,9 +153,9 @@ describe('the frame', () => {
     Object.defineProperty(main, 'scrollTop', { value: 300, writable: true });
     await user.click(screen.getByRole('button', { name: 'Save 1 supplier' }));
     await user.click(within(await screen.findByRole('alertdialog', { name: 'Save these suppliers?' })).getByRole('button', { name: 'Save' }));
-    await screen.findByRole('heading', { level: 3, name: 'Ingredients' }, LOAD);
+    await screen.findByRole('heading', { level: 3, name: 'Products' }, LOAD);
     await waitFor(() => { expect(main.scrollTop).toBe(0); });
-    expect(screen.getByRole('heading', { level: 3, name: 'Ingredients' })).toHaveFocus();
+    expect(screen.getByRole('heading', { level: 3, name: 'Products' })).toHaveFocus();
     expect(screen.getByText('Step 3 of 3')).toBeInTheDocument();
   });
 
@@ -164,7 +164,7 @@ describe('the frame', () => {
     await toSuppliers(user);
     await user.click(screen.getByRole('button', { name: 'Save 1 supplier' }));
     await user.click(within(await screen.findByRole('alertdialog', { name: 'Save these suppliers?' })).getByRole('button', { name: 'Save' }));
-    await screen.findByRole('heading', { level: 3, name: 'Ingredients' }, LOAD);
+    await screen.findByRole('heading', { level: 3, name: 'Products' }, LOAD);
     expect(screen.queryByRole('button', { name: /^(Next|Save)/ })).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Back' }));
     expect(await leaveDialog()).toBeInTheDocument();

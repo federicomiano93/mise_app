@@ -146,7 +146,7 @@ describe('choosing a file', () => {
     await chooseFiles(user, twoInvoices());
     expect(screen.getByText(/^This file: 2 invoices from 1 \w+ 2026 to 10 \w+ 2026 — 1 new, 1 already imported$/)).toBeInTheDocument();
     // The counts line, where the focus lands, carries the verdict as its description (a screen reader says both).
-    expect(screen.getByText('1 invoice read · 1 supplier found · 1 ingredient found')).toHaveAccessibleDescription(/^This file: 2 invoices .* 1 new, 1 already imported$/);
+    expect(screen.getByText('1 invoice read · 1 supplier found · 1 product to import')).toHaveAccessibleDescription(/^This file: 2 invoices .* 1 new, 1 already imported$/);
     expect(screen.getByRole('button', { name: 'Next' })).toBeInTheDocument();
   });
 
@@ -188,7 +188,7 @@ describe('the record of a run', () => {
     });
     await screen.findByText(/^Invoices loaded:/);
     await toIngredients(user, twoInvoices());
-    await importAll(user, 'Import 1 ingredient');
+    await importAll(user, 'Import 1 product');
     const records = importing.writes.filter(write => write.kind === 'importLog');
     expect(records).toHaveLength(1);
     expect(records[0]).toMatchObject({ record: { fileName: 'settembre.zip', invoiceIds: ['9000000002'], firstDate: '2026-09-10', lastDate: '2026-09-10', months: ['2026-09'] } });
@@ -200,7 +200,7 @@ describe('the record of a run', () => {
     await screen.findByText(/^The list starts with/);
     importing.failWith('saveImportLog', 'internal');
     await toIngredients(user, twoInvoices());
-    await importAll(user, 'Import 2 ingredients');
+    await importAll(user, 'Import 2 products');
     expect(screen.getByRole('alert')).toHaveTextContent('This file could not be added to the list of imports');
     expect(importing.ingredients).toHaveLength(2);
     expect(screen.queryByText('This file is now in the list of imports.')).not.toBeInTheDocument();
@@ -214,7 +214,7 @@ describe('«Done» with nothing to write', () => {
     const first = await open();
     await screen.findByText(/^The list starts with/);
     await toIngredients(first.user, twoInvoices());
-    await importAll(first.user, 'Import 2 ingredients');
+    await importAll(first.user, 'Import 2 products');
     const { importing } = first;
     cleanup();
     importing.importLog = [];

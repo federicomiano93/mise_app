@@ -200,7 +200,10 @@ export async function planPriceChanges({
     ...(packLabel ? { pack: packLabel } : {}),
   }));
   const label = String(name ?? '').trim().slice(0, MAX_NAME);
-  const found = changesFromPoints({ id: ingredientId, supplierId, name: label }, [...known, ...fresh])
+  // MISE 2: the file's piece has no weight only for packaging, resale and other (`everyKind`; the original refuses such an
+  // entry): their per-piece prices are then compared with the stored ones that have no weight either.
+  const weightlessPieces = priceUnit === 'pcs' && !(typeof unitWeightKg === 'number' && unitWeightKg > 0);
+  const found = changesFromPoints({ id: ingredientId, supplierId, name: label }, [...known, ...fresh], { weightlessPieces })
     .filter(acceptable);
   if (found.length === 0 && (isNew || fresh.length === 0)) return none;
   const stored: StoredChange[] = isNew ? [] : [...(await read.changeIds(ingredientId))];
@@ -464,6 +467,8 @@ export interface ReplanInput {
   fileIngredient: Partial<FileIngredient>;
   decision?: unknown;
   supplierIdByKey?: Record<string, string> | null;
+  // Mise 2: the file brings every kind, so the re-check matches items of every kind too (packaging included).
+  everyKind?: boolean;
   read: {
     ingredients: (supplierId: string) => Promise<readonly ExistingIngredient[]>;
     pointIds: (ingredientId: string) => Promise<PointIds>;
@@ -483,11 +488,11 @@ export interface ReplanResult {
 // → { row, waiting }. A row that is waiting here was not decided: the catalogue changed under it (a
 // similar ingredient appeared — maybe the one this very import created a moment ago), so the caller
 // leaves it for the next run rather than guess.
-export async function replanRow({ fileIngredient, decision, supplierIdByKey, read }: ReplanInput): Promise<ReplanResult> {
+export async function replanRow({ fileIngredient, decision, supplierIdByKey, everyKind, read }: ReplanInput): Promise<ReplanResult> {
   const supplierId = supplierIdByKey ? supplierIdByKey[fileIngredient.supplierKey as string] : undefined;
   const ingredients = typeof supplierId === 'string' && supplierId ? await read.ingredients(supplierId) : [];
   const plan = (extra?: PlanContext): { ctx: PlanContext; row: IngredientRow } => {
-    const ctx: PlanContext = { supplierIdByKey, ingredients, pricesById: {}, invoicePointIds: {}, ...extra };
+    const ctx: PlanContext = { supplierIdByKey, ingredients, pricesById: {}, invoicePointIds: {}, ...(everyKind ? { everyKind: true } : {}), ...extra };
     const first = planIngredients([fileIngredient], ctx)[0] as IngredientRow;
     return { ctx, row: decision ? resolveRow(first, decision, ctx) as IngredientRow : first };
   };

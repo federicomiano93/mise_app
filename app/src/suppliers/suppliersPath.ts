@@ -4,6 +4,8 @@
 //   /suppliers                      the Ingredients tab (the default: «this list IS the work», parity S45)
 //   /suppliers/suppliers            the Suppliers tab
 //   /suppliers/packaging            the Packaging tab
+//   /suppliers/resale               the Resale tab (Mise 2 only, 14 Nov 2026: goods sold as they arrive — drinks)
+//   /suppliers/other                the Other tab (Mise 2 only, 14 Nov 2026: cleaning, tools, clothing)
 //   /suppliers/supplier/new         a new supplier (the supplier card on an empty copy)
 //   /suppliers/supplier/<id>        one supplier's own screen («What they sell»)
 //   /suppliers/supplier/<id>/edit   that supplier's card, one level below its screen
@@ -12,24 +14,40 @@
 //   /suppliers/price-changes        «Price changes», the read-only report (same gate as the import), full width at every size
 //   /suppliers/ingredient/<id>      an ingredient's or a packaging item's card, one level below the list
 //   /suppliers/ingredient/<id>/merge  «Merge another pack…»: the chooser one level below that card (owner or manager with Food cost)
-//   /suppliers/ingredient/new       a new ingredient; `?kind=packaging` makes it a new packaging item and
-//                                   `?supplier=<id>` starts it on that supplier (opened from the supplier's screen)
+//   /suppliers/ingredient/new       a new ingredient; `?kind=packaging` (or `resale`, `other`) makes it a new item of that
+//                                   kind and `?supplier=<id>` starts it on that supplier (opened from the supplier's screen)
 //   anything else                   unknown: the section goes back to /suppliers
 //
 // ⚠️ `new` IS NEVER AN ID (a supplier's or an ingredient's): a Firestore auto id is 20 characters, so it cannot be one, and
 // an address that happens to say it must open the empty card, not an item that does not exist. suppliersPath.spec.ts pins it.
 
+import { INGREDIENT_KINDS } from '@mise/shared/ingredient-kind';
+import type { IngredientKind } from '@mise/shared/ingredient-kind';
+
 export const SUPPLIERS_PATH = '/suppliers';
 export const SUPPLIERS_TAB_PATH = '/suppliers/suppliers';
 export const PACKAGING_TAB_PATH = '/suppliers/packaging';
+export const RESALE_TAB_PATH = '/suppliers/resale';
+export const OTHER_TAB_PATH = '/suppliers/other';
 export const NEW_SUPPLIER_PATH = '/suppliers/supplier/new';
 export const SUPPLIERS_SETTINGS_PATH = '/suppliers/settings';
 export const SUPPLIERS_IMPORT_PATH = '/suppliers/import';
 export const SUPPLIERS_PRICE_CHANGES_PATH = '/suppliers/price-changes';
 export const NEW_INGREDIENT_PATH = '/suppliers/ingredient/new';
 export const NEW_PACKAGING_PATH = `${NEW_INGREDIENT_PATH}?kind=packaging`;
+export const NEW_RESALE_PATH = `${NEW_INGREDIENT_PATH}?kind=resale`;
+export const NEW_OTHER_PATH = `${NEW_INGREDIENT_PATH}?kind=other`;
 
-export type SuppliersTab = 'ingredients' | 'suppliers' | 'packaging';
+export type SuppliersTab = 'ingredients' | 'suppliers' | 'packaging' | 'resale' | 'other';
+
+// The tab every item of a kind is listed on, and back: one tab per kind, the Suppliers tab besides.
+export const TAB_OF_KIND = Object.freeze({
+  ingredient: 'ingredients', packaging: 'packaging', resale: 'resale', other: 'other',
+} as const satisfies Record<IngredientKind, SuppliersTab>);
+export const kindOfTab = (tab: SuppliersTab): IngredientKind | null => {
+  if (tab === 'suppliers') return null;
+  return tab === 'ingredients' ? 'ingredient' : tab;
+};
 
 export type SuppliersView =
   | { readonly kind: 'list'; readonly tab: SuppliersTab }
@@ -39,8 +57,8 @@ export type SuppliersView =
   | { readonly kind: 'ingredient'; readonly id: string }
   // «Merge another pack…»: the chooser one level below an ingredient's card (A, the card's item, is `id`).
   | { readonly kind: 'ingredient-merge'; readonly id: string }
-  // A new ingredient or packaging item; `supplier` is the preset of a new item opened from a supplier's screen.
-  | { readonly kind: 'ingredient-new'; readonly packaging: boolean; readonly supplier: string | null }
+  // A new item of `itemKind`; `supplier` is the preset of a new item opened from a supplier's screen.
+  | { readonly kind: 'ingredient-new'; readonly itemKind: IngredientKind; readonly supplier: string | null }
   | { readonly kind: 'settings' }
   | { readonly kind: 'import' }
   | { readonly kind: 'price-changes' }
@@ -51,10 +69,10 @@ export const supplierEditPath = (id: string): string => `${supplierPath(id)}/edi
 export const ingredientPath = (id: string): string => `${SUPPLIERS_PATH}/ingredient/${encodeURIComponent(id)}`;
 export const ingredientMergePath = (id: string): string => `${ingredientPath(id)}/merge`;
 
-// A new item's address: the kind and the supplier it starts on, when there are any.
-export function newIngredientPath({ packaging = false, supplier = null }: { packaging?: boolean; supplier?: string | null } = {}): string {
+// A new item's address: the kind and the supplier it starts on, when there are any (an ingredient is the default: no `kind`).
+export function newIngredientPath({ kind = 'ingredient', supplier = null }: { kind?: IngredientKind; supplier?: string | null } = {}): string {
   const query = new URLSearchParams();
-  if (packaging) query.set('kind', 'packaging');
+  if (kind !== 'ingredient') query.set('kind', kind);
   if (supplier !== null) query.set('supplier', supplier);
   const text = query.toString();
   return text === '' ? NEW_INGREDIENT_PATH : `${NEW_INGREDIENT_PATH}?${text}`;
@@ -64,6 +82,8 @@ export function newIngredientPath({ packaging = false, supplier = null }: { pack
 export function tabPath(tab: SuppliersTab): string {
   if (tab === 'suppliers') return SUPPLIERS_TAB_PATH;
   if (tab === 'packaging') return PACKAGING_TAB_PATH;
+  if (tab === 'resale') return RESALE_TAB_PATH;
+  if (tab === 'other') return OTHER_TAB_PATH;
   return SUPPLIERS_PATH;
 }
 
@@ -73,7 +93,7 @@ export function tabPath(tab: SuppliersTab): string {
 export function tabOf(view: SuppliersView): SuppliersTab {
   if (view.kind === 'list') return view.tab;
   if (view.kind === 'supplier' || view.kind === 'supplier-edit' || view.kind === 'supplier-new') return 'suppliers';
-  if (view.kind === 'ingredient-new' && view.packaging) return 'packaging';
+  if (view.kind === 'ingredient-new') return TAB_OF_KIND[view.itemKind];
   return 'ingredients';
 }
 
@@ -97,6 +117,8 @@ export function parseSuppliersPath(rest: string | undefined, search = ''): Suppl
   if (parts.length === 1) {
     if (first === 'suppliers') return { kind: 'list', tab: 'suppliers' };
     if (first === 'packaging') return { kind: 'list', tab: 'packaging' };
+    if (first === 'resale') return { kind: 'list', tab: 'resale' };
+    if (first === 'other') return { kind: 'list', tab: 'other' };
     if (first === 'settings') return { kind: 'settings' };
     if (first === 'import') return { kind: 'import' };
     if (first === 'price-changes') return { kind: 'price-changes' };
@@ -107,7 +129,10 @@ export function parseSuppliersPath(rest: string | undefined, search = ''): Suppl
     if (id === 'new') {
       const query = new URLSearchParams(search);
       const supplier = query.get('supplier');
-      return { kind: 'ingredient-new', packaging: query.get('kind') === 'packaging', supplier: supplier === null || supplier === '' ? null : supplier };
+      // Only one of the four kinds names a kind; anything else (absent, «food», a typo) is a new ingredient.
+      const asked = query.get('kind');
+      const itemKind = (INGREDIENT_KINDS as readonly string[]).includes(asked ?? '') ? asked as IngredientKind : 'ingredient';
+      return { kind: 'ingredient-new', itemKind, supplier: supplier === null || supplier === '' ? null : supplier };
     }
     return isSupplierId(id) ? { kind: 'ingredient', id } : { kind: 'unknown' };
   }
