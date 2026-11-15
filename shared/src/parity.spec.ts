@@ -406,6 +406,8 @@ const MISE2_ADDITIONS: Readonly<Record<string, readonly string[]>> = {
 };
 const MISE2_DIFFERENT_VALUES: Readonly<Record<string, readonly string[]>> = {
   'ingredient-kind': ['INGREDIENT_KINDS'],
+  // The line type 'altro' (non-food, imported as kind 'other'), sorted after resale (14 Nov 2026).
+  'invoice-zip/products': ['TYPE_ORDER'],
 };
 
 describe.each(PAIRS)('parity: %s', (_name, tsModule, jsModule) => {

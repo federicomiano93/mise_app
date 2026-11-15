@@ -24,7 +24,10 @@ describe.each(implementations)('%s', (_name, impl) => {
     expect(p.DEFAULT_EGG_WEIGHT_G).toBe(50);
     expect(p.EGG_PACK_WORD).toBe('uovo');
     expect(p.NO_SDI_REASON).toBe('no-sdi-id');
-    expect(p.TYPE_ORDER).toStrictEqual({ ingrediente: 0, packaging: 1, rivendita: 2 });
+    // ⚠️ MISE 2 (14 Nov 2026): the port adds the line type «altro», last; the frozen current app has the first three.
+    expect(p.TYPE_ORDER).toStrictEqual(_name.startsWith('shared/')
+      ? { ingrediente: 0, packaging: 1, rivendita: 2, altro: 3 }
+      : { ingrediente: 0, packaging: 1, rivendita: 2 });
   });
 
   test('makeConfig: the egg weight must be a positive number, supplier keys are normalised', () => {

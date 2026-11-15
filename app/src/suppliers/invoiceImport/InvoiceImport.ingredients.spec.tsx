@@ -60,9 +60,9 @@ describe('the step', () => {
     const release = importing.hold('invoicePoints');
     await toSuppliers(user);
     await user.click(primary('Next'));
-    expect(await screen.findByRole('heading', { level: 3, name: 'Ingredients' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 3, name: 'Products' })).toBeInTheDocument();
     expect(screen.getByText('Step 3 of 3')).toBeInTheDocument();
-    await waitFor(() => { expect(screen.getByRole('heading', { level: 3, name: 'Ingredients' })).toHaveFocus(); });
+    await waitFor(() => { expect(screen.getByRole('heading', { level: 3, name: 'Products' })).toHaveFocus(); });
     expect(screen.getAllByText('Checking what is already in Mise…').length).toBeGreaterThan(0);
     expect(screen.getAllByRole('status').some(region => region.textContent === 'Checking what is already in Mise…')).toBe(true);
     // Nothing to press while it checks: the bar has no primary button.
@@ -95,13 +95,14 @@ describe('the chips', () => {
     await toIngredients(user);
     const group = screen.getByRole('group', { name: 'Show' });
     const chips = within(group).getAllByRole('button').map(chip => chip.textContent);
-    expect(chips).toEqual(['All (2)', 'New (1)', 'To check (1)']);
-    expect(within(group).getByRole('button', { name: 'All (2)' })).toHaveAttribute('aria-pressed', 'true');
-    expect(within(group).getByRole('button', { name: 'New (1)' })).toHaveAttribute('aria-pressed', 'false');
+    // Mise 2 (14 Nov 2026): the cola is imported too (as resale), a second new row.
+    expect(chips).toEqual(['All (3)', 'New (2)', 'To check (1)']);
+    expect(within(group).getByRole('button', { name: 'All (3)' })).toHaveAttribute('aria-pressed', 'true');
+    expect(within(group).getByRole('button', { name: 'New (2)' })).toHaveAttribute('aria-pressed', 'false');
 
-    await user.click(within(group).getByRole('button', { name: 'New (1)' }));
-    expect(within(group).getByRole('button', { name: 'New (1)' })).toHaveAttribute('aria-pressed', 'true');
-    expect(within(group).getByRole('button', { name: 'All (2)' })).toHaveAttribute('aria-pressed', 'false');
+    await user.click(within(group).getByRole('button', { name: 'New (2)' }));
+    expect(within(group).getByRole('button', { name: 'New (2)' })).toHaveAttribute('aria-pressed', 'true');
+    expect(within(group).getByRole('button', { name: 'All (3)' })).toHaveAttribute('aria-pressed', 'false');
     expect(rows().map(li => li.textContent).join('|')).toContain('Farina tipo 00');
     expect(rows().map(li => li.textContent).join('|')).not.toContain('Spezia forte');
 
@@ -109,7 +110,7 @@ describe('the chips', () => {
     expect(rows().map(li => li.textContent).join('|')).toContain('Spezia forte');
     expect(rows().map(li => li.textContent).join('|')).not.toContain('Farina tipo 00');
 
-    await user.click(within(group).getByRole('button', { name: 'All (2)' }));
+    await user.click(within(group).getByRole('button', { name: 'All (3)' }));
     expect(rows().map(li => li.textContent).join('|')).toContain('Farina tipo 00');
   });
 
@@ -138,7 +139,8 @@ describe('a NEW ingredient', () => {
   it('is created by default and never blocks the button; «Do not import (remember)» leaves it out and keeps it under «New»', async () => {
     const { user } = await open({ suppliers: [] });
     await toIngredients(user);
-    expect(primary('Import 2 ingredients')).toBeEnabled();
+    // Mise 2 (14 Nov 2026): the cola is imported too (as resale), so three rows go in.
+    expect(primary('Import 3 products')).toBeEnabled();
     expect(screen.queryByText(/Choose what to do with/)).not.toBeInTheDocument();
     const flour = row('Farina tipo 00');
     const choice = within(flour).getByRole('combobox', { name: 'What should happen?' });
@@ -146,11 +148,11 @@ describe('a NEW ingredient', () => {
     expect(choice).toHaveValue('create');
 
     await user.selectOptions(choice, 'Do not import (remember)');
-    expect(primary('Import 1 ingredient')).toBeEnabled();
+    expect(primary('Import 2 products')).toBeEnabled();
     expect(within(row('Farina tipo 00')).getByText('Skipped')).toHaveAttribute('data-tone', 'quiet');
-    expect(screen.getByRole('button', { name: 'New (1)' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'New (2)' })).toBeInTheDocument();
     await user.selectOptions(within(row('Farina tipo 00')).getByRole('combobox'), 'Create');
-    expect(primary('Import 2 ingredients')).toBeEnabled();
+    expect(primary('Import 3 products')).toBeEnabled();
   });
 
   it('11 · a «do not import» answer on a row that waits for a price check keeps the Skipped pill', async () => {
@@ -167,7 +169,7 @@ describe('a NEW ingredient', () => {
   it('with nothing left to import the button says «Done» and the hint says why', async () => {
     const { user } = await open({ suppliers: [] });
     await toIngredients(user);
-    for (const name of ['Farina tipo 00', 'Spezia forte']) {
+    for (const name of ['Farina tipo 00', 'Spezia forte', 'Coca lattina']) {
       await user.selectOptions(within(row(name)).getByRole('combobox'), 'Do not import (remember)');
     }
     expect(primary('Done')).toBeEnabled();
@@ -209,7 +211,7 @@ describe('4 · why a price waits for a look, in words (the date in the interface
     expect(within(flour).getByText('Da controllare')).toBeInTheDocument();
     expect(screen.getByText('Passo 3 di 3')).toBeInTheDocument();
     expect(screen.getByRole('group', { name: 'Mostra' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Importa 1 ingrediente' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Importa 1 prodotto' })).toBeInTheDocument();
   });
 
   it('4 · the unreadable-weight sentence says the price below uses the invoice weight', async () => {
@@ -255,7 +257,7 @@ async function chooseAndGo(user: Parameters<typeof toSuppliers>[0], file: File):
     const dialog = await screen.findByRole('alertdialog', undefined, LOAD);
     await user.click(within(dialog).getByRole('button', { name: 'Salva' }));
   }
-  await screen.findByRole('heading', { level: 3, name: 'Ingredienti' }, LOAD);
+  await screen.findByRole('heading', { level: 3, name: 'Prodotti' }, LOAD);
   await waitFor(() => { expect(screen.queryByText('Controllo cosa c’è già in Mise…')).not.toBeInTheDocument(); }, LOAD);
 }
 
@@ -298,31 +300,31 @@ describe('a question', () => {
     const flour = row('Farina tipo 00');
     expect(within(flour).getByText('To decide')).toHaveAttribute('data-tone', 'warn');
     expect(within(flour).getByText('Same name, but another article code: is it the same product?')).toBeInTheDocument();
-    const button = primary('Import 0 ingredients');
-    const hint = screen.getByText('Choose what to do with 1 ingredient first.');
+    const button = primary('Import 0 products');
+    const hint = screen.getByText('Choose what to do with 1 product first.');
     expect(button).toBeDisabled();
     expect(button).toHaveAttribute('aria-describedby', hint.id);
     const choice = within(flour).getByRole('combobox', { name: 'What should happen?' });
     expect(within(choice).getAllByRole('option').map(option => option.textContent))
-      .toEqual(['Choose…', 'Same as Farina tipo 00', 'Create a new ingredient', 'Skip']);
+      .toEqual(['Choose…', 'Same as Farina tipo 00', 'Create a new product', 'Skip']);
 
     await user.selectOptions(choice, 'Same as Farina tipo 00');
     expect(screen.queryByText(/Choose what to do with/)).not.toBeInTheDocument();
-    expect(primary('Import 1 ingredient')).toBeEnabled();
+    expect(primary('Import 1 product')).toBeEnabled();
     // It stays under «To decide» once answered.
     expect(screen.getByRole('button', { name: 'To decide (1)' })).toBeInTheDocument();
     await user.selectOptions(within(row('Farina tipo 00')).getByRole('combobox', { name: 'What should happen?' }), 'Choose…');
-    expect(screen.getByText('Choose what to do with 1 ingredient first.')).toBeInTheDocument();
+    expect(screen.getByText('Choose what to do with 1 product first.')).toBeInTheDocument();
   });
 
-  it('«Skip» and «Create a new ingredient» are answers too', async () => {
+  it('«Skip» and «Create a new product» are answers too', async () => {
     const { user } = await open({ ingredients: [stored({ supplierCode: 'X99' })] });
     await toIngredients(user, invoiceZip([FLOUR]));
     const choice = () => within(row('Farina tipo 00')).getByRole('combobox', { name: 'What should happen?' });
     await user.selectOptions(choice(), 'Skip');
     expect(primary('Done')).toBeEnabled();
-    await user.selectOptions(choice(), 'Create a new ingredient');
-    expect(primary('Import 1 ingredient')).toBeEnabled();
+    await user.selectOptions(choice(), 'Create a new product');
+    expect(primary('Import 1 product')).toBeEnabled();
   });
 
   it('10 · «This price?» comes AFTER the question, has its own label, and a new answer clears «Use this price» (S4)', async () => {
@@ -360,7 +362,7 @@ describe('«This price?» for a row held for a look', () => {
     const choice = within(row('Farina tipo 00')).getByRole('combobox', { name: 'This price?' });
     expect(within(choice).getAllByRole('option').map(option => option.textContent)).toEqual(['Leave it for now', 'Use this price']);
     await user.selectOptions(choice, 'Use this price');
-    expect(primary('Import 1 ingredient')).toBeEnabled();
+    expect(primary('Import 1 product')).toBeEnabled();
     expect(within(row('Farina tipo 00')).getByText('To check')).toBeInTheDocument();
     await user.selectOptions(within(row('Farina tipo 00')).getByRole('combobox', { name: 'This price?' }), 'Leave it for now');
     expect(primary('Done')).toBeEnabled();
@@ -372,7 +374,7 @@ describe('rows already in Mise', () => {
     const { user, importing } = await open({ ingredients: [stored({ invoiceName: 'FARINA TIPO 00 SACCO KG 25' })], prices: { 'ing-1': priceDoc({ pricePerUnit: 0.57, priceUpdatedAt: '2026-09-01T12:00:00.000Z' }) } });
     importing.points.set('ing-1', { ids: new Set(['inv-9000000001-1']), points: [] });
     await toIngredients(user, invoiceZip([FLOUR]));
-    expect(screen.getByText('1 unchanged ingredient', { selector: 'summary' })).toBeInTheDocument();
+    expect(screen.getByText('1 unchanged product', { selector: 'summary' })).toBeInTheDocument();
     expect(primary('Done')).toBeEnabled();
     expect(screen.getByText('Nothing to import: everything is already in Mise, skipped or has an error.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Record price changes' })).toBeEnabled();
@@ -417,9 +419,49 @@ describe('a supplier skipped at step 2', () => {
     await toSuppliers(user);
     await user.selectOptions(screen.getByRole('combobox', { name: 'What should happen?' }), 'Do not import anything from this supplier (remember)');
     await user.click(primary('Next'));
-    await screen.findByRole('heading', { level: 3, name: 'Ingredients' }, LOAD);
+    await screen.findByRole('heading', { level: 3, name: 'Products' }, LOAD);
     await waitFor(() => { expect(screen.queryByText('Checking what is already in Mise…')).not.toBeInTheDocument(); }, LOAD);
     expect(screen.queryByText('Farina tipo 00')).not.toBeInTheDocument();
     expect(primary('Done')).toBeEnabled();
+  });
+});
+
+// Mise 2, 15 Nov 2026: steps 3, the confirmation and the summary count PRODUCTS, because the rows may be drinks or detergents. His
+// example: a zip with food, packaging, a drink and a detergent said «Importa 4 ingredienti» and «4 ingredienti creati».
+describe('the words for rows of every kind', () => {
+  const FILM = { desc: 'PELLICOLA ALIMENTARE ROTOLO', code: 'PEL', qty: 3, unit: 'KG', total: 15 };
+  const WATER = { desc: 'ACQUA SABRINELLA NAT 1/2X12', code: 'AQ', qty: 10, unit: 'CT', total: 30 };
+  const SOAP = { desc: 'DETERSIVO PAVIMENTI', code: 'DT', qty: 4, unit: 'PZ', total: 12 };
+
+  it('Italian: «Prodotti», «Importa 4 prodotti», the question and «4 prodotti creati» — never «ingredienti»', async () => {
+    const { user } = await open({ suppliers: [] }, { lang: 'it' });
+    await chooseAndGo(user, invoiceZip([FLOUR, FILM, WATER, SOAP]));
+    expect(screen.getByRole('heading', { level: 3, name: 'Prodotti' })).toBeInTheDocument();
+    await user.click(primary('Importa 4 prodotti'));
+    const box = await screen.findByRole('alertdialog', undefined, LOAD);
+    expect(within(box).getByText('Vuoi importare questi prodotti?')).toBeInTheDocument();
+    expect(within(box).getByText('Verranno creati 4 nuovi prodotti.')).toBeInTheDocument();
+    expect(box.textContent).not.toMatch(/ingredient/i);
+    await user.click(within(box).getByRole('button', { name: 'Importa' }));
+    const done = await screen.findByRole('heading', { level: 3, name: 'Importazione conclusa' }, LOAD);
+    expect(done.parentElement?.textContent).toContain('4 prodotti creati');
+    expect(done.parentElement?.textContent).not.toMatch(/ingredient/i);
+  });
+
+  it('English: «Products», «Import 4 products», «Import these products?», «4 new products will be created.»', async () => {
+    const { user } = await open({ suppliers: [] });
+    await toIngredients(user, invoiceZip([FLOUR, FILM, WATER, SOAP]));
+    expect(screen.getByRole('heading', { level: 3, name: 'Products' })).toBeInTheDocument();
+    await user.click(primary('Import 4 products'));
+    const box = await screen.findByRole('alertdialog', undefined, LOAD);
+    expect(within(box).getByText('Import these products?')).toBeInTheDocument();
+    expect(within(box).getByText('4 new products will be created.')).toBeInTheDocument();
+  });
+
+  it('the note keeps «ingredients» only where it is about food (the allergens)', async () => {
+    const { user } = await open({ suppliers: [] });
+    await toIngredients(user, invoiceZip([FLOUR, SOAP]));
+    expect(screen.getByText(/^New ingredients start with allergens not declared: check them afterwards\. Products you already have stay as they are/))
+      .toBeInTheDocument();
   });
 });

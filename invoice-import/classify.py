@@ -67,6 +67,9 @@ PACKAGING_RE = re.compile(
     # Not food at all — tools, clothing, cleaning, shop bags (5 Oct 2026, from the first real
     # import). Never imported, like packaging. Food words are checked first, so «olio … ml10»
     # or «zucchero … bustina» never land here.
+    # Mise 2 (14 Nov 2026) splits this part, down to the end of the pattern, from packaging: there it is
+    # the line type «altro» (shared/src/invoice-zip/keywords.ts NONFOOD_RE), imported as an item of kind
+    # 'other'. Here it stays packaging; keywords.spec.ts reads the two halves together against this list.
     r"|alluminio|grembiul|palett|coprivassoi|carte pizzo|shopper|\bborsa\b|\bbags\b|caraffa"
     r"|coppetta|anticalcare|detersiv|sgrassa|igienizz|candeggin|pennello|asciugaman|organza"
     r"|spolett|pentol|padell|\bpadel\b|guanti"
@@ -79,6 +82,11 @@ PACKAGING_RE = re.compile(
 # Beverages are bought to be sold: resale, whatever the liquid.
 BEVERAGE_RE = re.compile(
     r"coca cola|\bacqua\b|birra|redbull|succo|\bthe\b|fanta|sprite|lemonsoda|aranciata|chinotto"
+    # Soft drinks proposed as ingredients on a real invoice (14 Nov 2026: «LIMONATA TOM LATTINA CL 33X24»,
+    # «TONICA SCHWEPPES LEMON CL 18X24»), and their kin.
+    # Whole words only: «GINGER CANDITO» is candied ginger, a pastry ingredient (so is «SPUMANTE», no soft drink).
+    r"|\blimonata\b|\btonica\b|\bgassosa\b|\bspuma\b|\bcedrata\b"
+    r"|\bginger\s+(?:ale|beer)\b|\bgingerino\b"
     r"|prosecco|\bvino\b",
     re.I,
 )

@@ -16,6 +16,9 @@ describe.each([
   ['shared/ (TypeScript)', ported],
   ['js/ (current app)', legacy],
 ] as const)('%s', (_name, m) => {
+  // ⚠️ MISE 2 (14 Nov 2026): tools, clothing and cleaning are the line type «altro» in the port, still «packaging» in the frozen
+  // current app (keywords.ts, NONFOOD_RE). Every such expectation below names this, so the two answers are both pinned.
+  const NON_FOOD = _name.startsWith('shared/') ? 'altro' : 'packaging';
   const checkPack = (description: string, size: number, unit: ported.PackUnit, count: number | null = null): void => {
     expect(m.parsePack(description), description).toStrictEqual(m.packInfo(size, unit, count));
   };
@@ -138,9 +141,9 @@ describe.each([
       'PANZEROTTO CREMA 170gr* 25pz', 'PASTICCIOTTO AMARENA 110g* 30pz', 'TRECCIA NOCI 98g* 60pz']) {
       expect(kind(text)[0], text).toBe('ingrediente');
     }
-    expect(kind('4 PELAPATATE ESEMPIO')[0]).toBe('packaging');
-    expect(kind('LIQUIDO LAVASTOVIGLIE ESEMPIO')[0]).toBe('packaging');
-    expect(kind('MICRONIZZATORE STD LT 1')[0]).toBe('packaging');
+    expect(kind('4 PELAPATATE ESEMPIO')[0]).toBe(NON_FOOD);
+    expect(kind('LIQUIDO LAVASTOVIGLIE ESEMPIO')[0]).toBe(NON_FOOD);
+    expect(kind('MICRONIZZATORE STD LT 1')[0]).toBe(NON_FOOD);
     for (const text of ['AVENA MICRONIZZATA KG 25', 'PATATE PADELLATE 2,5KG', 'PATATE SACCHETTO 2,5KG',
       'CORNETTO FANTASIA 85GR* 50PZ', 'TRECCIA ALLA BIRRA 98G* 60PZ']) {
       expect(kind(text)[0], text).toBe('ingrediente');
@@ -210,7 +213,7 @@ describe.each([
       'BORSA SPESA 45X37', 'ECO BAGS ROSSO SMALL', 'CARAFFA GRADUATA 2 LT',
       'COPPETTA CONICA CM 20', 'L2 ANTICALCARE ESEMPIO', 'DETERSIVO PAVIMENTI 5 L',
       'PENNELLO 60MM', 'ASCIUGAMANI RIPIEGATI', 'PADEL ALLUMINIO 24CM', 'GUANTI NITRILE M']) {
-      expect(kind(text)[0], text).toBe('packaging');
+      expect(kind(text)[0], text).toBe(NON_FOOD);
     }
     // Food words still win, and a word inside another word is not the keyword.
     for (const text of ['OLIO EVO ML10X102', 'ZUCCHERO BUSTINA 4G', 'PAN DI SPUGNA KG 1', 'PEPERONI CAPSICUM']) {
@@ -281,5 +284,81 @@ describe.each([
     expect(m.invoiceNameOf('  Farina  T.00 {LOTTO 5}  KG 25 ')).toBe('Farina T.00 KG 25');
     expect(m.invoiceNameOf(null)).toBe('');
     expect(m.invoiceNameOf(undefined)).toBe('');
+  });
+});
+
+// ⚠️ MISE 2 ONLY (14 Nov 2026): the deliberate differences from the frozen current app, run against the port alone.
+describe('Mise 2 only: non-food, soft drinks and the bare «1/2» of a drink', () => {
+  const kind = (text: string) => ported.classify(text, 1, 1.0);
+
+  test('real packaging stays packaging; tools, clothing and cleaning are «altro»', () => {
+    for (const text of ['SACCHETTI CARTA PANE', 'BUSTE PLASTICA', 'CARTA FORNO', 'VASCHETTE ALLUMINIO NO']) {
+      expect(kind(text)[0], text).toBe('packaging');
+    }
+    for (const text of ['DETERSIVO PAVIMENTI 5 L', 'GUANTI NITRILE M', 'SET GREMBIULE PASTICCERIA', '4 PELAPATATE ESEMPIO',
+      'LIQUIDO LAVASTOVIGLIE ESEMPIO', 'MICRONIZZATORE STD LT 1', 'SGRASSATORE SPRAY ML 750']) {
+      expect(kind(text)[0], text).toBe('altro');
+    }
+    // Food words still win.
+    expect(kind('ZUCCHERO BUSTINA 4G')[0]).toBe('ingrediente');
+  });
+
+  test('soft drinks are resale (real lines once proposed as ingredients)', () => {
+    for (const text of ['LIMONATA TOM LATTINA CL 33X24', 'TONICA SCHWEPPES LEMON CL 18X24', 'GASSOSA BOTTIGLIA CL 27X24',
+      'SPUMA BIONDA CL 25X24', 'CEDRATA TASSONI CL 18X24', 'GINGER BEER CL 20X24']) {
+      expect(kind(text)[0], text).toBe('rivendita');
+      expect(legacy.classify(text, 1, 1.0)[0], `${text}: the frozen current app`).toBe('ingrediente');
+    }
+    // A food word still wins over a drink word.
+    expect(kind('LATTE SPUMA LT 1')[0]).toBe('ingrediente');
+  });
+
+  test('the soft-drink words are whole words: candied ginger and sparkling wine are not soft drinks', () => {
+    expect(kind('GINGER CANDITO KG 1')[0]).toBe('ingrediente');
+    expect(kind('GINGERINO ESEMPIO')[0]).toBe('rivendita');
+    expect(kind('GINGER ALE CL 20X24')[0]).toBe('rivendita');
+    expect(kind('GINGER BEER CL 20X24')[0]).toBe('rivendita');
+    expect(kind('TONICA SCHWEPPES CL 18X24')[0]).toBe('rivendita');
+    // «spuma» is no longer found inside «spumante» (it is the same class as in the frozen current app).
+    expect(kind('SPUMANTE BRUT ESEMPIO CL 75')[0]).toBe('ingrediente');
+    expect(legacy.classify('SPUMANTE BRUT ESEMPIO CL 75', 1, 1.0)[0]).toBe('ingrediente');
+    expect(kind('TONICHETTO ESEMPIO')[0]).toBe('ingrediente');
+  });
+
+  test('«1/2X12» on a drink is half a litre, twelve bottles; «LT 1/2X24» too (it read as one litre)', () => {
+    expect(ported.parsePack('ACQUA SABRINELLA NAT 1/2X12')).toStrictEqual(ported.packInfo(0.5, 'l', 12));
+    expect(ported.parsePack('ACQUA VERA NAT.1/2X24')).toStrictEqual(ported.packInfo(0.5, 'l', 24));
+    expect(ported.parsePack('ACQUA VERA LT 1/2X24')).toStrictEqual(ported.packInfo(0.5, 'l', 24));
+    expect(legacy.parsePack('ACQUA SABRINELLA NAT 1/2X12'), 'the frozen current app does not read it').toBeNull();
+    expect(legacy.parsePack('ACQUA VERA LT 1/2X24'), 'the frozen current app reads one litre').toStrictEqual(legacy.packInfo(1, 'l', null));
+    // Only on a drink: elsewhere a bare fraction says nothing certain.
+    expect(ported.parsePack('TOVAGLIOLI 1/2X12')).toBeNull();
+    // Never inside a longer number.
+    expect(ported.parsePack('ACQUA NAT 11/2X12')).toBeNull();
+  });
+
+  test('«1 1/2X6» on a drink is a litre and a half, six bottles (it read half a litre); «0/2» is still no size', () => {
+    expect(ported.parsePack('ACQUA NAT 1 1/2X6')).toStrictEqual(ported.packInfo(1.5, 'l', 6));
+    expect(ported.parsePack('ACQUA NAT. 2  1/2X6')).toStrictEqual(ported.packInfo(2.5, 'l', 6));
+    expect(ported.parsePack('ACQUA NAT 1/2X6')).toStrictEqual(ported.packInfo(0.5, 'l', 6));
+    expect(ported.parsePack('ACQUA NAT 0/2X6')).toStrictEqual(ported.packInfo(0, 'l', 6));
+    expect(ported.parsePack('ACQUA NAT 1 0/2X6')).toStrictEqual(ported.packInfo(1, 'l', 6));
+    // A decimal in front is not a whole part.
+    expect(ported.parsePack('ACQUA NAT 1,1 1/2X6')).toStrictEqual(ported.packInfo(0.5, 'l', 6));
+  });
+
+  test('«CL» above 100 on a drink is millilitres («CL 200X24» is 200 ml); up to 100 it stays centilitres', () => {
+    for (const [text, ml] of [
+      ['SUCCO BRAND PERA CL 200X24', 200], ['SUCCO BRAND CL 250X24', 250], ['THE BRAND LIMONE CL 400X12', 400],
+      ['SUCCO BRAND CL 33X24', 330], ['SUCCO BRAND CL 66X12', 660], ['SUCCO BRAND CL 100X6', 1000], ['SUCCO BRAND 200 CL', 200],
+    ] as const) {
+      expect(ported.parsePack(text)?.size, text).toBe(ml);
+      expect(ported.parsePack(text)?.unit, text).toBe('ml');
+    }
+    expect(ported.parsePack('SUCCO BRAND CL 200X24')).toStrictEqual(ported.packInfo(200, 'ml', 24));
+    expect(legacy.parsePack('SUCCO BRAND CL 200X24'), 'the frozen current app reads two litres').toStrictEqual(legacy.packInfo(2000, 'ml', 24));
+    // A line that is not a drink reads CL as before.
+    expect(ported.parsePack('CREMA BRAND CL 200X24')).toStrictEqual(legacy.parsePack('CREMA BRAND CL 200X24'));
+    expect(ported.parsePack('CREMA BRAND CL 200X24')).toStrictEqual(ported.packInfo(2000, 'ml', 24));
   });
 });

@@ -1417,3 +1417,103 @@ a new item, Save busy while counting, Cancel keeps the edit, typing and a type p
 the count), `IngredientCard.recipeCount.spec.ts` (the 4 s bound). The wording is his, word for word; note that the recipe rows
 keep their link (the item stays in those recipes and is still costed) — «non sarà più tra gli ingredienti delle ricette» means
 it is no longer offered where an ingredient is chosen.
+
+## Import of every kind — as built (14 Nov 2026)
+
+Mise 2 only; follows «Item kinds Resale/Other — as built». The invoice import brings in EVERY product it can read, each with
+its item kind. The current app is frozen and unchanged (it still imports ingredients only).
+
+- **Classification** (`shared/src/invoice-zip/keywords.ts`, `classify.ts`): the tools/clothing/cleaning words (plus
+  `pelapatate`, `lavastovigl`, `micronizzator`) leave `PACKAGING_RE` for `NONFOOD_RE`, the new line type `'altro'`, checked right
+  after packaging. `BEVERAGE_RE` gains `limonata`, `tonica`, `gassosa`, `spuma`, `cedrata`, `ginger` (also in
+  `invoice-import/classify.py` and its test; the Python script keeps non-food inside packaging, with a comment).
+  `keywords.spec.ts` compares the port's `PACKAGING_RE` + `NONFOOD_RE` with the Python list, and the port's source with the
+  current app's once the two Mise 2 changes are undone; `classify.spec.ts` and `products.spec.ts` pin both answers.
+- **«1/2X12»**: on a line the beverage words name, a fraction followed by a count is that fraction of a litre, that many
+  bottles («ACQUA SABRINELLA NAT 1/2X12» → 0.5 l × 12; «ACQUA VERA NAT.1/2X24» → 0.5 l × 24). ⚠️ The brief said «LT 1/2X24»
+  already worked: it did not — both apps read it as ONE litre (the «LT 1»). The same rule, run first, now reads it as 0.5 l × 24.
+- **`everyKind`** (Mise-2-only option of `build-import`, `selection` and the plan's context; without it every function is the
+  original's, so the paired specs still compare the two): every readable product is in the import file with `kind`
+  (ingrediente → `'ingredient'`, packaging → `'packaging'`, rivendita → `'resale'`, altro → `'other'`). A resale or other product
+  counted in pieces with no weight is priced per piece (`computeDocument`'s `weightlessPieces`: total ÷ pieces, reliability
+  «alta», no piece weight; the price is written through the card's own `pricePatch`, `unitWeightKg: null`). Food keeps
+  «pieces-need-price-unit-and-weight»; packaging too (the brief named only resale and other) — **changed on 15 Nov 2026,
+  see the follow-up below: packaging is now priced per piece like resale and other.**
+- **Decisions** (`invoice-decisions`, rules unchanged): «skip this product» and «skip this supplier» work as before; a stored
+  `'ingredient'` means «import».
+- **Matching** (`invoice-import-model`): a NEW item is created with the file's kind; an item MATCHED by the existing logic
+  (supplier, article code, names) keeps its own kind — no write ever names `kind` on it. With `everyKind` the pool holds the
+  items of every kind (a packaging line must find the packaging item it already is). A file entry's `kind` is read only when it
+  is one of the three non-food kinds; a resale or other entry priced per piece needs no piece weight.
+- **The first screen** (`FileStep.tsx`): «N products to import» on the counts line; the hint «Each product is imported with the
+  type the invoice suggests. You can change the type later on the item's card…»; one closed group per kind with products in it
+  («Ingredienti (n)», «Imballaggi (n)», «Rivendita (n)», «Altro (n)»), rows with name, supplier and description. The
+  «Imballaggi e rivendita» group and its «Importa come ingrediente» tick are gone. «Esclusi da te» with «Importa di nuovo», the
+  skipped suppliers, the unreadable products and the skipped files are unchanged. The «do not import (remember)» choice of each
+  row stays where it is (step 3).
+- **Not changed** (the brief: keep every other step as it is): steps 2 and 3, the confirmation and the summary still say
+  «ingredients» («Import 4 ingredients», «4 ingredients created») when the rows include packaging, resale or other —
+  **changed on 15 Nov 2026, see the follow-up below.**
+- **Specs**: `shared/src/invoice-zip/every-kind.spec.ts` (the chain, invented invoices), `InvoiceImport.file.spec.tsx`,
+  `InvoiceImport.run.spec.tsx` («every kind of product»: four new items with their kinds; an existing resale item matched by
+  code stays resale), `importRun.spec.ts`, `InvoiceImport.ingredients.spec.tsx`, `importWords.spec.ts`. Not driven in a browser.
+
+**Follow-up of 15 Nov 2026** (his approval of the two open points above).
+
+- **Words: «prodotti», not «ingredienti», where the rows can be of any kind.** Step 3's title «Prodotti» / «Products», its
+  button «Importa {n} prodotti» («Importa 1 prodotto»), the chips' groups («{n} prodotti invariati», «{n} prodotti con
+  errori»), «Prima scegli cosa fare con {n} prodotti.», «Crea un nuovo prodotto», the confirmation («Vuoi importare questi
+  prodotti?», «Verranno creati {n} nuovi prodotti.», «Nessun prodotto o prezzo cambia…»), the row reasons that name an item
+  of the venue (the chosen one gone, two with the same code or name, the merge target, 20 pack codes, a similar one appeared),
+  the summary («{n} prodotti creati», «… già presenti hanno nuovi prezzi», «… non importati», «… non sono stati provati»,
+  price changes and pack codes not recorded) and «Fornitori e prodotti si stanno ancora caricando». English likewise
+  («product» / «products»). **Kept, because they are about food:** step 1's group «Ingredienti (n)» (the food group of the
+  list by kind), the first sentence of step 3's note «I nuovi ingredienti partono con gli allergeni non dichiarati» (only food
+  has allergens; its second sentence now says «I prodotti che hai già…»), and the section's name «Ingredienti e fornitori».
+  Keys unchanged (`sup.imp.*`), only the words. Specs: every import spec that pinned the old words, plus
+  `InvoiceImport.ingredients.spec.tsx` «the words for rows of every kind» (a zip with food, packaging, a drink and a detergent:
+  «Prodotti», «Importa 4 prodotti», the question, «4 prodotti creati», no «ingredient» in the dialog or the summary; English;
+  the note).
+- **Packaging counted in pieces with no weight is priced per piece**, exactly like resale and other: `WEIGHTLESS_TYPES` in
+  `build-import.ts` and `WEIGHTLESS_KINDS` in `invoice-import-model.ts` now include packaging (Food cost counts packaging by
+  the piece). E.g. «VASCHETTE ALLUMINIO», 200 pieces for 30.00 → a NEW packaging item at 0.15 per piece, `unitWeightKg: null`
+  in the price in force, none on the history point. Food keeps today's rule (still «pieces-need-price-unit-and-weight»).
+  Specs: `every-kind.spec.ts` (the reader, the file entry valid, the new packaging item and its writes; food still
+  unreadable), `InvoiceImport.run.spec.tsx` (through the screen: the new packaging item priced per piece; food without weight
+  not imported). Not driven in a browser.
+- **The next invoices, and food (code review of 15 Nov 2026).** A product priced per piece with no weight (packaging, resale,
+  other) is matched again next month: «no weight» against a stored «no weight» is now the SAME piece, so the newer price
+  replaces the one in force (`matchedRow`; before, every later invoice went to the history only with «a piece of another
+  size», and the price stayed frozen), and its price changes are recorded (`changesFromPoints`' Mise-2-only option
+  `weightlessPieces`, asked by `planPriceChanges` when the file's piece has no weight). A weighed piece and a weightless one
+  are still never the same. ⚠️ Such a price is NEVER laid on a FOOD item: a weightless per-piece row matched to food (by code,
+  by name or «Uguale a …») is an error row, «The weight of one piece is missing.», and writes nothing. The frozen app never
+  makes a per-piece entry without a weight, so none of this changes its behaviour (parity and odd-input specs unchanged).
+  Specs: `every-kind.spec.ts` («per-piece prices with no weight, on the next invoices»).
+
+## Invoice import, every kind — fixes of 15 Nov 2026
+
+Found by code review and by driving a real drinks supplier's zip on the emulator. All Mise 2 only; `js/` is untouched.
+
+- **Write-time re-check (blocker).** `replanRow` built its context without `everyKind`, so at write time a line matched on screen to an
+  existing PACKAGING item by its code was planned «new» and written as a duplicate (next month both carry the code: `code-ambiguous`).
+  `ReplanInput` now carries `everyKind` and `ingredientsRun.ts` passes `true`. Specs: `every-kind.spec.ts` («the re-check before each
+  row is written»), `InvoiceImport.run.spec.tsx` («an existing PACKAGING item matched by its article code»).
+- **Drinks counted in bottles.** A drinks supplier counts single bottles (PZ, NR, N, BT, BOTT, PEZZI) while the description says the
+  carton («COLA ML 450 X24», 12 PZ): the price used pieces × size × 24, so every such drink was 6 to 24 times too cheap per litre.
+  `computeDocument` has an option `singleBottles` (set by `build-import.ts` only with `everyKind` and for resale lines): when every
+  line of the product is a single-piece unit and the description's count is 6 or more, the count is not multiplied in. A pack unit
+  (CF, CT…), a count under 6 (a retail multipack) and food keep the original reading; lines of one product in both kinds of unit keep
+  it and are «da verificare». What is saved on the item (weight, count, pack word) does not change, only the price per litre.
+- **«CL 200X24».** On a line the beverage words name, a CL number above 100 is read as millilitres (200 ml); up to 100 it stays
+  centilitres. Lives in `parsePack` like the «1/2X» drink reading (no option; a deliberate difference from `js/`, pinned in
+  `classify.spec.ts`). Note: the drink words do not include «energy» or «tea», so such lines are not drinks and read CL as before.
+- **Soft-drink words are whole words** (`keywords.ts` and `classify.py`, same text): limonata, tonica, gassosa, spuma, cedrata; ginger
+  only as «ginger ale», «ginger beer» or «gingerino». «GINGER CANDITO» and «SPUMANTE» stay ingredients.
+- **«1 1/2X6»** on a drink is 1.5 l (it read 0.5 l); a zero denominator still gives no size.
+- **A remembered «import as an ingredient»** (`invoice-decisions` value `ingredient`, stored by the current app) makes the NEW item's
+  kind `ingredient` (the owner's correction wins over the reader's guess); an existing item never changes kind.
+- **Words.** The row error «unit-weight-missing» now says what to do (change the type of the item, or do not import it), in both
+  languages (`sup.imp.reason.unitWeightMissing`).
+- Comments corrected: without `everyKind` the result is NOT always the original's: the «altro» line type, the soft drinks,
+  `TYPE_ORDER` and the «1/2X» reading apply in the port either way.
