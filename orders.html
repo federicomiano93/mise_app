@@ -242,6 +242,11 @@
         <button class="view-switch-btn active" id="view-by-supplier" type="button" role="tab" aria-selected="true" data-i18n="orders.bySupplier">By supplier</button>
         <button class="view-switch-btn" id="view-all-ingredients" type="button" role="tab" aria-selected="false" data-i18n="ui.ingredients">Ingredients</button>
       </div>
+      <!-- Whether everything typed on THIS device has reached the server: «Saved ✓» / «Not sent yet»
+           (js/orders/save-state-view.js). In the sticky head, so it stays in sight while typing. Empty
+           and invisible until the first snapshot of the order, but its room is always kept, so
+           nothing jumps when it appears. -->
+      <p class="draft-save-state" id="draft-save-state" role="status" aria-live="polite"></p>
     </div>
 
     <!-- ORDER -->
@@ -260,6 +265,12 @@
          work got done, this one only because somebody ANSWERED. It is what makes a
          strict week window safe: without it an order that never arrived would vanish,
          unanswered, on the day the week turned. -->
+    <!-- ⚠️⚠️ «ORDINE A X INVIATO ALLE 10:42: È PARTITO?» (14 Nov 2026). An order handed to
+         WhatsApp from ANY device waits here, on every device, until somebody answers: «Sì»
+         records what went, «No» keeps the quantities. First of all, and never moved into the
+         tablet's bell (js/orders/tablet-layout.js): the iPad has no WhatsApp, so the question
+         sent from a phone must be in plain sight on it. -->
+    <div id="orders-awaiting" aria-live="polite"></div>
     <div id="orders-owed" hidden></div>
     <!-- ⚠️⚠️ WHAT NOBODY HAS BEEN TOLD ABOUT. The shared order is live on every
          phone here, and both the sent list and the recorded order are only

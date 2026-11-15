@@ -77,6 +77,29 @@ class ZipTest(TempDirCase):
         self.assertEqual(load.documents, [])
         self.assertEqual(load.skipped[0].name, "evil.xml")
 
+    def test_a_dtd_hidden_in_utf16_is_refused_too(self):
+        # The byte search cannot see "<!DOCTYPE" once every character is two bytes wide;
+        # the parser pass must (security audit, 2 Nov 2026).
+        evil = '<?xml version="1.0" encoding="UTF-16"?><!DOCTYPE x [<!ENTITY a "EXPANDED">]><FatturaElettronica>&a;</FatturaElettronica>'
+        (self.fatture / "evil16.xml").write_bytes(evil.encode("utf-16"))
+        load = fatturapa.load_invoices(self.fatture)
+        self.assertEqual(load.documents, [])
+        self.assertEqual(load.skipped[0].name, "evil16.xml")
+        with self.assertRaises(ValueError):
+            fatturapa.parse_xml(evil.encode("utf-16"))
+
+    def test_an_archive_too_big_unpacked_is_listed_not_read(self):
+        self.add([LINE])
+        old = fatturapa.MAX_ZIP_TOTAL_BYTES
+        fatturapa.MAX_ZIP_TOTAL_BYTES = 10
+        try:
+            self.zip_of("huge.zip", {"a.xml": b"<a>" + b"0" * 100 + b"</a>"})
+            load = fatturapa.load_invoices(self.fatture)
+        finally:
+            fatturapa.MAX_ZIP_TOTAL_BYTES = old
+        self.assertEqual(len(load.documents), 1)
+        self.assertIn("huge.zip", {s.name for s in load.skipped})
+
     def test_missing_folder_gives_an_empty_result(self):
         load = fatturapa.load_invoices(self.tmp / "nowhere")
         self.assertEqual(load.documents, [])

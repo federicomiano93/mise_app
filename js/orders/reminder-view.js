@@ -116,3 +116,84 @@ export function renderPending(container, list, {
     ]));
   });
 }
+
+// «Ordine a Bruno inviato alle 10:42: è partito?» — one banner per supplier whose order was handed
+// to WhatsApp (or the mail app) and not answered yet (js/orders/awaiting-sent.js). On EVERY
+// device, until somebody answers: «Sì» records what went, «No» leaves the quantities in the order.
+// Persistent on purpose — nothing to dismiss: an order handed over and never answered is exactly
+// the order that used to go unrecorded.
+//
+// list: [{ supplier, at, … }] from awaitingList; question(supplier, entry) → the sentence;
+// busy(supplierId) → true while this device is answering (both buttons wait).
+// onYes / onNo(supplierId, at): `at` names the send the banner was showing.
+let awaitingSeq = 0;
+export function renderAwaiting(container, list, { question, onYes, onNo, busy } = {}) {
+  if (!container) return;
+  // ⚠️ REDRAWN ONLY WHEN SOMETHING CHANGED. This runs on every draft snapshot (every keystroke
+  // on any phone); a rebuild each time would throw the keyboard or screen-reader focus off «Sì»
+  // and make the polite live region on the host repeat the question.
+  const sentences = list.map(entry => (question ? question(entry.supplier, entry) : supplierLabel(entry.supplier)));
+  const key = JSON.stringify(list.map((e, i) => [e.supplier.id, e.at, sentences[i], Boolean(busy?.(e.supplier.id))]));
+  if (container.dataset.awaitingKey === key) return;
+  container.dataset.awaitingKey = key;
+  const oldOrder = (() => { try { return JSON.parse(container.dataset.awaitingOrder || '[]'); } catch { return []; } })();
+  container.dataset.awaitingOrder = JSON.stringify(list.map(e => e.supplier.id));
+  // ⚠️ FOCUS SURVIVES THE REBUILD. Tapping «Sì» flips the busy state, which changes the key, which
+  // rebuilds the row — and a keyboard or screen-reader user's focus fell to <body>. The button
+  // that had it (which supplier, which answer) is found again in the new row and focused.
+  const active = globalThis.document?.activeElement;
+  const hadFocus = active?.dataset?.awaitingSupplier
+    ? { supplier: active.dataset.awaitingSupplier, answer: active.dataset.awaitingAnswer } : null;
+  container.textContent = '';
+
+  let restoreFocus = null;
+  const yesOf = new Map();
+  list.forEach((entry, i) => {
+    const { supplier } = entry;
+    const id = `awaiting-q-${++awaitingSeq}`;
+    const waiting = Boolean(busy?.(supplier.id));
+    // The two answers are named by their own word AND described by the question, so a screen
+    // reader moving from button to button hears which order «Sì» is about.
+    // ⚠️ aria-disabled, NOT disabled, while this device is answering: a disabled button cannot hold
+    // focus, so the one that was just tapped could never get it back after the rebuild. The tap is
+    // ignored here, and answerAwaiting's busy guard would refuse it anyway.
+    const answer = (label, cls, which, fn) => el('button', {
+      type: 'button', class: `pending-btn${cls}`, 'aria-describedby': id,
+      'aria-disabled': waiting ? 'true' : null,
+      dataset: { awaitingSupplier: supplier.id, awaitingAnswer: which },
+      onClick: () => { if (!waiting) fn?.(supplier.id, entry.at); },
+    }, label);
+    const yes = answer(t('orders.awaiting.yes'), ' primary', 'yes', onYes);
+    const no = answer(t('orders.awaiting.no'), '', 'no', onNo);
+    yesOf.set(supplier.id, yes);
+    if (hadFocus && hadFocus.supplier === supplier.id) restoreFocus = hadFocus.answer === 'yes' ? yes : no;
+    container.appendChild(el('div', { class: 'pending-banner awaiting-banner' }, [
+      el('div', { class: 'pending-main' }, [
+        el('span', { class: 'pending-title', id, text: sentences[i] }),
+      ]),
+      el('div', { class: 'pending-actions' }, [yes, no]),
+    ]));
+  });
+  if (restoreFocus) { restoreFocus.focus(); return; }
+  // ⚠️ THE ANSWERED ROW IS GONE (recorded, dropped, answered elsewhere): the focused button left
+  // the page with it and focus would fall to <body>. It goes to the «Sì» of the next row that
+  // follows it in the old banner, else to the Orders tab, a stable control just above.
+  if (hadFocus) {
+    const at = oldOrder.indexOf(hadFocus.supplier);
+    const nextId = at < 0 ? undefined : oldOrder.slice(at + 1).find(id => yesOf.has(id));
+    (nextId !== undefined ? yesOf.get(nextId) : globalThis.document?.getElementById?.('tab-order-btn'))?.focus();
+  }
+}
+
+// Put focus back on one answer of one supplier after something outside the banner took it and
+// handed it back to a button that is no longer on the page (a confirm dialog opened over a banner
+// that was rebuilt meanwhile). Falls back like the rebuild does. Walks the children, no selector.
+export function refocusAwaiting(container, { supplier, answer }) {
+  const found = [];
+  const visit = node => {
+    if (node?.dataset?.awaitingSupplier === supplier && node.dataset.awaitingAnswer === answer) found.push(node);
+    (node?.children ? [...node.children] : []).forEach(visit);
+  };
+  visit(container);
+  (found[0] || globalThis.document?.getElementById?.('tab-order-btn'))?.focus();
+}
