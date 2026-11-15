@@ -6,7 +6,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-const read = f => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8');
+const read = f => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8').replace(/\r\n/g, '\n');
 const count = (src, re) => (src.match(re) || []).length;
 
 test('orders-main passes the venue language when it builds a message and a record row', () => {

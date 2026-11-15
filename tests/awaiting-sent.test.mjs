@@ -13,7 +13,7 @@ import {
   supplierKeepsLines, answerAwaiting,
 } from '../js/orders/awaiting-sent.js';
 
-const read = p => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
+const read = p => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8').replace(/\r\n/g, '\n');
 
 beforeEach(() => { stub.reset(); });
 

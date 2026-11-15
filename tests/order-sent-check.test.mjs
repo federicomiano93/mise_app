@@ -14,7 +14,7 @@ import { runSendBatch } from '../js/orders/send-editor.js';
 import { orderedItems, buildOrderMessage } from '../js/orders/order-text.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const read = f => readFileSync(join(ROOT, f), 'utf8');
+const read = f => readFileSync(join(ROOT, f), 'utf8').replace(/\r\n/g, '\n');
 
 test('the question is asked for a normal recording and for the post-send prompt', () => {
   assert.equal(shouldAskSent({ confirm: true }), true);

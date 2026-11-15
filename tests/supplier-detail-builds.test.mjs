@@ -160,7 +160,7 @@ test('a snapshot repaint gives the focus back to the day select', () => {
 // «aggiungi il resoconto dentro la scheda dei fornitori così posso vedere tutto quello che ho
 // selezionato senza tornare indietro».
 import { readFileSync } from 'node:fs';
-const read = p => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
+const read = p => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8').replace(/\r\n/g, '\n');
 
 const barOf = view => byClass(view.overlay, 'supplier-summary-bar');
 

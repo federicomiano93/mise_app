@@ -41,7 +41,7 @@ const {
   sendEditorDialog, runSendBatch, picturePrep, previewLines, editorTitle, settleOnce, afterShare,
 } = await import('../js/orders/send-editor.js');
 
-const read = p => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
+const read = p => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8').replace(/\r\n/g, '\n');
 const wait = ms => new Promise(r => setTimeout(r, ms));
 const nodes = () => walk(globalThis.document.body);
 const box = () => nodes().find(n => n.tagName === 'TEXTAREA');
