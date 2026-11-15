@@ -46,7 +46,7 @@ import {
 } from './draft.js';
 import {
   awaitingEntry, awaitingList, isAwaiting, claimDecision, linesToClear, supplierKeepsLines, answerAwaiting,
-  draftQuantities,
+  draftQuantities, shouldAskBeforeRecording,
 } from './awaiting-sent.js';
 import { saveStateView, paintSaveState } from './save-state-view.js';
 import { buildSendScreen } from './preview.js';
@@ -196,6 +196,7 @@ const placing = new Set();      // suppliers whose order is being written right 
 const askHere = new Map();
 const localAwaiting = new Map();
 const answeringAwaiting = new Set();
+const askingBeforeRecording = new Set();   // «Sì» is waiting on «It may already be recorded»
 let askHereWanted = false;      // the page is back after a send: ask the questions above
 let askingHere = false;         // a «did it go?» dialog is open
 
@@ -2050,6 +2051,35 @@ async function answerAwaitingSent(supplierId, answer, at) {
     setStatus(t('orders.youReOfflineReconnect'), 'error', 6000);
     return;
   }
+  // ⚠️ «Sì» WHEN THE ORDER'S LINES ARE ALL GONE FROM THE LIST: another device (one still on an
+  // older version clears the lines on «Ordine fatto» and knows nothing of this question) has
+  // probably recorded it, and recording again doubles it in History. Ask first. «Non registrare»
+  // goes the very same road as «No» (the key goes on every device). A dialog already open (or
+  // this one, asked a second time by a second tap) would answer false at once and drop the
+  // question unasked, so nothing is decided then.
+  let notRecorded = false;
+  if (answer === 'yes' && shouldAskBeforeRecording(state.entries, id => lensById()[id] || null, entry)) {
+    if (askingBeforeRecording.has(supplierId) || globalThis.document?.querySelector('.app-dialog-backdrop')) return;
+    askingBeforeRecording.add(supplierId);
+    let record;
+    try {
+      record = await confirmDialog({
+        title: t('orders.awaiting.maybeRecorded.title'),
+        message: t('orders.awaiting.maybeRecorded.body', { supplier: supplier ? supplierLabel(supplier) : '' }),
+        okLabel: t('orders.awaiting.maybeRecorded.yes'),
+        cancelLabel: t('orders.awaiting.maybeRecorded.no'),
+      });
+    } finally {
+      askingBeforeRecording.delete(supplierId);
+    }
+    // Answered on another device while the dialog was open.
+    if (!local && state.awaiting?.[supplierId]?.at !== entry.at) {
+      setStatus(t('orders.awaiting.elsewhere'), 'ok', 4000);
+      scheduleRender('reminders');
+      return;
+    }
+    if (!record) { answer = 'no'; notRecorded = true; }
+  }
   askHere.delete(supplierId);
   const answering = answerAwaiting(answer, supplierId, entry, {
     busy: answeringAwaiting,
@@ -2069,7 +2099,7 @@ async function answerAwaitingSent(supplierId, answer, at) {
   const result = await answering;
   if (local && (result === 'recorded' || result === 'dropped')) localAwaiting.delete(supplierId);
   const name = supplier ? supplierLabel(supplier) : '';
-  if (result === 'dropped') setStatus(t('orders.awaiting.kept', { supplier: name }), 'ok', 5000);
+  if (result === 'dropped') setStatus(notRecorded ? t('orders.awaiting.notRecorded') : t('orders.awaiting.kept', { supplier: name }), 'ok', 5000);
   else if (result === 'elsewhere') setStatus(t('orders.awaiting.elsewhere'), 'ok', 4000);
   else if (result === 'claimFailed') setStatus(t('orders.couldNotSaveThe'), 'error');
   // 'recorded' and 'failed': placeOrder has already said so.

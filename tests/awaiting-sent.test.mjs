@@ -10,7 +10,7 @@ import { readFileSync } from 'node:fs';
 import { draft, stub } from './helpers/load-draft.mjs';
 import {
   awaitingEntry, draftQuantities, isAwaiting, awaitingList, claimDecision, linesToClear,
-  supplierKeepsLines, answerAwaiting,
+  supplierKeepsLines, answerAwaiting, shouldAskBeforeRecording,
 } from '../js/orders/awaiting-sent.js';
 
 const read = p => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8').replace(/\r\n/g, '\n');
@@ -305,4 +305,44 @@ test('⚠️ «Invialo ora» with numbers corrected on the review screen: «Sì�
   const check = main.slice(main.indexOf('async function askSentCheck'), main.indexOf('// The line that says which suppliers'));
   assert.match(check, /draft: draftQuantities\(bySupplier\[id\] \|\| \[\], state\.entries\)/);
   assert.match(main, /sentDraft: e\.draft \|\| null/);
+});
+
+// ── «Sì» when the lines are already gone (review, 15 Nov 2026) ─────────────────────
+
+test('⚠️ «Sì» asks first when NONE of the order\'s lines is still in the list; some left → records', () => {
+  const cards = { flour: { id: 'flour', unit: 'kg' }, yeast: { id: 'yeast', unit: 'kg' } };
+  const cardOf = id => cards[id];
+  const stored = { quantities: { flour: 2, yeast: 1 }, units: {} };
+  assert.equal(shouldAskBeforeRecording({}, cardOf, stored), true, 'all gone: another device may have recorded it');
+  assert.equal(shouldAskBeforeRecording({ milk: { qty: 4 } }, cardOf, stored), true, 'typing for other lines is not this order');
+  assert.equal(shouldAskBeforeRecording({ flour: { qty: 2 } }, cardOf, stored), false, 'one line still there: record');
+  assert.equal(shouldAskBeforeRecording({ flour: { qty: 9 } }, cardOf, stored), true, 'a changed number is not the order that went');
+  assert.equal(shouldAskBeforeRecording({ flour: { qty: 2 } }, cardOf, { quantities: {}, units: {} }), true, 'nothing stored: ask');
+  assert.equal(shouldAskBeforeRecording({ flour: { qty: 2 } }, cardOf, null), true);
+  // The stored `draft` snapshot is what the draft said at the send, when it differed from what went.
+  const corrected = { quantities: { flour: 3 }, units: {}, draft: { quantities: { flour: 5 }, units: {} } };
+  assert.equal(shouldAskBeforeRecording({ flour: { qty: 5 } }, cardOf, corrected), false);
+  assert.equal(shouldAskBeforeRecording({ flour: { qty: 3 } }, cardOf, corrected), true);
+});
+
+test('«Sì» with the lines gone goes through the dialog; «Non registrare» takes the «No» road', () => {
+  const fn = main.slice(main.indexOf('async function answerAwaitingSent'), main.indexOf('// ── Sending the list to whoever'));
+  assert.match(fn, /answer === 'yes' && shouldAskBeforeRecording\(state\.entries, id => lensById\(\)\[id\] \|\| null, entry\)/);
+  assert.match(fn, /t\('orders\.awaiting\.maybeRecorded\.title'\)/);
+  assert.match(fn, /if \(!record\) \{ answer = 'no'; notRecorded = true; \}/, 'the same path as «No», so every device\'s banner goes');
+  assert.match(fn, /querySelector\('\.app-dialog-backdrop'\)\) return;/, 'a dialog already open would answer false and drop the question unasked');
+  assert.ok(fn.indexOf('shouldAskBeforeRecording') < fn.indexOf('answerAwaiting(answer'), 'asked BEFORE claiming');
+  assert.match(fn, /notRecorded \? t\('orders\.awaiting\.notRecorded'\)/);
+});
+
+test('the «already recorded?» words, both languages', async () => {
+  const d = (await import('../js/i18n.js'))._dictionaries();
+  assert.equal(d.it['orders.awaiting.maybeRecorded.title'], 'Forse è già registrato');
+  assert.equal(d.it['orders.awaiting.maybeRecorded.yes'], 'Registra lo stesso');
+  assert.equal(d.it['orders.awaiting.maybeRecorded.no'], 'Non registrare');
+  assert.equal(d.en['orders.awaiting.maybeRecorded.title'], 'It may already be recorded');
+  assert.equal(d.en['orders.awaiting.maybeRecorded.yes'], 'Record anyway');
+  assert.match(d.it['orders.awaiting.maybeRecorded.body'], /\{supplier\}/);
+  assert.match(d.en['orders.awaiting.maybeRecorded.body'], /\{supplier\}/);
+  assert.ok(d.en['orders.awaiting.notRecorded'] && d.it['orders.awaiting.notRecorded']);
 });

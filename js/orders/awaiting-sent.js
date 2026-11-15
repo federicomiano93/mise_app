@@ -127,6 +127,16 @@ export function linesToClear(entries, cardOf, stored) {
   });
 }
 
+// Before «Sì» records: is it worth asking first? ⚠️ When NONE of the order's lines is still in the
+// draft, another device (one still on an older version, which clears the lines on «Ordine fatto»
+// and knows nothing of this question) has probably recorded it already, and recording it again
+// would double the order in History (mergeArchives adds). Same inputs and same comparison as the
+// recording itself (linesToClear): what it would clear is what proves the order is still open.
+// An entry with no stored lines has nothing to compare, so it asks too.
+export function shouldAskBeforeRecording(entries, cardOf, stored) {
+  return linesToClear(entries, cardOf, stored).length === 0;
+}
+
 // Does anything of this supplier stay in the draft once `cleared` are gone? Decides whether its
 // day stamp goes too (a stamp with no rows is what the «not placed» banner reads as forgotten).
 export function supplierKeepsLines(supplierIngredients, entries, cleared) {
