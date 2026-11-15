@@ -343,27 +343,31 @@ test('the restore is a transaction stamped with the bakery, and the screen does 
   assert.doesNotMatch(answer, /setAwaitingSent\(/, 'no blind overwrite any more');
 });
 
-// ── «Sì» when the lines are already gone (review, 15 Nov 2026) ─────────────────────
+// ── «Sì» when History already holds the order (review, 15 Nov 2026) ─────────────────
 
-test('⚠️ «Sì» asks first when NONE of the order\'s lines is still in the list; some left → records', () => {
-  const cards = { flour: { id: 'flour', unit: 'kg' }, yeast: { id: 'yeast', unit: 'kg' } };
-  const cardOf = id => cards[id];
+test('⚠️ «Sì» asks ONLY when History already holds this order at least as large; otherwise it records', () => {
   const stored = { quantities: { flour: 2, yeast: 1 }, units: {} };
-  assert.equal(shouldAskBeforeRecording({}, cardOf, stored), true, 'all gone: another device may have recorded it');
-  assert.equal(shouldAskBeforeRecording({ milk: { qty: 4 } }, cardOf, stored), true, 'typing for other lines is not this order');
-  assert.equal(shouldAskBeforeRecording({ flour: { qty: 2 } }, cardOf, stored), false, 'one line still there: record');
-  assert.equal(shouldAskBeforeRecording({ flour: { qty: 9 } }, cardOf, stored), true, 'a changed number is not the order that went');
-  assert.equal(shouldAskBeforeRecording({ flour: { qty: 2 } }, cardOf, { quantities: {}, units: {} }), true, 'nothing stored: ask');
-  assert.equal(shouldAskBeforeRecording({ flour: { qty: 2 } }, cardOf, null), true);
-  // The stored `draft` snapshot is what the draft said at the send, when it differed from what went.
-  const corrected = { quantities: { flour: 3 }, units: {}, draft: { quantities: { flour: 5 }, units: {} } };
-  assert.equal(shouldAskBeforeRecording({ flour: { qty: 5 } }, cardOf, corrected), false);
-  assert.equal(shouldAskBeforeRecording({ flour: { qty: 3 } }, cardOf, corrected), true);
+  assert.equal(shouldAskBeforeRecording(stored, null), false, 'no record for that day: record');
+  assert.equal(shouldAskBeforeRecording(stored, undefined), false);
+  assert.equal(shouldAskBeforeRecording(stored, { quantities: { flour: 2, yeast: 1 } }), true, 'holds every line: ask');
+  assert.equal(shouldAskBeforeRecording(stored, { quantities: { flour: 5, yeast: 1, salt: 3 } }), true, 'larger and more: ask');
+  assert.equal(shouldAskBeforeRecording(stored, { quantities: { flour: 2 } }), false, 'only some lines: record');
+  assert.equal(shouldAskBeforeRecording(stored, { quantities: { flour: 1, yeast: 1 } }), false, 'a smaller quantity: record');
+  assert.equal(shouldAskBeforeRecording(stored, { quantities: {} }), false);
+  assert.equal(shouldAskBeforeRecording({ quantities: {} }, { quantities: { flour: 2 } }), false, 'nothing stored: record');
+  assert.equal(shouldAskBeforeRecording(null, { quantities: { flour: 2 } }), false);
 });
 
-test('«Sì» with the lines gone goes through the dialog; «Non registrare» takes the «No» road', () => {
+test('a changed or cleared draft is NO evidence: with no History record «Sì» just records', () => {
+  // The draft is not an argument any more: the rule takes the entry and the record only.
+  assert.equal(shouldAskBeforeRecording.length, 2);
+  assert.equal(shouldAskBeforeRecording({ quantities: { flour: 2 } }, null), false, 'number changed after sending, nothing filed');
+});
+
+test('«Sì» with the order already in History goes through the dialog; «Non registrare» takes the «No» road', () => {
   const fn = main.slice(main.indexOf('async function answerAwaitingSent'), main.indexOf('// ── Sending the list to whoever'));
-  assert.match(fn, /answer === 'yes' && shouldAskBeforeRecording\(state\.entries, id => lensById\(\)\[id\] \|\| null, entry\)/);
+  assert.match(fn, /answer === 'yes' && shouldAskBeforeRecording\(entry, filed\)/);
+  assert.match(fn, /const filed = allHistory\(\)\.find\(h => h && h\.id === historyDocId\(entry\.date \|\| dayForSupplier\(supplierId\), supplierId\)\)/);
   assert.match(fn, /t\('orders\.awaiting\.maybeRecorded\.title'\)/);
   assert.match(fn, /if \(!record\) \{ answer = 'no'; notRecorded = true; \}/, 'the same path as «No», so every device\'s banner goes');
   assert.match(fn, /querySelector\('\.app-dialog-backdrop'\)\) return;/, 'a dialog already open would answer false and drop the question unasked');
@@ -374,10 +378,10 @@ test('«Sì» with the lines gone goes through the dialog; «Non registrare» ta
 test('the «already recorded?» words, both languages', async () => {
   const d = (await import('../js/i18n.js'))._dictionaries();
   assert.equal(d.it['orders.awaiting.maybeRecorded.title'], 'Forse è già registrato');
-  assert.equal(d.it['orders.awaiting.maybeRecorded.yes'], 'Registra lo stesso');
+  assert.equal(d.it['orders.awaiting.maybeRecorded.yes'], 'Registra di nuovo');
   assert.equal(d.it['orders.awaiting.maybeRecorded.no'], 'Non registrare');
   assert.equal(d.en['orders.awaiting.maybeRecorded.title'], 'It may already be recorded');
-  assert.equal(d.en['orders.awaiting.maybeRecorded.yes'], 'Record anyway');
+  assert.equal(d.en['orders.awaiting.maybeRecorded.yes'], 'Record again');
   assert.match(d.it['orders.awaiting.maybeRecorded.body'], /\{supplier\}/);
   assert.match(d.en['orders.awaiting.maybeRecorded.body'], /\{supplier\}/);
   assert.ok(d.en['orders.awaiting.notRecorded'] && d.it['orders.awaiting.notRecorded']);

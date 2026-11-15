@@ -134,14 +134,17 @@ export function linesToClear(entries, cardOf, stored) {
   });
 }
 
-// Before «Sì» records: is it worth asking first? ⚠️ When NONE of the order's lines is still in the
-// draft, another device (one still on an older version, which clears the lines on «Ordine fatto»
-// and knows nothing of this question) has probably recorded it already, and recording it again
-// would double the order in History (mergeArchives adds). Same inputs and same comparison as the
-// recording itself (linesToClear): what it would clear is what proves the order is still open.
-// An entry with no stored lines has nothing to compare, so it asks too.
-export function shouldAskBeforeRecording(entries, cardOf, stored) {
-  return linesToClear(entries, cardOf, stored).length === 0;
+// Before «Sì» records: is it worth asking first? ⚠️ ONLY WHEN HISTORY ALREADY HOLDS THIS ORDER.
+// Another device (one on an older version records «Ordine fatto» without knowing of this
+// question) may have recorded it, and recording again would double it (mergeArchives adds). The
+// evidence is History itself: the record for that supplier and day (`record`, or null) holds
+// EVERY stored line at a quantity ≥ the stored one. The draft is no evidence: a number changed
+// after sending, or a list cleared on purpose, says nothing about whether this order was
+// recorded, and asking there would let «Non registrare» lose an order that really went.
+export function shouldAskBeforeRecording(entry, record) {
+  const lines = Object.entries(entry?.quantities || {}).filter(([, q]) => positive(q) > 0);
+  if (!lines.length || !record || typeof record !== 'object') return false;
+  return lines.every(([id, q]) => positive(record.quantities?.[id]) >= positive(q));
 }
 
 // Does anything of this supplier stay in the draft once `cleared` are gone? Decides whether its

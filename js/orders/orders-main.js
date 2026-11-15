@@ -2057,14 +2057,16 @@ async function answerAwaitingSent(supplierId, answer, at) {
     setStatus(t('orders.youReOfflineReconnect'), 'error', 6000);
     return;
   }
-  // ⚠️ «Sì» WHEN THE ORDER'S LINES ARE ALL GONE FROM THE LIST: another device (one still on an
-  // older version clears the lines on «Ordine fatto» and knows nothing of this question) has
-  // probably recorded it, and recording again doubles it in History. Ask first. «Non registrare»
+  // ⚠️ «Sì» WHEN HISTORY ALREADY HOLDS THIS ORDER (that supplier, that day, every stored line at
+  // least as large): another device (one still on an older version records «Ordine fatto» without
+  // knowing of this question) has probably recorded it, and recording again doubles it in History.
+  // Ask first; with no such record, record as always. «Non registrare»
   // goes the very same road as «No» (the key goes on every device). A dialog already open (or
   // this one, asked a second time by a second tap) would answer false at once and drop the
   // question unasked, so nothing is decided then.
   let notRecorded = false;
-  if (answer === 'yes' && shouldAskBeforeRecording(state.entries, id => lensById()[id] || null, entry)) {
+  const filed = allHistory().find(h => h && h.id === historyDocId(entry.date || dayForSupplier(supplierId), supplierId));
+  if (answer === 'yes' && shouldAskBeforeRecording(entry, filed)) {
     if (askingBeforeRecording.has(supplierId) || globalThis.document?.querySelector('.app-dialog-backdrop')) return;
     askingBeforeRecording.add(supplierId);
     let record;
