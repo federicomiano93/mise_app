@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Check, ClipboardList, List, Plus, Share } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router';
+import { draftQuantities } from '@mise/shared/awaiting-sent';
 import { fromOrdersList, fromOrdersSupplier, ingredientCardAddress, newIngredientAddress, supplierScreenAddress } from '@mise/shared/records-link';
 import { supplierLabel } from '@mise/shared/supplier-label';
 import { useT } from '../i18n/useT';
@@ -181,6 +182,8 @@ export function SupplierOrderScreen({ id, lens }: { id: string; lens: OrdersLens
       sending.current = false;
       say(t('ord.send.failed'), LONG_MS);
     };
+    // ⚠️ WHAT GOES IS TAKEN AT THE PRESS, with the message: «did it go?» asks about exactly these numbers, whatever is typed meanwhile.
+    const went = draftQuantities(lens.linesOf(id), snapshot.draft.entries);
     let going: ReturnType<typeof send>;
     try {
       going = send({ rows: draftSendRows(lens, snapshot.draft, [id]), grouped: true, supplierRoadsOnly: false });
@@ -190,6 +193,10 @@ export function SupplierOrderScreen({ id, lens }: { id: string; lens: OrdersLens
     }
     void going.then(result => {
       sending.current = false;
+      // Handed over, whether or not this screen is still the one on show: the question is the only thing that gets it recorded.
+      if (result?.kind === 'sent' && result.ids.includes(id)) {
+        store.waitForAnswer([{ supplierId: id, quantities: went.quantities, units: went.units }], result.handOff);
+      }
       if (result?.kind === 'list') sayListOutcome(say, t, result.outcome);
       else if (result?.kind === 'sent' && result.blocked) say(t('ord.send.nothingOpened'), LONG_MS);
     }).catch(failed);

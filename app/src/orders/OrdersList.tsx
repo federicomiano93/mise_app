@@ -15,6 +15,7 @@ import { SPLIT_QUERY } from '../ui/split';
 import { useMediaQuery } from '../ui/useMediaQuery';
 import { DeliveryDoors } from './DeliveryDoors';
 import { ListsDoor } from './ListsDoor';
+import { AwaitingBanners } from './AwaitingBanners';
 import { NoticesPanel } from './NoticesPanel';
 import { OrdersFilter } from './OrdersFilter';
 import { OrdersHead } from './OrdersHead';
@@ -150,6 +151,11 @@ export function OrdersList({ lens, earlyLens, ready, openId, heldId, onLookingEl
           />
         ) : null}
       </OrdersHead>
+
+      {/* «Did it go?»: always on the page, above everything the bell holds (decision P2 of the v1.145.0 port). */}
+      <PartBoundary>
+        <AwaitingBanners lens={lens} />
+      </PartBoundary>
 
       <PartBoundary>
         <NoticesPanel onOpenSupplier={onOpenSupplier} onOpenPending={onOpenPending} onSend={onSend} />

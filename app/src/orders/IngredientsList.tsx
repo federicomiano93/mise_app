@@ -5,6 +5,7 @@ import { PartBoundary } from '../errors/PartBoundary';
 import { useT } from '../i18n/useT';
 import { FoldedGroup, useFoldedOpen } from '../ui/FoldedGroup';
 import { tabOfLine, useCardDoors } from './CardDoors';
+import { AwaitingBanners } from './AwaitingBanners';
 import { NoticesPanel } from './NoticesPanel';
 import { OrderLine } from './OrderLine';
 import { OrdersFilter } from './OrdersFilter';
@@ -144,6 +145,11 @@ export function IngredientsList({ lens, ready, swapOpen, saveSilent, onSwap, onS
           />
         ) : null}
       </OrdersHead>
+
+      {/* «Did it go?»: always on the page, above everything the bell holds (decision P2 of the v1.145.0 port). */}
+      <PartBoundary>
+        <AwaitingBanners lens={lens} />
+      </PartBoundary>
 
       {/* The bell is in the page's bar on the split whatever the list column holds, so its panel must be here too. Only the always-on blocks
           (today's orders, the debt doors, the order lists) stay on the supplier view (F-4). */}

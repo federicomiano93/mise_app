@@ -78,10 +78,15 @@ async function escapeFrom(view: View, dialog: HTMLElement) {
   await view.user.keyboard('{Escape}');
 }
 
-// The confirm screen that follows a send, once its working copy is on screen.
-async function orderSent() {
-  await screen.findByText('This is what will be recorded:', undefined, LOAD);
-  return within(screen.getByRole('region', { name: 'Order sent' }));
+// After a send that reached suppliers the screen goes back to the LIST and «did it go?» waits on every device (v1.145.0): nothing is
+// recorded by the send, and the confirm screen is no longer in the road.
+async function backAtList(view: View) {
+  await waitFor(() => { expect(view.router.state.location.pathname).toBe('/orders'); }, LOAD);
+}
+type Asked = { at: string; date: string; quantities: Record<string, number>; units: Record<string, string>; draft?: unknown };
+const asking = (source: FakeOrdersSource) => (source.draft?.awaitingSent ?? {}) as Record<string, Asked>;
+async function waitingFor(source: FakeOrdersSource, ...ids: string[]) {
+  await waitFor(() => { expect(Object.keys(asking(source)).sort()).toEqual([...ids].sort()); }, LOAD);
 }
 
 // The send editor of one message (SendEditorDialog.tsx): «Send» in it is the press that opens the window or starts the share.
@@ -166,7 +171,8 @@ describe('the send arrow and the send screen', () => {
 describe('one open road', () => {
   it('opens WhatsApp INSIDE the press, then asks to record what was sent', async () => {
     const open = spyOpen();
-    const view = await atList(seeded(), STAFF);
+    const source = seeded();
+    const view = await atList(source, STAFF);
     await toSend(view, 'Alpine Mills', 'Zed');
     await view.user.click(sendButton());
     // ⚠️ The send editor comes first: nothing opens until the person has seen the message and pressed ITS «Send».
@@ -185,11 +191,16 @@ describe('one open road', () => {
     expect(text).toContain('Alpine Mills');
     expect(text).toContain('*Zed*');
     expect(text).toContain('- Flour 00: 2');
-    const confirm = await orderSent();
-    expect(view.router.state.location.pathname).toBe('/orders/place-all/confirm');
-    expect(confirm.getByText('Alpine Mills')).toBeInTheDocument();
-    expect(confirm.getByText('Zed')).toBeInTheDocument();
-    expect(confirm.getByRole('button', { name: 'Mark as placed' })).toBeInTheDocument();
+    // Back at the list, with ONE question per supplier, written whole with exactly what went, and nothing recorded.
+    await backAtList(view);
+    await waitingFor(source, 's-alp', 's-zed');
+    expect(asking(source)['s-alp']).toMatchObject({ date: TODAY, quantities: { 'i-flour': 2, 'i-rye': 3 } });
+    expect(asking(source)['s-zed']).toMatchObject({ date: TODAY, quantities: { 'i-milk': 4 } });
+    expect(asking(source)['s-alp']?.at).toBe(asking(source)['s-zed']?.at);
+    expect(source.records.size).toBe(0);
+    // The banners ask on the list, on this device and on every other.
+    expect(await screen.findByText(/^Order to Alpine Mills sent at .+: did it go\?$/)).toBeInTheDocument();
+    expect(screen.getByText(/^Order to Zed sent at .+: did it go\?$/)).toBeInTheDocument();
   });
 
   it('writes ONE list when asked to', async () => {
@@ -204,32 +215,37 @@ describe('one open road', () => {
     expect(text).toContain('- Flour 00: 2');
   });
 
-  it('still asks «Did you send it?» after a send, records only what is confirmed, and Back goes to the list', async () => {
+  it('«Yes» on the banner records what WENT, on the day it was for, and clears only what was sent', async () => {
     spyOpen();
     const source = seeded();
     const view = await atList(source, STAFF);
     await toSend(view, 'Alpine Mills');
     await view.user.click(sendButton());
     await editorSend(view);
-    const confirm = await orderSent();
-    await view.user.click(confirm.getByRole('button', { name: 'Mark as placed' }));
-    const asked = await screen.findByRole('alertdialog', undefined, LOAD);
-    expect(within(asked).getByText('Did you send the order to Alpine Mills?')).toBeInTheDocument();
-    await view.user.click(within(asked).getByRole('button', { name: 'Yes, sent' }));
+    await backAtList(view);
+    await waitingFor(source, 's-alp');
+    // A colleague types the rye again after the send: it is the next order, and survives.
+    source.remoteMerge({ entries: { 'i-rye': { qty: 7 } } });
+    const sentence = await screen.findByText(/^Order to Alpine Mills sent at .+: did it go\?$/);
+    await view.user.click(screen.getByRole('button', { name: 'Yes', description: sentence.textContent ?? '' }));
     await waitFor(() => { expect(source.records.has(`${TODAY}_s-alp`)).toBe(true); });
-    await waitFor(() => { expect(view.router.state.location.pathname).toBe('/orders'); });
+    expect(source.records.get(`${TODAY}_s-alp`)?.quantities).toEqual({ 'i-flour': 2, 'i-rye': 3 });
     expect(source.records.has(`${TODAY}_s-zed`)).toBe(false);
+    await waitingFor(source);
+    await waitFor(() => { expect((source.draft?.entries as Record<string, unknown>)['i-flour']).toBeUndefined(); });
+    expect((source.draft?.entries as Record<string, { qty: number }>)['i-rye']?.qty).toBe(7);
+    expect(await screen.findByText('Alpine Mills — order saved to history ✓')).toBeInTheDocument();
   });
 
-  it('goes back to the LIST from the confirm screen that follows a send, not to the send screen', async () => {
+  it('goes back to the LIST after a send, not to a confirm screen and not to the send screen', async () => {
     spyOpen();
     const view = await atList(seeded(), STAFF);
     await toSend(view, 'Alpine Mills');
     await view.user.click(sendButton());
     await editorSend(view);
-    const confirm = await orderSent();
-    await view.user.click(confirm.getByRole('button', { name: 'Back' }));
-    await waitFor(() => { expect(view.router.state.location.pathname).toBe('/orders'); });
+    await backAtList(view);
+    await waitFor(() => { expect(screen.queryByRole('region', { name: 'Send order' })).not.toBeInTheDocument(); });
+    expect(screen.queryByRole('region', { name: 'Order sent' })).not.toBeInTheDocument();
   });
 
   it('refuses a unit clash with today’s record, says it and opens nothing', async () => {
@@ -312,7 +328,7 @@ describe('several roads', () => {
       expect(open).toHaveBeenCalledTimes(1);
     });
     expect(pressed(open)[0]?.startsWith('https://wa.me/447700900123?text=')).toBe(true);
-    await orderSent();
+    await backAtList(view);
   });
 
   it('names a supplier with no phone under the road straight to the supplier', async () => {
@@ -348,10 +364,10 @@ describe('the send editor and the order picture', () => {
     await view.user.click(within(notice).getByRole('button', { name: 'OK' }));
     expect(open).not.toHaveBeenCalled();
 
-    // Only the supplier whose picture was shared is carried on to be recorded.
-    const confirm = await orderSent();
-    expect(confirm.getByText('Café Bar Srl')).toBeInTheDocument();
-    expect(confirm.queryByText('Zed')).not.toBeInTheDocument();
+    // Only the supplier whose picture was shared is asked about.
+    await backAtList(view);
+    await waitingFor(source, 's-caf');
+    expect(source.records.size).toBe(0);
   });
 
   it('⚠️ shares the picture of the EDITED message and opens nothing', async () => {
@@ -385,7 +401,7 @@ describe('the send editor and the order picture', () => {
     expect(open).toHaveBeenCalledTimes(1);
     expect(pressed(open)[0]?.startsWith('https://wa.me/447700900123?text=')).toBe(true);
     expect(textOf(pressed(open)[0] ?? '')).toContain('PLUS ONE SACK');
-    await orderSent();
+    await backAtList(view);
   });
 
   it('sends nothing when the editor is left, and stays on the send screen', async () => {
@@ -408,7 +424,7 @@ describe('«Send it now» on the confirm screen', () => {
     await screen.findByText('This is what will be recorded:', undefined, LOAD);
   }
 
-  it('sends the CORRECTED numbers and records the supplier it reached', async () => {
+  it('sends the CORRECTED numbers and records NOTHING: the question waits with them, and with what the order said before', async () => {
     const open = spyOpen();
     const source = seeded();
     const view = await atList(source, STAFF);
@@ -426,11 +442,18 @@ describe('«Send it now» on the confirm screen', () => {
     await editorSend(view);
     await waitFor(() => { expect(open).toHaveBeenCalled(); });
     expect(textOf(pressed(open)[0] ?? '')).toContain('Rye: 9');
-    await waitFor(() => { expect(source.records.size).toBe(3); });
-    expect(source.records.get(`${TODAY}_s-alp`)?.quantities).toEqual({ 'i-flour': 2, 'i-rye': 9 });
+    await backAtList(view);
+    await waitingFor(source, 's-alp', 's-caf', 's-zed');
+    // The CONFIRMED numbers, and — because the person corrected the rye — what the order said before, so «Yes» clears the lines that
+    // still read it (a corrected 3 → 9 must not stay behind as a phantom order).
+    expect(asking(source)['s-alp']).toMatchObject({
+      quantities: { 'i-flour': 2, 'i-rye': 9 },
+      draft: { quantities: { 'i-flour': 2, 'i-rye': 3 } },
+    });
+    expect(source.records.size).toBe(0);
   });
 
-  it('records ONLY the supplier the road reached and names the one it did not', async () => {
+  it('asks about ONLY the suppliers the road reached and names the one it did not', async () => {
     const open = spyOpen();
     const source = seeded({ ordersConfig: DIRECT_ONLY });
     const view = await atList(source, STAFF);
@@ -446,8 +469,10 @@ describe('«Send it now» on the confirm screen', () => {
       next.getByRole('button', { name: 'Send' }).click();
       expect(open).toHaveBeenCalledTimes(2);
     });
-    await waitFor(() => { expect(source.records.size).toBe(2); });
-    expect(source.records.has(`${TODAY}_s-alp`)).toBe(false);
+    await backAtList(view);
+    // Only the suppliers the road reached are asked about; the one it did not reach is named.
+    await waitingFor(source, 's-caf', 's-zed');
+    expect(source.records.size).toBe(0);
     expect(await screen.findByText(/Not sent, still to do: Alpine Mills/)).toBeInTheDocument();
   });
 
@@ -511,14 +536,13 @@ describe('one window per tap', () => {
     });
     expect(pressed(open)[0]?.startsWith('https://wa.me/39021234567?text=')).toBe(true);
     expect(pressed(open)[1]?.startsWith('https://wa.me/447700900123?text=')).toBe(true);
-    const confirm = await orderSent();
-    expect(confirm.getByText('Café Bar Srl')).toBeInTheDocument();
-    expect(confirm.getByText('Zed')).toBeInTheDocument();
+    await backAtList(view);
   });
 
   it('Skip leaves that supplier unsent and names it', async () => {
     const open = spyOpen();
-    const view = await atList(seeded({ ordersConfig: DIRECT_ONLY }), STAFF);
+    const source = seeded({ ordersConfig: DIRECT_ONLY });
+    const view = await atList(source, STAFF);
     await toSend(view, 'Zed', 'Café');
     await view.user.click(sendButton());
     await editorSend(view, 'Order for Café Bar Srl (1 of 2)');
@@ -528,9 +552,8 @@ describe('one window per tap', () => {
     expect(within(notice).getByText('Not sent: Zed')).toBeInTheDocument();
     await view.user.click(within(notice).getByRole('button', { name: 'OK' }));
     expect(open).toHaveBeenCalledTimes(1);
-    const confirm = await orderSent();
-    expect(confirm.getByText('Café Bar Srl')).toBeInTheDocument();
-    expect(confirm.queryByText('Zed')).not.toBeInTheDocument();
+    await backAtList(view);
+    await waitingFor(source, 's-caf');
     expect(await screen.findByText(/Not sent, still to do: Zed/)).toBeInTheDocument();
   });
 
@@ -571,15 +594,16 @@ describe('one window per tap', () => {
 });
 
 describe('naming the suppliers a send did not reach', () => {
-  it('says so on the way to the confirm screen when a ticked supplier has no phone (no chooser to warn)', async () => {
+  it('says so on the way back to the list when a ticked supplier has no phone (no chooser to warn)', async () => {
     const open = spyOpen();
-    const view = await atList(seeded({ ordersConfig: DIRECT_ONLY }), STAFF);
+    const source = seeded({ ordersConfig: DIRECT_ONLY });
+    const view = await atList(source, STAFF);
     await toSend(view, 'Alpine Mills', 'Zed');
     await view.user.click(sendButton());
     await editorSend(view, 'Order for Zed');
-    const confirm = await orderSent();
+    await backAtList(view);
+    await waitingFor(source, 's-zed');
     expect(open).toHaveBeenCalledTimes(1);
-    expect(confirm.queryByText('Alpine Mills')).not.toBeInTheDocument();
     expect(await screen.findByText(/Not sent, still to do: Alpine Mills/)).toBeInTheDocument();
   });
 });
@@ -677,6 +701,7 @@ describe('the package word (Mise 2 only)', () => {
     const text = textOf(pressed(open)[0] ?? '');
     expect(text).toContain('- Cream: 2 bottles');
     expect(text).toContain('- Flour 00: 2');
-    await orderSent();
+    await backAtList(view);
+    await waitingFor(source, 's-alp');
   });
 });

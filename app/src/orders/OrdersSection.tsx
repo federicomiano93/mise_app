@@ -11,6 +11,7 @@ import { useSession } from '../session/SessionContext';
 import { SPLIT_QUERY } from '../ui/split';
 import { useMediaQuery } from '../ui/useMediaQuery';
 import { StatusMessageProvider, useStatusMessage } from '../ui/StatusMessage';
+import { AskHereDialog } from './AskHereDialog';
 import { CardDoorsProvider } from './CardDoors';
 import type { CardDoor } from './CardDoors';
 import { NoticesBell } from './NoticesBell';
@@ -50,6 +51,7 @@ import {
   incomingMissingPath, parseOrdersPath, requestPath, supplierConfirmPath, supplierItemsPath, supplierPath, supplierSummaryPath,
 } from './ordersPath';
 import type { OrdersView } from './ordersPath';
+import { awaitingSupplierName } from './awaitingWords';
 import { buildOrdersLens } from './ordersLens';
 import { useListCopy } from './useListCopy';
 import styles from './OrdersSection.module.css';
@@ -146,6 +148,10 @@ function OrdersLayout({ view }: { view: ShownView }) {
     if (message.kind === 'day-not-saved') say(t('ord.day.notSaved'), LONG_MS);
     // «Close as not ordered» or «Reopen» refused: Firestore has already put the supplier back on screen as it is stored.
     if (message.kind === 'close-not-saved') say(t('ord.summary.saveFailed'), LONG_MS);
+    // «Did it go?» could not be shared with the other devices: it is asked HERE, and the person is told why.
+    if (message.kind === 'awaiting-not-shared') {
+      say(t('ord.awaiting.notShared', { supplier: awaitingSupplierName(store.getSnapshot().suppliers, message.supplierId, t) }), 10000);
+    }
   }), [store, say, t]);
 
   // ⚠️ THE LENS IS THE ONE PLACE THAT DECIDES AN INGREDIENT'S SUPPLIER (ordersLens.ts): the list, a supplier's screen and
@@ -532,6 +538,10 @@ function OrdersLayout({ view }: { view: ShownView }) {
           </div>
         </div>
       </Page>
+      {/* The sender's own question, at the level of the whole section: it survives moving from one Orders screen to another. */}
+      <PartBoundary>
+        <AskHereDialog lens={lens} />
+      </PartBoundary>
       </NoticesProvider>
       </CardDoorsProvider>
     </HandBackProvider>

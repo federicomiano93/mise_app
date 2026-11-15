@@ -1977,3 +1977,33 @@ not reached. Nothing handed over: the screen stays, corrections kept (as today).
   to the next «Sì» or the head when a row goes), the sender's dialog, the supplier screen's button, the list's button. Text through
   `t()` in both dictionaries (`ord.saveState.*`, `ord.sendEditor.*`, `ord.supplierSend*`, `ord.awaiting.*`, the list's button),
   words copied from `js/i18n.js` on `main`.
+
+## «Did it go?» on every device, and «Send to the supplier» on a list — as built (15 Nov 2026)
+
+Pieces 4 and 5 of the plan above, slice 4 of 4.
+
+- **Data.** `ordersSource`: `setAwaitingSent` (setDoc, `mergeFields: ['bakery', FieldPath('awaitingSent', id)]`, the value whole),
+  `clearAwaitingSent` (updateDoc FieldPath delete), `claimAwaitingSent` and `restoreAwaitingSentIfAbsent` (`runTransaction`, deciding with
+  `claimDecision` / `restoreDecision`; ⚠️ both reject offline). `DraftView.awaitingSent` is the server's map, `{}` in `EMPTY_DRAFT`.
+- **Store.** `OrdersSnapshot.awaiting` = `{ questions, busy, ask }`. `questions` is the draft's map plus the questions this device could not
+  share (local, answered without a claim), through `awaitingList` over the live lens's suppliers, oldest first; `busy` is the set both banner
+  buttons wait on; `ask` is the one question the sender's dialog should show now. `waitForAnswer(sent, handOff)` writes ONE entry per supplier
+  with ONE `at` (a refused write keeps the question local and says `awaiting-not-shared`); `answerAwaiting(...)` is the shared `answerAwaiting`
+  with the claim, the record (`place` with `sentOnly`), the restore (kept local and retried on `online` when it rejects) and the drop;
+  `leaveAskToBanner` is Escape on the dialog. `place` gained `sentOnly` / `sentDraft` (records the STORED quantities filed under that supplier
+  even when a line moved, clears only `linesToClear`, the day only when nothing is left, nothing after the record may throw) and a normal
+  `place` removes the supplier's question (`forgetAwaitingAfterRecording`). `OrdersDeps` gained `page` (visible / onVisible) and `onOnline`.
+- **Screens.** `AwaitingBanners` (under the head on both views, always on the page, rows keyed by supplier, `aria-disabled` while answering,
+  focus to the next «Yes» or the search box), `AskHereDialog` (section level; one question at a time, no Cancel; Escape leaves it to the banner;
+  never over another dialog — rechecked each second; closes itself and says «Already answered on another device.»), `useAnswerAwaiting` (the
+  words of every outcome, «It may already be recorded» as a `useConfirm`).
+- **Sends.** `SendPicker` captures `draftQuantities` at the press and calls `waitForAnswer`; `SendScreen` goes back to the list, the confirm
+  screen's after-send mode is gone; the supplier screen's «Send» does the same for one supplier; «Send it now» snapshots the draft first and
+  records NOTHING, only `waitForAnswer(…, handOff)` with `draft`, then leaves for the list saying who was not reached.
+- **The list's button** (`OrderListScreen`): per supplier of the list, the lines not ticked, with the list's frozen quantities, names and units,
+  only suppliers the live lens knows; `supplierRoadsOnly`; hidden with nothing left or no road to a supplier; the ticks are not touched.
+- **Decisions taken while building.** (1) The question the claim could not make is worded with the live app's «Could not save the order — check
+  your network and try again.» (new key `ord.awaiting.couldNotSave`). (2) `ord.orderSent` and `ord.markAsPlaced` were removed with the mode that
+  used them. (3) A question this device could not share is asked in the dialog too when the send was a share (the take-back snapshot may
+  arrive before the rejection). (4) The banner buttons are native `<button>`s with the Button look: the shared `Button` does not pass
+  `aria-disabled`.
