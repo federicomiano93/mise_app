@@ -157,7 +157,7 @@ export function screenNameFor(pathname: string): string | null {
 }
 
 // The Recipe catalogue is five screens so far that share one section: the list, one recipe (the current
-// app's `''` and `detail`), the Allergen sheet (`recipes-allergens`), the label Settings (`recipes-settings`), a recipe's label (`recipes-label`, the current app's `label`) and the editor, new or existing (`recipes-editor`), the mixing steps (`recipes-steps`) the guided mix (`recipes-run`) the photo reader (`recipes-photo`), the HACCP list (`recipes-haccp`) and a recipe's HACCP label (`recipes-haccp-label`). A recipe opened beside the list is
+// app's `''` and `detail`), the Allergen sheet (`recipes-allergens`), the label Settings (`recipes-settings`), a recipe's label (`recipes-label`, the current app's `label`) and the editor, new or existing (`recipes-editor`), the mixing steps (`recipes-steps`) the guided mix (`recipes-run`) the photo reader (`recipes-photo`), the HACCP list (`recipes-haccp`), a recipe's HACCP label (`recipes-haccp-label`) and the ingredient book (`recipes-ingredients`). A recipe opened beside the list is
 // the same screen as on its own.
 // ⚠️ ONLY AN ADDRESS THE SECTION DRAWS AS A RECIPE counts as one: a reserved word or junk is sent back to
 // the list, and logging it as a recipe screen would put a screen nobody saw in the owner's statistics.
@@ -177,6 +177,8 @@ function recipesScreenName(pathname: string, base: string): string {
   // The HACCP list and a recipe's HACCP label (image labels step 2) are two screens in the statistics.
   if (kind === 'haccp') return 'recipes-haccp';
   if (kind === 'haccpLabel') return 'recipes-haccp-label';
+  // The ingredient book (14 Nov 2026).
+  if (kind === 'ingredients') return 'recipes-ingredients';
   return kind === 'label' ? 'recipes-label' : 'recipes';
 }
 
