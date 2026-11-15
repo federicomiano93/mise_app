@@ -1388,7 +1388,7 @@ reads them as an ingredient).
 - **Open for him (review of 14 Nov 2026, not built):** the «Type» menu lets an item that recipes already use leave Ingredient
   with no warning. Its recipe rows keep the link; its allergen sections disappear from the card (a label blocked by «not
   declared» then has no visible fix but switching the type back). A warning or refusal through the usage count the delete
-  already makes (`useDeleteIngredient`) is the obvious next step if he wants one.
+  already makes (`useDeleteIngredient`) is the obvious next step if he wants one. **Built on 15 Nov 2026 as a warning: see below.**
 - **Accepted risk beside the current app:** the current app's card saves `kind: kindOf(item)`, and its `kindOf` reads
   'resale' and 'other' as 'ingredient'. A phone still on the current app (before it takes the update, or after a rollback)
   that SAVES a resale or other item files it back as food. `js/` is frozen, so this is written down, not fixed.
@@ -1400,6 +1400,18 @@ reads them as an ingredient).
   one other item across Suppliers, Food cost's chooser and a recipe row's suggestions), `SuppliersSection.list.spec.tsx`
   (tabs, addresses, keys, Italian), `SuppliersSection.ingredient.save.spec.tsx` («Type»), `SuppliersSection.merge.spec.tsx`,
   `suppliersPath.spec.ts`, `ordersDoors.spec.ts`, `ingredientCardModel.spec.ts`; the rules suite. Not driven in a browser.
+
+**Follow-up of 15 Nov 2026 — the warning when food leaves food** (his approval of the open point above). When Save would turn an
+EXISTING item from food (absent / `'ingredient'`) into packaging, resale or other, the card first asks the delete's own count
+(`store.ingredientUsage(id).recipes`, read from the server, handed to `records/IngredientCard` as `countRecipes`; Save is
+pending meanwhile). Used in N recipes, the Save question's message becomes «È usato in {n} ricette: non sarà più tra gli
+ingredienti delle ricette e i suoi allergeni non verranno più mostrati. Salvare comunque?» (singular «1 ricetta»; English «It is
+used in {n} recipes: …  Save anyway?»). A count that fails or has not answered within `RECIPE_COUNT_WAIT_MS` (4 s: offline, no
+signal) says «Potrebbe essere usato in alcune ricette: …» — never a false «no recipe». It is a warning, not a refusal: Save
+writes as before; Cancel keeps the edit on screen, unsaved. Nothing is counted and nothing extra is said for a change between
+two non-food kinds, a food item saved as food, or a NEW item. Specs: `SuppliersSection.ingredient.save.spec.tsx` («a food item
+that recipes use, turned into another kind»: n = 1 and n > 1 in both languages, 0 recipes, the count failed, a non-food change,
+a new item, Save busy while counting, Cancel keeps the edit), `IngredientCard.recipeCount.spec.ts` (the 4 s bound).
 
 ## Import of every kind — as built (14 Nov 2026)
 
