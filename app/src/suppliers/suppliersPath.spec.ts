@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'vitest';
 import {
   NEW_INGREDIENT_PATH, NEW_PACKAGING_PATH, NEW_SUPPLIER_PATH, PACKAGING_TAB_PATH, SUPPLIERS_IMPORT_PATH, SUPPLIERS_PRICE_CHANGES_PATH, SUPPLIERS_PATH, SUPPLIERS_SETTINGS_PATH,
-  SUPPLIERS_TAB_PATH,
-  ingredientMergePath, ingredientPath, newIngredientPath, parseSuppliersPath, supplierEditPath, supplierPath, suppliersScreenName, tabOf, tabPath,
+  SUPPLIERS_TAB_PATH, TAB_OF_KIND,
+  ingredientMergePath, ingredientPath, kindOfTab, newIngredientPath, parseSuppliersPath, supplierEditPath, supplierPath, suppliersScreenName, tabOf, tabPath,
 } from './suppliersPath';
 
 const rest = (path: string) => path.slice(SUPPLIERS_PATH.length);
@@ -65,29 +65,36 @@ describe('the addresses of Ingredients & suppliers', () => {
 
   test('an ingredient, a new ingredient, a new packaging item, and a supplier to start a new one on', () => {
     expect(parseSuppliersPath(rest(ingredientPath('abc')))).toEqual({ kind: 'ingredient', id: 'abc' });
-    expect(parseSuppliersPath(rest(NEW_INGREDIENT_PATH))).toEqual({ kind: 'ingredient-new', packaging: false, supplier: null });
-    expect(parseSuppliersPath('/ingredient/new', '?kind=packaging')).toEqual({ kind: 'ingredient-new', packaging: true, supplier: null });
-    expect(parseSuppliersPath('/ingredient/new', '?supplier=s-1')).toEqual({ kind: 'ingredient-new', packaging: false, supplier: 's-1' });
-    expect(parseSuppliersPath('/ingredient/new', '?kind=packaging&supplier=s%201')).toEqual({ kind: 'ingredient-new', packaging: true, supplier: 's 1' });
-    // Anything but the word «packaging» is an ingredient, and an empty supplier is none.
-    expect(parseSuppliersPath('/ingredient/new', '?kind=food&supplier=')).toEqual({ kind: 'ingredient-new', packaging: false, supplier: null });
+    expect(parseSuppliersPath(rest(NEW_INGREDIENT_PATH))).toEqual({ kind: 'ingredient-new', itemKind: 'ingredient', supplier: null });
+    expect(parseSuppliersPath('/ingredient/new', '?kind=packaging')).toEqual({ kind: 'ingredient-new', itemKind: 'packaging', supplier: null });
+    expect(parseSuppliersPath('/ingredient/new', '?supplier=s-1')).toEqual({ kind: 'ingredient-new', itemKind: 'ingredient', supplier: 's-1' });
+    expect(parseSuppliersPath('/ingredient/new', '?kind=packaging&supplier=s%201')).toEqual({ kind: 'ingredient-new', itemKind: 'packaging', supplier: 's 1' });
+    // Mise 2 (14 Nov 2026): a new resale or other item.
+    expect(parseSuppliersPath('/ingredient/new', '?kind=resale')).toEqual({ kind: 'ingredient-new', itemKind: 'resale', supplier: null });
+    expect(parseSuppliersPath('/ingredient/new', '?kind=other&supplier=s-1')).toEqual({ kind: 'ingredient-new', itemKind: 'other', supplier: 's-1' });
+    // Anything but one of the four kinds is an ingredient, and an empty supplier is none.
+    expect(parseSuppliersPath('/ingredient/new', '?kind=Resale')).toEqual({ kind: 'ingredient-new', itemKind: 'ingredient', supplier: null });
+    expect(parseSuppliersPath('/ingredient/new', '?kind=food&supplier=')).toEqual({ kind: 'ingredient-new', itemKind: 'ingredient', supplier: null });
   });
 
   test('the addresses are built the way they are read', () => {
     expect(newIngredientPath()).toBe('/suppliers/ingredient/new');
-    expect(newIngredientPath({ packaging: true })).toBe(NEW_PACKAGING_PATH);
+    expect(newIngredientPath({ kind: 'packaging' })).toBe(NEW_PACKAGING_PATH);
     expect(NEW_PACKAGING_PATH).toBe('/suppliers/ingredient/new?kind=packaging');
+    expect(newIngredientPath({ kind: 'resale' })).toBe('/suppliers/ingredient/new?kind=resale');
+    expect(newIngredientPath({ kind: 'other' })).toBe('/suppliers/ingredient/new?kind=other');
+    expect(newIngredientPath({ kind: 'ingredient' })).toBe('/suppliers/ingredient/new');
     expect(newIngredientPath({ supplier: 's 1' })).toBe('/suppliers/ingredient/new?supplier=s+1');
     for (const id of ['a/b', '50%', 'two words', 'è']) {
       expect(parseSuppliersPath(rest(ingredientPath(id)))).toEqual({ kind: 'ingredient', id });
     }
-    const made = newIngredientPath({ packaging: true, supplier: 'x&y' });
+    const made = newIngredientPath({ kind: 'packaging', supplier: 'x&y' });
     const [path = '', search = ''] = made.slice(SUPPLIERS_PATH.length).split('?');
-    expect(parseSuppliersPath(path, `?${search}`)).toEqual({ kind: 'ingredient-new', packaging: true, supplier: 'x&y' });
+    expect(parseSuppliersPath(path, `?${search}`)).toEqual({ kind: 'ingredient-new', itemKind: 'packaging', supplier: 'x&y' });
   });
 
   test('⚠️ «new» is never an ingredient\'s id either, and «new/x» is nothing', () => {
-    expect(parseSuppliersPath('/ingredient/%6Eew')).toEqual({ kind: 'ingredient-new', packaging: false, supplier: null });
+    expect(parseSuppliersPath('/ingredient/%6Eew')).toEqual({ kind: 'ingredient-new', itemKind: 'ingredient', supplier: null });
     expect(parseSuppliersPath('/ingredient/new/edit')).toEqual({ kind: 'unknown' });
   });
 
@@ -104,8 +111,19 @@ describe('the addresses of Ingredients & suppliers', () => {
     expect(tabOf({ kind: 'supplier-new' })).toBe('suppliers');
     expect(tabOf({ kind: 'list', tab: 'packaging' })).toBe('packaging');
     expect(tabOf({ kind: 'settings' })).toBe('ingredients');
-    expect(tabOf({ kind: 'ingredient-new', packaging: true, supplier: null })).toBe('packaging');
-    expect(tabOf({ kind: 'ingredient-new', packaging: false, supplier: 's' })).toBe('ingredients');
+    expect(tabOf({ kind: 'ingredient-new', itemKind: 'packaging', supplier: null })).toBe('packaging');
+    expect(tabOf({ kind: 'ingredient-new', itemKind: 'ingredient', supplier: 's' })).toBe('ingredients');
+    expect(tabOf({ kind: 'ingredient-new', itemKind: 'resale', supplier: null })).toBe('resale');
+    expect(tabOf({ kind: 'ingredient-new', itemKind: 'other', supplier: null })).toBe('other');
+  });
+
+  test('Mise 2: the Resale and Other tabs have addresses of their own, read the way they are built', () => {
+    expect(tabPath('resale')).toBe('/suppliers/resale');
+    expect(tabPath('other')).toBe('/suppliers/other');
+    expect(parseSuppliersPath('/resale')).toEqual({ kind: 'list', tab: 'resale' });
+    expect(parseSuppliersPath('/other')).toEqual({ kind: 'list', tab: 'other' });
+    expect(kindOfTab('suppliers')).toBeNull();
+    for (const kind of ['ingredient', 'packaging', 'resale', 'other'] as const) expect(kindOfTab(TAB_OF_KIND[kind])).toBe(kind);
   });
 
   test('the usage record names the screens of decision T1', () => {

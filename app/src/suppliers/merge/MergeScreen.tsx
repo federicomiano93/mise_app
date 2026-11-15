@@ -3,7 +3,7 @@ import type { MutableRefObject } from 'react';
 import { Navigate, useLocation, useNavigate, useNavigationType } from 'react-router';
 import { useBlocker } from 'react-router';
 import { ChevronRight, Search } from 'lucide-react';
-import { isPackaging } from '@mise/shared/ingredient-kind';
+import { isFood } from '@mise/shared/ingredient-kind';
 import { ingredientDisplayName } from '@mise/shared/ingredient-name';
 import { mergeCandidates } from '@mise/shared/ingredient-merge';
 import type { UsageFound } from '@mise/shared/ingredient-merge';
@@ -104,8 +104,9 @@ export function MergeScreen({ id }: { id: string }) {
     if (cameFromCard(state) && navigationType !== 'POP') title.current?.focus();
   }, []);
 
-  // Packaging is never merged (the door is not drawn for it): somebody who types the address is sent to its card.
-  if (a !== null && isPackaging(a)) return <Navigate to={ingredientPath(id)} replace state={KEEP_FOCUS} />;
+  // Only FOOD is merged: packaging, resale and other never are (the door is not drawn for them, 14 Nov 2026 for the two
+  // new kinds, as for packaging): somebody who types the address is sent to its card.
+  if (a !== null && !isFood(a)) return <Navigate to={ingredientPath(id)} replace state={KEEP_FOCUS} />;
 
   if (a === null) {
     if (!missing) {
