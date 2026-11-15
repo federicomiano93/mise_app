@@ -76,9 +76,11 @@ describe('the road to whoever runs the place', () => {
     const view = await atList(seeded({ ordersConfig: { sendRoutes: { manager: false, whatsapp: true, whatsappSupplier: false, email: false } } }));
     await toSend(view, 'Alpine Mills');
     await view.user.click(sendButton());
-    // One road left: taken in the press, no chooser.
-    await waitFor(() => { expect(open).toHaveBeenCalledTimes(1); });
+    // One road left: taken in the press, no chooser — straight to the editor of the message.
+    const editor = within(await screen.findByRole('dialog', { name: 'Check the order' }, LOAD));
     expect(screen.queryByRole('dialog', { name: 'How should this order go?' })).not.toBeInTheDocument();
+    await view.user.click(editor.getByRole('button', { name: 'Send' }));
+    await waitFor(() => { expect(open).toHaveBeenCalledTimes(1); });
   });
 
   it('⚠️ is never offered on a re-send from History: that road goes to the one chat, with no chooser', async () => {
@@ -89,10 +91,12 @@ describe('the road to whoever runs the place', () => {
     const history = within(await screen.findByRole('region', { name: 'History' }, LOAD));
     await waitFor(() => { expect(screen.queryByText('Loading…')).not.toBeInTheDocument(); }, LOAD);
     await view.user.click(await history.findByRole('button', { name: /^Alpine Mills/ }));
-    act(() => { history.getByRole('button', { name: 'Send again' }).click(); });
-    for (let hop = 0; hop < 60; hop++) await Promise.resolve();
-    expect(open).toHaveBeenCalledTimes(1);
+    await view.user.click(history.getByRole('button', { name: 'Send again' }));
+    // Straight to the editor of the message: no chooser.
+    const editor = within(await screen.findByRole('dialog', { name: 'Check the order' }, LOAD));
     expect(screen.queryByRole('dialog', { name: 'How should this order go?' })).not.toBeInTheDocument();
+    await view.user.click(editor.getByRole('button', { name: 'Send' }));
+    expect(open).toHaveBeenCalledTimes(1);
   });
 
   it('⚠️ sent: says who will be told, leaves for the Orders list, and the order is NOT cleared and NOT recorded', async () => {

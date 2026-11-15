@@ -79,6 +79,15 @@ async function pressThenMicrotasks(button: HTMLElement) {
   for (let hop = 0; hop < 60; hop++) await Promise.resolve();
 }
 
+// The send editor of the message (SendEditorDialog.tsx): what the supplier will get, and the «Send» whose press opens the window.
+const EDITOR = /^(Check the order|Order for )/;
+const editorBox = async () => within(await screen.findByRole('dialog', { name: EDITOR }, LOAD));
+async function editorSend(view: View) {
+  const box = await editorBox();
+  await waitFor(() => { expect(box.getByRole('button', { name: 'Send' })).toBeEnabled(); }, LOAD);
+  await view.user.click(box.getByRole('button', { name: 'Send' }));
+}
+
 const bodyOf = (head: HTMLElement): HTMLElement => document.getElementById(head.getAttribute('aria-controls') ?? '') as HTMLElement;
 
 async function openCard(view: View, name: string, index = 0) {
@@ -355,7 +364,9 @@ describe('the package word of a typed card (Mise 2 only)', () => {
     const view = await atHistory(typedSource(), STAFF);
     const head = await openCard(view, 'Alpine Mills');
     expect(within(bodyOf(head)).getByText('2 bottles')).toBeInTheDocument();
-    await pressThenMicrotasks(history().getByRole('button', { name: 'Send again' }));
+    await view.user.click(history().getByRole('button', { name: 'Send again' }));
+    expect((await editorBox()).getByRole('group', { name: 'What they will receive' })).toHaveTextContent('- Cream: 2 bottles');
+    await editorSend(view);
     expect(decodeURIComponent(String(open.mock.calls[0]?.[0]))).toContain('- Cream: 2 bottles');
   });
 
@@ -363,13 +374,14 @@ describe('the package word of a typed card (Mise 2 only)', () => {
     const open = spyOpen();
     const view = await atHistory(typedSource({ 'i-cream': 'carton' }), STAFF);
     await openCard(view, 'Alpine Mills');
-    await pressThenMicrotasks(history().getByRole('button', { name: 'Send again' }));
+    await view.user.click(history().getByRole('button', { name: 'Send again' }));
+    await editorSend(view);
     expect(decodeURIComponent(String(open.mock.calls[0]?.[0]))).toContain('- Cream: 2 × carton');
   });
 });
 
 describe('«Send again»', () => {
-  it('opens the one road in the very tick of the press, with no unit check against today’s record, and records nothing', async () => {
+  it('shows the message in the editor, opens the window in ITS press, with no unit check against today’s record, and records nothing', async () => {
     const open = spyOpen();
     const source = seeded({
       // Today's record in `carton`, the older one in `bag`: a send from the draft would be refused for the clash.
@@ -379,7 +391,12 @@ describe('«Send again»', () => {
     const view = await atHistory(source, STAFF);
     await openCard(view, 'Alpine Mills', 1);
     const before = source.recordAttempts;
-    await pressThenMicrotasks(history().getByRole('button', { name: 'Send again' }));
+    await view.user.click(history().getByRole('button', { name: 'Send again' }));
+    const box = await editorBox();
+    expect(open).not.toHaveBeenCalled();
+    await waitFor(() => { expect(box.getByRole('button', { name: 'Send' })).toBeEnabled(); });
+    // ⚠️ In the editor's own press, with nothing awaited.
+    await pressThenMicrotasks(box.getByRole('button', { name: 'Send' }));
     expect(open).toHaveBeenCalledTimes(1);
     const url = String(open.mock.calls[0]?.[0]);
     expect(decodeURIComponent(url)).toContain('- Cake box: 2 × bag');
@@ -389,15 +406,17 @@ describe('«Send again»', () => {
     expect(path(view)).toBe('/orders/history');
   });
 
-  it('ignores a second press while the first is pending and frees the button when the send throws', async () => {
+  it('a window that throws is told as «Nothing was opened» and frees the button for another try', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const open = vi.spyOn(window, 'open').mockImplementation(() => { throw new Error('blocked by the browser'); });
     const view = await atHistory(seeded(fortnight()), STAFF);
     await openCard(view, 'Zed');
     const again = history().getAllByRole('button', { name: 'Send again' })[0] as HTMLElement;
     await view.user.click(again);
-    expect(await screen.findByText('Something went wrong while sending. Try again.')).toBeInTheDocument();
+    await editorSend(view);
+    expect(await screen.findByText(/^Nothing was opened/)).toBeInTheDocument();
     await view.user.click(again);
+    await editorSend(view);
     await waitFor(() => { expect(open).toHaveBeenCalledTimes(2); });
   });
 
@@ -406,6 +425,7 @@ describe('«Send again»', () => {
     const view = await atHistory(seeded(fortnight()), STAFF);
     await openCard(view, 'Zed');
     await view.user.click(history().getAllByRole('button', { name: 'Send again' })[0] as HTMLElement);
+    await editorSend(view);
     expect(open).toHaveBeenCalledTimes(1);
     expect(await screen.findByText(/^Nothing was opened/)).toBeInTheDocument();
   });
@@ -426,6 +446,7 @@ describe('«Send all» for a day', () => {
     expect(day.getByText('3 items')).toBeInTheDocument();
     await view.user.click(day.getByRole('radio', { name: 'One list' }));
     await view.user.click(day.getByRole('button', { name: 'Send' }));
+    await editorSend(view);
     await waitFor(() => { expect(path(view)).toBe('/orders/history'); });
     const text = decodeURIComponent(String(open.mock.calls[0]?.[0]));
     expect(text).toContain('Flour 00');
@@ -441,6 +462,7 @@ describe('«Send all» for a day', () => {
     const day = within(await screen.findByRole('region', { name: 'Send today' }));
     await view.user.click(day.getByRole('checkbox', { name: 'Select all suppliers' }));
     await view.user.click(day.getByRole('button', { name: 'Send' }));
+    await editorSend(view);
     expect(await screen.findByText(/^Nothing was opened/)).toBeInTheDocument();
     expect(path(view)).toBe(`/orders/history/day/${TODAY}`);
   });
