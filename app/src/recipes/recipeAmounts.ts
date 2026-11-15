@@ -1,5 +1,6 @@
-import { baseAmounts, roundInUnit, scaledAmounts, unitDecimals, unitOf, unitTextKey, weighableTotalGrams } from '@mise/shared/catalogue-model';
+import { baseAmounts, roundInUnit, scaledResult, unitDecimals, unitOf, unitTextKey, weighableTotalGrams } from '@mise/shared/catalogue-model';
 import type { CatalogueRecipe, RowScale } from '@mise/shared/catalogue-model';
+import type { TotalWarning } from '@mise/shared/clean-step';
 import type { MessageKey } from '../i18n/en';
 import type { MessageParams } from '../i18n/i18n';
 
@@ -32,6 +33,9 @@ export type RecipeAmounts = {
   // unit, unrounded (null = «to taste»), and the Total's grams, unrounded.
   readonly values: readonly (number | null)[];
   readonly totalGrams: number;
+  // Set when a batch scaled by its total could not be made to add up to it (shared applyTargetTotal refused): the screen says
+  // «The total is off by … g» under the Total. Never in a file.
+  readonly warning: TotalWarning | null;
 };
 
 // The word a person reads for a unit: the dictionary's for pieces, spoons, a pinch and «to taste»,
@@ -46,10 +50,11 @@ export function unitWord(t: Translate, unit: string): string {
 // when scaled it is the target, at base the recipe's own. Pieces and «to taste» rows are shown above
 // but never enter it.
 // `row`: the batch was worked out from that row («Calculate from this ingredient»), which then shows exactly the amount typed
-// (shared `scaledAmounts`, the one rule «Use as base recipe» saves by too).
+// (shared `scaledResult`, the one rule «Use as base recipe» saves by too).
 export function recipeAmounts(recipe: CatalogueRecipe, target: number | null, t: Translate, locale: string, row?: RowScale | null): RecipeAmounts {
   const goal = target !== null && target > 0 ? target : null;
-  const amounts = goal !== null ? scaledAmounts(recipe, goal, row) : baseAmounts(recipe);
+  const scaled = goal !== null ? scaledResult(recipe, goal, row) : null;
+  const amounts = scaled !== null ? scaled.amounts : baseAmounts(recipe);
   const rows = recipe.ingredients.map((ing, index): AmountRow => {
     const value = amounts[index] ?? null;
     return value === null
@@ -57,7 +62,13 @@ export function recipeAmounts(recipe: CatalogueRecipe, target: number | null, t:
       : { label: ing.label, num: amountNumber(value, unitOf(ing), locale), unit: unitWord(t, unitOf(ing)) };
   });
   const totalGrams = goal ?? weighableTotalGrams(recipe);
-  return { rows, total: { num: wholeNumber(totalGrams), unit: 'g' }, values: recipe.ingredients.map((_, index) => amounts[index] ?? null), totalGrams };
+  return {
+    rows,
+    total: { num: wholeNumber(totalGrams), unit: 'g' },
+    values: recipe.ingredients.map((_, index) => amounts[index] ?? null),
+    totalGrams,
+    warning: scaled?.warning ?? null,
+  };
 }
 
 // «250 g», «3 pcs», «to taste»: one row's amount as a single piece of text (the full-screen view).

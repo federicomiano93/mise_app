@@ -1228,6 +1228,7 @@ export const en = {
   'cat.fromRow.tooBig': 'That would be more than 10 tonnes of dough. Check the amount.',
   'cat.fromRow.line': 'Calculated from {name}: {amount}',
   'cat.fromRow.undo': 'Undo',
+  'cat.totalOff': 'The total is off by {diff} g: check the recipe.',
   'cat.order.do': 'Order',
   'cat.order.noSupplier': 'No supplier linked to this ingredient',
   'cat.order.isRecipe': 'A recipe from the Recipe book: not ordered',

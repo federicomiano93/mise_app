@@ -1195,6 +1195,73 @@ describe('clean-step rounding inside the recipe-book scaling (Mise 2 only)', () 
   });
 });
 
+describe('one correction of the total when scaling by TOTAL weight (Mise 2 only)', () => {
+  // Invented: 2990 g, ten rows — under 10 g, 10 to 249 g, and at these batches 250 to 499 g and 500 g or more.
+  const PROVA = { id: 'pv', name: 'Pane di prova', ingredients: ([
+    ['Farina A di prova', 1000], ['Farina B di prova', 640], ['Acqua di prova', 720], ['Burro di prova', 310], ['Zucchero di prova', 180],
+    ['Tuorli di prova', 95], ['Sale di prova', 22], ['Lievito di prova', 14], ['Malto di prova', 6], ['Vaniglia di prova', 3],
+  ] as const).map(([label, grams]) => ({ label, grams, unit: 'g' })) };
+  const sum = (list: readonly (number | null)[]): number => list.reduce<number>((a, b) => a + (b ?? 0), 0);
+
+  test('corrected UP: the clean steps come to 3662 g for 3664 g, one gram each on the two rows it hurts least', () => {
+    // The steps: 1230, 780, 880, 380, 221, 116, 27, 17, 7, 4. Sugar 220.58 → 222 and egg yolks 116.41 → 117 stay within 1%.
+    const out = ported.scaleCatalogueResult(PROVA, 3664);
+    expect(out).toStrictEqual({ amounts: [1230, 780, 880, 380, 222, 117, 27, 17, 7, 4], warning: null });
+    expect(sum(out.amounts)).toBe(3664);
+  });
+
+  test('corrected DOWN: 4003 g for 4000 g, two grams off the sugar and one off the yolks; the vanilla is never touched', () => {
+    const out = ported.scaleCatalogueResult(PROVA, 4000);
+    expect(out).toStrictEqual({ amounts: [1340, 860, 960, 415, 239, 126, 29, 19, 8, 4], warning: null });
+    expect(sum(out.amounts)).toBe(4000);
+  });
+
+  test('steps 2, 3 and 4 together: 4815 g for 4800 g — two grams, a 10 g step, then 3 g on the largest row', () => {
+    // The steps: 1610, 1030, 1160, 500, 290, 153, 35, 22, 10, 5. Yolks 153 → 151; flour A 1610 → 1600 (−10 g, 0.33%); the 3 g
+    // left go on flour A too, which reads 1597.
+    const out = ported.scaleCatalogueResult(PROVA, 4800);
+    expect(out).toStrictEqual({ amounts: [1597, 1030, 1160, 500, 290, 151, 35, 22, 10, 5], warning: null });
+  });
+
+  test('every batch adds up to the typed total to the gram', () => {
+    for (let target = 1000; target <= 20000; target += 13) {
+      const out = ported.scaleCatalogueResult(PROVA, target);
+      expect(out.warning, String(target)).toBe(null);
+      expect(sum(out.amounts), String(target)).toBe(target);
+      expect(ported.scaleCatalogue(PROVA, target), String(target)).toStrictEqual(out.amounts);
+    }
+  });
+
+  test('protection: a batch so small a row would go to 0 g → the rows as rounded, and a warning with the gap', () => {
+    const FIVE = { ingredients: [1, 2, 3, 4, 5].map(n => ({ label: `Riga ${n} di prova`, grams: 200 })) };
+    expect(ported.scaleCatalogueResult(FIVE, 3)).toStrictEqual({ amounts: [1, 1, 1, 1, 1], warning: { diff: -2 } });
+  });
+
+  test('pieces and «to taste» are not weighed, so the gram rows are still corrected to the total', () => {
+    const recipe = { ingredients: [...PROVA.ingredients, { label: 'Uova di prova', grams: 4, unit: 'pcs' }, { label: 'Scorza di prova', grams: 0, unit: 'to taste' }] };
+    const out = ported.scaleCatalogueResult(recipe, 3664);
+    expect(out.amounts).toStrictEqual([1230, 780, 880, 380, 222, 117, 27, 17, 7, 4, 5, null]);
+    expect(out.warning).toBe(null);
+  });
+
+  test('mixed units (a ml row): each row in its own unit, NO correction, never a warning', () => {
+    const recipe = { ingredients: PROVA.ingredients.map((row, i) => (i === 2 ? { ...row, unit: 'ml' } : row)) };
+    const out = ported.scaleCatalogueResult(recipe, 3664);
+    // The clean steps and 882 ml as rounded: 3662 g, two short of the batch, and no gram moved.
+    expect(out).toStrictEqual({ amounts: [1230, 780, 882, 380, 221, 116, 27, 17, 7, 4], warning: null });
+  });
+
+  test('from a row: never corrected, never a warning', () => {
+    const fromRow = ported.scaleFromRow(PROVA, 4, 241)!;
+    expect(ported.scaledResult(PROVA, fromRow.target, { index: 4, amount: 241 })).toStrictEqual({ amounts: fromRow.amounts, warning: null });
+    expect(ported.scaledResult(PROVA, 4000)).toStrictEqual(ported.scaleCatalogueResult(PROVA, 4000));
+  });
+
+  test('«Use as base recipe» saves the corrected rows, and the guided run shows them too', () => {
+    expect(ported.rebaseAmounts(PROVA, 4000)).toStrictEqual([1340, 860, 960, 415, 239, 126, 29, 19, 8, 4]);
+  });
+});
+
 // ── The LINKED import (owner's decision, 18 Oct 2026): the port only, the current app still copies ──────────────────
 //
 // The tests above that run against both files stay true for both. These are what Mise 2 adds: the Calculator tab an
@@ -1557,8 +1624,9 @@ describe('the port against the original', () => {
   // `calculatorImportKind` is new in Mise 2 with the linked import (18 Oct 2026).
   // `rebaseAmounts` and `rowsLostByRebase` are new in Mise 2 with «Use as base recipe», `scaleFromRow` and `scaledAmounts` with
   // «Calculate from this ingredient» (14 Nov 2026).
+  // `scaleCatalogueResult` and `scaledResult` are new with the clean-step rounding (16 Nov 2026): the batch and its total's warning.
   const ADDED = ['unitTextKey', 'nameTaken', 'supplierLabel', 'calculatorImportKind', 'calculatorRefusal', 'rebaseAmounts',
-    'rowsLostByRebase', 'scaleFromRow', 'scaledAmounts'];
+    'rowsLostByRebase', 'scaleFromRow', 'scaledAmounts', 'scaleCatalogueResult', 'scaledResult'];
   // One more parameter each: batchWarning's translator; mergeImportedRecipe's catalogue rows, so a linked copy keeps its
   // yeast knob (Mise 2 only, 18 Oct 2026).
   const ARITY_DIFFERS = ['batchWarning', 'mergeImportedRecipe'];

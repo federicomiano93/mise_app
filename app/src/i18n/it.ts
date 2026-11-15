@@ -1116,6 +1116,7 @@ export const it: Messages = {
   'cat.fromRow.tooBig': 'Sarebbero più di 10 tonnellate di impasto. Controlla la quantità.',
   'cat.fromRow.line': 'Calcolata su {name}: {amount}',
   'cat.fromRow.undo': 'Annulla',
+  'cat.totalOff': 'Il totale non torna di {diff} g: controlla la ricetta.',
   'cat.order.do': 'Ordina',
   'cat.order.noSupplier': 'Nessun fornitore collegato a questo ingrediente',
   'cat.order.isRecipe': 'È una ricetta del Ricettario: non si ordina',

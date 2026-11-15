@@ -2153,9 +2153,26 @@ from one place.
 - «Calculate from this ingredient»: the chosen row is EXACTLY the amount typed; every other gram row on its clean step; NO correction
   of the total (the owner's example, sugar 800 g → 1000 g of the brioche: eggs read 970 g).
 
+**One correction of the total** (`applyTargetTotal`, scale by TOTAL weight only, and only when every WEIGHABLE row is in grams —
+pieces and «to taste» do not stop it; a kg, l or ml row does). It replaces the residual-on-the-largest-row rounding there.
+`diff` = the typed total − the clean-rounded rows.
+1. Protections first: if |diff| is larger than Σ (half a step + half a gram) over the gram rows, or a correction would bring a row to
+   0 g or below, NOTHING is corrected and the recipe screen says one line under the Total: «The total is off by {diff} g: check the
+   recipe.» / «Il totale non torna di {diff} g: controlla la ricetta.» (`cat.totalOff`, the gap without its sign). Screen only, never
+   in a file.
+2. One gram at a time on the 1 g rows, each to the row whose relative error AFTER the move is smallest, only while it stays within 1%
+   (a 5 g vanilla row is never touched); a row may take more than one gram. A tie goes to the larger row.
+3. Then whole 5 g / 10 g steps on the stepped rows, the same way, while the gap holds a whole step.
+4. A few grams left: on the largest row (by its exact amount), which then loses its round number (1597 g). ⚠️ Measured on an invented
+   ten-row recipe (2990 g, three rows on the 10 g step, the small ones on 1 g): at every 100 g from 1 kg to 20 kg, about 7 batches in 10
+   end with the largest row off its round number by 1 to 9 g — not rare. The rule is built exactly as approved; the owner decides.
+
 **No longer compared with `js/`:** `scaleCatalogue` (`catalogue-model.spec.ts`, its three whole-gram tests now run against `js/` only;
 `odd-inputs.spec.ts`) and `amountsFor` (`odd-inputs.spec.ts`), which draws with it. `baseAmounts` is still compared.
 
 **Specs.** `shared/src/clean-step.spec.ts` (the steps, 249/250 and 499/500 g, half up, floating-point noise, junk);
 `catalogue-model.spec.ts` («clean-step rounding inside the recipe-book scaling»: grams on steps, ml / pieces / «to taste» / kg / l as
-before, not scaled and its own total, from a row).
+before, not scaled and its own total, from a row; «one correction of the total»: up, down, steps 2-3-4 together, every batch to the
+gram, the protection, pieces and «to taste», a ml row, from a row, «Use as base recipe»); `clean-step.spec.ts` also covers
+`applyTargetTotal` alone (each step, both protections, junk); `app/src/recipes/RecipesSection.cleanStep.spec.tsx` (the table, the
+warning line under the Total in English and Italian).

@@ -697,6 +697,12 @@ function IngredientsCard({ recipe, scale }: { recipe: CatalogueRecipe; scale: Re
         </tfoot>
       </table>
 
+      {/* A batch whose rows could not be made to add up to the total typed (shared applyTargetTotal refused): said here, under the
+          Total, and nowhere else — the file prints the rows as they are. */}
+      {amounts.warning === null ? null : (
+        <p className={styles.totalOff}>{t('cat.totalOff', { diff: wholeNumber(Math.abs(amounts.warning.diff)) })}</p>
+      )}
+
       {fromRow === null ? null : (() => {
         const ing = recipe.ingredients[fromRow.index];
         const unit = unitOf(ing);

@@ -42,3 +42,95 @@ export function roundToCleanStep(grams: unknown): number {
   const step = cleanStepOf(whole);
   return Math.floor(whole / step + 0.5) * step;
 }
+
+// ── The one correction of the total (scale by TOTAL weight, every weighable row in grams) ─────────────────────────────────────
+
+// Why the rows could not be made to add up to the typed total: `diff` is the typed total less the rows shown, in grams (positive:
+// the rows are short of it). The screen says it under the Total; nothing is said in a file.
+export interface TotalWarning {
+  readonly diff: number;
+}
+
+export interface TargetTotalResult {
+  // The rows as shown, aligned with the exact ones handed in.
+  readonly amounts: number[];
+  readonly warning: TotalWarning | null;
+}
+
+// The relative error a row would have at `shown`: |shown − exact| ÷ exact.
+const relativeError = (shown: number, exact: number): number => Math.abs(shown - exact) / exact;
+
+// The row to move by `delta`, among those `eligible` lets move: the one whose relative error AFTER the move is smallest, and only if
+// that is within TOLERANCE; -1 when none is. A tie goes to the larger row (a gram weighs less on it), then to the earlier one.
+function bestMove(exact: readonly number[], shown: readonly number[], delta: number, eligible: (i: number) => boolean): number {
+  let best = -1;
+  let bestError = Infinity;
+  for (let i = 0; i < exact.length; i++) {
+    if (!eligible(i) || !(exact[i]! > 0)) continue;
+    const error = relativeError(shown[i]! + delta, exact[i]!);
+    if (error > TOLERANCE + 1e-12) continue;
+    if (error < bestError - 1e-12 || (Math.abs(error - bestError) <= 1e-12 && exact[i]! > exact[best]!)) {
+      best = i;
+      bestError = error;
+    }
+  }
+  return best;
+}
+
+// The gram rows of a recipe scaled by its TOTAL, rounded to clean steps and then corrected ONCE so they add up to the typed total
+// (the owner's decision, 16 Nov 2026). `exact` are the unrounded scaled grams; `target` the total typed, in grams.
+//   1. Protections first: when the gap is larger than the rounding could ever have made (Σ half a step + half a gram per row), or a
+//      correction would bring a row to 0 g or below, NOTHING is corrected and a warning is returned: the screen says the total is
+//      off, rather than hide a wrong recipe behind a right-looking total.
+//   2. One gram at a time on the rows weighed to the gram, each to the row it hurts least (smallest relative error after the move),
+//      only while that stays within 1%: a 5 g vanilla row never takes a gram (+20%). A row may take more than one.
+//   3. Then whole steps (5 or 10 g) on the rows weighed in steps, the same way, while the gap is at least that step.
+//   4. A few grams still left (rare): on the largest row, which then loses its round number — the typed total wins.
+export function applyTargetTotal(exact: readonly number[], target: unknown): TargetTotalResult {
+  const rows = exact.map(value => (Number.isFinite(value) && value > 0 ? value : 0));
+  const rounded = rows.map(roundToCleanStep);
+  const steps = rows.map(cleanStepOf);
+  const total = Number(target);
+  if (!Number.isFinite(total) || rows.length === 0) return { amounts: rounded, warning: null };
+  const sumOf = (list: readonly number[]): number => list.reduce((a, b) => a + b, 0);
+  const gap = Math.round(total) - sumOf(rounded);
+  if (gap === 0) return { amounts: rounded, warning: null };
+  const refused: TargetTotalResult = { amounts: rounded, warning: { diff: gap } };
+  if (Math.abs(gap) > sumOf(steps.map(step => step / 2 + 0.5))) return refused;
+
+  const shown = rounded.slice();
+  let left = gap;
+  const sign = Math.sign(left);
+  // 2. Gram by gram on the 1 g rows.
+  while (left !== 0) {
+    const i = bestMove(rows, shown, sign, index => steps[index] === 1);
+    if (i < 0) break;
+    shown[i]! += sign;
+    left -= sign;
+  }
+  // 3. Whole steps on the 5 g and 10 g rows, while the gap holds a whole step.
+  while (left !== 0) {
+    // The 10 g rows and the 5 g rows compete: the move that leaves the smaller relative error wins.
+    let pick = -1;
+    let pickError = Infinity;
+    for (const step of [10, 5]) {
+      if (Math.abs(left) < step) continue;
+      const j = bestMove(rows, shown, sign * step, index => steps[index] === step);
+      if (j < 0) continue;
+      const error = relativeError(shown[j]! + sign * step, rows[j]!);
+      if (error < pickError) { pick = j; pickError = error; }
+    }
+    if (pick < 0) break;
+    shown[pick]! += sign * steps[pick]!;
+    left -= sign * steps[pick]!;
+  }
+  // 4. What is left goes on the largest row.
+  if (left !== 0) {
+    let largest = 0;
+    for (let i = 1; i < rows.length; i++) if (rows[i]! > rows[largest]!) largest = i;
+    shown[largest]! += left;
+  }
+  // A correction may never empty a row (or push it below 0) that had something to weigh.
+  if (shown.some((value, i) => value <= 0 && value !== rounded[i])) return refused;
+  return { amounts: shown, warning: null };
+}
