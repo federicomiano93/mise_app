@@ -75,14 +75,14 @@ async function open(recipes = [MIXED, FOCACCIA], id = 'm', options = {}) {
 
 // What the mixed recipe reads at 2000 g: 250 g + 0.5 l + 120 ml + 0.2 kg + 330 g = 1400 g weighable, so ×(2000 / 1400).
 const MIXED_AT_2000 = [
-  ['Flour', '357', 'g'],
+  ['Flour', '355', 'g'],
   ['Eggs', '4', 'pcs'],
   ['Milk', '0.714', 'l'],
   ['Cream', '171', 'ml'],
   ['Butter', '0.286', 'kg'],
   ['Sugar', '3', 'tbsp'],
   ['Salt', '', 'to taste'],
-  ['Base dough', '471', 'g'],
+  ['Base dough', '470', 'g'],
 ];
 
 describe('«Use as base recipe»', () => {
@@ -124,7 +124,7 @@ describe('«Use as base recipe»', () => {
     expect(rowsOf().at(-1)).toEqual(['Total', '2000', 'g']);
     await user.click(useAsBase()!);
     // The total the recipe will have: the rows as shown added up (each rounded in its own unit), not the batch typed.
-    expect(question().getByText('The quantities of this recipe become the calculated ones: total 1999 g (was 1400 g). This cannot be undone. Continue?'))
+    expect(question().getByText('The quantities of this recipe become the calculated ones: total 1996 g (was 1400 g). This cannot be undone. Continue?'))
       .toBeInTheDocument();
     await user.click(question().getByRole('button', { name: 'Use as base' }));
 
@@ -139,14 +139,14 @@ describe('«Use as base recipe»', () => {
     expect(write.data!.shelfLifeDays).toBe(3);
     // Every row exactly as it was but its amount, which is the number that was on screen.
     expect(write.data!.ingredients).toEqual([
-      { label: 'Flour', grams: 357, unit: 'g', kind: 'ingredient', refId: 'flour', rid: 'r1', dividerAfter: true },
+      { label: 'Flour', grams: 355, unit: 'g', kind: 'ingredient', refId: 'flour', rid: 'r1', dividerAfter: true },
       { label: 'Eggs', grams: 4, unit: 'pcs', rid: 'r2' },
       { label: 'Milk', grams: 0.714, unit: 'l', rid: 'r3' },
       { label: 'Cream', grams: 171, unit: 'ml', rid: 'r4' },
       { label: 'Butter', grams: 0.286, unit: 'kg', rid: 'r5' },
       { label: 'Sugar', grams: 3, unit: 'tbsp', rid: 'r6' },
       { label: 'Salt', grams: 0, unit: 'to taste', rid: 'r7' },
-      { label: 'Base dough', grams: 471, unit: 'g', kind: 'recipe', refId: 'base', rid: 'r8' },
+      { label: 'Base dough', grams: 470, unit: 'g', kind: 'recipe', refId: 'base', rid: 'r8' },
     ]);
     const stored = source.recipes.get('m')!;
     for (const key of ['lossPct', 'rawGrams', 'cookedGrams', 'steps', 'endNote', 'category', 'labelName', 'archived'] as const) {
@@ -156,7 +156,7 @@ describe('«Use as base recipe»', () => {
     // The batch is gone: the recipe as written now reads what was on screen.
     await says('Recipe saved.');
     expect(rowsOf().slice(0, -1)).toEqual(MIXED_AT_2000);
-    expect(rowsOf().at(-1)).toEqual(['Total', '1999', 'g']);
+    expect(rowsOf().at(-1)).toEqual(['Total', '1996', 'g']);
     expect(JSON.parse(window.localStorage.getItem('catalogue-scaled') ?? '{}')).toEqual({});
     expect(gramsBox()).toHaveValue(null);
     expect(useAsBase()).not.toBeInTheDocument();

@@ -72,7 +72,7 @@ describe('«Calculate from this ingredient»', () => {
       ['Flour', '2500', 'g'],
       ['Butter', '1000', 'g'],
       ['Sugar', '1000', 'g'],
-      ['Eggs', '969', 'g'],
+      ['Eggs', '970', 'g'],
       ['Total', '5469', 'g'],
     ]);
     expect(gramsBox()).toHaveValue(5469);
@@ -218,7 +218,7 @@ describe('«Calculate from this ingredient»', () => {
     const full = within(screen.getByRole('dialog', { name: 'Brioche' }));
     expect(full.getByText('2500 g')).toBeInTheDocument();
     expect(full.getAllByText('1000 g')).toHaveLength(2);
-    expect(full.getByText('969 g')).toBeInTheDocument();
+    expect(full.getByText('970 g')).toBeInTheDocument();
     expect(full.getByText('5469 g')).toBeInTheDocument();
   });
 
@@ -227,19 +227,19 @@ describe('«Calculate from this ingredient»', () => {
     await calculateFrom(user, 'Sugar', '1000');
     await user.click(main().getByRole('button', { name: 'Use as base recipe' }));
     const question = within(screen.getByRole('alertdialog'));
-    expect(question.getByText('The quantities of this recipe become the calculated ones: total 5469 g (was 4375 g). This cannot be undone. Continue?'))
+    expect(question.getByText('The quantities of this recipe become the calculated ones: total 5470 g (was 4375 g). This cannot be undone. Continue?'))
       .toBeInTheDocument();
     await user.click(question.getByRole('button', { name: 'Use as base' }));
     await waitFor(() => { expect(source.recipeWrites).toHaveLength(1); });
-    expect((source.recipeWrites[0]!.data!.ingredients as { grams: number }[]).map(row => row.grams)).toEqual([2500, 1000, 1000, 969]);
+    expect((source.recipeWrites[0]!.data!.ingredients as { grams: number }[]).map(row => row.grams)).toEqual([2500, 1000, 1000, 970]);
     expect(main().queryByText(/Calculated from/)).not.toBeInTheDocument();
     expect(stored()).toEqual({});
     expect(rowsOf()).toEqual([
       ['Flour', '2500', 'g'],
       ['Butter', '1000', 'g'],
       ['Sugar', '1000', 'g'],
-      ['Eggs', '969', 'g'],
-      ['Total', '5469', 'g'],
+      ['Eggs', '970', 'g'],
+      ['Total', '5470', 'g'],
     ]);
   });
 

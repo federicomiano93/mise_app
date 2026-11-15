@@ -2133,3 +2133,29 @@ recipe, the open counted, the door beside a recipe on the split, unreadable ingr
 - Left as built, for the owner to hear: a use of an ingredient that was deleted but is still linked from a recipe is not shown here
   (the recipe screen itself marks that row); the search and the open ingredients are remembered until the page reloads, so on the lab
   tablet the next person may find the previous search applied.
+
+## Clean-step rounding of a scaled recipe as built (16 Nov 2026) — differs from the current app ON PURPOSE
+
+The owner (16 Nov 2026, plan reviewed point by point): a scaled weight is rounded ONCE to a step a scale can weigh and a baker can
+read, every screen and file shows the same numbers, and the export stops asking whether to round. The current app (`js/`) is the
+rollback copy and keeps whole grams; its tests are untouched. The Calculator keeps its own dough maths for now (a later PR).
+
+**The step** (`shared/src/clean-step.ts`, NEW IN MISE 2, not paired). `TOLERANCE = 0.01`. A scaled amount in GRAMS is first rounded to the
+whole gram (half up), then that whole number to the largest of 10, 5 and 1 g whose half is at most 1% of it — 10 g from 500 g, 5 g from
+250 to 499 g, 1 g under 250 g — half up (`roundToCleanStep`, `cleanStepOf`). 249.5 g reads 250 g (5 g step), 499.5 g reads 500 g.
+
+**Where.** Inside `scaleCatalogue` and `scaleFromRow` of `shared/src/catalogue-model.ts`, so the table, the full screen, the guided run
+(`amountsFor`), the «Calculate from this ingredient» preview, the PDF, the Excel file and «Use as base recipe» all read the same numbers
+from one place.
+- Not scaled, or scaled to exactly its own total (`Math.round(target) === Math.round(weighableTotalGrams)`): the recipe as written
+  (`baseAmounts`, unchanged). The same holds when «Calculate from this ingredient» is given the row's own amount.
+- Rows in kg, l, dl, cl, mg, ml, pieces, spoons and «to taste»: as before (`roundInUnit`), never a step.
+- «Calculate from this ingredient»: the chosen row is EXACTLY the amount typed; every other gram row on its clean step; NO correction
+  of the total (the owner's example, sugar 800 g → 1000 g of the brioche: eggs read 970 g).
+
+**No longer compared with `js/`:** `scaleCatalogue` (`catalogue-model.spec.ts`, its three whole-gram tests now run against `js/` only;
+`odd-inputs.spec.ts`) and `amountsFor` (`odd-inputs.spec.ts`), which draws with it. `baseAmounts` is still compared.
+
+**Specs.** `shared/src/clean-step.spec.ts` (the steps, 249/250 and 499/500 g, half up, floating-point noise, junk);
+`catalogue-model.spec.ts` («clean-step rounding inside the recipe-book scaling»: grams on steps, ml / pieces / «to taste» / kg / l as
+before, not scaled and its own total, from a row).
