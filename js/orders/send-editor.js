@@ -264,7 +264,9 @@ export function sendEditorDialog({ job, i = 0, n = 1, language = null, photo = f
     const original = job.text;
     let asking = false;
     const leave = async outcome => {
-      if (asking) return;
+      // While the share sheet is open the editor waits for its answer: leaving now would leave a
+      // «Discard?» question behind when the share resolves and closes the editor under it.
+      if (asking || sharing) return;
       const text = area.value;
       if (text !== original) {
         asking = true;

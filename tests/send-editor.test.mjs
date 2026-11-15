@@ -238,6 +238,23 @@ test('the share sheet closed without sending: the editor stays, «Invia» works 
   assert.equal((await answer).outcome, 'shared');
 });
 
+test('⚠️ while the share sheet is open, «Cancel» and Escape do nothing: no orphan «Discard?» is left behind', async () => {
+  let finish;
+  shareAnswer = () => new Promise(r => { finish = r; });
+  const answer = sendEditorDialog({ job: { text: MESSAGE, open: () => true }, photo: true, render: async t => ({ t }) });
+  await wait(0);
+  type(box(), 'edited');
+  await wait(450);
+  tap(sendButton());
+  assert.equal(sendButton().disabled, true, 'the share is under way');
+  click(otherButton());
+  pressEscape();
+  assert.equal(questionBox(), undefined, 'no question while the share sheet is open');
+  finish();
+  assert.deepEqual(await answer, { outcome: 'shared', text: 'edited' });
+  assert.equal(questionBox(), undefined, 'and none after it either');
+});
+
 // ── the picture keeper, with its own clock ──────────────────────────────────────
 
 function clock() {
