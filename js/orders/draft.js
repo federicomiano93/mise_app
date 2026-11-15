@@ -16,7 +16,7 @@
 
 import {
   saveDoc, patchDoc, watchDoc, watchPendingWrites, watchServerAnswer, getRecentHistoryFromServer, clearFields, transactDoc,
-  replaceDoc, removeDoc, getDocOnce, currentBakery, COLLECTIONS,
+  replaceDoc, removeDoc, getDocOnce, currentBakery, COLLECTIONS, saveFields, clearFieldsIf, saveFieldsIf,
 } from './firebase-orders.js';
 import {
   readJournal, writeJournal, dropNotedLine, orderedSince, historyLookBackDay, DRAFT_JOURNAL_MAX_AGE_MS,
@@ -671,7 +671,7 @@ export function flushDraftWhenHidden(doc = globalThis.document, win = globalThis
   });
 }
 
-// Real-time subscription. onChange receives { entries, days, skipped, updatedAt, exists }.
+// Real-time subscription. onChange receives { entries, days, skipped, awaitingSent, updatedAt, exists }.
 // onError is passed straight through: losing this stream means the order stops
 // syncing between phones, which nothing on screen would otherwise reveal.
 export function watchDraft(onChange, onError) {
@@ -680,6 +680,8 @@ export function watchDraft(onChange, onError) {
   // The suppliers closed as «non ordinato» (`skipped`), as the server last said. Kept here so a
   // repaint from the restored note (which carries only rows and days) never blanks them.
   let skipped = {};
+  // The «did it go?» questions (`awaitingSent`, awaiting-sent.js), kept for the same reason.
+  let awaitingSent = {};
   const show = (doc, cameBack = false) => {
     // …but anything typed here and not yet written goes back ON TOP, field by
     // field, or the snapshot would erase it mid-keystroke. See `pending`.
@@ -692,6 +694,7 @@ export function watchDraft(onChange, onError) {
       entries,
       days: { ...(doc?.days || {}), ...pending.days },
       skipped,
+      awaitingSent,
       updatedAt,
       exists,
       cameBack,
@@ -731,6 +734,7 @@ export function watchDraft(onChange, onError) {
     known = { entries: detach(doc?.entries), days: { ...(doc?.days || {}) } };
     releaseConfirmed();
     skipped = { ...(doc?.skipped || {}) };
+    awaitingSent = { ...(doc?.awaitingSent || {}) };
     updatedAt = doc?.updatedAt || '';
     exists = Boolean(doc);
     saveJournal();
@@ -968,6 +972,60 @@ export function setSupplierSkipped(supplierId, day) {
 // only offers «Riapri» over a key it has seen, so the document is there.
 export function clearSupplierSkipped(supplierId) {
   return clearFields(COLLECTIONS.drafts, DRAFT_ID, [`skipped.${supplierId}`]);
+}
+
+// ── «Ordine a X inviato alle 10:42: è partito?» (owner, 14 Nov 2026) ─────────────────
+// `awaitingSent: { supplierId: { at, date, quantities, units } }` — what the send editor handed
+// to WhatsApp, waiting for somebody, on ANY device, to say whether it really went. The rules of
+// the question are awaiting-sent.js; these are its three writes. Like `skipped`, none of them
+// goes through the autosave: the claims machinery above never sees this key.
+
+// Ask. ⚠️ THE SUPPLIER'S VALUE IS WRITTEN WHOLE (saveFields → mergeFields), never merged: a
+// second send to the same supplier must not keep a line of the first one's quantities. Not
+// awaited by the screen for the same reason as setSupplierSkipped: Firestore shows it in this
+// phone's own snapshot at once, and sends it when it can.
+export function setAwaitingSent(supplierId, value) {
+  return saveFields(COLLECTIONS.drafts, DRAFT_ID,
+    { awaitingSent: { [supplierId]: value } }, [`awaitingSent.${supplierId}`]);
+}
+
+// «No» (or a question nobody can answer any more): only that supplier's key goes.
+export function clearAwaitingSent(supplierId) {
+  return clearFields(COLLECTIONS.drafts, DRAFT_ID, [`awaitingSent.${supplierId}`]);
+}
+
+// «Sì»: take the question before recording, in ONE transaction, so two devices answering at
+// the same moment record once — the one whose transaction removed the key. `decide` is
+// awaiting-sent.js claimDecision. Resolves true only for the winner.
+export function claimAwaitingSent(supplierId, at, decide) {
+  return clearFieldsIf(COLLECTIONS.drafts, DRAFT_ID, [`awaitingSent.${supplierId}`],
+    data => decide(data, supplierId, at));
+}
+
+// «Sì» failed to record: put the question back — but ONLY if no question stands for that supplier
+// now. Another device may have sent the same supplier again meanwhile; its newer question must
+// not be overwritten by this older one. `decide` is awaiting-sent.js restoreDecision. Resolves
+// true when the question was put back.
+export function restoreAwaitingSentIfAbsent(supplierId, value, decide) {
+  return saveFieldsIf(COLLECTIONS.drafts, DRAFT_ID, { awaitingSent: { [supplierId]: value } },
+    [`awaitingSent.${supplierId}`], data => decide(data, supplierId));
+}
+
+// After «Sì» was recorded: remove the lines that went (awaiting-sent.js linesToClear chooses
+// them) and, when nothing of this supplier is left, its day stamp. The same write as
+// clearSupplier, for a chosen set of lines: whatever was typed since the send stays.
+export function clearSentLines(supplierId, ids, { clearDay = false } = {}) {
+  const paths = (ids || []).map(id => `entries.${id}`);
+  if (clearDay) paths.push(`days.${supplierId}`);
+  if (!paths.length) return Promise.resolve();
+  forgetRestoredPaths(paths);
+
+  return clearFields(COLLECTIONS.drafts, DRAFT_ID, paths, {
+    updatedAt: new Date().toISOString(),
+  }).then(result => {
+    forgetKnown(paths);
+    return result;
+  });
 }
 
 // Rewrite a history record whole (the History editor). Not a merge: the operator

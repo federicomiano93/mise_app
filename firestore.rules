@@ -1223,7 +1223,7 @@ service cloud.firestore {
           && id == 'current'
           && stampedFor(lid)
           && request.resource.data.keys().hasOnly([
-               'bakery', 'entries', 'days', 'updatedAt', 'weekId', 'skipped'
+               'bakery', 'entries', 'days', 'updatedAt', 'weekId', 'skipped', 'awaitingSent'
              ])
           && (!('entries' in request.resource.data)
               || (request.resource.data.entries is map
@@ -1247,7 +1247,18 @@ service cloud.firestore {
           // sends it. Once phones have saved it, it stays listed for good (retired-field trap).
           && (!('skipped' in request.resource.data)
               || (request.resource.data.skipped is map
-                  && request.resource.data.skipped.size() <= 200));
+                  && request.resource.data.skipped.size() <= 200))
+          // `awaitingSent` (14 Nov 2026) — { supplierId: { at, date, quantities, units } }: an order
+          // the send editor handed to WhatsApp, waiting for somebody on ANY device to answer «è
+          // partito?» (js/orders/awaiting-sent.js). «Sì» records the stored quantities and removes
+          // the key in a transaction, «No» removes it: one key per supplier at most, overwritten by
+          // the next send. The cap only refuses a 201st supplier waiting at once. Like `days` and
+          // `skipped`, the values are not judged — the app reads them through isAwaiting and
+          // ignores a malformed one. OPTIONAL in both directions: a phone on the previous version
+          // never sends it. Once phones have saved it, it stays listed for good (retired-field trap).
+          && (!('awaitingSent' in request.resource.data)
+              || (request.resource.data.awaitingSent is map
+                  && request.resource.data.awaitingSent.size() <= 200));
 
         allow delete: if false;
       }
