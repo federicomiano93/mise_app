@@ -209,7 +209,11 @@ function describeProduct(catalogue: Catalogue, product: Product, everyKind = fal
     && unitClass(latestLine.unit)[0] === PIECES
     && (params.priceUnit === null || ((params.priceUnit === 'kg' || params.priceUnit === 'l') && params.pack === null));
   if (weightless) ({ params, problems } = paramsFromCells('pz', '', cells.count, proposal));
-  const evaluation = evaluate(product, params, catalogue, problems, weightless ? { weightlessPieces: true } : {});
+  // MISE 2 (`everyKind`): a drinks supplier counts bottles, so a resale product's carton count is not multiplied into its price (pricing.ts).
+  const evaluation = evaluate(product, params, catalogue, problems, {
+    ...(weightless ? { weightlessPieces: true } : {}),
+    ...(everyKind && type === 'rivendita' ? { singleBottles: true } : {}),
+  });
   const { points } = evaluation;
   // ⚠️ THE VAT OF THE NEWEST PAID LINE: a free line carries 0 % because it is outside the tax base, not because the
   // goods are zero-rated, and a VAT of 0 is a real answer. Never paid = null, «not stated».

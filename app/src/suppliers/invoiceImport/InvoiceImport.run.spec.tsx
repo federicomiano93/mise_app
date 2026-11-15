@@ -498,6 +498,15 @@ describe('every kind of product', () => {
     expect(importing.prices.get('ing-film')?.pricePerUnit).toBe(5);
   });
 
+  it('⚠️ a drink counted in single bottles is priced per litre of what was bought, not times the carton count (15 Nov 2026)', async () => {
+    const CHINOTTO = { desc: 'CHINOTTO BRAND ML 450 X24', code: 'CH', qty: 12, unit: 'PZ', total: 8.98 };
+    const { user, importing } = await open({ suppliers: [] });
+    await toIngredients(user, invoiceZip([CHINOTTO]));
+    await importAll(user, 'Import 1 product');
+    expect(importing.ingredients[0]).toMatchObject({ supplierCode: 'CH', kind: 'resale', packCount: 24 });
+    expect(importing.prices.get(importing.ingredients[0]?.id as string)).toMatchObject({ priceUnit: 'l', pricePerUnit: 1.663 });
+  });
+
   it('⚠️ an existing RESALE item matched by its article code is never turned into an ingredient', async () => {
     const water = item('ing-water', { name: 'Acqua naturale', supplierId: 'sup-1', supplierCode: 'AQ', kind: 'resale', weight: '0.5 l' });
     const { user, importing } = await open({ ingredients: [water] });

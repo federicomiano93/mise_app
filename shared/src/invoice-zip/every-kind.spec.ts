@@ -7,6 +7,7 @@ import { describe, expect, test } from 'vitest';
 import { ingredientWrites, parseImportFile, planIngredients } from '../invoice-import-model';
 import type { FileIngredient } from '../invoice-import-model';
 import { selectImport, decisionId, supplierDecisionKey } from './selection';
+import { computeDocument, params } from './pricing';
 import { ported } from './testing/implementations';
 import { makeCase } from './testing/invoice-builders';
 import type { LineSpec } from './testing/invoice-builders';
@@ -260,5 +261,58 @@ describe('the re-check before each row is written, with every kind', () => {
     const file = fileOf(built([FILM]));
     const out = await replanRow({ fileIngredient: file[0] as FileIngredient, supplierIdByKey: { [SUPPLIER]: SUPPLIER_ID }, read });
     expect(out.row.status).toBe('new');
+  });
+});
+
+// Mise 2, 15 Nov 2026: a drinks supplier counts BOTTLES on the invoice, so the carton count of the description must not be
+// multiplied into the price (found with a real drinks zip: every such drink was priced 6 to 24 times too low). Invented lines only.
+describe('drinks counted in single bottles', () => {
+  const priceOf = (line: LineSpec, everyKind = true) => {
+    const ingredient = built([line], everyKind).importFile.ingredients[0];
+    return { ingredient, price: ingredient?.prices.map(p => p.pricePerUnit) };
+  };
+  const COLA_ML: LineSpec = { desc: 'CHINOTTO BRAND ML 450 X24', code: 'CB', qty: 12, unit: 'PZ', total: 8.98 };
+  const WATER_L: LineSpec = { desc: 'ACQUA BRAND NAT LT 1,5X6', code: 'WB', qty: 12, unit: 'PZ', total: 3.77 };
+
+  test('12 bottles of 0.45 l counted as PZ are 1.66 a litre, not 24 times less', () => {
+    const { ingredient, price } = priceOf(COLA_ML);
+    expect(ingredient).toMatchObject({ kind: 'resale', priceUnit: 'l', weight: '450 ml', packCount: 24 });
+    expect(price).toStrictEqual([1.6630]);
+  });
+
+  test('12 bottles of 1.5 l (a «X6» carton) counted as PZ are 0.21 a litre; NR and BT count single bottles too', () => {
+    expect(priceOf(WATER_L).price).toStrictEqual([0.2094]);
+    expect(priceOf({ ...WATER_L, unit: 'NR' }).price).toStrictEqual([0.2094]);
+    expect(priceOf({ ...WATER_L, unit: 'BT' }).price).toStrictEqual([0.2094]);
+    expect(priceOf({ ...WATER_L, unit: 'N.' }).price).toStrictEqual([0.2094]);
+  });
+
+  test('a pack unit (CF) keeps the reading pieces × size × count', () => {
+    const pack: LineSpec = { desc: 'ACQUA BRAND NAT LT 1,5X6', code: 'WB', qty: 1, unit: 'CF', total: 2.31 };
+    expect(priceOf(pack).price).toStrictEqual([0.2567]);
+  });
+
+  test('a retail multipack (count under 6, «CL.33X3» sold as one PZ) keeps the reading too', () => {
+    const beer: LineSpec = { desc: 'BEER BRAND CL.33X3', code: 'BB', qty: 1, unit: 'PZ', total: 1.49 };
+    expect(priceOf(beer).price).toStrictEqual([1.5051]);
+  });
+
+  test('a food line with PZ and «X24» is not touched (and is not a drink)', () => {
+    const food = built([{ desc: 'FARINA SPECIALE KG 1 X24', code: 'FS', qty: 2, unit: 'PZ', total: 48 }]).importFile.ingredients[0];
+    expect(food).toMatchObject({ kind: 'ingredient', priceUnit: 'kg' });
+    expect(food?.prices.map(p => p.pricePerUnit)).toStrictEqual([1]);
+  });
+
+  test('without everyKind the price is the original\'s (the count is multiplied in)', () => {
+    const lines = [{ number: 1, unit: 'PZ', quantity: 12, total: 8.98 }];
+    const pack = params({ priceUnit: 'l', pack: { size: 450, unit: 'ml' }, packCount: 24 });
+    expect(computeDocument(lines, pack).price).toBeCloseTo(0.0693, 4);
+    expect(computeDocument(lines, pack, false, { singleBottles: true }).price).toBeCloseTo(1.663, 3);
+  });
+
+  test('the lines of one product in both kinds of unit keep today\'s reading and need a look', () => {
+    const result = built([COLA_ML, { ...COLA_ML, qty: 1, total: 12, unit: 'CF' }]);
+    const point = result.products.find(row => row.supplierCode === 'CB');
+    expect(point?.reliability).toBe('da verificare');
   });
 });
