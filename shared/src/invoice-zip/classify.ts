@@ -130,6 +130,14 @@ const withFractions = (description: unknown): string => String(description || ''
 // after a word is fine.
 const BARE_FRACTION_X = /(?<![\d/]|\d[.,])(\d)\s*\/\s*(\d)\s*[X×*]\s*(\d+)(?!\d)/u;
 
+// MISE 2 (15 Nov 2026): a drinks supplier writes «CL» for millilitres on the big sizes, «SUCCO … CL 200X24» is 200 ml, not two litres
+// (the frozen app and classify.py read 2000 ml). On a line the beverage words name, a «CL» number above 100 is millilitres; up to 100
+// it stays centilitres («CL 33» is 330 ml, «CL 100» one litre). Any other line reads CL as the original does.
+const CL_IS_ML_ABOVE = 100;
+function centilitresToMl(size: number, d: string): number {
+  return BEVERAGE_RE.test(d) && size > CL_IS_ML_ABOVE ? size : size * 10;
+}
+
 export function parsePack(description?: unknown): PackInfo | null {
   const d = withFractions(description);
 
@@ -167,7 +175,7 @@ export function parsePack(description?: unknown): PackInfo | null {
     if (unit === 'KG') return packInfo(size, 'kg', count);
     if (unit === 'GR' || unit === 'G') return packInfo(size, 'g', count);
     if (unit === 'ML') return packInfo(size, 'ml', count);
-    if (unit === 'CL') return packInfo(size * 10, 'ml', count);
+    if (unit === 'CL') return packInfo(centilitresToMl(size, d), 'ml', count);
     return packInfo(size, 'l', count);
   }
   // "kg 2,5 x 4", "KG.2,5X4"
@@ -196,7 +204,7 @@ export function parsePack(description?: unknown): PackInfo | null {
   m = P_ML.exec(d);
   if (m) return packInfo(Number(m[1] || m[2]), 'ml');
   m = P_CL.exec(d);
-  if (m) return packInfo(Number(m[1]) * 10, 'ml');
+  if (m) return packInfo(centilitresToMl(Number(m[1]), d), 'ml');
   return null;
 }
 

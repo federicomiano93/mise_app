@@ -324,4 +324,19 @@ describe('Mise 2 only: non-food, soft drinks and the bare «1/2» of a drink', (
     // Never inside a longer number.
     expect(ported.parsePack('ACQUA NAT 11/2X12')).toBeNull();
   });
+
+  test('«CL» above 100 on a drink is millilitres («CL 200X24» is 200 ml); up to 100 it stays centilitres', () => {
+    for (const [text, ml] of [
+      ['SUCCO BRAND PERA CL 200X24', 200], ['SUCCO BRAND CL 250X24', 250], ['THE BRAND LIMONE CL 400X12', 400],
+      ['SUCCO BRAND CL 33X24', 330], ['SUCCO BRAND CL 66X12', 660], ['SUCCO BRAND CL 100X6', 1000], ['SUCCO BRAND 200 CL', 200],
+    ] as const) {
+      expect(ported.parsePack(text)?.size, text).toBe(ml);
+      expect(ported.parsePack(text)?.unit, text).toBe('ml');
+    }
+    expect(ported.parsePack('SUCCO BRAND CL 200X24')).toStrictEqual(ported.packInfo(200, 'ml', 24));
+    expect(legacy.parsePack('SUCCO BRAND CL 200X24'), 'the frozen current app reads two litres').toStrictEqual(legacy.packInfo(2000, 'ml', 24));
+    // A line that is not a drink reads CL as before.
+    expect(ported.parsePack('CREMA BRAND CL 200X24')).toStrictEqual(legacy.parsePack('CREMA BRAND CL 200X24'));
+    expect(ported.parsePack('CREMA BRAND CL 200X24')).toStrictEqual(ported.packInfo(2000, 'ml', 24));
+  });
 });
