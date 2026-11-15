@@ -303,7 +303,12 @@ test('⚠️ «Invialo ora» with numbers corrected on the review screen: «Sì�
   assert.equal(awaitingEntry({ at: AT, quantities: { a: 1 }, draft: { quantities: { a: 1 } } }).draft, undefined,
     'no copy when the draft is what went');
   const check = main.slice(main.indexOf('async function askSentCheck'), main.indexOf('// The line that says which suppliers'));
-  assert.match(check, /draft: draftQuantities\(bySupplier\[id\] \|\| \[\], state\.entries\)/);
+  assert.match(check, /draftBefore\[id\] = draftQuantities\(lensBefore\[id\] \|\| \[\], state\.entries\)/);
+  assert.match(check, /draft: draftBefore\[id\],/);
+  // ⚠️ the snapshot is taken BEFORE the editor is awaited: a line another device adds while it is
+  // open is not in what went, and «Sì» must not clear it unrecorded.
+  assert.ok(check.indexOf('draftBefore[id] = draftQuantities(') < check.indexOf('await chooseAndSend('));
+  assert.doesNotMatch(check.slice(check.indexOf('await chooseAndSend(')), /draftQuantities\(/);
   assert.match(main, /sentDraft: e\.draft \|\| null/);
 });
 

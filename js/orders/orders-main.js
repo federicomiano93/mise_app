@@ -2532,6 +2532,13 @@ async function askSentCheck(suppliers, confirmed) {
   const rows = confirmedRows(suppliers.map(s => ({ id: s.id, name: supplierLabel(s) })),
     ingredientsBySupplier(), confirmed);
 
+  // ⚠️ WHAT THE DRAFT SAYS, TAKEN BEFORE THE EDITOR OPENS. The editor and the share sheet stay open
+  // for as long as somebody likes; a line another device adds meanwhile is NOT in what went, and
+  // reading the draft afterwards would let «Sì» clear it without ever recording it.
+  const lensBefore = ingredientsBySupplier();
+  const draftBefore = {};
+  ids.forEach(id => { draftBefore[id] = draftQuantities(lensBefore[id] || [], state.entries); });
+
   let sent = [];
   let handOff = 'text';
   await chooseAndSend({
@@ -2548,12 +2555,11 @@ async function askSentCheck(suppliers, confirmed) {
     onSent: (sentIds, info = {}) => { sent = sentIds; handOff = info.handOff || 'text'; },
   });
   const handed = suppliersToRecord(ids, sent);
-  // `draft`: what the draft said for each one right now — the review screen may have corrected
-  // it, and «Sì» must clear those lines too (awaiting-sent.js awaitingEntry).
-  const bySupplier = ingredientsBySupplier();
+  // `draft`: what the draft said for each one BEFORE the editor opened (draftBefore) — the review
+  // screen may have corrected it, and «Sì» must clear those lines too (awaiting-sent.js awaitingEntry).
   waitForAnswer(handed.map(id => ({
     supplierId: id, quantities: confirmed.quantities[id], units: confirmed.units[id],
-    draft: draftQuantities(bySupplier[id] || [], state.entries),
+    draft: draftBefore[id],
   })), { handOff });
   const notReached = suppliers.filter(s => !handed.includes(s.id)).map(s => supplierLabel(s));
   return { ids: [], notReached };

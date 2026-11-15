@@ -71,7 +71,8 @@ test('wiring: both recording paths ask, before archiving, and the send carries t
   // The live draft is read for ONE thing only: what it said at the send, so «Sì» can clear those
   // lines (awaiting-sent.js) — never for the message.
   assert.deepEqual(ask.match(/state\.entries/g), ['state.entries']);
-  assert.match(ask, /draft: draftQuantities\(bySupplier\[id\] \|\| \[\], state\.entries\)/);
+  assert.match(ask, /draftBefore\[id\] = draftQuantities\(lensBefore\[id\] \|\| \[\], state\.entries\)/);
+  assert.match(ask, /draft: draftBefore\[id\],/);
   assert.match(ask, /chooseAndSend\(/);
   // Only supplier roads, with the send screen's own unit-clash check; no manager road.
   assert.match(ask, /supplierRoadsOnly: true/);
