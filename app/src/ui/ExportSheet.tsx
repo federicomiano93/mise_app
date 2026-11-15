@@ -93,7 +93,7 @@ function ExportSheet({ request, onClose }: { request: Request; onClose: () => vo
     // The words for a nameless recipe are read now, in the venue's language, never at module load.
     const fileName = exportFileName(request.model, kind, t('export.fileFallback'));
     const made = kind === 'pdf'
-      ? buildPdfBlob(request.model)
+      ? buildPdfBlob(request.model, request.totalLabel)
       : buildXlsxBlob(request.model, request.totalLabel, t('export.sheetFallback'));
     made.then(blob => {
       if (run.current !== mine) return;

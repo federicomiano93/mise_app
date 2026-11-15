@@ -124,7 +124,7 @@ describe('no rounding question', () => {
     await user.click(screen.getByRole('button', { name: 'Export' }));
     await user.click(within(await sheet()).getByRole('button', { name: /^PDF/ }));
     await ready();
-    expect(builders.buildPdfBlob).toHaveBeenCalledWith(MODEL);
+    expect(builders.buildPdfBlob).toHaveBeenCalledWith(MODEL, 'Total');
   });
 });
 
@@ -146,7 +146,7 @@ describe('a PDF', () => {
     const { user } = draw();
     await choose(user, 'PDF');
     const box = within(await ready());
-    expect(builders.buildPdfBlob).toHaveBeenCalledWith(MODEL);
+    expect(builders.buildPdfBlob).toHaveBeenCalledWith(MODEL, 'Total');
     expect(builders.buildXlsxBlob).not.toHaveBeenCalled();
     const link = box.getByRole('link', { name: 'Download' });
     expect(link).toHaveAttribute('href', 'blob:test/1');

@@ -228,9 +228,24 @@ describe('the port equals the original', () => {
     [{ name: 'A very long ingredient name that will not fit at all on one line', text: '1.250 kg', dividerAfter: true },
       { name: 'Salt', text: '2 g' }],
   ];
-  test.each(cases.map((rows, i) => [i, rows] as const))('pdfLayout case %i', (_i, rows) => {
-    expect(portedExport.pdfLayout({ title: 'Sample loaf', rows }, measure))
-      .toStrictEqual(legacyExport.pdfLayout({ title: 'Sample loaf', rows }, measure));
+  // pdfLayout is no longer compared output for output: Mise 2's first row sits lower (FIRST_ROW_GAP 88 for the original's 48, the
+  // owner's decision of 16 Nov 2026; js/ is the rollback copy). The same lines, at the same places RELATIVE to their rows, are pinned
+  // above for both files; here the port's answer is the original's moved down by those 40 pt, item for item and line for line.
+  test.each(cases.map((rows, i) => [i, rows] as const))('pdfLayout case %i: the original\'s answer, 40 pt lower', (_i, rows) => {
+    const mine = portedExport.pdfLayout({ title: 'Sample loaf', rows }, measure);
+    const theirs = legacyExport.pdfLayout({ title: 'Sample loaf', rows }, measure);
+    expect(mine.titleSize).toBe(theirs.titleSize);
+    expect(mine.items.length).toBe(theirs.items.length);
+    expect(mine.lines.length).toBe(theirs.lines.length);
+    expect(mine.items[0]).toStrictEqual(theirs.items[0]);
+    // The room below the title is 40 pt shorter, so a list long enough to shrink shrinks a little more: compared only where it did not.
+    if (theirs.leading === 30 && mine.leading === 30) {
+      mine.items.slice(1).forEach((item, i) => {
+        const was = theirs.items[i + 1]!;
+        expect({ ...item, y: item.y - 40 }).toStrictEqual(was);
+      });
+      mine.lines.forEach((line, i) => { expect(line.y - 40).toBeCloseTo(theirs.lines[i]!.y, 9); });
+    }
   });
 
   test('moveRow, removeRow, keepRows, withoutTrailingDivider on every small case', () => {

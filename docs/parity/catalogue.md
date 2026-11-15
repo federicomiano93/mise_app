@@ -2179,6 +2179,15 @@ option of `buildPdfBlob` and `rowTextOf`, `hasRoundableRows`, `roundLabWeight` i
 PDF prints the card's whole grams. `js/recipe-export.js` keeps its switch (rollback copy): `recipe-export.spec.ts` runs the lab-rounding
 tests against it alone and lists the two functions as left out of the port on purpose.
 
+**The PDF page** (every PDF, recipe book AND Calculator; `shared/src/recipe-export.ts`). The first row sits 88 pt under the title
+(`FIRST_ROW_GAP`, was 48). A Total row closes the list: its label (the caller's word — «Total» / «Totale» in the recipe book,
+`calc.totalDough` in the Calculator, the same one the Excel file already had) and its weight both bold, a 0.75 pt line above it as wide
+as the 300 pt block with a divider's 14 pt of air; a divider under the last ingredient is that same line. Its weight is the rows AS
+PRINTED added up in grams (`printedTotalGrams`: weighable rows only, pieces, spoons and «to taste» left out); a list with nothing to
+weigh has NO Total row. It takes part in the fit like any row (counted with its line and air on the vertical, its label measured bold on
+the horizontal). Weights stay right-aligned by per-character measurement (no kerning). `recipe-dividers.spec.ts` now checks the port's
+page against the original's moved down by 40 pt.
+
 **No longer compared with `js/`:** `scaleCatalogue` (`catalogue-model.spec.ts`, its three whole-gram tests now run against `js/` only;
 `odd-inputs.spec.ts`) and `amountsFor` (`odd-inputs.spec.ts`), which draws with it. `baseAmounts` is still compared.
 

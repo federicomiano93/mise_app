@@ -72,8 +72,8 @@ const ONLY_PIECES: ExportModel = {
   ],
 };
 
-async function pdfText(model: ExportModel): Promise<string> {
-  const blob = await buildPdfBlob(model);
+async function pdfText(model: ExportModel, totalLabel = 'Totale'): Promise<string> {
+  const blob = await buildPdfBlob(model, totalLabel);
   expect(blob.type).toBe('application/pdf');
   return Buffer.from(await blob.arrayBuffer()).toString('latin1');
 }
@@ -105,15 +105,27 @@ describe('a real PDF', () => {
     expect(pdf).toMatch(/\/Title \(Pizza di prova\)/);
   });
 
-  it('draws a line under a row that has a divider, and none without one', async () => {
+  it('draws a line under a row that has a divider, besides the one above the Total', async () => {
+    const lines = (pdf: string) => (pdf.match(/\sl\s+S/g) ?? []).length;
     const divided: ExportModel = { ...SIX, rows: SIX.rows.map((row, i) => (i === 1 ? { ...row, dividerAfter: true } : row)) };
     const pdf = await pdfText(divided);
     expect(pageCount(pdf)).toBe(1);
-    expect(pdf.match(/\sl\s+S/g) ?? []).toHaveLength(1);
-    expect(await pdfText(SIX)).not.toMatch(/\sl\s+S/);
-    // The last row never has one: nothing under it to divide.
+    expect(lines(pdf)).toBe(2);
+    expect(lines(await pdfText(SIX)), 'the Total\'s own line').toBe(1);
+    // A line under the last ingredient is the Total's own line: still one.
     const trailing: ExportModel = { ...SIX, rows: SIX.rows.map((row, i) => (i === 5 ? { ...row, dividerAfter: true } : row)) };
-    expect(await pdfText(trailing)).not.toMatch(/\sl\s+S/);
+    expect(lines(await pdfText(trailing))).toBe(1);
+  });
+
+  it('ends with a Total row: the caller\'s word, and the printed rows added up', async () => {
+    // 14400 + 8641 + 288 + 73 + 480 + 118, each as printed.
+    const pdf = await pdfText(SIX, 'Totale impasto');
+    expect(pdf).toContain('(Totale impasto)');
+    expect(pdf).toContain('(24000 g)');
+    // 500 ml + 2 kg + 250 g; the eggs and the salt do not weigh.
+    expect(await pdfText(MIXED, 'Totale')).toContain('(2750 g)');
+    // A list of pieces has nothing to add up: no Total row.
+    expect(await pdfText(ONLY_PIECES, 'Totale')).not.toContain('(Totale)');
   });
 
   it('of 60 rows is still one page', async () => {
@@ -249,7 +261,7 @@ describe('a library that cannot be loaded', () => {
     vi.doMock('jspdf', () => { throw new Error('Failed to fetch dynamically imported module'); });
     vi.doMock('write-excel-file/browser', () => { throw new Error('Failed to fetch dynamically imported module'); });
     const fresh = await import('./recipeExport');
-    const pdf = await fresh.buildPdfBlob(SIX).then(() => null, (error: unknown) => error);
+    const pdf = await fresh.buildPdfBlob(SIX, 'Totale').then(() => null, (error: unknown) => error);
     const xlsx = await fresh.buildXlsxBlob(SIX, 'Totale').then(() => null, (error: unknown) => error);
     for (const error of [pdf, xlsx]) {
       expect(exportErrorCode(error)).toBe('library');

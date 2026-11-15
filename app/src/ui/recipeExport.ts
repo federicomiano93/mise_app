@@ -12,7 +12,7 @@
 // needs a connection.
 
 import {
-  exportRow, exportTitle, libraryError, pdfLayout, pdfMeasurer, pdfSafe, rowTextOf, xlsxSheet, XLSX_FONT,
+  exportRow, exportTitle, libraryError, pdfLayout, pdfMeasurer, pdfSafe, printedTotalGrams, rowTextOf, xlsxSheet, XLSX_FONT,
 } from '@mise/shared/recipe-export';
 import type { ExportModel } from '@mise/shared/recipe-export';
 
@@ -24,17 +24,21 @@ async function loadLibrary<T>(importer: () => Promise<T>): Promise<T> {
   }
 }
 
-// -> Blob (application/pdf). One A4 page: the title, then «name ........ weight» per row. It prints the amounts it is handed: nothing
-// is rounded or worked out again here.
-export async function buildPdfBlob(model: ExportModel): Promise<Blob> {
+// -> Blob (application/pdf). One A4 page: the title, then «name ........ weight» per row, then the Total row. It prints the amounts it
+// is handed: nothing is rounded or worked out again here. `totalLabel` is the caller's own word for the Total, as for the
+// spreadsheet («Total» in the recipe book, «Total dough» in the Calculator); the Total's weight is the printed rows added up
+// (printedTotalGrams), and a list with nothing to weigh has no Total row.
+export async function buildPdfBlob(model: ExportModel, totalLabel: string): Promise<Blob> {
   const { jsPDF } = await loadLibrary(() => import('jspdf'));
   const doc = new jsPDF({ unit: 'pt', format: 'a4', compress: false });
   const title = pdfSafe(exportTitle(model));
   doc.setProperties({ title });
   const measure = pdfMeasurer(doc);
+  const totalGrams = printedTotalGrams(model.rows);
   const { items, lines } = pdfLayout({
     title,
     rows: model.rows.map(row => ({ name: pdfSafe(exportRow(row).name), text: pdfSafe(rowTextOf(row)), dividerAfter: row.dividerAfter === true })),
+    total: totalGrams === null ? null : { label: pdfSafe(totalLabel), text: `${totalGrams} g` },
   }, measure);
   for (const item of items) {
     doc.setFont('helvetica', item.bold ? 'bold' : 'normal');

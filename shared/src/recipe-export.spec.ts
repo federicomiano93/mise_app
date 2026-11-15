@@ -52,6 +52,11 @@ describe.each([
     rows: model.rows.map((r: Loose) => ({ name: r.name, text: rowText(r.grams) })),
   }, measure);
   const EPS = 1e-6;
+  // ⚠️ The first row sits at 158 in Mise 2 (FIRST_ROW_GAP 88, the owner's decision of 16 Nov 2026) and at 118 in js/, so a list keeps
+  // the 30 pt leading up to 21 rows in Mise 2 and 23 in js/.
+  const isPort = m === ported;
+  const FIRST_ROW_Y = isPort ? 158 : 118;
+  const ROWS_AT_30 = isPort ? 21 : 23;
 
   test('title: the recipe\'s name only, with trays and with a total; the file name keeps both', () => {
     expect(exportTitle(TRAYS)).toBe('Pizza di prova');
@@ -114,12 +119,12 @@ describe.each([
     return lay;
   }
 
-  test('layout of a normal recipe: 20 pt rows, 30 pt apart, title at 70, first row at 118, a 300 pt block centred', () => {
+  test('layout of a normal recipe: 20 pt rows, 30 pt apart, title at 70, the first row under it, a 300 pt block centred', () => {
     const lay = checkGeometry(SIX);
     expect(Math.abs(NAME_X - 147.64) < 0.01 && Math.abs(WEIGHT_RIGHT - 447.64) < 0.01).toBe(true);
     expect((lay.items[0] as ported.PdfItem).y).toBe(70);
     expect((lay.items[0] as ported.PdfItem).size).toBe(28);
-    expect((lay.items[1] as ported.PdfItem).y).toBe(118);
+    expect((lay.items[1] as ported.PdfItem).y).toBe(FIRST_ROW_Y);
     expect(lay.fontSize <= 20 && lay.fontSize >= 9).toBe(true);
     expect(lay.leading).toBe(30);
     const names = lay.items.filter(i => !i.bold && !/^\.+$/.test(i.text));
@@ -128,8 +133,8 @@ describe.each([
     expect(weights.every(i => Math.abs(i.x + measure(i.text, i.size, true) - 447.64) < 0.01)).toBe(true);
   });
 
-  test('23 rows still keep the 30 pt leading, and a long name never overflows the block', () => {
-    const rows = Array.from({ length: 23 }, (_, i) => ({ name: `Ingrediente di prova ${i + 1}`, grams: 100 + i }));
+  test('a long list still keeps the 30 pt leading, and a long name never overflows the block', () => {
+    const rows = Array.from({ length: ROWS_AT_30 }, (_, i) => ({ name: `Ingrediente di prova ${i + 1}`, grams: 100 + i }));
     const lay = checkGeometry({ ...SIX, rows });
     expect(lay.leading).toBe(30);
     checkGeometry(LONG_ROW);
@@ -387,6 +392,119 @@ describe('the error the app\'s loader makes', () => {
   });
 });
 
+// ── The PDF's Total row and its first row lower (Mise 2 only, the owner's decision of 16 Nov 2026) ─────────────────────────────
+
+describe('Mise 2 PDF: the first row lower, and a Total row', () => {
+  const doc = new (jsPDF as Loose)({ unit: 'pt', format: 'a4' });
+  const measure = ported.pdfMeasurer(doc);
+  const NAME_X = (ported.PAGE_W - 300) / 2;
+  const WEIGHT_RIGHT = NAME_X + 300;
+  const EPS = 1e-6;
+  // The rows as the PDF builder hands them over, and the Total it adds.
+  const layoutWithTotal = (model: Loose, label = 'Totale') => {
+    const rows = model.rows.map((r: Loose) => ({ name: String(ported.exportRow(r).name), text: ported.rowTextOf(r), dividerAfter: r.dividerAfter === true }));
+    const grams = ported.printedTotalGrams(model.rows);
+    return ported.pdfLayout({ title: ported.exportTitle(model), rows, total: grams === null ? null : { label, text: `${grams} g` } }, measure);
+  };
+  const printedNumber = (text: string): number => Number(text.replace(',', '.').split(' ')[0]);
+
+  test('the first row is 88 pt under the title: at 158', () => {
+    const lay = ported.pdfLayout({ title: 'Pane di prova', rows: [{ name: 'Farina di prova', text: '1000 g' }] }, measure);
+    expect(lay.items[0]!.y).toBe(70);
+    expect(lay.items[1]!.y).toBe(158);
+  });
+
+  test('the Total is the rows as printed, added up: several recipes and batches', () => {
+    // The Calculator's unrounded grams print as whole grams: 14400 + 8641 + 288 + 73 + 480 + 118.
+    expect(ported.printedTotalGrams(SIX.rows)).toBe(14400 + 8641 + 288 + 73 + 480 + 118);
+    // 500 ml + 2 kg + 250 g; the eggs and the salt do not weigh.
+    expect(ported.printedTotalGrams(MIXED.rows)).toBe(2750);
+    expect(ported.printedTotalGrams(MIXED_DRIFT.rows)).toBe(2001);
+    // A three-decimal kg row counts its grams.
+    expect(ported.printedTotalGrams([{ name: 'a', value: 0.727, unit: 'kg', factor: 1000, decimals: 3, text: '0,727' }, { name: 'b', value: 1597, unit: 'g', factor: 1, text: '1597' }])).toBe(2324);
+    for (const model of [SIX, TRAYS, MIXED, MIXED_DRIFT, LONG_ROW, SIXTY]) {
+      const lay = layoutWithTotal(model);
+      const weights = lay.items.slice(1).filter(i => i.bold && i.x > NAME_X + EPS).map(i => i.text);
+      const total = weights.pop()!;
+      const printed = model.rows.map((r: Loose) => ported.exportRow(r)).map((r: Loose, i: number) => (r.factor > 0 && r.value !== null ? printedNumber(weights[i]!) * r.factor : 0));
+      expect(printedNumber(total), model.name).toBe(Math.round(printed.reduce((a: number, b: number) => a + b, 0)));
+    }
+  });
+
+  test('nothing weighable: no Total row', () => {
+    expect(ported.printedTotalGrams(ONLY_PIECES.rows)).toBe(null);
+    expect(ported.printedTotalGrams([])).toBe(null);
+    const lay = layoutWithTotal(ONLY_PIECES);
+    expect(lay.items.some(i => i.text === 'Totale')).toBe(false);
+    expect(lay.lines).toStrictEqual([]);
+  });
+
+  test('the Total row: label and weight bold, a 0.75 pt line above it as wide as the block, with a divider\'s 14 pt of air', () => {
+    const plain = ported.pdfLayout({ title: 'T', rows: [{ name: 'Farina di prova', text: '1000 g' }, { name: 'Acqua di prova', text: '700 g' }] }, measure);
+    const lay = ported.pdfLayout({ title: 'T', rows: [{ name: 'Farina di prova', text: '1000 g' }, { name: 'Acqua di prova', text: '700 g' }], total: { label: 'Totale', text: '1700 g' } }, measure);
+    const label = lay.items.find(i => i.text === 'Totale')!;
+    const weight = lay.items.find(i => i.text === '1700 g')!;
+    expect(label.bold).toBe(true);
+    expect(weight.bold).toBe(true);
+    expect(label.y).toBe(weight.y);
+    expect(label.x).toBe(NAME_X);
+    const lastRowY = plain.items.at(-1)!.y;
+    expect(label.y - lastRowY).toBeCloseTo(30 + 14, 9);
+    expect(lay.lines).toHaveLength(1);
+    const line = lay.lines[0]!;
+    expect(line).toMatchObject({ x1: NAME_X, x2: WEIGHT_RIGHT, width: 0.75 });
+    expect(line.y > lastRowY && line.y < label.y).toBe(true);
+    // The ingredient rows stay where they were.
+    plain.items.forEach((item, i) => { expect(lay.items[i]).toStrictEqual(item); });
+  });
+
+  test('a divider on the last ingredient is the Total\'s own line: one line, not two', () => {
+    const rows = [{ name: 'Farina di prova', text: '1000 g' }, { name: 'Acqua di prova', text: '700 g', dividerAfter: true }];
+    const lay = ported.pdfLayout({ title: 'T', rows, total: { label: 'Totale', text: '1700 g' } }, measure);
+    expect(lay.lines).toHaveLength(1);
+  });
+
+  test('the Total row takes part in the vertical fit: a long recipe and its Total still end above the bottom margin', () => {
+    const lay = layoutWithTotal(SIXTY);
+    const lastY = Math.max(...lay.items.map(i => i.y));
+    expect(lastY).toBeLessThanOrEqual(ported.PAGE_H - 60 + EPS);
+    expect(lay.items.at(-1)!.y).toBe(lastY);
+    // 21 rows keep the 30 pt leading alone; with the Total row and its air they no longer do.
+    const rows = Array.from({ length: 21 }, (_, i) => ({ name: `Ingrediente ${i + 1}`, text: `${100 + i} g` }));
+    expect(ported.pdfLayout({ title: 'T', rows }, measure).leading).toBe(30);
+    expect(ported.pdfLayout({ title: 'T', rows, total: { label: 'Totale', text: '2310 g' } }, measure).leading).toBeLessThan(30);
+  });
+
+  test('the Total row takes part in the horizontal fit: its label is measured bold', () => {
+    const rows = [{ name: 'Farina', text: '1000 g' }];
+    // A label that fits at 20 pt in the regular face but not in bold makes the whole list a size smaller.
+    let label = 'Totale';
+    while (measure(label, 20, false) + measure(' ', 20, false) * 2 + measure('.', 20, false) * 3 + measure('1000 g', 20, true) <= 300) label += 'o';
+    label = label.slice(0, -1);
+    expect(measure(label, 20, true) + measure(' ', 20, false) * 2 + measure('.', 20, false) * 3 + measure('1000 g', 20, true)).toBeGreaterThan(300);
+    const lay = ported.pdfLayout({ title: 'T', rows, total: { label, text: '1000 g' } }, measure);
+    expect(lay.fontSize).toBeLessThan(20);
+    const drawn = lay.items.find(i => i.text === label)!;
+    expect(drawn.bold).toBe(true);
+    const dots = lay.items.filter(i => /^\.+$/.test(i.text) && i.y === drawn.y)[0]!;
+    expect(drawn.x + measure(drawn.text, drawn.size, true) + measure(' ', drawn.size, false)).toBeLessThanOrEqual(dots.x + EPS);
+  });
+
+  test('weights of 1, 2, 3 and 4 digits, and the Total, share one right edge (within 0.1 pt)', () => {
+    const rows = [{ name: 'Vaniglia', text: '5 g' }, { name: 'Sale', text: '22 g' }, { name: 'Burro', text: '310 g' }, { name: 'Farina', text: '1000 g' }];
+    const lay = ported.pdfLayout({ title: 'T', rows, total: { label: 'Totale', text: '1337 g' } }, measure);
+    const weights = lay.items.slice(1).filter(i => i.bold && i.x > NAME_X + EPS);
+    expect(weights.map(i => i.text)).toStrictEqual(['5 g', '22 g', '310 g', '1000 g', '1337 g']);
+    // Measured as the PDF draws them: character by character, no kerning.
+    const drawnRight = (i: ported.PdfItem) => {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(i.size);
+      return i.x + [...i.text].reduce((w, ch) => w + (doc.getTextWidth(ch) as number), 0);
+    };
+    for (const w of weights) expect(Math.abs(drawnRight(w) - WEIGHT_RIGHT), w.text).toBeLessThan(0.1);
+  });
+});
+
 // ── The current app's lab rounding (js/ only) ────────────────────────────────────────────────────────────────────────────
 // Mise 2 has no rounding option any more: the recipe book's scaling rounds each row once to a clean step and the file prints what
 // it receives (the owner's decision, 16 Nov 2026). js/ is the rollback copy and keeps its switch, so these run against it alone.
@@ -449,7 +567,8 @@ describe('the port against the original', () => {
   // The two builders that load the libraries; and the PDF's «round the weights» rule and its question, which Mise 2 no longer has
   // (the owner's decision, 16 Nov 2026: the recipe book rounds once, to a clean step, and the file prints what it receives).
   const LEFT_OUT = ['buildPdfBlob', 'buildXlsxBlob', 'roundLabWeight', 'hasRoundableRows'];
-  const ADDED = ['LIBRARY_ERROR', 'libraryError'];
+  // `printedTotalGrams`: the PDF's Total row (Mise 2 only, 16 Nov 2026).
+  const ADDED = ['LIBRARY_ERROR', 'libraryError', 'printedTotalGrams'];
   const original = legacyJs as unknown as Record<string, unknown>;
   const port = ported as unknown as Record<string, unknown>;
   const shared = Object.keys(original).filter(name => !LEFT_OUT.includes(name)).sort();

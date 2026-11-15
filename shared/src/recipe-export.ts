@@ -9,7 +9,11 @@
 // LEFT OUT: `buildPdfBlob` and `buildXlsxBlob` (they `import()` the vendored libraries, which belong to the
 // app: shared/ has no runtime dependency) and the private loader that wraps a failed `import()`. And, ON PURPOSE since
 // 16 Nov 2026 (the owner's decision), the PDF's «round the weights» rule `roundLabWeight` and its question `hasRoundableRows`:
-// the recipe book rounds once, to a clean step (clean-step.ts), and `rowTextOf` prints what it receives. What the
+// the recipe book rounds once, to a clean step (clean-step.ts), and `rowTextOf` prints what it receives.
+//
+// ⚠️ DIFFERS ON PURPOSE (the owner's decision, 16 Nov 2026): the PDF's first row sits lower (FIRST_ROW_GAP 88, the original's 48),
+// and `pdfLayout` takes an optional `total` — a Total row closing the list, label and weight bold, a line above it. Mise 2 only:
+// `printedTotalGrams`, the rows as printed added up. The original's pdfLayout is no longer compared output for output. What the
 // app's loader needs from here to make the SAME error the two functions below recognise is `LIBRARY_ERROR`
 // and `libraryError(cause)` (new in the port: in the original they are private to the loader).
 //
@@ -59,10 +63,12 @@ export interface ExportModel {
   rows: ExportRowInput[];
 }
 
-// What `pdfLayout` is handed: the page title and, per row, the name and the weight text.
+// What `pdfLayout` is handed: the page title and, per row, the name and the weight text; and (Mise 2, 16 Nov 2026) the Total row
+// that closes the list — the caller's own word and the weight text — or nothing for no Total row.
 export interface PdfLayoutInput {
   title: string;
   rows: { name: string; text: string; dividerAfter?: boolean }[];
+  total?: { label: string; text: string } | null;
 }
 
 // The width in points of `text` in Helvetica at `size`, bold or not.
@@ -180,6 +186,22 @@ export function rowTextOf(row: ExportRowInput | null | undefined): string {
   return `${r.text ?? Math.round(r.value)} ${r.unit}`;
 }
 
+// The PDF's Total, in whole grams: the rows AS PRINTED, added up — each weighable row (a factor in grams) at the number it prints
+// (the screen's own number, or the whole gram the Calculator's card shows), times its grams per unit. Pieces, spoons and «to taste»
+// do not count. null when no row is weighable: the PDF then has no Total row (a list of pieces has no weight to add up).
+// Mise 2 only (16 Nov 2026): the original's PDF has no Total row.
+export function printedTotalGrams(rows: readonly (ExportRowInput | null | undefined)[]): number | null {
+  let grams = 0;
+  let weighed = false;
+  for (const row of rows) {
+    const r = exportRow(row);
+    if (r.value === null || !(r.factor > 0)) continue;
+    weighed = true;
+    grams += (r.text !== null ? r.value : Math.round(r.value)) * r.factor;
+  }
+  return weighed ? Math.round(grams) : null;
+}
+
 // ── The PDF page ──────────────────────────────────────────────────────────────────────────
 
 export const PAGE_W = 595.28;
@@ -193,7 +215,8 @@ const NAME_X = (PAGE_W - BLOCK_W) / 2;
 const WEIGHT_RIGHT = NAME_X + BLOCK_W;
 const ROW_SIZE = 20;
 const ROW_LEADING = 30;
-const FIRST_ROW_GAP = 48;    // title baseline → first row baseline
+// ⚠️ 88, NOT THE ORIGINAL'S 48 (the owner's decision, 16 Nov 2026): the first row sat too close under the title. js/ keeps 48.
+const FIRST_ROW_GAP = 88;    // title baseline → first row baseline
 const BOTTOM_MARGIN = 60;
 const LEADING_RATIO = 1.25;    // never tighter than this × the font size, until the font itself shrinks
 const VERTICAL_MIN_SIZE = 6;
@@ -227,10 +250,13 @@ function truncated(text: string, maxW: number, size: number, bold: boolean, meas
   return s.trimEnd() + ELLIPSIS;
 }
 
-// pdfLayout({ title, rows: [{ name, text, dividerAfter? }] }, measure) -> { items, lines, titleSize, fontSize, leading }
+// pdfLayout({ title, rows: [{ name, text, dividerAfter? }], total? }, measure) -> { items, lines, titleSize, fontSize, leading }
 // `measure(text, sizePt, bold)` is the width in points. Pure: the caller decides how to measure
 // (jsPDF's getTextWidth in the app and in the tests), so the geometry can be checked without a PDF.
-export function pdfLayout({ title, rows }: PdfLayoutInput, measure: Measure): PdfLayout {
+// ⚠️ THE TOTAL ROW (Mise 2, the owner's decision of 16 Nov 2026) is one more row at the end: its label AND its weight bold, a line
+// above it as wide as the block with a divider's own air. It takes part in the fit like any row: the vertical one counts it and
+// its line, the horizontal one measures its label in bold.
+export function pdfLayout({ title, rows, total = null }: PdfLayoutInput, measure: Measure): PdfLayout {
   const items: PdfItem[] = [];
 
   // Title: centred, bold, as large as fits the column, then cut.
@@ -243,12 +269,17 @@ export function pdfLayout({ title, rows }: PdfLayoutInput, measure: Measure): Pd
     y: TITLE_Y, size: titleSize, bold: true,
   });
 
+  // Every line of the list: the ingredients, then the Total. Only the Total's label is bold.
+  const all: { name: string; text: string; dividerAfter?: boolean; bold: boolean }[] = rows.map(r => ({ ...r, bold: false }));
+  if (total !== null) all.push({ name: total.label, text: total.text, bold: true });
+  // A line under a row that asks for it, never under the last (nothing below it); and always above the Total.
+  const n = all.length;
+  const lineAfter = (i: number): boolean => i < n - 1 && (all[i]!.dividerAfter === true || (total !== null && i === n - 2));
+
   // Vertical size: the whole list on ONE page. Leading shrinks first, then the font.
   const firstY = TITLE_Y + FIRST_ROW_GAP;
-  const n = rows.length;
   const room = PAGE_H - BOTTOM_MARGIN - firstY;
-  // The lines that draw: one under a row that asks for it, never under the last (nothing below it).
-  const breaks = rows.filter((r, i) => i < n - 1 && r.dividerAfter).length;
+  const breaks = all.filter((_, i) => lineAfter(i)).length;
   const minLeading = LEADING_RATIO * VERTICAL_MIN_SIZE;
   let air = breaks > 0 ? DIVIDER_AIR : 0;
   // The air gives way only when the rows are already at their tightest, so a long recipe stays on one page.
@@ -264,10 +295,10 @@ export function pdfLayout({ title, rows }: PdfLayoutInput, measure: Measure): Pd
   // Horizontal size: one size for ALL rows, the largest where each row still holds its name,
   // three dots and its weight between NAME_X and WEIGHT_RIGHT.
   const span = WEIGHT_RIGHT - NAME_X;
-  const fits = (size: number): boolean => rows.every((r) => {
+  const fits = (size: number): boolean => all.every((r) => {
     const gap = measure(' ', size, false);
     const dot = measure('.', size, false);
-    return measure(r.name, size, false) + gap + MIN_DOTS * dot + gap + measure(r.text, size, true) <= span;
+    return measure(r.name, size, r.bold) + gap + MIN_DOTS * dot + gap + measure(r.text, size, true) <= span;
   });
   const floor = Math.min(fontSize, HORIZONTAL_MIN_SIZE);
   let size = fontSize;
@@ -277,22 +308,24 @@ export function pdfLayout({ title, rows }: PdfLayoutInput, measure: Measure): Pd
   const dot = measure('.', size, false);
   const lines: PdfLine[] = [];
   let breaksAbove = 0;
-  rows.forEach((r, i) => {
+  all.forEach((r, i) => {
     const y = firstY + i * leading + breaksAbove * air;
+    // ⚠️ RIGHT-ALIGNED BY MEASUREMENT, character by character (pdfMeasurer), never by jsPDF's align: 'right', whose width
+    // counts kerning that a Tj does not draw: every weight, of any number of digits, ends exactly at WEIGHT_RIGHT.
     const weightW = measure(r.text, size, true);
     const weightX = WEIGHT_RIGHT - weightW;
     // A name that still does not fit at the smallest size is cut, never allowed to push the weight.
     const nameRoom = span - weightW - 2 * gap - MIN_DOTS * dot;
-    const name = truncated(r.name, nameRoom, size, false, measure);
-    const nameEnd = NAME_X + measure(name, size, false);
+    const name = truncated(r.name, nameRoom, size, r.bold, measure);
+    const nameEnd = NAME_X + measure(name, size, r.bold);
     const dots = Math.floor((weightX - gap - (nameEnd + gap)) / dot);
-    items.push({ text: name, x: NAME_X, y, size, bold: false });
+    items.push({ text: name, x: NAME_X, y, size, bold: r.bold });
     if (dots > 0) {
       const dotText = '.'.repeat(dots);
       items.push({ text: dotText, x: weightX - gap - measure(dotText, size, false), y, size, bold: false });
     }
     items.push({ text: r.text, x: weightX, y, size, bold: true });
-    if (i < n - 1 && r.dividerAfter) {
+    if (lineAfter(i)) {
       // Halfway between this row's lowest point and the next row's highest.
       const lineY = y + (leading + air + ROW_DESCENT * size - ROW_ASCENT * size) / 2;
       lines.push({ x1: NAME_X, x2: WEIGHT_RIGHT, y: lineY, width: DIVIDER_WIDTH });
