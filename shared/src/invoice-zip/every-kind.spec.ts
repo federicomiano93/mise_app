@@ -12,7 +12,7 @@ import { makeCase } from './testing/invoice-builders';
 import type { LineSpec } from './testing/invoice-builders';
 import type { ImportResult } from './build-import';
 import { changesFromPoints } from '../price-changes-model';
-import { planPriceChanges } from '../invoice-import-plan';
+import { planPriceChanges, replanRow } from '../invoice-import-plan';
 
 const SUPPLIER = 'IT00000000001';
 const FLOUR: LineSpec = { desc: 'FARINA TIPO 00 SACCO KG 25', code: 'F00', qty: 25, unit: 'KG', total: 14.25 };
@@ -237,5 +237,28 @@ describe('per-piece prices with no weight, on the next invoices', () => {
     });
     expect(plan.create).toHaveLength(1);
     expect(plan.create[0]).toMatchObject({ type: 'add-price-change', data: { oldPrice: 0.14, newPrice: 0.17 } });
+  });
+});
+
+describe('the re-check before each row is written, with every kind', () => {
+  const SUPPLIER_ID = 's-cerere';
+  const packaging = { id: 'p1', supplierId: SUPPLIER_ID, name: 'Pellicola', supplierCode: 'PEL', kind: 'packaging' };
+  const read = {
+    ingredients: async () => [packaging],
+    pointIds: async () => new Set<string>() as Set<string> & { points?: unknown[] },
+    price: async () => null,
+  };
+
+  test('⚠️ a line matched to an existing PACKAGING item by its code stays an update of that item, never a new one', async () => {
+    const file = fileOf(built([FILM]));
+    const out = await replanRow({ fileIngredient: file[0] as FileIngredient, supplierIdByKey: { [SUPPLIER]: SUPPLIER_ID }, everyKind: true, read });
+    expect(out.row).toMatchObject({ ingredientId: 'p1', status: 'update-price' });
+    expect(out.ingredient).toMatchObject({ id: 'p1' });
+  });
+
+  test('without the option the packaging item is not seen (the original pool): the same line is planned new', async () => {
+    const file = fileOf(built([FILM]));
+    const out = await replanRow({ fileIngredient: file[0] as FileIngredient, supplierIdByKey: { [SUPPLIER]: SUPPLIER_ID }, read });
+    expect(out.row.status).toBe('new');
   });
 });

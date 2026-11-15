@@ -487,6 +487,17 @@ describe('every kind of product', () => {
     expect(importing.ingredients.map(created => created.supplierCode)).toEqual(['F00']);
   });
 
+  it('⚠️ an existing PACKAGING item matched by its article code is updated, never written again as a new item', async () => {
+    const film = item('ing-film', { name: 'Pellicola alimentare', supplierId: 'sup-1', supplierCode: 'PEL', kind: 'packaging', weight: '1 kg' });
+    const { user, importing } = await open({ ingredients: [film] });
+    await toIngredients(user, invoiceZip([FILM]));
+    await importAll(user, 'Import 1 product');
+    expect(importing.ingredients).toHaveLength(1);
+    expect(importing.ingredients[0]).toMatchObject({ id: 'ing-film', supplierCode: 'PEL' });
+    expect(importing.ingredients[0]).toMatchObject({ kind: 'packaging' });
+    expect(importing.prices.get('ing-film')?.pricePerUnit).toBe(5);
+  });
+
   it('⚠️ an existing RESALE item matched by its article code is never turned into an ingredient', async () => {
     const water = item('ing-water', { name: 'Acqua naturale', supplierId: 'sup-1', supplierCode: 'AQ', kind: 'resale', weight: '0.5 l' });
     const { user, importing } = await open({ ingredients: [water] });

@@ -237,7 +237,7 @@ export async function runIngredientImport(input: RunInput): Promise<RunOutcome> 
     };
   };
   const replan = (fileIngredient: FileIngredient, key: string) => replanRow({
-    fileIngredient, decision: answers.decisions[key], supplierIdByKey: { ...supplierIdByKey }, read: readFor(fileIngredient),
+    fileIngredient, decision: answers.decisions[key], supplierIdByKey: { ...supplierIdByKey }, everyKind: true, read: readFor(fileIngredient),
   });
   const toWrite = (fresh: IngredientRow, key: string, held: boolean) => rowToWrite(fresh, {
     confirmed: answers.confirmKeys.has(key), rename: answers.renames.get(key) ?? null, held,
