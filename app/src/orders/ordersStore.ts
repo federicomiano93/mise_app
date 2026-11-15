@@ -775,6 +775,18 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
     }
   }
 
+  // ⚠️ A QUESTION KEPT ONLY ON THIS DEVICE LIVES IN MEMORY: a self-started reload would lose it, and with it the only «did it go?» of an
+  // order that already left. Held busy while any stands, released when the last is answered or forgotten, and by stop().
+  let releaseLocalBusy: (() => void) | null = null;
+  function syncLocalBusy() {
+    if (localQuestions.size > 0 && !stopped) {
+      releaseLocalBusy ??= deps.markBusy();
+    } else if (releaseLocalBusy) {
+      releaseLocalBusy();
+      releaseLocalBusy = null;
+    }
+  }
+
   // The questions as the screen shows them: the draft's, plus any this device could not share (the draft's wins when it holds one).
   function currentAwaiting(): Record<string, unknown> {
     const all: Record<string, unknown> = { ...snapshot.draft.awaitingSent };
@@ -813,6 +825,7 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
   // never queued) STAYS ON THIS DEVICE: an order handed over must never be left with nobody asking.
   function keepQuestionHere(supplierId: string, entry: AwaitingEntry) {
     localQuestions.set(supplierId, entry);
+    syncLocalBusy();
     askHere.set(supplierId, { at: entry.at, seen: true });
     say({ kind: 'awaiting-not-shared', supplierId });
     awaitingDirty = true;
@@ -839,6 +852,7 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
       questionsToRetry.delete(id);
       // Shared now (or a newer send stands there): the shared question is the one to show.
       localQuestions.delete(id);
+      syncLocalBusy();
       awaitingDirty = true;
       set({});
     }
@@ -863,6 +877,7 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
   function forgetAwaitingAfterRecording(supplierId: string) {
     askHere.delete(supplierId);
     localQuestions.delete(supplierId);
+    syncLocalBusy();
     questionsToRetry.delete(supplierId);
     dropRetryListener();
     if (isAwaiting(snapshot.draft.awaitingSent[supplierId])) {
@@ -1062,6 +1077,7 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
     start() {
       if (stops.length) return;
       stopped = false;
+      syncLocalBusy();
       // This opening owns the note again: it is read afresh at the first snapshot or keystroke (draftSync.ts, journalLive).
       sync.startJournal();
       // A refusal noted by the store of an earlier opening, still waiting for its last write, while this one is on screen.
@@ -1171,6 +1187,7 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
         if (!entry) continue;
         askHere.set(supplierId, { at: entry.at, seen: false });
         localQuestions.delete(supplierId);
+        syncLocalBusy();
         // Held busy until the server answers (offline, until the connection is back), so a self-started reload cannot throw the tap
         // away before Firestore has the write; and not awaited by any screen.
         const release = deps.markBusy();
@@ -1192,10 +1209,14 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
     },
 
     async answerAwaiting(supplierId, answer, at, askRecordAgain, noSupplierName) {
-      const local = localQuestions.get(supplierId) ?? null;
-      const stored = local ?? snapshot.draft.awaitingSent[supplierId];
-      if (!isAwaiting(stored) || (at && (stored as AwaitingEntry).at !== at)) return { kind: 'elsewhere' };
-      const entry = stored as AwaitingEntry;
+      // ⚠️ THE ENTRY THE PERSON WAS SHOWN: the banner prefers the shared copy (currentAwaiting), so the one whose `at` is the one asked
+      // about is taken; a question in both places with different `at` would otherwise never match.
+      const kept = localQuestions.get(supplierId) ?? null;
+      const shared = snapshot.draft.awaitingSent[supplierId];
+      const candidates = [shared, kept].filter(isAwaiting) as AwaitingEntry[];
+      const entry = at ? candidates.find(candidate => candidate.at === at) : (kept ?? candidates[0]);
+      if (!entry) return { kind: 'elsewhere' };
+      const local = entry === kept ? kept : null;
       // A transaction and a record both need the network (placing says the same).
       if (answer === 'yes' && !deps.online()) return { kind: 'offline' };
       // ⚠️ «YES» WHEN HISTORY ALREADY HOLDS THIS ORDER (that supplier, that day, every stored line at least as large): another device
@@ -1244,8 +1265,9 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
           return Promise.resolve();
         },
       }, { local: local !== null });
-      if (local && (result === 'recorded' || result === 'dropped')) {
+      if (kept && kept.at === entry.at && (result === 'recorded' || result === 'dropped')) {
         localQuestions.delete(supplierId);
+        syncLocalBusy();
         questionsToRetry.delete(supplierId);
         dropRetryListener();
       }
@@ -1272,6 +1294,7 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
       sync.stopJournal();
       // The write is handed to Firestore now; it carries on without the listeners and lands when it can.
       stopped = true;
+      syncLocalBusy();
       sync.flush().then(dropBusyWhenSaved, () => { /* said through onResult, which also releases the busy marker */ });
     },
 

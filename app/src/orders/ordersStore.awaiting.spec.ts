@@ -34,14 +34,20 @@ const settle = () => new Promise(resolve => setTimeout(resolve, 0));
 let stops: Array<() => void> = [];
 afterEach(() => { stops.forEach(stop => stop()); stops = []; });
 
-function device(source: FakeOrdersSource, options: { visible?: boolean } = {}): Device {
+function device(source: FakeOrdersSource, options: { visible?: boolean; holds?: { open: number } } = {}): Device {
   let connected = true;
   let visible = options.visible ?? true;
   let now = NOW;
   const visibleListeners = new Set<() => void>();
   const onlineListeners = new Set<() => void>();
   const deps: OrdersDeps = {
-    markBusy: () => () => {},
+    markBusy: () => {
+      const holds = options.holds;
+      if (!holds) return () => {};
+      holds.open += 1;
+      let released = false;
+      return () => { if (!released) { released = true; holds.open -= 1; } };
+    },
     today: () => TODAY,
     draft: { nowIso: () => now, setTimer: () => 1, clearTimer: () => {} },
     online: () => connected,
@@ -475,5 +481,60 @@ describe('ordersStore — the sender`s own dialog', () => {
     h.store.waitForAnswer([{ supplierId: 'mill', quantities: { flour: 4 }, units: {} }], 'share');
     await settle();
     expect(h.store.getSnapshot().awaiting.ask).toStrictEqual({ supplierId: 'mill', at: NOW });
+  });
+});
+
+describe('ordersStore — a question kept only on this device holds the reload', () => {
+  const refused = async () => {
+    const holds = { open: 0 };
+    const source = fakeOrdersSource({ suppliers: [mill], ingredients: [flour], draft: { entries: { flour: { qty: 4 } }, days: { mill: TODAY } } });
+    const h = device(source, { holds });
+    await settle();
+    source.failAwaiting.set = true;
+    h.store.waitForAnswer([{ supplierId: 'mill', quantities: { flour: 4 }, units: {} }], 'share');
+    await settle();
+    return { h, holds, source };
+  };
+
+  it('holds busy while the question stands only here, and lets go when it is answered', async () => {
+    const { h, holds } = await refused();
+    expect(h.store.getSnapshot().awaiting.questions).toHaveLength(1);
+    expect(holds.open).toBe(1);
+    await go(h, 'no', NOW);
+    expect(h.store.getSnapshot().awaiting.questions).toStrictEqual([]);
+    expect(holds.open).toBe(0);
+  });
+
+  it('lets go when the question is forgotten by recording the order another way', async () => {
+    const { h, holds } = await refused();
+    expect(holds.open).toBe(1);
+    await h.store.place([{ supplierId: 'mill', date: TODAY, quantities: { flour: 4 }, units: { flour: '' } }], NO_SUPPLIER);
+    expect(holds.open).toBe(0);
+  });
+
+  it('lets go on stop()', async () => {
+    const { h, holds } = await refused();
+    expect(holds.open).toBe(1);
+    h.store.stop();
+    expect(holds.open).toBe(0);
+  });
+});
+
+describe('ordersStore — answering the question the banner shows', () => {
+  it('answers the SHARED question when a different one is also kept here (the banner prefers the shared one)', async () => {
+    const h = await started({ draft: { entries: { flour: { qty: 4 } }, days: { mill: TODAY } } });
+    h.source.failAwaiting.set = true;
+    h.store.waitForAnswer([{ supplierId: 'mill', quantities: { flour: 4 }, units: {} }], 'text');
+    await settle();
+    h.source.failAwaiting.set = false;
+    const newer = '2026-11-15T12:00:00.000Z';
+    h.source.remoteMerge({ awaitingSent: { mill: { at: newer, date: TODAY, quantities: { flour: 4 }, units: {} } } });
+    await settle();
+    const [shown] = h.store.getSnapshot().awaiting.questions;
+    expect(shown?.entry.at).toBe(newer);
+
+    const outcome = await go(h, 'yes', newer);
+    expect(outcome).toMatchObject({ kind: 'recorded', place: { kind: 'saved' } });
+    expect(h.source.awaitingWrites.some(w => w.op === 'claim')).toBe(true);
   });
 });
