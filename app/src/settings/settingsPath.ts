@@ -1,12 +1,14 @@
-// The addresses of Settings: the page, and the two screens one level below it that an owner or a manager reaches. Anything else under
-// `/settings/…` goes back to the page.
+// The addresses of Settings: the page, the two screens one level below it that an owner or a manager reaches, and «Who can get in», which
+// only the full owner reaches. Anything else under `/settings/…` goes back to the page.
 
 export const SETTINGS_PATH = '/settings';
 export const LANGUAGE_PATH = '/settings/language';
 export const SECTIONS_PATH = '/settings/sections';
+// The current app's screen is «people» too (js/staff/people.js).
+export const PEOPLE_PATH = '/settings/people';
 
 // The doors of the page, by the name the Back button of a sub-screen hands the focus back to.
-export type SettingsDoor = 'language' | 'sections';
+export type SettingsDoor = 'language' | 'sections' | 'people';
 
 export type SettingsScreen = 'page' | SettingsDoor | 'unknown';
 
@@ -16,6 +18,7 @@ export function settingsScreenOf(pathname: string): SettingsScreen {
   if (clean === SETTINGS_PATH) return 'page';
   if (clean === LANGUAGE_PATH) return 'language';
   if (clean === SECTIONS_PATH) return 'sections';
+  if (clean === PEOPLE_PATH) return 'people';
   return 'unknown';
 }
 
@@ -25,5 +28,6 @@ export function settingsScreenName(pathname: string): string {
   const screen = settingsScreenOf(pathname);
   if (screen === 'language') return 'settings-language';
   if (screen === 'sections') return 'settings-sections';
+  if (screen === 'people') return 'settings-people';
   return 'settings';
 }

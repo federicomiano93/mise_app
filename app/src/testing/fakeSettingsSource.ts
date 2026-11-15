@@ -1,7 +1,12 @@
 import { vi } from 'vitest';
 import { buildAwayDoc } from '@mise/shared/away-model';
 import type { DocData } from '../session/backend';
-import type { MyAway, SettingsSource } from '../settings/settingsSource';
+import type { Invitation, MyAway, SettingsSource } from '../settings/settingsSource';
+
+// What the fake «server» mints: six digits for an employee, a link token for anybody, both living a day (functions/onboarding.js).
+export const FAKE_DIGITS = '482913';
+export const FAKE_LINK_TOKEN = 'Q7xk2mP9vR4tY8wZ1nB6cD3fG5hJ0sLa';
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 // A settings source for the specs, in memory. The holiday lands at once (as Firestore's local copy does); a write is refused, as the
 // rules or the network would, by setting `refuseWith`. The Cloud Functions are `vi.fn`s a spec can make fail.
@@ -10,7 +15,7 @@ export type FakeSettingsSource = SettingsSource & {
   away: MyAway | null;
   // While set, a holiday write's promise rejects with this error (and the document is left as it was).
   refuseWith: unknown;
-  // While set, setLanguage and setStaffCard reject with this error.
+  // While set, setLanguage, setStaffCard and createInvitation reject with this error.
   functionsFailWith: unknown;
   // The venue document the «server» holds: setStaffCard changes it, readVenueFromServer returns it.
   venue: DocData | null;
@@ -90,5 +95,20 @@ export function fakeSettingsSource(
       return state.venue;
     }),
     readVenueFromServer: vi.fn(() => (state.offline ? Promise.reject(new Error('offline')) : Promise.resolve(state.venue))),
+    // Answers as the function does: the role it was asked for, a title only on the manager level, six digits refused for anybody but an
+    // employee (failed-precondition, the server's own refusal).
+    createInvitation: vi.fn(async (role, title, kind): Promise<Invitation> => {
+      if (state.functionsFailWith !== null) throw state.functionsFailWith as Error;
+      if (kind === 'digits' && role !== 'staff') {
+        throw Object.assign(new Error('A manager or an owner is invited with a link. Six digits are for employees.'), { code: 'functions/failed-precondition' });
+      }
+      return {
+        code: kind === 'link' ? FAKE_LINK_TOKEN : FAKE_DIGITS,
+        kind,
+        role,
+        title: role === 'manager' ? (title ?? 'manager') : null,
+        expiresAt: now() + DAY_MS,
+      };
+    }),
   };
 }
