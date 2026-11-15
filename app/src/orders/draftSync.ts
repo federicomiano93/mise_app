@@ -41,6 +41,10 @@ export interface DraftView {
   // The suppliers closed as «not ordered» (drafts/current.skipped, { supplierId: 'YYYY-MM-DD' }), as the server last said.
   // Written on their own, never by the autosave (ordersSource.setSupplierSkipped); only the day counts (reminders skippedOn).
   readonly skipped: DraftDays;
+  // «Order to X sent at 10:42: did it go?» (drafts/current.awaitingSent, { supplierId: entry }), as the server last said — see
+  // @mise/shared/awaiting-sent. Written on their own (ordersSource.setAwaitingSent), never by the autosave. Whole values, shaped
+  // by the writer: the store judges them (isAwaiting), the draft only carries them.
+  readonly awaitingSent: Readonly<Record<string, unknown>>;
   // The document's own `updatedAt` (ISO), '' when it has none.
   readonly updatedAt: string;
   // Whether drafts/current exists at all.
@@ -107,7 +111,8 @@ export const SAVE_DELAY_MS = 800;
 export const ORDERS_RETRY_MS = 30_000;
 
 export const EMPTY_DRAFT: DraftView = Object.freeze({
-  entries: Object.freeze({}), days: Object.freeze({}), skipped: Object.freeze({}), updatedAt: '', exists: false,
+  entries: Object.freeze({}), days: Object.freeze({}), skipped: Object.freeze({}),
+  awaitingSent: Object.freeze({}), updatedAt: '', exists: false,
 });
 
 export interface DraftSync {
@@ -826,6 +831,8 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
       entries,
       days: { ...daysOf(doc?.days), ...pending.days },
       skipped: daysOf(doc?.skipped),
+      awaitingSent: doc?.awaitingSent && typeof doc.awaitingSent === 'object' && !Array.isArray(doc.awaitingSent)
+        ? { ...(doc.awaitingSent as Record<string, unknown>) } : {},
       updatedAt: typeof doc?.updatedAt === 'string' ? doc.updatedAt : '',
       exists: doc !== null && doc !== undefined,
     };

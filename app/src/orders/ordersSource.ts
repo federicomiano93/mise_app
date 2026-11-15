@@ -36,6 +36,7 @@
 // The Suppliers section watches three of the same collections with its own source: a feature never imports from another
 // feature's folder, and the two sections are never on screen together, so no document is listened to twice (T4).
 
+import { claimDecision, restoreDecision } from '@mise/shared/awaiting-sent';
 import { buildPath } from '@mise/shared/location-id';
 import type { Query } from 'firebase/firestore';
 import type { FirestoreKit } from '../session/firebaseBackend';
@@ -89,6 +90,19 @@ export interface OrdersSource {
   // «Reopen»: only that supplier's key goes (a FieldPath: an id is data, not a path), whatever another phone closed meanwhile
   // survives. A draft that does not exist is refused, as updateDoc does: «Reopen» is only offered over a key that was seen.
   clearSupplierSkipped(supplierId: string): Promise<void>;
+  // «Order to X sent at 10:42: did it go?» (v1.145.0): drafts/current.awaitingSent.<supplierId> = the entry, written WHOLE
+  // (mergeFields names that one key, so a deep merge can never mix two sends) with the venue stamp. Same promise contract as
+  // mergeDraft. ⚠️ ON ITS OWN, never through the autosave.
+  setAwaitingSent(supplierId: string, value: unknown): Promise<void>;
+  // Only that supplier's question goes (a FieldPath: an id is data, not a path). A draft that does not exist is refused.
+  clearAwaitingSent(supplierId: string): Promise<void>;
+  // «Yes»: in a TRANSACTION, read the draft and — only when the question is still there with the same `at`
+  // (claimDecision) — delete the key. Resolves true for the device that removed it (the only one that records), false otherwise.
+  // ⚠️ A transaction needs the network: offline it REJECTS.
+  claimAwaitingSent(supplierId: string, at: string): Promise<boolean>;
+  // A failed recording puts the question back, in a transaction, only when no question stands for that supplier now
+  // (restoreDecision). Resolves true when it was written. ⚠️ Rejects offline.
+  restoreAwaitingSentIfAbsent(supplierId: string, value: unknown): Promise<boolean>;
   // orders-history/<id> as stored, once (null when there is none). A failure rejects.
   readRecord(id: string): Promise<Record<string, unknown> | null>;
   // Writes orders-history/<id> in a TRANSACTION: `merge` gets the record as stored (null when there is none) and returns the
@@ -319,6 +333,49 @@ export function createFirestoreOrdersSource(firestore: () => Promise<FirestoreKi
         new fs.FieldPath('skipped', supplierId), fs.deleteField(),
         'bakery', locationId,
       );
+    },
+
+    // ⚠️ mergeFields, NOT merge: the value is written WHOLE under that one key, so two sends can never be mixed field by field.
+    async setAwaitingSent(supplierId, value) {
+      const { fs, db } = await firestore();
+      await fs.setDoc(fs.doc(db, draftsPath, DRAFT_ID), { awaitingSent: { [supplierId]: value }, bakery: locationId },
+        { mergeFields: ['bakery', new fs.FieldPath('awaitingSent', supplierId)] });
+    },
+
+    async clearAwaitingSent(supplierId) {
+      const { fs, db } = await firestore();
+      await fs.updateDoc(
+        fs.doc(db, draftsPath, DRAFT_ID),
+        new fs.FieldPath('awaitingSent', supplierId), fs.deleteField(),
+        'bakery', locationId,
+      );
+    },
+
+    // ⚠️ THE CLAIM IS WHAT KEEPS AN ORDER FROM BEING RECORDED TWICE (mergeArchives ADDS): of two devices answering «Yes» together,
+    // only the one whose transaction removed the key records.
+    async claimAwaitingSent(supplierId, at) {
+      const { fs, db } = await firestore();
+      const ref = fs.doc(db, draftsPath, DRAFT_ID);
+      return fs.runTransaction(db, async tx => {
+        const snap = await tx.get(ref);
+        const data = snap.exists() ? (snap.data() as Record<string, unknown>) : null;
+        if (!claimDecision(data, supplierId, at)) return false;
+        tx.update(ref, new fs.FieldPath('awaitingSent', supplierId), fs.deleteField(), 'bakery', locationId);
+        return true;
+      });
+    },
+
+    async restoreAwaitingSentIfAbsent(supplierId, value) {
+      const { fs, db } = await firestore();
+      const ref = fs.doc(db, draftsPath, DRAFT_ID);
+      return fs.runTransaction(db, async tx => {
+        const snap = await tx.get(ref);
+        const data = snap.exists() ? (snap.data() as Record<string, unknown>) : null;
+        if (!restoreDecision(data, supplierId)) return false;
+        tx.set(ref, { awaitingSent: { [supplierId]: value }, bakery: locationId },
+          { mergeFields: ['bakery', new fs.FieldPath('awaitingSent', supplierId)] });
+        return true;
+      });
     },
 
     async readRecord(id) {

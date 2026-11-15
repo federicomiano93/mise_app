@@ -1,3 +1,4 @@
+import { claimDecision, restoreDecision } from '@mise/shared/awaiting-sent';
 import type { DraftPayload } from '../orders/draftSync';
 import type { OrdersMeta, OrdersSource, RosterRow, StoredDoc } from '../orders/ordersSource';
 
@@ -32,6 +33,11 @@ export type FakeOrdersSource = OrdersSource & {
   // `holdWrites` keeps them in the air too.
   skippedWrites: Array<{ op: 'set'; supplierId: string; day: string } | { op: 'clear'; supplierId: string }>;
   refuseSkipped: boolean;
+  // Every «did it go?» write, in order (refused ones included): the question written whole, removed, claimed or put back.
+  // `failAwaiting` refuses the NEXT one of that kind (then it goes back to false): `set`/`clear` as a refusal of the rules, `claim`/
+  // `restore` as a transaction that cannot run (offline).
+  awaitingWrites: Array<{ op: 'set' | 'clear' | 'claim' | 'restore'; supplierId: string; value?: unknown; at?: string }>;
+  failAwaiting: { set: boolean; clear: boolean; claim: boolean; restore: boolean };
   // The next watches fail (the rules refused them, or the stream died).
   refuse: { suppliers: boolean; ingredients: boolean; config: boolean; draft: boolean; history: boolean; requests: boolean };
   // Another phone writes the draft: merged like a setDoc merge, then every watcher is told.
@@ -151,6 +157,63 @@ export function fakeOrdersSource(init: {
     refuse: { suppliers: false, ingredients: false, config: false, draft: false, history: false, requests: false },
     historyFrom: null,
     historyCached: false,
+
+    awaitingWrites: [],
+    failAwaiting: { set: false, clear: false, claim: false, restore: false },
+
+    // Like Firestore: the question is shown at once, WHOLE under its key, and taken back when the rules refuse it.
+    setAwaitingSent(supplierId, value) {
+      source.awaitingWrites.push({ op: 'set', supplierId, value: structuredClone(value) });
+      const refused = source.failAwaiting.set;
+      source.failAwaiting.set = false;
+      const before = source.draft;
+      writeAwaiting(supplierId, value);
+      return new Promise<void>((resolve, reject) => {
+        const settle = () => {
+          if (!refused) { resolve(); return; }
+          source.draft = before === null ? null : structuredClone(before);
+          tellDraft();
+          reject(new Error('permission-denied'));
+        };
+        if (held) held.push(settle);
+        else queueMicrotask(settle);
+      });
+    },
+
+    async clearAwaitingSent(supplierId) {
+      source.awaitingWrites.push({ op: 'clear', supplierId });
+      await Promise.resolve();
+      if (source.failAwaiting.clear) {
+        source.failAwaiting.clear = false;
+        throw new Error('permission-denied');
+      }
+      if (!source.draft) throw new Error('not-found');
+      removeAwaiting(supplierId);
+    },
+
+    async claimAwaitingSent(supplierId, at) {
+      source.awaitingWrites.push({ op: 'claim', supplierId, at });
+      await Promise.resolve();
+      if (source.failAwaiting.claim) {
+        source.failAwaiting.claim = false;
+        throw new Error('unavailable');
+      }
+      if (!claimDecision(source.draft, supplierId, at)) return false;
+      removeAwaiting(supplierId);
+      return true;
+    },
+
+    async restoreAwaitingSentIfAbsent(supplierId, value) {
+      source.awaitingWrites.push({ op: 'restore', supplierId, value: structuredClone(value) });
+      await Promise.resolve();
+      if (source.failAwaiting.restore) {
+        source.failAwaiting.restore = false;
+        throw new Error('unavailable');
+      }
+      if (!restoreDecision(source.draft, supplierId)) return false;
+      writeAwaiting(supplierId, value);
+      return true;
+    },
 
     watchSuppliers(onChange, onError) {
       const l = { onChange, onError };
@@ -618,6 +681,22 @@ export function fakeOrdersSource(init: {
       if (held) held.push(() => settle(resolve, reject));
       else queueMicrotask(() => settle(resolve, reject));
     });
+  }
+
+  function writeAwaiting(supplierId: string, value: unknown) {
+    const next = structuredClone(source.draft ?? {});
+    const map = next.awaitingSent && typeof next.awaitingSent === 'object' ? next.awaitingSent as Record<string, unknown> : {};
+    map[supplierId] = structuredClone(value);
+    next.awaitingSent = map;
+    next.bakery = 'bakery';
+    source.draft = next;
+    tellDraft();
+  }
+  function removeAwaiting(supplierId: string) {
+    const next = structuredClone(source.draft ?? {});
+    if (next.awaitingSent && typeof next.awaitingSent === 'object') delete (next.awaitingSent as Record<string, unknown>)[supplierId];
+    source.draft = next;
+    tellDraft();
   }
 
   function tellDraft() {
