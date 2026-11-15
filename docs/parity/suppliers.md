@@ -1409,6 +1409,11 @@ ingredienti delle ricette e i suoi allergeni non verranno più mostrati. Salvare
 used in {n} recipes: …  Save anyway?»). A count that fails or has not answered within `RECIPE_COUNT_WAIT_MS` (4 s: offline, no
 signal) says «Potrebbe essere usato in alcune ricette: …» — never a false «no recipe». It is a warning, not a refusal: Save
 writes as before; Cancel keeps the edit on screen, unsaved. Nothing is counted and nothing extra is said for a change between
-two non-food kinds, a food item saved as food, or a NEW item. Specs: `SuppliersSection.ingredient.save.spec.tsx` («a food item
+two non-food kinds, a food item saved as food, or a NEW item. ⚠️ The boxes stay editable while it counts, so the card is
+read again (every refusal included) after the count: what is asked about and written is what the screen shows then, and a way
+out taken meanwhile (its «Discard changes?» open) wins — Save then asks nothing (code review of 15 Nov 2026). Specs: `SuppliersSection.ingredient.save.spec.tsx` («a food item
 that recipes use, turned into another kind»: n = 1 and n > 1 in both languages, 0 recipes, the count failed, a non-food change,
-a new item, Save busy while counting, Cancel keeps the edit), `IngredientCard.recipeCount.spec.ts` (the 4 s bound).
+a new item, Save busy while counting, Cancel keeps the edit, typing and a type put back during the count, a way out during
+the count), `IngredientCard.recipeCount.spec.ts` (the 4 s bound). The wording is his, word for word; note that the recipe rows
+keep their link (the item stays in those recipes and is still costed) — «non sarà più tra gli ingredienti delle ricette» means
+it is no longer offered where an ingredient is chosen.

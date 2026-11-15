@@ -396,8 +396,9 @@ export function IngredientCard({
     if (typeof target?.scrollIntoView === 'function') target.scrollIntoView({ block: 'center' });
   }
 
-  async function save() {
-    if (deleting || busy.current || askingLeave.current || leavingClean.current) return;
+  // Every check of a Save, in order, and what it would write — read from the card as it stands NOW. Null when a box was refused
+  // (it has been shown, said and focused). Run again after the recipe count (below), so nothing typed meanwhile is lost.
+  function prepare() {
     // ⚠️ FIRST OF ALL, a proposal still waiting on the pack text (the pause has not ended) is run now, so that what is checked and
     // written below is what the screen shows. The card's copy is updated synchronously by changeAllergen.
     allergenControls.current?.flushProposal();
@@ -422,19 +423,19 @@ export function IngredientCard({
       : firstRefusal(current, opened, { mayPrice: priceActive, lang: language, priceDirty, packTypeShown: packTypeVisible(current, opened, typeOpts) });
     if (wrong) {
       show(wrong);
-      return;
+      return null;
     }
     const legacyCtx = legacyCtxOf(current, menus);
     const wrongLegacy = legacyNow && mayPrice ? legacyRefusal(legacyNow, legacyCtx) : null;
     if (wrongLegacy) {
       show(wrongLegacy === 'packWeight' ? 'legacyPackWeight' : wrongLegacy);
-      return;
+      return null;
     }
     const ctx = state ? ctxOf(current, state) : null;
     const wrongPrice = state && ctx ? priceRefusal(state, ctx) : null;
     if (wrongPrice) {
       show(wrongPrice === 'weight' ? 'priceWeight' : wrongPrice);
-      return;
+      return null;
     }
     // Then the nutrition's: text that is not a number, or a negative one (a new rule of Mise 2, the model's header says why). Only
     // the boxes somebody changed, and only while the venue shows the nutrition (read now, like the sections do).
@@ -444,7 +445,7 @@ export function IngredientCard({
     const wrongNutrient = kindToSave === 'ingredient' && nutritionOn(location) ? nutritionRefusal(allergenCopy, allergenBaseline) : null;
     if (wrongNutrient) {
       showNutrient(wrongNutrient);
-      return;
+      return null;
     }
     // The card of before hands the store a price only when a price box or menu moved, or the weight did (legacySends), and only
     // for whoever may write prices NOW; it never reports a unit change (the order unit is a menu a person chose).
@@ -463,6 +464,16 @@ export function IngredientCard({
     const payload = { ...built.payload, ...allergenPayload(
       allergenCopy, opened, kindToSave, new Date().toISOString(), { allergens: allergensOn(location), nutrition: nutritionOn(location) },
     ) };
+    return { built, payload, patch, kindToSave };
+  }
+
+  // An existing FOOD item about to be saved as packaging, resale or other (see save()).
+  const leavesFood = (kindToSave: CardKind) => opened !== null && kind === 'ingredient' && kindToSave !== 'ingredient';
+
+  async function save() {
+    if (deleting || busy.current || askingLeave.current || leavingClean.current) return;
+    let ready = prepare();
+    if (!ready) return;
     busy.current = true;
     let ok = false;
     try {
@@ -470,18 +481,25 @@ export function IngredientCard({
       // says so first — a warning, not a refusal. The recipes keep their link, but the item leaves the food choosers and its
       // allergens are no longer drawn. A count that cannot be made (offline, no answer in time) says it MAY be used: never a
       // false «no recipe». No count, no words, for a change between non-food kinds or a new item (no recipe can name it yet).
-      const leavesFood = opened !== null && kind === 'ingredient' && kindToSave !== 'ingredient';
       let used: number | null = 0;
-      if (leavesFood) {
+      if (leavesFood(ready.kindToSave)) {
         setCounting(true);
         used = await countWithin(countRecipes);
         if (!mounted.current) return;
         setCounting(false);
+        // ⚠️ THE BOXES STAYED EDITABLE WHILE IT COUNTED: the card is read again, so what is asked about and written is what the
+        // screen shows now (a box refused now is shown, and nothing is asked). A way out taken meanwhile (its «Discard
+        // changes?» is open, or the card is leaving) wins: Save then asks nothing.
+        if (askingLeave.current || leavingClean.current) return;
+        ready = prepare();
+        if (!ready) return;
       }
-      const question = t('sup.save.question', { name: labelOf(built.payload) });
+      const question = t('sup.save.question', { name: labelOf(ready.built.payload) });
       ok = await confirm({
-        title: t(KIND_WORDS[kindToSave].saveTitle),
-        message: used === 0 ? question : used === null ? t('sup.kind.leavesFoodUnknown') : t('sup.kind.leavesFood', { n: used }),
+        title: t(KIND_WORDS[ready.kindToSave].saveTitle),
+        message: !leavesFood(ready.kindToSave) || used === 0
+          ? question
+          : used === null ? t('sup.kind.leavesFoodUnknown') : t('sup.kind.leavesFood', { n: used }),
         okLabel: t('ui.save'),
         cancelLabel: t('common.cancel'),
       });
@@ -490,6 +508,7 @@ export function IngredientCard({
       if (mounted.current) setCounting(false);
     }
     if (!ok || !mounted.current) return;
+    const { built, payload, patch } = ready;
     // Saved: nothing is unsaved any more, so leaving asks nothing. Local-first: the list changes at once and the database
     // follows; a refused write is taken back and said by the store.
     leavingClean.current = true;

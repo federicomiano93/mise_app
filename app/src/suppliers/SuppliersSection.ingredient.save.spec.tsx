@@ -607,6 +607,57 @@ describe('⚠️ a food item that recipes use, turned into another kind', () => 
     expect(within(await dialogOf('Save resale item?')).getByText(WARNING_1)).toBeInTheDocument();
   });
 
+  it('⚠️ what is typed while the count runs is what is saved (the card is read again after it)', async () => {
+    const source = seeded();
+    source.usage = { recipes: 1, products: 0 };
+    const release = source.holdUsage();
+    const view = await open('/suppliers/ingredient/i-flour', source);
+    await view.user.selectOptions(typeMenu(view.region), 'resale');
+    await view.user.click(view.region.getByRole('button', { name: 'Save' }));
+    await waitFor(() => { expect(source.usageCalls).toEqual(['i-flour']); });
+    await view.user.clear(nameBox(view.region));
+    await view.user.type(nameBox(view.region), 'Flour 00 Caputo');
+    act(() => { release(); });
+    await view.user.click(within(await dialogOf('Save resale item?')).getByRole('button', { name: 'Save' }));
+    await waitFor(() => { expect(source.writes).toHaveLength(1); });
+    expect(source.writes[0]).toMatchObject({ op: 'ingredient-save', id: 'i-flour', data: { name: 'Flour 00 Caputo', kind: 'resale' } });
+  });
+
+  it('the type put back to Ingredient while the count runs: the plain question, saved as an ingredient', async () => {
+    const source = seeded();
+    source.usage = { recipes: 2, products: 0 };
+    const release = source.holdUsage();
+    const view = await open('/suppliers/ingredient/i-flour', source);
+    await view.user.selectOptions(typeMenu(view.region), 'other');
+    await view.user.type(nameBox(view.region), ' B');
+    await view.user.click(view.region.getByRole('button', { name: 'Save' }));
+    await waitFor(() => { expect(source.usageCalls).toEqual(['i-flour']); });
+    await view.user.selectOptions(typeMenu(view.region), 'ingredient');
+    act(() => { release(); });
+    const dialog = await dialogOf('Save ingredient?');
+    expect(within(dialog).queryByText(/recipe/)).not.toBeInTheDocument();
+    await view.user.click(within(dialog).getByRole('button', { name: 'Save' }));
+    await waitFor(() => { expect(source.writes).toHaveLength(1); });
+    expect(source.writes[0]).toMatchObject({ data: { name: 'Flour 00 B', kind: 'ingredient' } });
+  });
+
+  it('⚠️ a way out taken while the count runs wins: «Discard changes?» stays, Save asks nothing', async () => {
+    const source = seeded();
+    source.usage = { recipes: 1, products: 0 };
+    const release = source.holdUsage();
+    const view = await open('/suppliers/ingredient/i-flour', source);
+    await view.user.selectOptions(typeMenu(view.region), 'resale');
+    await view.user.click(view.region.getByRole('button', { name: 'Save' }));
+    await waitFor(() => { expect(source.usageCalls).toEqual(['i-flour']); });
+    await view.user.click(within(screen.getByRole('navigation', { name: 'All sections' })).getByRole('link', { name: 'Recipes' }));
+    const discard = await dialogOf('Discard changes?');
+    act(() => { release(); });
+    await act(async () => { await new Promise(resolve => { setTimeout(resolve, 50); }); });
+    expect(screen.getAllByRole('alertdialog')).toEqual([discard]);
+    expect(screen.queryByRole('alertdialog', { name: 'Save resale item?' })).not.toBeInTheDocument();
+    expect(source.writes).toEqual([]);
+  });
+
   it('a change between two non-food kinds asks no count and says nothing of recipes', async () => {
     const source = seeded();
     source.usage = { recipes: 5, products: 0 };
