@@ -1414,9 +1414,9 @@ read again (every refusal included) after the count: what is asked about and wri
 out taken meanwhile (its «Discard changes?» open) wins — Save then asks nothing (code review of 15 Nov 2026). Specs: `SuppliersSection.ingredient.save.spec.tsx` («a food item
 that recipes use, turned into another kind»: n = 1 and n > 1 in both languages, 0 recipes, the count failed, a non-food change,
 a new item, Save busy while counting, Cancel keeps the edit, typing and a type put back during the count, a way out during
-the count), `IngredientCard.recipeCount.spec.ts` (the 4 s bound). The wording is his, word for word; note that the recipe rows
-keep their link (the item stays in those recipes and is still costed) — «non sarà più tra gli ingredienti delle ricette» means
-it is no longer offered where an ingredient is chosen.
+the count), `IngredientCard.recipeCount.spec.ts` (the 4 s bound). The wording is his, word for word: it reads «non si potrà più
+scegliere come ingrediente nelle ricette» (his choice, 15 Nov 2026, replacing an earlier, inaccurate wording) — the recipe rows
+keep their link (the item stays in those recipes and is still costed); it simply is no longer offered where an ingredient is chosen.
 
 ## Import of every kind — as built (14 Nov 2026)
 
