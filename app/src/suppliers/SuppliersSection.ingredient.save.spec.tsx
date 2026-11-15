@@ -517,3 +517,146 @@ describe('the «Type» menu', () => {
     expect(within(menu).getAllByRole('option').map(node => node.textContent)).toEqual(['Ingrediente', 'Imballaggio', 'Rivendita', 'Altro']);
   });
 });
+
+// Mise 2, 15 Nov 2026: a FOOD item saved as packaging, resale or other while recipes use it — the Save question says so first,
+// with the delete's own count. A warning, not a refusal.
+describe('⚠️ a food item that recipes use, turned into another kind', () => {
+  const typeMenu = (region: Region) => region.getByRole('combobox', { name: /^(Type|Tipo)$/ });
+  const WARNING_1 = 'It is used in 1 recipe: it will no longer be among the ingredients of recipes and its allergens will no longer be shown. Save anyway?';
+
+  it('used in 1 recipe: the question says so (singular), and Save writes the new kind', async () => {
+    const source = seeded();
+    source.usage = { recipes: 1, products: 4 };
+    const view = await open('/suppliers/ingredient/i-flour', source);
+    await view.user.selectOptions(typeMenu(view.region), 'resale');
+    await view.user.click(view.region.getByRole('button', { name: 'Save' }));
+    const dialog = await dialogOf('Save resale item?');
+    expect(within(dialog).getByText(WARNING_1)).toBeInTheDocument();
+    expect(source.usageCalls).toEqual(['i-flour']);
+    await view.user.click(within(dialog).getByRole('button', { name: 'Save' }));
+    await waitFor(() => { expect(source.writes).toHaveLength(1); });
+    expect(source.writes[0]).toMatchObject({ op: 'ingredient-save', id: 'i-flour', data: { kind: 'resale' } });
+  });
+
+  it.each(['packaging', 'other'] as const)('used in several recipes: the plural (to %s)', async next => {
+    const source = seeded();
+    source.usage = { recipes: 3, products: 0 };
+    const view = await open('/suppliers/ingredient/i-flour', source);
+    await view.user.selectOptions(typeMenu(view.region), next);
+    await view.user.click(view.region.getByRole('button', { name: 'Save' }));
+    const dialog = await screen.findByRole('alertdialog');
+    expect(within(dialog).getByText(/^It is used in 3 recipes: it will no longer be among the ingredients of recipes/)).toBeInTheDocument();
+  });
+
+  it.each([[1, 'È usato in 1 ricetta:'], [2, 'È usato in 2 ricette:']] as const)('says it in Italian (%i)', async (n, words) => {
+    const source = seeded();
+    source.usage = { recipes: n, products: 0 };
+    const view = await open('/suppliers/ingredient/i-flour', source, { lang: 'it', session: { language: 'it' } });
+    await view.user.selectOptions(typeMenu(view.region), 'other');
+    await view.user.click(view.region.getByRole('button', { name: 'Salva' }));
+    const dialog = await screen.findByRole('alertdialog');
+    expect(within(dialog).getByText(
+      `${words} non sarà più tra gli ingredienti delle ricette e i suoi allergeni non verranno più mostrati. Salvare comunque?`,
+    )).toBeInTheDocument();
+  });
+
+  it('used in no recipe: the plain question, no warning', async () => {
+    const source = seeded();
+    source.usage = { recipes: 0, products: 2 };
+    const view = await open('/suppliers/ingredient/i-flour', source);
+    await view.user.selectOptions(typeMenu(view.region), 'packaging');
+    await view.user.click(view.region.getByRole('button', { name: 'Save' }));
+    const dialog = await dialogOf('Save packaging?');
+    expect(within(dialog).getByText('Save “Flour”?')).toBeInTheDocument();
+    expect(within(dialog).queryByText(/recipe/)).not.toBeInTheDocument();
+  });
+
+  it('⚠️ the count could not be made (offline): it says it MAY be used, never nothing', async () => {
+    const source = seeded();
+    source.usage = { recipes: null, products: null };
+    const view = await open('/suppliers/ingredient/i-flour', source);
+    await view.user.selectOptions(typeMenu(view.region), 'resale');
+    await view.user.click(view.region.getByRole('button', { name: 'Save' }));
+    const dialog = await dialogOf('Save resale item?');
+    expect(within(dialog).getByText(
+      'It may be used in some recipes: it will no longer be among the ingredients of recipes and its allergens will no longer be shown. Save anyway?',
+    )).toBeInTheDocument();
+  });
+
+  it('Italian «may be used» words', async () => {
+    const source = seeded();
+    source.usage = { recipes: null, products: null };
+    const view = await open('/suppliers/ingredient/i-flour', source, { lang: 'it', session: { language: 'it' } });
+    await view.user.selectOptions(typeMenu(view.region), 'resale');
+    await view.user.click(view.region.getByRole('button', { name: 'Salva' }));
+    const dialog = await screen.findByRole('alertdialog');
+    expect(within(dialog).getByText(/^Potrebbe essere usato in alcune ricette: non sarà più tra gli ingredienti delle ricette/)).toBeInTheDocument();
+  });
+
+  it('while the count runs, Save is busy and nothing is asked yet', async () => {
+    const source = seeded();
+    source.usage = { recipes: 1, products: 0 };
+    const release = source.holdUsage();
+    const view = await open('/suppliers/ingredient/i-flour', source);
+    await view.user.selectOptions(typeMenu(view.region), 'resale');
+    await view.user.click(view.region.getByRole('button', { name: 'Save' }));
+    await waitFor(() => { expect(source.usageCalls).toEqual(['i-flour']); });
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(view.region.getByRole('button', { name: /^Save/ })).toHaveAttribute('aria-disabled', 'true');
+    act(() => { release(); });
+    expect(within(await dialogOf('Save resale item?')).getByText(WARNING_1)).toBeInTheDocument();
+  });
+
+  it('a change between two non-food kinds asks no count and says nothing of recipes', async () => {
+    const source = seeded();
+    source.usage = { recipes: 5, products: 0 };
+    const view = await open('/suppliers/ingredient/i-box', source);
+    await view.user.selectOptions(typeMenu(view.region), 'other');
+    await view.user.click(view.region.getByRole('button', { name: 'Save' }));
+    const dialog = await dialogOf('Save item?');
+    expect(within(dialog).getByText('Save “Cake box”?')).toBeInTheDocument();
+    expect(source.usageCalls).toEqual([]);
+  });
+
+  it('a food item saved as food asks no count', async () => {
+    const source = seeded();
+    source.usage = { recipes: 5, products: 0 };
+    const view = await open('/suppliers/ingredient/i-flour', source);
+    await view.user.clear(nameBox(view.region));
+    await view.user.type(nameBox(view.region), 'Flour 0');
+    await saveAndConfirm(view);
+    await waitFor(() => { expect(source.writes).toHaveLength(1); });
+    expect(source.usageCalls).toEqual([]);
+  });
+
+  it('a NEW item made as resale asks no count (no recipe can name it yet)', async () => {
+    const source = seeded();
+    source.usage = { recipes: 5, products: 0 };
+    const view = await open('/suppliers/ingredient/new', source);
+    await view.user.type(nameBox(view.region), 'Cola');
+    await view.user.selectOptions(view.region.getByRole('combobox', { name: 'Comes as' }), 'single');
+    await view.user.selectOptions(typeMenu(view.region), 'resale');
+    await view.user.click(view.region.getByRole('button', { name: 'Save' }));
+    const dialog = await dialogOf('Save resale item?');
+    expect(within(dialog).getByText('Save “Cola”?')).toBeInTheDocument();
+    expect(source.usageCalls).toEqual([]);
+  });
+
+  it('⚠️ Cancel keeps the edit on screen, unsaved: nothing written, the menu still on the new kind, leaving still asks', async () => {
+    const source = seeded();
+    source.usage = { recipes: 2, products: 0 };
+    const view = await open('/suppliers/ingredient/i-flour', source);
+    await view.user.selectOptions(typeMenu(view.region), 'resale');
+    await view.user.click(view.region.getByRole('button', { name: 'Save' }));
+    await view.user.click(within(await dialogOf('Save resale item?')).getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => { expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument(); });
+    expect(source.writes).toEqual([]);
+    expect(typeMenu(view.region)).toHaveValue('resale');
+    expect(screen.getByRole('heading', { name: 'Edit resale item' })).toBeInTheDocument();
+    expect(isBusy()).toBe(true);
+    // Save again asks again, and counts again.
+    await view.user.click(view.region.getByRole('button', { name: 'Save' }));
+    expect(within(await dialogOf('Save resale item?')).getByText(/^It is used in 2 recipes:/)).toBeInTheDocument();
+    expect(source.usageCalls).toEqual(['i-flour', 'i-flour']);
+  });
+});

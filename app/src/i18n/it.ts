@@ -1809,6 +1809,11 @@ export const it: Messages = {
   'sup.kind.resale': 'Rivendita',
   'sup.kind.other': 'Altro',
   'sup.ing.type': 'Tipo',
+  'sup.kind.leavesFood': {
+    one: 'È usato in {n} ricetta: non sarà più tra gli ingredienti delle ricette e i suoi allergeni non verranno più mostrati. Salvare comunque?',
+    other: 'È usato in {n} ricette: non sarà più tra gli ingredienti delle ricette e i suoi allergeni non verranno più mostrati. Salvare comunque?',
+  },
+  'sup.kind.leavesFoodUnknown': 'Potrebbe essere usato in alcune ricette: non sarà più tra gli ingredienti delle ricette e i suoi allergeni non verranno più mostrati. Salvare comunque?',
   'sup.ing.typeHint': 'Rivendita: si vende così come arriva, come le bevande. Altro: pulizia, attrezzi, abbigliamento. Solo un ingrediente si può usare in una ricetta.',
   'sup.ing.delete.title': 'Eliminare «{name}»?',
   'sup.ing.delete.unknown': 'Non si può annullare. Gli ordini passati lo mostrano ancora; nelle ricette e nel food cost comparirà come ingrediente mancante, e le etichette di quelle ricette restano bloccate finché non lo sostituisci.',

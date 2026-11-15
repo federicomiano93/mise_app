@@ -210,6 +210,8 @@ export function IngredientCardScreen({ id, newKind, preset }: Props) {
         }}
         onLeave={leave}
         deleting={counting}
+        // The delete's own count (useDeleteIngredient): Save asks it only when a food item would leave food.
+        countRecipes={id !== null ? () => store.ingredientUsage(id).then(usage => usage.recipes) : undefined}
         onDelete={canManage && item !== null && id !== null
           ? markClean => runDelete({ id, name: ingredientDisplayName(item) }, () => { markClean(); leaveAfterDelete(); })
           : undefined}

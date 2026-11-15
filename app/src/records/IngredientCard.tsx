@@ -110,6 +110,10 @@ type Props = {
   onDelete?: (markClean: () => void) => void | Promise<boolean>;
   // The delete is counting what uses the item: the bin is disabled and says it is busy.
   deleting?: boolean;
+  // How many recipes use this EXISTING item, from the server (null: it could not be counted). Asked only when Save would turn a
+  // food item into packaging, resale or other, so the question can say so first (Mise 2, 15 Nov 2026). Left out, the question
+  // says it MAY be used in recipes — never a false «no recipe».
+  countRecipes?: () => Promise<number | null>;
   // «Merge another pack…»: the door is drawn only when this is given AND the card shows an EXISTING ingredient (never packaging, never a
   // new item). With unsaved edits it says so and does NOT call this: a merge closes and reopens the card, so typing must never be lost.
   onMerge?: () => void;
@@ -129,6 +133,19 @@ type Props = {
   readHistory?: (id: string) => Promise<readonly Readonly<Record<string, unknown>>[]>;
 };
 
+// How long Save waits for the recipe count before it asks anyway, with the «may be used» words: the count is a server read,
+// and with no signal it might never answer.
+export const RECIPE_COUNT_WAIT_MS = 4000;
+
+export function countWithin(count: (() => Promise<number | null>) | undefined): Promise<number | null> {
+  if (!count) return Promise.resolve(null);
+  return new Promise(resolve => {
+    const timer = setTimeout(() => { resolve(null); }, RECIPE_COUNT_WAIT_MS);
+    const settle = (n: number | null) => { clearTimeout(timer); resolve(n); };
+    count().then(n => { settle(typeof n === 'number' && Number.isFinite(n) ? n : null); }, () => { settle(null); });
+  });
+}
+
 // A Save refused on a price box, or on the weight box with the price's own sentence (`legacyPackWeight`: the card of before's
 // own sentence), or on a «+ New …» box of the card of before's two menus.
 type Refused = RefusedField | PriceBox | LegacyBox | 'priceWeight' | 'legacyPackWeight' | 'legacyPack' | 'legacyUnit';
@@ -144,7 +161,7 @@ type Refused = RefusedField | PriceBox | LegacyBox | 'priceWeight' | 'legacyPack
 //
 // ⚠️ THE FOOD WORDS (the categories, the package words, the carton word) COME FROM THE VENUE'S COUNTRY, never from `t()`.
 export function IngredientCard({
-  item, presetName, host, kind, kindLocked = false, preset, suppliers, categories, packs, orderUnits = [], language, titleRef, onSave, onLeave, onDelete, deleting = false, onMerge, mergeDoorRef, renderNewSupplier, watchRefusedSupplier,
+  item, presetName, host, kind, kindLocked = false, preset, suppliers, categories, packs, orderUnits = [], language, titleRef, onSave, onLeave, onDelete, deleting = false, countRecipes, onMerge, mergeDoorRef, renderNewSupplier, watchRefusedSupplier,
   mayPrice = false, country, money = FALLBACK_MONEY, readHistory,
 }: Props) {
   const { t, locale } = useT();
@@ -203,6 +220,8 @@ export function IngredientCard({
   // ⚠️ MADE ONCE, WHEN THE CARD OPENS, like the rest: the model's header says what a save writes from it.
   // ── The kind (Mise 2, 14 Nov 2026): on the working copy like the rest, kept in a ref for the same reason as `dirtyRef` ──
   const [kindNow, setKindNow] = useState<CardKind>(kind);
+  // Save is counting the recipes that use the item before it asks (a food item leaving food): the button says it is busy.
+  const [counting, setCounting] = useState(false);
   const kindRef = useRef<CardKind>(kind);
 
   const [allergenBaseline] = useState<AllergenWorking>(() => allergenWorkingFrom(opened, money));
@@ -447,14 +466,28 @@ export function IngredientCard({
     busy.current = true;
     let ok = false;
     try {
+      // ⚠️ AN EXISTING FOOD ITEM SAVED AS PACKAGING, RESALE OR OTHER while recipes use it (Mise 2, 15 Nov 2026): the question
+      // says so first — a warning, not a refusal. The recipes keep their link, but the item leaves the food choosers and its
+      // allergens are no longer drawn. A count that cannot be made (offline, no answer in time) says it MAY be used: never a
+      // false «no recipe». No count, no words, for a change between non-food kinds or a new item (no recipe can name it yet).
+      const leavesFood = opened !== null && kind === 'ingredient' && kindToSave !== 'ingredient';
+      let used: number | null = 0;
+      if (leavesFood) {
+        setCounting(true);
+        used = await countWithin(countRecipes);
+        if (!mounted.current) return;
+        setCounting(false);
+      }
+      const question = t('sup.save.question', { name: labelOf(built.payload) });
       ok = await confirm({
         title: t(KIND_WORDS[kindToSave].saveTitle),
-        message: t('sup.save.question', { name: labelOf(built.payload) }),
+        message: used === 0 ? question : used === null ? t('sup.kind.leavesFoodUnknown') : t('sup.kind.leavesFood', { n: used }),
         okLabel: t('ui.save'),
         cancelLabel: t('common.cancel'),
       });
     } finally {
       busy.current = false;
+      if (mounted.current) setCounting(false);
     }
     if (!ok || !mounted.current) return;
     // Saved: nothing is unsaved any more, so leaving asks nothing. Local-first: the list changes at once and the database
@@ -645,7 +678,7 @@ export function IngredientCard({
         titleId={id('title')}
         titleRef={titleRef}
         action={
-          <Button variant="primary" onPress={() => { void save(); }}>
+          <Button variant="primary" isPending={counting} onPress={() => { void save(); }}>
             <Check aria-hidden="true" />
             {t('ui.save')}
           </Button>

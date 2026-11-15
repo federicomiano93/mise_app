@@ -1965,6 +1965,12 @@ export const en = {
   'sup.kind.resale': 'Resale',
   'sup.kind.other': 'Other',
   'sup.ing.type': 'Type',
+  // Save turns a food item into packaging, resale or other while recipes use it (Mise 2, 15 Nov 2026): a warning, not a refusal.
+  'sup.kind.leavesFood': {
+    one: 'It is used in {n} recipe: it will no longer be among the ingredients of recipes and its allergens will no longer be shown. Save anyway?',
+    other: 'It is used in {n} recipes: it will no longer be among the ingredients of recipes and its allergens will no longer be shown. Save anyway?',
+  },
+  'sup.kind.leavesFoodUnknown': 'It may be used in some recipes: it will no longer be among the ingredients of recipes and its allergens will no longer be shown. Save anyway?',
   'sup.ing.typeHint': 'Resale: sold as it arrives, like drinks. Other: cleaning, tools, clothing. Only an ingredient can go into a recipe.',
   'sup.ing.delete.title': 'Delete “{name}”?',
   // The current app's sentence: said when the recipes and products could not be counted.
