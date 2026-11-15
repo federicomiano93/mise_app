@@ -147,7 +147,7 @@ describe('«Send» on a supplier’s own screen, and the device that sent it', (
   it('is disabled while nothing is typed', async () => {
     renderOrders('/orders/supplier/s-zed', { source: seeded(), ...STAFF });
     await screen.findAllByRole('spinbutton', undefined, LOAD);
-    expect(screen.getByRole('button', { name: 'Send the order to Zed' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Send the order to Zed' })).toHaveAttribute('aria-disabled', 'true');
   });
 
   it('sends this supplier’s rows through the editor, and asks «did it go?» on THIS device once the page is back', async () => {
@@ -183,6 +183,44 @@ describe('«Send» on a supplier’s own screen, and the device that sent it', (
     await waitFor(() => { expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument(); });
     expect(source.records.size).toBe(0);
     expect((source.draft?.awaitingSent as Record<string, unknown>)['s-alp']).toBeDefined();
+  });
+
+  it('keeps the focus on «Send» (aria-disabled, never disabled) once «Yes» has cleared the lines', async () => {
+    vi.spyOn(window, 'open').mockImplementation(() => ({ opener: null }) as unknown as Window);
+    const source = seeded();
+    const view = renderOrders('/orders/supplier/s-alp', { source, ...STAFF });
+    await screen.findAllByRole('spinbutton', undefined, LOAD);
+    await view.user.click(sendHere());
+    await sendFromEditor();
+    await waitFor(() => { expect((source.draft?.awaitingSent as Record<string, unknown> | undefined)?.['s-alp']).toBeDefined(); });
+    act(() => { document.dispatchEvent(new Event('visibilitychange')); });
+    const asked = within(await screen.findByRole('alertdialog', undefined, LOAD));
+    await view.user.click(asked.getByRole('button', { name: 'Yes' }));
+    await waitFor(() => { expect(source.records.has(`${TODAY}_s-alp`)).toBe(true); });
+    await waitFor(() => { expect(sendHere()).toHaveAttribute('aria-disabled', 'true'); });
+    expect(sendHere()).not.toBeDisabled();
+  });
+
+  it('⚠️ «Order placed» answers a question held only on this device too: it is never asked again', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    vi.spyOn(window, 'open').mockImplementation(() => ({ opener: null }) as unknown as Window);
+    const source = seeded();
+    source.failAwaiting.set = true;
+    const view = renderOrders('/orders/supplier/s-alp', { source, ...STAFF });
+    await screen.findAllByRole('spinbutton', undefined, LOAD);
+    await view.user.click(sendHere());
+    await sendFromEditor();
+    await screen.findByText(/^The other devices could not be told/, undefined, LOAD);
+    act(() => { void view.router.navigate('/orders/supplier/s-alp/confirm'); });
+    await screen.findByText('This is what will be recorded:', undefined, LOAD);
+    await view.user.click(screen.getByRole('button', { name: 'Order placed' }));
+    await view.user.click(within(await screen.findByRole('alertdialog', undefined, LOAD)).getByRole('button', { name: 'Yes, sent' }));
+    await waitFor(() => { expect(source.records.has(`${TODAY}_s-alp`)).toBe(true); });
+    await waitFor(() => { expect(view.router.state.location.pathname).toBe('/orders'); });
+    act(() => { document.dispatchEvent(new Event('visibilitychange')); });
+    await new Promise(resolve => setTimeout(resolve, 100));
+    expect(screen.queryByText(/did it go\?$/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
   });
 
   it('⚠️ a question the other devices could not be told stays on THIS device, and «Yes» records it without a claim', async () => {

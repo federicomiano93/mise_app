@@ -138,7 +138,7 @@ export function SupplierOrderScreen({ id, lens }: { id: string; lens: OrdersLens
   const sendingRef = useRef(false);
   const [sending, setSending] = useState(false);
   const sendNow = () => {
-    if (sendingRef.current) return;
+    if (sendingRef.current || lens.filledFor(id) === 0) return;
     const rows = draftSendRows(lens, snapshot.draft, [id]);
     if (rows.length === 0) return;
     sendingRef.current = true;
@@ -239,7 +239,9 @@ export function SupplierOrderScreen({ id, lens }: { id: string; lens: OrdersLens
               <Button
                 className={styles.add}
                 aria-label={t('ord.supplierSendAria', { supplier: label })}
-                isDisabled={filled === 0 || sending}
+                // ⚠️ aria-disabled, NOT disabled: the focus comes back to this button after the editor and «did it go?», and a button
+                // that becomes disabled under it (the lines cleared by «Yes») drops the focus on the page. The press is ignored instead.
+                aria-disabled={filled === 0 || sending || undefined}
                 onPress={sendNow}
               >
                 <Share aria-hidden="true" />

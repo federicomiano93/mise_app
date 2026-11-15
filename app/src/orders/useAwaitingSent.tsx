@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { historyDocId } from '@mise/shared/archive';
+import { historyDocId, ingredientDisplayLabel } from '@mise/shared/archive';
 import { dayWhen, localDayOf, todayISO } from '@mise/shared/day';
 import { supplierLabel } from '@mise/shared/supplier-label';
 import { useT } from '../i18n/useT';
@@ -8,7 +8,9 @@ import { announceAction } from '../telemetry/usage';
 import { Button } from '../ui/Button';
 import { Dialog } from '../ui/Dialog';
 import { useStatusMessage } from '../ui/StatusMessage';
+import { useAlert } from '../ui/useAlert';
 import { useConfirm } from '../ui/useConfirm';
+import { unitConflictOfLines } from './unitConflictText';
 import { useOrders, useOrdersStore } from './OrdersContext';
 import {
   answerAwaiting, awaitingEntry, awaitingList, isAwaiting, putQuestionBack, shouldAskBeforeRecording,
@@ -67,6 +69,7 @@ export function AwaitingSentProvider({ lens, children }: { lens: OrdersLens; chi
   const { draft } = useOrders();
   const say = useStatusMessage();
   const [confirm, confirmDialog] = useConfirm();
+  const [alert, alertDialog] = useAlert();
   // The questions THIS device sent: supplierId → { at, seen } (`seen` once the draft has shown the key, so its later absence means
   // somebody answered).
   const askHere = useRef(new Map<string, { at: string; seen: boolean }>());
@@ -83,8 +86,8 @@ export function AwaitingSentProvider({ lens, children }: { lens: OrdersLens; chi
   const retry = useRef(new Map<string, AwaitingEntry>());
   const yesButton = useRef<HTMLButtonElement>(null);
 
-  const latest = useRef({ t, locale, lens, draft, say, confirm, store });
-  latest.current = { t, locale, lens, draft, say, confirm, store };
+  const latest = useRef({ t, locale, lens, draft, say, confirm, alert, store });
+  latest.current = { t, locale, lens, draft, say, confirm, alert, store };
 
   const setLocalEntry = useCallback((id: string, entry: AwaitingEntry | null) => {
     const next = new Map(localRef.current);
@@ -198,6 +201,15 @@ export function AwaitingSentProvider({ lens, children }: { lens: OrdersLens; chi
     maybeAsk();
   }, [draft.awaitingSent, local, currentAwaiting, maybeAsk]);
 
+  // ⚠️ RECORDED ANOTHER WAY («Order placed», «Yes, sent», «Placed yesterday»): a question about that supplier held only on this device is
+  // answered by that very recording (the store removes the shared key itself). Left standing, a later «Yes» would record it twice.
+  useEffect(() => store.onMessage(message => {
+    if (message.kind !== 'order-recorded') return;
+    askHere.current.delete(message.supplierId);
+    retry.current.delete(message.supplierId);
+    if (localRef.current.has(message.supplierId)) setLocalEntry(message.supplierId, null);
+  }), [store, setLocalEntry]);
+
   // Back from WhatsApp (or the mail app) after a send: «did it go?» at once, on THIS device.
   useEffect(() => {
     const back = () => {
@@ -271,6 +283,19 @@ export function AwaitingSentProvider({ lens, children }: { lens: OrdersLens; chi
           announceAction('order-sent');
           tell(say2('ord.savedNotCleared', { name }), LONG_MS);
           return true;
+        }
+        if (outcome.kind === 'unit-conflict') {
+          // Today's record holds these lines in a unit this order cannot be added to: said with the lines, as placing says it.
+          const lines = latest.current.lens.linesOf(id);
+          const names = outcome.ids.map(line => {
+            const card = lines.find(candidate => candidate.id === line);
+            return (card && ingredientDisplayLabel(card)) || line;
+          });
+          void latest.current.alert({
+            message: unitConflictOfLines({ date: sent.date || todayISO(), names, now: new Date(), t: say2 }),
+            okLabel: say2('common.ok'),
+          });
+          return false;
         }
         tell(`${say2('ord.notRecorded', { names: name })} ${say2('ord.tryAgain')}`, LONG_MS);
         return false;
@@ -351,6 +376,7 @@ export function AwaitingSentProvider({ lens, children }: { lens: OrdersLens; chi
         />
       ) : null}
       {confirmDialog}
+      {alertDialog}
     </AwaitingContext.Provider>
   );
 }

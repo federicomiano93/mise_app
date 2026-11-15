@@ -385,6 +385,53 @@ describe('several roads', () => {
   });
 });
 
+describe('several suppliers, one editor each', () => {
+  it('⚠️ Escape with edits, then «Discard», stops the WHOLE send (not just this supplier) and names the rest', async () => {
+    const open = spyOpen();
+    const view = await atList(seeded({ ordersConfig: DIRECT_ONLY }), STAFF);
+    await toSend(view, 'Zed', 'Café');
+    await view.user.click(sendButton());
+    const first = await editor('Order for Café Bar Srl (1 of 2)');
+    await view.user.type(first.getByRole('textbox', { name: 'Change the message' }), ' extra');
+    await escapeFrom(view, screen.getByRole('dialog', { name: 'Order for Café Bar Srl (1 of 2)' }));
+    const ask = within(await screen.findByRole('alertdialog', { name: 'Discard your changes?' }, LOAD));
+    await waitFor(() => { expect(ask.getByRole('button', { name: 'Keep editing' })).toHaveFocus(); });
+    await view.user.click(ask.getByRole('button', { name: 'Discard' }));
+    const notice = await screen.findByRole('alertdialog', { name: 'Not sent: Café Bar Srl, Zed' }, LOAD);
+    expect(notice).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'Order for Zed (2 of 2)' })).not.toBeInTheDocument();
+    expect(open).not.toHaveBeenCalled();
+  });
+
+  it('«Keep editing» puts the focus back in the box', async () => {
+    spyOpen();
+    const view = await atList(seeded(), STAFF);
+    await toSend(view, 'Alpine Mills');
+    await view.user.click(sendButton());
+    const box = await editor('Check the order');
+    await view.user.type(box.getByRole('textbox', { name: 'Change the message' }), ' extra');
+    await view.user.click(box.getByRole('button', { name: 'Cancel' }));
+    const ask = within(await screen.findByRole('alertdialog', { name: 'Discard your changes?' }, LOAD));
+    await view.user.click(ask.getByRole('button', { name: 'Keep editing' }));
+    await waitFor(() => { expect(screen.getByRole('textbox', { name: 'Change the message' })).toHaveFocus(); });
+  });
+
+  it('⚠️ an order that went still waits for «did it go?» when the send screen is left in the middle of the batch', async () => {
+    spyOpen();
+    const source = seeded({ ordersConfig: DIRECT_ONLY });
+    const view = await atList(source, STAFF);
+    await toSend(view, 'Zed', 'Café');
+    await view.user.click(sendButton());
+    await view.user.click(await editorSend('Order for Café Bar Srl (1 of 2)'));
+    await editor('Order for Zed (2 of 2)');
+    // The phone's back gesture, with the second editor still open.
+    act(() => { void view.router.navigate(-1); });
+    await waitFor(() => { expect(view.router.state.location.pathname).toBe('/orders'); });
+    await waitFor(() => { expect(Object.keys(source.draft?.awaitingSent as object ?? {})).toStrictEqual(['s-caf']); });
+    expect(await didItGo('Café Bar Srl')).toBeInTheDocument();
+  });
+});
+
 describe('the order AS A PICTURE through the share sheet', () => {
   it('shares one picture per supplier, drawn from the edited text; Skip names the one skipped; asks «did it go?» at once', async () => {
     const share = allowShare();

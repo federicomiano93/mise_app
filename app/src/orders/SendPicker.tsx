@@ -26,6 +26,9 @@ type Props = {
   // A send reached these suppliers. Called before the «not reached» line is spoken; the screen goes on from here. `rows`: the rows
   // that went, as they were at the press; `handOff`: how the last message left (sendFlow.ts RoadResult).
   onReached: (ids: readonly string[], info: { rows: readonly SendRow[]; handOff: 'share' | 'text' }) => void;
+  // ⚠️ CALLED EVEN WHEN THE SCREEN HAS GONE MEANWHILE (the phone's back gesture in the middle of a batch): the orders that already went
+  // must still wait for «did it go?», or one goes to the supplier and nobody is ever asked about it. Before onReached.
+  onHanded?: (rows: readonly SendRow[], handOff: 'share' | 'text') => void;
   // The in-app list was written (or is waiting for the connection): the screen leaves. Not given where the list road is never
   // offered (History's re-send).
   onListSent?: () => void;
@@ -42,7 +45,7 @@ const LIST_SENT_MS = 6000;
 //
 // ⚠️ «SEND» CALLS useSendOrder's `send` STRAIGHT FROM ITS PRESS, with nothing awaited first (a window opened later is blocked as
 // a pop-up). A second press while the first is still pending is ignored.
-export function SendPicker({ lens, rows, titleId, emptyText, resend = false, onReached, onListSent }: Props) {
+export function SendPicker({ lens, rows, titleId, emptyText, resend = false, onReached, onHanded, onListSent }: Props) {
   const { t } = useT();
   const say = useStatusMessage();
   const [send, sendDialogs] = useSendOrder(lens);
@@ -52,6 +55,8 @@ export function SendPicker({ lens, rows, titleId, emptyText, resend = false, onR
   latest.current = onReached;
   const afterList = useRef(onListSent);
   afterList.current = onListSent;
+  const handed = useRef(onHanded);
+  handed.current = onHanded;
 
   const [ticked, setTicked] = useState<readonly string[]>([]);
   const [grouped, setGrouped] = useState(true);
@@ -123,6 +128,9 @@ export function SendPicker({ lens, rows, titleId, emptyText, resend = false, onR
     }
     void sending.then(result => {
       pendingRef.current = false;
+      if (result?.kind === 'sent' && result.ids.length > 0) {
+        handed.current?.(going.filter(row => result.ids.includes(row.id)), result.handOff);
+      }
       if (!mounted.current) {
         // ⚠️ A LIST THAT WAS WRITTEN AFTER THE PERSON WENT BACK IS STILL SAID (sent, queued or failed), and nobody is moved: the status
         // line outlives this screen. A send that was stopped by leaving ('nothing', or no answer at all) says nothing, and takes its

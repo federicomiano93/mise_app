@@ -1915,5 +1915,9 @@ checks in `tests/rules/firestore-rules-check.mjs`; already deployed live with v1
 owner's PR #554 of 14 Nov made the picture the road wherever the phone can share one. (2) Email counts only a window that opened (F-3),
 where the current app counts every mailto. (3) The discard question is the same dialog changing its words, not a second dialog on top.
 (4) The «did it go?» banner sits under the list's head in both views (the current app has one page). (5) The saving line of the list's
-head is left empty, not stale, while a supplier screen speaks. Not checked on a real phone or tablet yet: the share sheet, WhatsApp coming
+head is left empty, not stale, while a supplier screen speaks. (6) «Yes» from the dialog over a supplier's screen leaves that screen open even when it
+is now empty (the current app closes it); Back goes to the list. (7) A batch left in the middle (the back gesture) still hands the orders
+that already went to «did it go?» (`SendPicker onHanded`), and asks no further question nobody could answer. **Known, as in the current
+app:** the busy marker is held only while the text is edited, not while the share sheet is open; and a question held only on this device
+can be shadowed by a newer shared send to the same supplier until a reload. Not checked on a real phone or tablet yet: the share sheet, WhatsApp coming
 back, and two devices answering at once are the owner's drive.

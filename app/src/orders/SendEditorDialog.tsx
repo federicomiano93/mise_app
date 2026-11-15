@@ -34,7 +34,10 @@ export function SendEditorDialog({ question, render, answer }: Props) {
   const { job, i, n, photo } = question;
   const original = job.text;
   const [text, setText] = useState(original);
-  const [asking, setAsking] = useState(false);
+  // The way out the person asked for («cancelled» by Cancel or Escape, «skipped» by Skip), while «Discard your changes?» is up.
+  const [asking, setAsking] = useState<EditOutcome | null>(null);
+  const area = useRef<HTMLTextAreaElement>(null);
+  const backToBox = useRef(false);
   const [sharing, setSharing] = useState(false);
   const sharingRef = useRef(false);
   const [picture, setPicture] = useState<PictureState>({ ready: false, busy: photo, failed: false });
@@ -117,23 +120,35 @@ export function SendEditorDialog({ question, render, answer }: Props) {
 
   const leave = (outcome: EditOutcome) => {
     if (sharingRef.current) return;
-    if (text !== original) { setAsking(true); return; }
+    if (text !== original) { setAsking(outcome); return; }
     answer({ outcome, text });
   };
+  const keepEditing = () => {
+    backToBox.current = true;
+    setAsking(null);
+  };
+  // «Keep editing»: the focus goes back into the box, where the person was typing.
+  useEffect(() => {
+    if (asking !== null || !backToBox.current) return;
+    backToBox.current = false;
+    requestAnimationFrame(() => { area.current?.focus(); });
+  }, [asking]);
   const otherOutcome: EditOutcome = n > 1 ? 'skipped' : 'cancelled';
 
-  if (asking) {
+  if (asking !== null) {
     return (
+      // A dialog of its own (key): React must not reuse the editor's buttons, or «Keep editing» never takes the focus.
       <Dialog
+        key="discard"
         isOpen
         role="alertdialog"
         title={t('ord.sendEditor.discard.title')}
         message={t('ord.sendEditor.discard.body')}
-        onClose={() => { setAsking(false); }}
+        onClose={keepEditing}
         actions={(
           <>
-            <Button autoFocus onPress={() => { setAsking(false); }}>{t('ord.sendEditor.discard.no')}</Button>
-            <Button variant="danger" onPress={() => { answer({ outcome: otherOutcome, text }); }}>{t('ord.sendEditor.discard.yes')}</Button>
+            <Button autoFocus onPress={keepEditing}>{t('ord.sendEditor.discard.no')}</Button>
+            <Button variant="danger" onPress={() => { answer({ outcome: asking, text }); }}>{t('ord.sendEditor.discard.yes')}</Button>
           </>
         )}
       />
@@ -145,6 +160,7 @@ export function SendEditorDialog({ question, render, answer }: Props) {
   const waitingForPicture = photo && !picture.ready && !picture.failed;
   return (
     <Dialog
+      key="editor"
       isOpen
       title={title}
       onClose={() => { leave('cancelled'); }}
@@ -178,6 +194,7 @@ export function SendEditorDialog({ question, render, answer }: Props) {
         <label className={styles.label} htmlFor={areaId}>{t('ord.sendEditor.edit')}</label>
         <p className={styles.hint} id={hintId}>{t('ord.sendEditor.hint')}</p>
         <textarea
+          ref={area}
           id={areaId}
           className={styles.text}
           rows={6}

@@ -80,7 +80,10 @@ export type OrdersMessage =
   // The day chosen on a supplier's day line was refused: the line is back on the day that is stored (parity D7).
   | { readonly kind: 'day-not-saved' }
   // «Close as not ordered» or «Reopen» was refused: Firestore has already put the supplier back as it was on screen.
-  | { readonly kind: 'close-not-saved' };
+  | { readonly kind: 'close-not-saved' }
+  // This supplier's order was recorded another way than «Yes» to «did it go?» («Order placed», «Yes, sent», «Placed yesterday»): a
+  // question about it held only on this device is answered too (useAwaitingSent).
+  | { readonly kind: 'order-recorded'; readonly supplierId: string };
 
 export interface OrdersSnapshot {
   // Every supplier, as stored (the lens keeps the active ones and sorts them).
@@ -647,6 +650,7 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
 
   // A supplier's order was recorded another way than «Yes»: its waiting question, if any, is answered on every device.
   function forgetQuestion(supplierId: string) {
+    say({ kind: 'order-recorded', supplierId });
     if (!isAwaiting(snapshot.draft.awaitingSent[supplierId])) return;
     source.clearAwaitingSent(supplierId).catch((err: unknown) => { console.error('Removing the answered question failed:', err); });
   }

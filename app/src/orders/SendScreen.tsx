@@ -48,10 +48,10 @@ export function SendScreen({ lens }: { lens: OrdersLens }) {
         emptyText={t('ord.send.empty')}
         // ⚠️ HANDED OVER IS NOT «GONE» (the current app's PR #554): every device now asks «did it go?» about exactly the quantities that
         // went, and whoever answers «Yes» records them. Back to the list.
-        onReached={(_ids, { rows: went, handOff }) => {
+        onHanded={(went, handOff) => {
           awaiting.wait(went.flatMap(row => (row.lines ? [{ supplierId: row.id, ...row.lines }] : [])), { handOff });
-          leave();
         }}
+        onReached={leave}
         // The in-app list is written: back to the Orders list, with the order as it was (nothing is recorded after a list).
         onListSent={leave}
       />
