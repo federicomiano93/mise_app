@@ -1,16 +1,21 @@
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode, Ref } from 'react';
 import { FileText, Table } from 'lucide-react';
-import { exportErrorCode, exportErrorKey, exportFileName, hasRoundableRows } from '@mise/shared/recipe-export';
+import { exportErrorCode, exportErrorKey, exportFileName } from '@mise/shared/recipe-export';
 import type { ExportModel } from '@mise/shared/recipe-export';
 import { useT } from '../i18n/useT';
 import { Button } from './Button';
 import { Dialog } from './Dialog';
-import { SettingSwitch } from './SettingSwitch';
 import { buildPdfBlob, buildXlsxBlob } from './recipeExport';
 import styles from './ExportSheet.module.css';
 
-type Request = { model: ExportModel; totalLabel: string };
+// `fileName`: how the CALLER names the file, given the extension and the translated word for a nameless recipe. The recipe book names
+// it after the recipe's title (titleFileName); left out, the Calculator's batch names (exportFileName: «Pizza_x3.pdf»).
+type Request = {
+  model: ExportModel;
+  totalLabel: string;
+  fileName?: (ext: 'pdf' | 'xlsx', fallback: string) => string;
+};
 type Kind = 'pdf' | 'xlsx';
 
 // «Export as PDF or Excel» for a recipe as the screen shows it (the Calculator's scaled dough, or a Recipe
@@ -18,7 +23,7 @@ type Kind = 'pdf' | 'xlsx';
 // file…», then «File ready» with a Download link. Port of js/export-sheet.js, state for state.
 //
 //   const [openExport, exportSheet] = useExportSheet();
-//   openExport({ model, totalLabel });    // and put exportSheet in the component's output
+//   openExport({ model, totalLabel, fileName? });    // and put exportSheet in the component's output
 //
 // ⚠️ THE FILE IS NOT SAVED ON THE FIRST TAP, AND THAT IS DELIBERATE. The libraries load on the tap, so by the
 // time the file exists the tap's «user activation» may have run out, and a browser then refuses a programmatic
@@ -32,8 +37,8 @@ type Kind = 'pdf' | 'xlsx';
 // ⚠️ A FAILURE IS REPORTED WITH FIXED WORDS ONLY (which file, which stage), never the recipe, its name or the
 // error's own message: console.error is what telemetry/errorReport.ts picks up.
 //
-// The choice also holds a switch, «Round the weights in the PDF», shown only when a row is in grams; the PDF
-// reads it, the spreadsheet always keeps exact numbers.
+// ⚠️ NO ROUNDING QUESTION (the owner's decision, 16 Nov 2026): the PDF and the spreadsheet print the amounts they are handed. The
+// recipe book rounds each batch row once, to a clean step, in its scaling, so the file already says what the screen says.
 //
 // Escape, the backdrop and Cancel / Close end it; the focus is trapped inside and goes back to what opened it
 // (React Aria's modal).
@@ -63,11 +68,6 @@ function ExportSheet({ request, onClose }: { request: Request; onClose: () => vo
   const run = useRef(0);
   const url = useRef<string | null>(null);
   const first = useRef<HTMLElement | null>(null);
-  // ON at every opening, not remembered (the component is mounted anew per opening). Only the PDF reads it:
-  // the spreadsheet keeps exact numbers.
-  const [rounded, setRounded] = useState(true);
-  const nameId = useId();
-  const noteId = useId();
 
   // The first control of each state takes the focus (the dialog itself takes it only when it opens).
   useEffect(() => { first.current?.focus(); }, [state.kind]);
@@ -97,9 +97,11 @@ function ExportSheet({ request, onClose }: { request: Request; onClose: () => vo
     const mine = ++run.current;
     setState({ kind: 'working' });
     // The words for a nameless recipe are read now, in the venue's language, never at module load.
-    const fileName = exportFileName(request.model, kind, t('export.fileFallback'));
+    const fileName = request.fileName !== undefined
+      ? request.fileName(kind, t('export.fileFallback'))
+      : exportFileName(request.model, kind, t('export.fileFallback'));
     const made = kind === 'pdf'
-      ? buildPdfBlob(request.model, { rounded })
+      ? buildPdfBlob(request.model, request.totalLabel)
       : buildXlsxBlob(request.model, request.totalLabel, t('export.sheetFallback'));
     made.then(blob => {
       if (run.current !== mine) return;
@@ -136,16 +138,6 @@ function ExportSheet({ request, onClose }: { request: Request; onClose: () => vo
             <span className={styles.note}>{t('export.excelNote')}</span>
           </span>
         </Button>
-        {hasRoundableRows(request.model) ? (
-          // The whole row is the switch, as in the current app: it looks like the two kinds above it, so a tap on its
-          // words must answer. Named by the words alone and described by the note, or the note would be read twice.
-          <SettingSwitch selected={rounded} onChange={setRounded} labelledBy={nameId} describedBy={noteId} className={styles.round}>
-            <span className={styles.text}>
-              <span id={nameId} className={styles.name}>{t('export.roundWeights')}</span>
-              <span id={noteId} className={styles.note}>{t('export.roundNote')}</span>
-            </span>
-          </SettingSwitch>
-        ) : null}
       </div>
     );
     actions = cancel();
