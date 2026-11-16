@@ -2177,6 +2177,10 @@ Total on screen is 1 g or more from the batch typed, the same `cat.totalOff` lin
 − `shownTotalGrams` (the very function that writes the Total), so the line says exactly the gap the Total shows (invented example in
 the specs: 5056 g asked, Total 5110 g → «… di 54 g …»). None from a row, none unscaled or at the recipe's own total, never in a file.
 
+**The line is announced** (review of PR #563): it sits inside a polite live region (`role="status"`, `aria-live="polite"`) that is
+always under the table, empty without a warning — a screen reader reads out text that arrives in a region it already knows, not one
+that appears with its text — so the line is read out when a new batch brings it. Pinned by `RecipesSection.cleanStep.spec.tsx`.
+
 **The Total is the rows shown, added up** (`shownTotalGrams` of `shared/src/catalogue-model.ts`, called by
 `app/src/recipes/recipeAmounts.ts`): each weighable row converted to grams (0.714 l is 714 g), pieces, spoons and «to taste» left out,
 in whole grams — never the batch typed or a figure worked out again. The export model's `totalG` is that same number. Scaled by its

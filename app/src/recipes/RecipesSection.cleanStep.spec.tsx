@@ -1,5 +1,6 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { LOAD, recipe, renderRecipes, sourceWith } from '../testing/renderRecipes';
 
 // The recipe book's clean-step rounding and its one correction of the total (Mise 2 only, the owner's decision of 16 Nov 2026), as
@@ -58,8 +59,25 @@ describe('clean-step rounding on the recipe screen', () => {
     // The Total is the rows shown, added up — not the 3 g typed.
     expect(rowsOf().at(-1)).toEqual(['Total', '5', 'g']);
     const line = main().getByText('The total is off by 2 g: check the recipe.');
-    // Right under the ingredient table.
-    expect(table().nextElementSibling).toBe(line);
+    // Right under the ingredient table, inside its polite live region.
+    expect(table().nextElementSibling).toBe(line.parentElement);
+  });
+
+  it('the line is announced: it arrives in a polite live region that is already there before it', async () => {
+    const user = userEvent.setup();
+    await open('five');
+    // The recipe as written: the region is under the table, empty.
+    const region = table().nextElementSibling as HTMLElement;
+    expect(region).toHaveAttribute('role', 'status');
+    expect(region).toHaveAttribute('aria-live', 'polite');
+    expect(region).toBeEmptyDOMElement();
+    // A batch of 3 g the correction refuses: the line arrives in that same region, which a screen reader then reads out.
+    await user.type(main().getByRole('spinbutton', { name: 'Total dough weight in grams' }), '3');
+    await user.click(main().getByRole('button', { name: 'Calculate' }));
+    await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Calculate' }));
+    const line = await main().findByText('The total is off by 2 g: check the recipe.');
+    expect(table().nextElementSibling).toBe(region);
+    expect(region).toContainElement(line);
   });
 
   it('says it in Italian', async () => {
