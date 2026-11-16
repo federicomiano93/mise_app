@@ -137,3 +137,55 @@ describe('the Export button', () => {
     await waitFor(() => { expect(screen.queryByRole('dialog')).not.toBeInTheDocument(); });
   });
 });
+
+// ⚠️ THE CALCULATOR'S PDF PAGE, PINNED (review of PR #563): the builders above are replaced, so the file the Calculator hands over is
+// built here with the REAL builder and read back — the first row 88 pt under the title, and a bold Total row with the Calculator's own
+// word (calc.totalDough) and the printed rows added up. A change to either now fails here, not silently on the owner's prints.
+describe('the Calculator PDF page', () => {
+  type Placed = { text: string; x: number; y: number; bold: boolean };
+  // Every piece of text jsPDF wrote, with its baseline measured from the TOP of the page (as the layout counts it) and its font.
+  async function placedText(model: unknown, label: string): Promise<Placed[]> {
+    const real = await vi.importActual<typeof import('../ui/recipeExport')>('../ui/recipeExport');
+    const pdf = await (await real.buildPdfBlob(model as Parameters<typeof real.buildPdfBlob>[0], label)).text();
+    const height = Number(/\/MediaBox \[0 0 [\d.]+ ([\d.]+)\]/.exec(pdf)?.[1]);
+    return Array.from(pdf.matchAll(/BT\n\/(F\d+) [\d.]+ Tf\n[\s\S]*?([\d.]+) ([\d.]+) Td\n\((.*)\) Tj\nET/g), m => ({
+      text: m[4]!, x: Number(m[2]), y: Math.round((height - Number(m[3])) * 100) / 100, bold: m[1] === 'F2',
+    })).filter(item => !/^\.+$/.test(item.text));
+  }
+
+  async function exportedPdf(lang: 'en' | 'it') {
+    focaccia();
+    const { user } = await open('/calculator/focaccia', onlyFocaccia(), lang);
+    await user.click(main().getByRole('button', { name: lang === 'it' ? 'Esporta' : 'Export' }));
+    await user.click(within(await screen.findByRole('dialog', { name: lang === 'it' ? 'Esporta come' : 'Export as' })).getByRole('button', { name: /^PDF/ }));
+    await screen.findByRole('dialog', { name: lang === 'it' ? 'File pronto' : 'File ready' });
+    const [model, label] = builders.buildPdfBlob.mock.calls[0]! as [unknown, string];
+    return { label, placed: await placedText(model, label) };
+  }
+
+  it('hands the builder the «Total dough» word, and the page puts the first row 88 pt under the title', async () => {
+    const { label, placed } = await exportedPdf('en');
+    expect(label).toBe('Total dough');
+    const [title, first] = placed;
+    expect(title).toMatchObject({ text: 'Focaccia', bold: true });
+    expect(first).toMatchObject({ text: 'Flour', bold: false });
+    expect(first!.y - title!.y).toBe(88);
+  });
+
+  it('closes the list with a bold Total row: «Total dough» and the printed rows added up', async () => {
+    const { placed } = await exportedPdf('en');
+    const [name, weight] = placed.slice(-2);
+    expect(name).toMatchObject({ text: 'Total dough', bold: true });
+    expect(weight).toMatchObject({ text: '2000 g', bold: true });
+    // On one line, the lowest on the page, under the ingredient rows the card shows.
+    expect(weight!.y).toBe(name!.y);
+    expect(placed.slice(1, -2).map(item => item.text)).toEqual(['Flour', '1159 g', 'Water', '812 g', 'Salt', '23 g', 'Yeast', '6 g']);
+    expect(Math.max(...placed.map(item => item.y))).toBe(name!.y);
+  });
+
+  it('in Italian the Total row says «Impasto totale»', async () => {
+    const { label, placed } = await exportedPdf('it');
+    expect(label).toBe('Impasto totale');
+    expect(placed.at(-2)).toMatchObject({ text: 'Impasto totale', bold: true });
+  });
+});
