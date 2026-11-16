@@ -52,7 +52,8 @@
 // (clean-step.ts: 1 g under 250 g, 5 g up to 499 g, 10 g from 500 g), corrects them ONCE to the typed total when every weighable
 // row is in grams (applyTargetTotal, in place of the original's residual on the largest row), and a recipe scaled to its own total
 // reads as written (baseAmounts). `scaleCatalogueResult` and `scaledResult` (Mise 2 only, with the type `ScaleResult`) also answer
-// the warning the screen says when the total cannot be made to add up. The current app keeps whole grams: js/ is the rollback copy and does not change, so the specs no longer compare
+// the warning the screen says when the total does not add up (all grams: the correction refused; mixed units: the rows' Total is 1 g
+// or more off), and `shownTotalGrams` is the one Total every recipe-book screen writes. The current app keeps whole grams: js/ is the rollback copy and does not change, so the specs no longer compare
 // the two files' scaleCatalogue (catalogue-model.spec.ts, odd-inputs.spec.ts say where).
 //
 // PRIVATE, ported only because something above calls them and not exported: `normalizeIngredient(s)` (the
@@ -970,11 +971,29 @@ const scaledRow = (row: unknown, factor: number): number | null => {
 
 // ⚠️ A RECIPE «SCALED» TO ITS OWN TOTAL IS NOT SCALED: typing the recipe's own weight in the batch box must show the recipe as
 // written, not the same recipe moved to clean steps (337 g becoming 335 g with nothing asked). Compared in whole grams, as the
-// box shows them.
-const isOwnTotal = (recipe: unknown, target: number): boolean => Math.round(target) === Math.round(weighableTotalGrams(recipe));
+// box shows them, with the typed amounts added up AND with the Total the recipe screen and the editor show (shownTotalGrams of the
+// rows as written): with half grams and a kg, l or ml row the two are a gram apart (10.5 g + 10.5 g + 1 kg: 1021 typed, 1022 shown),
+// and typing the Total a person SEES must not scale the recipe and warn that it is 1 g off (review of PR #563).
+const isOwnTotal = (recipe: unknown, target: number): boolean => {
+  const whole = Math.round(target);
+  return whole === Math.round(weighableTotalGrams(recipe)) || whole === shownTotalGrams(recipe, baseAmounts(recipe));
+};
 
-// A batch as the screen draws it: the amounts (as scaleCatalogue answers them) and, when the rows could not be made to add up to
-// the typed total, the warning the recipe screen says under its Total (clean-step.ts, applyTargetTotal). Mise 2 only.
+// The Total the recipe screen writes under the rows (Mise 2 only): the rows AS SHOWN, each converted to grams through the unit table
+// (ingredientGrams: 0.714 l counts 714 g, pieces and «to taste» nothing), added up and rounded to the whole gram. ⚠️ ONE FUNCTION for
+// the Total of the recipe screen (and so the export model's totalG), the editor's Total, the warning of a mixed-unit batch and the
+// own-total check — so two screens can never disagree on the same rows by the rounding of a half gram. (The PDF adds up its printed
+// rows with printedTotalGrams, and the Excel file with its own formula: for the recipe book's rows they come to the same number.) `amounts` is aligned with recipe.ingredients (null = «to taste»).
+export function shownTotalGrams(recipe: unknown, amounts: readonly (number | null | undefined)[]): number {
+  const grams = rowsOf(recipe).reduce<number>((sum, row, index) => {
+    const value = amounts[index];
+    return value === null || value === undefined ? sum : sum + ingGrams({ unit: unitOf(row), grams: value });
+  }, 0);
+  return Math.round(grams);
+}
+
+// A batch as the screen draws it: the amounts (as scaleCatalogue answers them) and, when the rows do not add up to the typed total,
+// the warning the recipe screen says under its Total (clean-step.ts, applyTargetTotal; for mixed units see below). Mise 2 only.
 export interface ScaleResult {
   readonly amounts: (number | null)[];
   readonly warning: TotalWarning | null;
@@ -986,7 +1005,9 @@ export interface ScaleResult {
 // non-positive target / no weighable mass → zeros (no NaN). The recipe's own total → baseAmounts.
 // ⚠️ WHEN EVERY WEIGHABLE ROW IS IN GRAMS the gram rows are corrected ONCE so they add up to the typed total (applyTargetTotal:
 // gram by gram where it hurts least, then whole steps, then the largest row), or left as rounded with a warning when that would be
-// absurd. With kg, l, ml… rows each row is rounded in its own unit and nothing is corrected: the Total is the rows added up.
+// absurd. With kg, l, ml… rows each row is rounded in its own unit and nothing is corrected: the Total is the rows added up, and
+// when it is 1 g or more away from the typed total the same warning says by how much (the owner's decision, 16 Nov 2026: a total
+// that does not match is said, never hidden). `diff` = the typed total (whole grams) less shownTotalGrams, the Total on screen.
 export function scaleCatalogueResult(recipe: unknown, targetGrams: unknown): ScaleResult {
   const ings = rowsOf(recipe);
   const target = Number(targetGrams);
@@ -998,7 +1019,10 @@ export function scaleCatalogueResult(recipe: unknown, targetGrams: unknown): Sca
   const factor = target / weighTotal;
   const amounts = ings.map(i => scaledRow(i, factor));
   const grams = ings.flatMap((row, index) => (unitOf(row) === 'g' ? [index] : []));
-  if (!ings.every(row => unitOf(row) === 'g' || !isWeighableUnit(unitOf(row)))) return { amounts, warning: null };
+  if (!ings.every(row => unitOf(row) === 'g' || !isWeighableUnit(unitOf(row)))) {
+    const gap = Math.round(target) - shownTotalGrams(recipe, amounts);
+    return { amounts, warning: Math.abs(gap) >= 1 ? { diff: gap } : null };
+  }
   const corrected = applyTargetTotal(grams.map(index => gramsOfRow(ings[index]) * factor), target);
   grams.forEach((index, k) => { amounts[index] = corrected.amounts[k]!; });
   return { amounts, warning: corrected.warning };
