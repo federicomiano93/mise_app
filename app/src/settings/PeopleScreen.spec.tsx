@@ -381,7 +381,9 @@ describe('while the invitation is made', () => {
     expect(await main().findByText(/^Joins as employee · 1 minute left ·/)).toBeInTheDocument();
     expect(isBusy()).toBe(true);
     expect(await main().findByText(/^Joins as employee · expired ·/, {}, { timeout: 2000 })).toBeInTheDocument();
-    expect(isBusy()).toBe(false);
+    // ⚠️ THE MARKER IS LET GO IN A PASSIVE EFFECT (InviteCard's useEffect cleanup), which React may run a tick after the DOM shows
+    // «expired»: read straight after the text it raced, and lost on a loaded CI runner (PR #564's push run).
+    await waitFor(() => { expect(isBusy()).toBe(false); });
   });
 
   it('lets go of the busy marker after a code\'s whole life on THIS phone\'s clock, even when the server says it dies later (a phone set behind)', async () => {
