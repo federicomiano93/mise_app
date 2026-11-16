@@ -429,3 +429,21 @@ the focus, the browser's Back, the keyboard, a list opened by address); `shell/r
   those whose label can only be refused (allergens off, ingredients not declared), which the label screen then explains; the
   «Recipes» switch in «Sections for employees» now hides «Labels» too, and its name does not say so; the choices' Back replaces
   the screen with the Home, so the history holds the Home twice after a visit from the rail.
+
+## «Ordini da fare» card as built (16 Nov 2026) — NEW IN MISE 2, no original in the current app
+
+Piece B (item 7) of the Orders redesign agreed on the lab tablet (`docs/mockups/orders-tablet-2026-11.md`, added by PR #564).
+
+- **What it shows.** `OrdersDueCard` (`home/`): the suppliers still to order TODAY — an order day today, not placed today, not closed today
+  as «not needed» (reminders `dueTodayIds` through `shell/useDueSuppliers`, the rule of the Orders list and the Suppliers list), A→Z by
+  `supplierLabel`, one amber row each; a tap pushes `/orders/supplier/<id>` (the supplier's own Back then goes up to the Orders list, the
+  browser's Back to the Home). None left: the card is not drawn. Title only («Ordini da fare» / «Orders to place»), no sentence.
+- **Who.** Only somebody the venue shows Orders to (`useVisibleSections`): for anybody else nothing is read. The rules already allow the
+  reads to exactly them (`canUse(lid, 'orders')` on `orders-history` and `drafts`, `canReadOrdersData` on `suppliers`).
+- **Data (P14).** `home/ordersDueSource.ts`, three read-only listeners on paths and queries the app already makes: `suppliers`,
+  `orders-history` with `date >= today` (the Suppliers section's `watchPlaced`), `drafts/current` (only `skipped`). No new collection,
+  field, rule or index. They live while the Home is on screen (`useOrdersDue`), and move to the new day at midnight (`useTodayKey`).
+- **No flash.** Nobody is listed before the SERVER has answered for the records and the draft (`fromServer`): offline, the card stays
+  hidden. A dead stream hides it too (the card is a shortcut, never the only way to Orders).
+- **Layout.** From 1000px «Da fare» and «Ordini da fare» are two columns (`.cards`, the Home's column widened to 72rem); one under the
+  other below. Each card is its own `PartBoundary`.
