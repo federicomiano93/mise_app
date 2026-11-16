@@ -2185,7 +2185,12 @@ that appears with its text — so the line is read out when a new batch brings i
 `app/src/recipes/recipeAmounts.ts`): each weighable row converted to grams (0.714 l is 714 g), pieces, spoons and «to taste» left out,
 in whole grams — never the batch typed or a figure worked out again. The export model's `totalG` is that same number. Scaled by its
 total with every weighable row in grams it is the batch typed (unless the line under it says it is off); with kg, l or ml rows it can be
-a few grams from the batch, and then the line says by how much; from a row it can be a few grams from the batch, with no line. ⚠️ The batch box still shows the
+a few grams from the batch, and then the line says by how much; from a row it can be a few grams from the batch, with no line. The
+EDITOR's Total is the same function over the rows as the recipe screen shows them (`totalText` = `shownTotalGrams(clean,
+baseAmounts(clean))`, review of PR #563): it used to add up the typed amounts exactly, which with half grams and a kg, l or ml row read
+a gram off the recipe screen (10.5 g + 10.5 g + 1 kg: 1021 in the editor, 1022 on the screen). All-gram recipes read as before. And
+typing that shown Total in the batch box is the recipe's own total, as typing the typed amounts' sum always was (`isOwnTotal` checks
+both): the recipe as written, never a 1 g warning. ⚠️ The batch box still shows the
 batch («Calculate from this ingredient»: box 5469, Total 5470 on the owner's brioche example).
 
 **The export prints what it receives.** The «Round the weights in the PDF» switch is gone (the dialog, its state, the `rounded`

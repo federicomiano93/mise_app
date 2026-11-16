@@ -1279,6 +1279,18 @@ describe('one correction of the total when scaling by TOTAL weight (Mise 2 only)
     expect(ported.scaledResult(KG, fromRow.target, { index: 0, amount: 510 }).warning).toBe(null);
   });
 
+  test('typing the Total the screen shows is the recipe as written: no batch, no warning (half grams with a kg row)', () => {
+    const HALF = { ingredients: [
+      { label: 'Zucchero di prova', grams: 10.5, unit: 'g' }, { label: 'Sale di prova', grams: 10.5, unit: 'g' },
+      { label: 'Farina di prova', grams: 1, unit: 'kg' },
+    ] };
+    // The rows as written read 11 g, 11 g and 1 kg: the screen and the editor show 1022; the typed amounts add up to 1021.
+    expect(ported.shownTotalGrams(HALF, ported.baseAmounts(HALF))).toBe(1022);
+    for (const target of [1022, 1021]) {
+      expect(ported.scaleCatalogueResult(HALF, target), String(target)).toStrictEqual({ amounts: ported.baseAmounts(HALF), warning: null });
+    }
+  });
+
   test('shownTotalGrams: each row through the unit table, pieces and «to taste» left out, whole grams', () => {
     const recipe = { ingredients: [
       { label: 'Farina di prova', unit: 'g' }, { label: 'Latte di prova', unit: 'l' }, { label: 'Uova di prova', unit: 'pcs' },

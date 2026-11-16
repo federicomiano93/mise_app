@@ -971,8 +971,13 @@ const scaledRow = (row: unknown, factor: number): number | null => {
 
 // ⚠️ A RECIPE «SCALED» TO ITS OWN TOTAL IS NOT SCALED: typing the recipe's own weight in the batch box must show the recipe as
 // written, not the same recipe moved to clean steps (337 g becoming 335 g with nothing asked). Compared in whole grams, as the
-// box shows them.
-const isOwnTotal = (recipe: unknown, target: number): boolean => Math.round(target) === Math.round(weighableTotalGrams(recipe));
+// box shows them, with the typed amounts added up AND with the Total the recipe screen and the editor show (shownTotalGrams of the
+// rows as written): with half grams and a kg, l or ml row the two are a gram apart (10.5 g + 10.5 g + 1 kg: 1021 typed, 1022 shown),
+// and typing the Total a person SEES must not scale the recipe and warn that it is 1 g off (review of PR #563).
+const isOwnTotal = (recipe: unknown, target: number): boolean => {
+  const whole = Math.round(target);
+  return whole === Math.round(weighableTotalGrams(recipe)) || whole === shownTotalGrams(recipe, baseAmounts(recipe));
+};
 
 // The Total the recipe screen writes under the rows (Mise 2 only): the rows AS SHOWN, each converted to grams through the unit table
 // (ingredientGrams: 0.714 l counts 714 g, pieces and «to taste» nothing), added up and rounded to the whole gram. ⚠️ ONE FUNCTION for
