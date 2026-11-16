@@ -2030,7 +2030,8 @@ No Firestore data, rules or queries changed: every point reads the streams Order
 - **Groups.** `supplierGroups` (ordersLens): «Da ordinare» (`dueTodayIds` once the server answered, or quantities typed; never one
   closed today), «Preferiti», «Altri fornitori»; each supplier once; no heading when only one group is left. A row moving group is a
   new node: the list hands the focus back to the same supplier's row. «N articoli» sits under the name beside «Da ordinare oggi».
-- **«Riapri».** The row's summary button (split) is drawn for a supplier closed today too; on a phone the supplier's head keeps
+- **«Riapri».** The row's summary button (split) is drawn for a supplier closed today too, and for one due today with nothing typed
+  (its only door to «Chiudi come non ordinato» since the chips went; found driving the branch, 16 Nov 2026); on a phone the supplier's head keeps
   «Riepilogo (N)». `FROM_CHIP`, `cameFromChip` and `todayOpener` are gone with the chips.
 - **Notices.** `NoticesPanel` has a head (X «Chiudi gli avvisi», «Avvisi»); on the split it takes the bottom-right pane, the open screen
   staying mounted and hidden behind it, and any move gives the pane back.

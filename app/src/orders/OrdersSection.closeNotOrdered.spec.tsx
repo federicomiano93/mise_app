@@ -275,7 +275,7 @@ describe('close as not ordered: the second port\'s extras', () => {
     await waitFor(() => { expect(screen.getByRole('button', { name: 'Order summary: Alpine Mills' })).toHaveFocus(); });
   });
 
-  it('reopened from that summary, its button is gone: Back hands the focus to the supplier\'s row', async () => {
+  it('reopened from that summary, it is due again so its button stays: Back hands the focus to that button', async () => {
     split();
     const source = seeded({ draft: { entries: {}, days: {}, skipped: { 's-alp': TODAY } } });
     const view = renderOrders('/orders', { source });
@@ -300,6 +300,8 @@ describe('close as not ordered: the second port\'s extras', () => {
     await view.user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Close' }));
     await waitFor(() => { expect(path(view)).toBe('/orders'); });
     await waitFor(() => { expect(group('To order').some(name => name.startsWith('Bee Farm'))).toBe(false); });
+    // The row moved group (a new node): the focus still lands on its summary button, not on the page.
+    await waitFor(() => { expect(screen.getByRole('button', { name: 'Order summary: Bee Farm' })).toHaveFocus(); });
     const again = await screen.findByRole('button', { name: 'Order summary: Bee Farm' });
     await view.user.click(again);
     expect(await pane('Bee Farm').findByRole('button', { name: 'Reopen' }, LOAD)).toBeInTheDocument();
