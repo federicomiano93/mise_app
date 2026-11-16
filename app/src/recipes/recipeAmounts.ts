@@ -1,5 +1,6 @@
-import { baseAmounts, roundInUnit, scaledAmounts, unitDecimals, unitOf, unitTextKey, weighableTotalGrams } from '@mise/shared/catalogue-model';
+import { baseAmounts, ingredientGrams, roundInUnit, scaledResult, unitDecimals, unitOf, unitTextKey } from '@mise/shared/catalogue-model';
 import type { CatalogueRecipe, RowScale } from '@mise/shared/catalogue-model';
+import type { TotalWarning } from '@mise/shared/clean-step';
 import type { MessageKey } from '../i18n/en';
 import type { MessageParams } from '../i18n/i18n';
 
@@ -29,9 +30,12 @@ export type RecipeAmounts = {
   readonly rows: readonly AmountRow[];
   readonly total: { readonly num: string; readonly unit: string };
   // What the rows were drawn FROM, for the export (it starts from what the screen says): each row's amount in its own
-  // unit, unrounded (null = «to taste»), and the Total's grams, unrounded.
+  // unit as shown (null = «to taste»), and the Total's grams: those rows added up.
   readonly values: readonly (number | null)[];
   readonly totalGrams: number;
+  // Set when a batch scaled by its total could not be made to add up to it (shared applyTargetTotal refused): the screen says
+  // «The total is off by … g» under the Total. Never in a file.
+  readonly warning: TotalWarning | null;
 };
 
 // The word a person reads for a unit: the dictionary's for pieces, spoons, a pinch and «to taste»,
@@ -41,23 +45,42 @@ export function unitWord(t: Translate, unit: string): string {
   return key === null ? unit : t(key);
 }
 
-// The ingredient list as it is drawn: the SCALED amounts when a batch is applied (`target` > 0), the
-// recipe as written otherwise. `locale` is the interface's (useT().locale), for the decimal mark. The total is the WEIGHABLE mass in grams (weight and volume rows):
-// when scaled it is the target, at base the recipe's own. Pieces and «to taste» rows are shown above
-// but never enter it.
+// The ingredient list as it is drawn: the SCALED amounts when a batch is applied (`target` > 0), the recipe as written otherwise.
+// `locale` is the interface's (useT().locale), for the decimal mark.
+// ⚠️ THE TOTAL IS THE ROWS SHOWN, ADDED UP (the owner's decision, 16 Nov 2026): each weighable row (weight and volume) converted to
+// grams, pieces and «to taste» left out — never the batch typed, never a figure worked out again. Scaled by its total with every
+// weighable row in grams it IS the batch typed (the rows were corrected to it), unless the screen says under it that it is off; from a
+// row, or with kg, l or ml rows, it can be a few grams from the batch, and it says what the rows really weigh.
 // `row`: the batch was worked out from that row («Calculate from this ingredient»), which then shows exactly the amount typed
-// (shared `scaledAmounts`, the one rule «Use as base recipe» saves by too).
+// (shared `scaledResult`, the one rule «Use as base recipe» saves by too).
 export function recipeAmounts(recipe: CatalogueRecipe, target: number | null, t: Translate, locale: string, row?: RowScale | null): RecipeAmounts {
   const goal = target !== null && target > 0 ? target : null;
-  const amounts = goal !== null ? scaledAmounts(recipe, goal, row) : baseAmounts(recipe);
+  const scaled = goal !== null ? scaledResult(recipe, goal, row) : null;
+  const amounts = scaled !== null ? scaled.amounts : baseAmounts(recipe);
   const rows = recipe.ingredients.map((ing, index): AmountRow => {
     const value = amounts[index] ?? null;
     return value === null
       ? { label: ing.label, num: '', unit: unitWord(t, 'to taste') }
       : { label: ing.label, num: amountNumber(value, unitOf(ing), locale), unit: unitWord(t, unitOf(ing)) };
   });
-  const totalGrams = goal ?? weighableTotalGrams(recipe);
-  return { rows, total: { num: wholeNumber(totalGrams), unit: 'g' }, values: recipe.ingredients.map((_, index) => amounts[index] ?? null), totalGrams };
+  const totalGrams = shownTotalGrams(recipe, amounts);
+  return {
+    rows,
+    total: { num: wholeNumber(totalGrams), unit: 'g' },
+    values: recipe.ingredients.map((_, index) => amounts[index] ?? null),
+    totalGrams,
+    warning: scaled?.warning ?? null,
+  };
+}
+
+// The rows as shown, in grams, added up: each through the catalogue's own unit table (ingredientGrams), so 0.714 l counts 714 g and
+// pieces count nothing. Whole grams: every row is shown to the gram or finer, and the Total is written in whole grams.
+function shownTotalGrams(recipe: CatalogueRecipe, amounts: readonly (number | null)[]): number {
+  const grams = recipe.ingredients.reduce((sum, ing, index) => {
+    const value = amounts[index];
+    return value === null || value === undefined ? sum : sum + ingredientGrams({ unit: unitOf(ing), grams: value });
+  }, 0);
+  return Math.round(grams);
 }
 
 // «250 g», «3 pcs», «to taste»: one row's amount as a single piece of text (the full-screen view).

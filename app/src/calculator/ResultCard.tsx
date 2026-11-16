@@ -145,7 +145,7 @@ export function ResultCard({ recipe, result, config, products, qty, divisorN, on
           </div>
           {/* Its own full-width line under Copy and Send: a third square in that row made «Copia la ricetta» wrap
               at 296px in Italian. The file is made from the SAME rows the card draws (the unrounded grams, never
-              recomputed), titled with the same name as the text above; only the PDF's own switch rounds them. */}
+              recomputed), titled with the same name as the text above; the PDF prints them as the card does (whole grams). */}
           <button
             type="button"
             className={styles.export}

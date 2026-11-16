@@ -1,7 +1,7 @@
 import { useId, useLayoutEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { ListOrdered, Pencil, Play, RotateCcw } from 'lucide-react';
-import type { CatalogueRecipe } from '@mise/shared/catalogue-model';
+import type { CatalogueRecipe, RowScale } from '@mise/shared/catalogue-model';
 import { formatDuration, normalizeSteps, progressText, unassignedRows } from '@mise/shared/guided-model';
 import { useT } from '../i18n/useT';
 import { Button } from '../ui/Button';
@@ -31,7 +31,8 @@ import styles from './ProcedureCard.module.css';
 // fresh session (a snapshot of the recipe as shown now, with the batch the page is scaled to) before it navigates, and resuming
 // checks the saved one at the tap. A mix that aged out says so and is cleared, here, on the recipe — never a silent fresh start.
 // Back from the run puts the focus on the card's FIRST mix button (the one every state has), where the person left.
-export function ProcedureCard({ recipe, target = null }: { recipe: CatalogueRecipe; target?: number | null }) {
+// `row`: the batch was worked out from that row («Calculate from this ingredient»): the mix keeps it, so it shows the screen's numbers.
+export function ProcedureCard({ recipe, target = null, row = null }: { recipe: CatalogueRecipe; target?: number | null; row?: RowScale | null }) {
   const { t } = useT();
   const navigate = useNavigate();
   const say = useStatusMessage();
@@ -84,7 +85,7 @@ export function ProcedureCard({ recipe, target = null }: { recipe: CatalogueReci
   // ⚠️ A STORAGE THAT REFUSES THE WRITE (full, blocked) must not leave the run to read nothing — or an OLDER mix of this
   // recipe, which «Start again» would then resume at its old step. The fresh mix travels with the move instead.
   const startMix = () => {
-    const fresh = freshSession(recipe, target);
+    const fresh = freshSession(recipe, target, Date.now(), row);
     openRun(writeSession(fresh) ? undefined : fresh);
   };
   const resumeMix = () => {
