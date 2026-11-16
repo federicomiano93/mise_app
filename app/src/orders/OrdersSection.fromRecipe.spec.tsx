@@ -260,12 +260,13 @@ describe('«Order» on a recipe row', () => {
     await waitFor(() => { expect(where(view.router)).toBe('/recipes/r1'); });
   });
 
-  it('⚠️ coming back from «Summary» or «What they sell», the focus returns to that button, not to the quantity box again', async () => {
+  // (A phone: «Summary» is in the supplier's head there; «What they sell» left the head on 16 Nov 2026.)
+  it('⚠️ coming back from «Summary», the focus returns to that button, not to the quantity box again', async () => {
     const view = show('/recipes/r1');
     await orderFlour(view);
     const box = await quantityBox();
     await waitFor(() => { expect(box).toHaveFocus(); });
-    for (const name of [/^Summary/, 'What they sell']) {
+    for (const name of [/^Summary/]) {
       await view.user.click(screen.getByRole('button', { name }));
       await waitFor(() => { expect(where(view.router)).not.toContain('/orders/supplier/s-alp?'); });
       await view.user.click(within(screen.getByRole('main')).getByRole('button', { name: 'Back' }));

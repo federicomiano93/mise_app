@@ -80,8 +80,8 @@ async function pressThenMicrotasks(button: HTMLElement) {
 }
 
 // The send editor of the message (SendEditorDialog.tsx): what the supplier will get, and the «Send» whose press opens the window.
-const EDITOR = /^(Check the order|Order for )/;
-const editorBox = async () => within(await screen.findByRole('dialog', { name: EDITOR }, LOAD));
+// Since 16 Nov 2026 it is named by the supplier alone (or «Check the order»): it is the dialog that holds the message box.
+const editorBox = async () => within((await screen.findByRole('textbox', undefined, LOAD)).closest('[role="dialog"]') as HTMLElement);
 async function editorSend(view: View) {
   const box = await editorBox();
   await waitFor(() => { expect(box.getByRole('button', { name: 'Send' })).toBeEnabled(); }, LOAD);
@@ -365,7 +365,7 @@ describe('the package word of a typed card (Mise 2 only)', () => {
     const head = await openCard(view, 'Alpine Mills');
     expect(within(bodyOf(head)).getByText('2 bottles')).toBeInTheDocument();
     await view.user.click(history().getByRole('button', { name: 'Send again' }));
-    expect((await editorBox()).getByRole('group', { name: 'What they will receive' })).toHaveTextContent('- Cream: 2 bottles');
+    expect(((await editorBox()).getByRole('textbox') as HTMLTextAreaElement).value).toContain('- Cream: 2 bottles');
     await editorSend(view);
     expect(decodeURIComponent(String(open.mock.calls[0]?.[0]))).toContain('- Cream: 2 bottles');
   });

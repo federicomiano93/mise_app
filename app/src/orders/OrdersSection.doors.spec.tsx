@@ -1,5 +1,5 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, screen, waitFor, within } from '@testing-library/react';
 import { useLocation } from 'react-router';
 import type { RouteObject } from 'react-router';
 import { fromOrdersList, fromOrdersSupplier } from '@mise/shared/records-link';
@@ -122,22 +122,14 @@ describe('the name of an ingredient', () => {
   });
 });
 
-describe('«+» in the supplier’s bar', () => {
-  it('opens a new ingredient with the supplier preset', async () => {
-    const { user } = await opened('/orders/supplier/s-alp');
-    await user.click(screen.getByRole('button', { name: 'Add an ingredient to Alpine Mills' }));
-    expect(pushed()).toEqual({ path: '/suppliers/ingredient/new?supplier=s-alp', state: fromOrdersSupplier('s-alp') });
-  });
-
-  it('opens one with no preset from the pseudo-supplier', async () => {
-    const { user } = await opened('/orders/supplier/no-supplier');
-    await user.click(screen.getByRole('button', { name: 'Add an ingredient with no supplier' }));
-    expect(pushed()).toEqual({ path: '/suppliers/ingredient/new', state: fromOrdersList('ingredients') });
-  });
-
-  it('is named in Italian too', async () => {
-    await opened('/orders/supplier/s-alp', seeded(), { lang: 'it' });
-    expect(screen.getByRole('button', { name: 'Aggiungi un ingrediente a Alpine Mills' })).toBeInTheDocument();
+// Since 16 Nov 2026 the head is `[X] NAME ›` … `[send]`: an item is added from the supplier's card, behind ›.
+describe('no «+» in the supplier’s head', () => {
+  it('draws no «Add an ingredient» button, for a supplier or for the pseudo-supplier', async () => {
+    await opened('/orders/supplier/s-alp');
+    expect(screen.queryByRole('button', { name: /^Add an ingredient/ })).not.toBeInTheDocument();
+    cleanup();
+    await opened('/orders/supplier/no-supplier');
+    expect(screen.queryByRole('button', { name: /^Add an ingredient/ })).not.toBeInTheDocument();
   });
 });
 
@@ -167,12 +159,8 @@ describe('Back from the card', () => {
     await waitFor(() => { expect(edit('Barley')).toHaveFocus(); });
   });
 
-  it('puts the focus on «+», and on the supplier’s name', async () => {
+  it('puts the focus on the supplier’s name', async () => {
     const view = await opened('/orders/supplier/s-alp');
-    await view.user.click(screen.getByRole('button', { name: 'Add an ingredient to Alpine Mills' }));
-    await act(async () => { await view.router.navigate(-1); });
-    await screen.findAllByRole('spinbutton', undefined, LOAD);
-    await waitFor(() => { expect(screen.getByRole('button', { name: 'Add an ingredient to Alpine Mills' })).toHaveFocus(); });
     await view.user.click(screen.getByRole('button', { name: /^Card of Alpine Mills/ }));
     await act(async () => { await view.router.navigate(-1); });
     await screen.findAllByRole('spinbutton', undefined, LOAD);

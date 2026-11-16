@@ -18,8 +18,8 @@ import { useSession } from '../session/SessionContext';
 import { useMoney } from '../session/useMoney';
 import { OrderTotals } from './OrderTotals';
 import { useOrders, useOrdersStore } from './OrdersContext';
-import { PLACE_DOOR, SUMMARY_DOOR, summaryOpener, todayOpener, useHandBack } from './handBack';
-import { FROM_LIST, cameFromChip, cameFromList, cameFromSupplier, columnPart, listDistanceOf, useLeave } from './ordersNav';
+import { PLACE_DOOR, SUMMARY_DOOR, summaryOpener, useHandBack } from './handBack';
+import { FROM_LIST, cameFromList, cameFromSupplier, columnPart, listDistanceOf, useLeave } from './ordersNav';
 import { ORDERS_PATH, supplierConfirmPath, supplierPath } from './ordersPath';
 import { LONG_MS } from './useClearQuantities';
 import type { OrdersLens } from './ordersLens';
@@ -73,9 +73,9 @@ export function SupplierSummaryScreen({ id, lens }: { id: string; lens: OrdersLe
   const title = useRef<HTMLHeadingElement>(null);
   const screen = useRef<HTMLElement>(null);
   // Back is the browser's Back when the supplier's screen or the list is the entry behind; an address typed in goes up one level, to
-  // the supplier's order. Opened by a closed supplier's chip in «Order today», the focus goes back to that chip.
+  // the supplier's order.
   const leave = useLeave(supplierPath(id), () => {
-    handBack.expect(cameFromSupplier(state) ? SUMMARY_DOOR : cameFromChip(state) ? todayOpener(id) : summaryOpener(id));
+    handBack.expect(cameFromSupplier(state) ? SUMMARY_DOOR : summaryOpener(id));
   });
 
   const supplier = lens.supplierById(id);

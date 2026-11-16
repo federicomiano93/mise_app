@@ -27,8 +27,9 @@ type Props = {
   onSend: () => void;
 };
 
-// What the bell opens (step 3f-6, parity R3–R11), under the list's head: NOT a dialog and not an overlay, so it pushes the list down
-// and the list stays usable. In order: the orders typed on an earlier day and never placed, what was added that nobody was told about,
+// What the bell opens (step 3f-6, parity R3–R11): NOT a dialog and not an overlay. On the split it takes the bottom-right pane in place
+// of the open supplier, which comes back when it is closed (the redesign of 16 Nov 2026, item 6); on a phone it sits above the list
+// and pushes it down. Either way the list stays usable. Its head: an X that closes it, and «Notices». In order: the orders typed on an earlier day and never placed, what was added that nobody was told about,
 // the calendar notices (or, once all are put away, the pill that brings them back); with nothing at all, one line that says so.
 //
 // ⚠️ ONLY THE CALENDAR NOTICES CAN BE CLOSED (Federico, 24 Aug 2026): the rest is WORK, and a closeable piece of work is one somebody
@@ -53,11 +54,16 @@ export function NoticesPanel({ onOpenSupplier, onOpenPending, onSend }: Props) {
   const today = todayISO();
   const now = new Date();
 
+  // Escape or the X: closed, and the focus back on the bell that opened it.
+  function closePanel() {
+    setOpen(false);
+    bellRef.current?.focus();
+  }
+
   function onKeyDown(event: KeyboardEvent<HTMLElement>) {
     if (event.key !== 'Escape' || event.defaultPrevented) return;
     event.stopPropagation();
-    setOpen(false);
-    bellRef.current?.focus();
+    closePanel();
   }
 
   async function discard(row: PendingSupplier<StoredDoc>) {
@@ -93,6 +99,12 @@ export function NoticesPanel({ onOpenSupplier, onOpenPending, onSend }: Props) {
         tabIndex={-1}
         onKeyDown={onKeyDown}
       >
+        <div className={styles.head}>
+          <Button variant="bare" className={styles.shut} aria-label={t('ord.notices.close')} onPress={closePanel}>
+            <X aria-hidden="true" />
+          </Button>
+          <h2 className={styles.heading}>{t('ord.notices.title')}</h2>
+        </div>
         {pending.map(row => {
           const id = row.supplier.id;
           const name = supplierLabel(row.supplier);

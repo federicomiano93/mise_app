@@ -16,7 +16,7 @@ import { useOrders, useOrdersStore } from './OrdersContext';
 import { RoadChooser } from './RoadChooser';
 import { SendEditorDialog } from './SendEditorDialog';
 import { recordDateFor } from './orderDay';
-import { canSharePhotos } from './orderImage';
+import { ORDER_PHOTO_ON, canSharePhotos } from './orderImage';
 import type { OrdersLens } from './ordersLens';
 import type { StoredDoc } from './ordersSource';
 import { openWindow, sendTranslate, takeRoad } from './sendFlow';
@@ -132,7 +132,8 @@ export function useSendOrder(lens: OrdersLens): readonly [(request: SendRequest)
       // ever, so the orders that already went never reach «did it go?» (SendPicker hands them over once the batch ends). It answers at
       // once: no notice, and no text sent instead of a picture.
       alert: message => (mounted.current ? latest.current.alert({ message, okLabel: latest.current.t('common.ok') }) : Promise.resolve()),
-      canSharePhotos,
+      // ⚠️ THE ORDER PHOTO IS OFF FOR NOW (orderImage.ts ORDER_PHOTO_ON): no picture is drawn or offered, every road sends the text.
+      canSharePhotos: () => ORDER_PHOTO_ON && canSharePhotos(),
       askEditor: question => ask<EditorAnswer, EditorAsk>(setEditor, answer => ({ ...question, answer }), { outcome: 'cancelled', text: question.job.text }),
       confirmText: () => (!mounted.current ? Promise.resolve(false) : latest.current.confirm({
         message: latest.current.t('ord.sendFormat.photoFailed'),
@@ -235,10 +236,17 @@ export function useSendOrder(lens: OrdersLens): readonly [(request: SendRequest)
   const dialogs = (
     <>
       {chooser ? <RoadChooser offers={chooser.offers} onPick={chooser.pick} onCancel={chooser.cancel} /> : null}
-      {editor ? <SendEditorDialog key={editor.i} job={editor.job} i={editor.i} n={editor.n} photo={editor.photo} language={outputLanguage(session.location)} answer={editor.answer} /> : null}
+      {editor ? <SendEditorDialog key={editor.i} job={editor.job} i={editor.i} n={editor.n} photo={editor.photo} language={outputLanguage(session.location)} answer={editor.answer} soleName={soleNameOf(editor.job, lens)} /> : null}
       {confirmDialog}
       {alertDialog}
     </>
   );
   return [send, dialogs];
+}
+
+// The one supplier an unnamed message goes to (the WhatsApp chat road with one supplier), for the editor's title; '' for several.
+function soleNameOf(job: EditorJob, lens: OrdersLens): string {
+  if (job.name !== undefined || job.ids.length !== 1) return '';
+  const supplier = lens.supplierById(job.ids[0] as string);
+  return supplier ? supplierLabel(supplier) : '';
 }

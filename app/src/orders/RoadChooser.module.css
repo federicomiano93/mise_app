@@ -1,4 +1,4 @@
-/* The roads of «How should this order go?»: big rows, stacked. A mis-tap here sends something real down a road nobody chose, so
+/* The roads of «Send to»: big rows, stacked, one word each. A mis-tap here sends something real down a road nobody chose, so
    the targets are the large touch height. Icon and text sit on one flex row, centred on each other. */
 
 .roads {
@@ -41,20 +41,9 @@
   outline-offset: 2px;
 }
 
-.text {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 2px;
-}
-
 .name {
+  min-width: 0;
+  font-size: var(--fs-lg);
   font-weight: 600;
-}
-
-/* What the road costs, said before it is taken. */
-.note {
   overflow-wrap: anywhere;
-  color: var(--ink-2);
-  font-size: var(--fs-sm);
 }

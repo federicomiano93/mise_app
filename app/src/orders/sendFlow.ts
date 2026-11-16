@@ -201,6 +201,7 @@ export async function takeRoad({ offer, rows, settings, unitRefusal, open, t }: 
   const jobs = jobsFor(offer, rows, settings, open);
   if (jobs.length === 0) return { kind: 'cancelled' };
   // The picture road is the two WhatsApp roads where the browser can share a PNG; email, and WhatsApp without it, send the text.
+  // (Switched off for now by ORDER_PHOTO_ON, orderImage.ts: the screens' `canSharePhotos` then answers false.)
   const photo = offer.route !== 'email' && ui.canSharePhotos();
   // How the LAST message left decides what the screen does next (a share leaves the person here, a window may not).
   let handOff: 'share' | 'text' = 'text';
