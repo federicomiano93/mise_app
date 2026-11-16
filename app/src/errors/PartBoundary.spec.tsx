@@ -116,7 +116,8 @@ describe('PartBoundary', () => {
     expect(headings).toHaveLength(1);
     expect(headings[0]).toHaveTextContent('Recipes');
     expect(document.title).toBe('Recipes · Mise');
-    expect(screen.getByRole('status')).toHaveTextContent('This part didn’t load.');
+    // The page's offline strip keeps an empty live region of its own (Page, 16 Nov 2026): the part's notice is the one that speaks.
+    expect(screen.getAllByRole('status').find(region => region.textContent !== '')).toHaveTextContent('This part didn’t load.');
   });
 
   describe('focus', () => {

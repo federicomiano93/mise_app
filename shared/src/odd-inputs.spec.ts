@@ -2566,7 +2566,24 @@ describe('catalogue-model: odd inputs', () => {
     { ingredients: [{ label: 'Salt', grams: 5, unit: 'to taste' }, { label: 'Pinch', grams: 1, unit: 'pinch' }] },
     { ingredients: [{ grams: 0.4 }, { grams: 0.4 }, { grams: 0.4 }] }, { ingredients: [{ grams: 1 }, null] }, { ingredients: [{ grams: 1, unit: 'kg' }, undefined] }];
   const TARGETS: readonly unknown[] = [...PRICE_VALUES.slice(0, 40), 10000, 17500, 17500000, 1, 0.4, 999.4, '2000', 4000];
-  agree('scaleCatalogue', m.scaleCatalogue, l.scaleCatalogue, product(SCALE_RECIPES, TARGETS));
+  // scaleCatalogue is NOT compared any more: Mise 2 rounds a scaled gram row to a clean step and the current app to the whole gram
+  // (the owner's decision, 16 Nov 2026; js/ is the rollback copy and does not change). The port's own odd inputs are below.
+  test('scaleCatalogue (the port alone): it throws exactly where the original throws, never gives NaN, and keeps to-taste null', () => {
+    const attempt = (fn: AnyFn, args: unknown[]): { threw: boolean; out: unknown } => {
+      try { return { threw: false, out: fn(...args) }; } catch { return { threw: true, out: null }; }
+    };
+    for (const args of product(SCALE_RECIPES, TARGETS)) {
+      const mine = attempt(m.scaleCatalogue as AnyFn, args);
+      const theirs = attempt(l.scaleCatalogue as AnyFn, args);
+      const label = JSON.stringify(args);
+      expect(mine.threw, `${label}: throws only where the original does`).toBe(theirs.threw);
+      if (mine.threw) continue;
+      const out = mine.out as (number | null)[];
+      const was = theirs.out as (number | null)[];
+      expect(out.every(v => v === null || Number.isFinite(v)), label).toBe(true);
+      expect(out.map(v => v === null), `${label}: the same rows have no number`).toStrictEqual(was.map(v => v === null));
+    }
+  });
   agree('baseAmounts', m.baseAmounts, l.baseAmounts, product(SCALE_RECIPES));
 
   agree('formatWeight', m.formatWeight, l.formatWeight, product([...PRICE_VALUES, 500, 999.999, 1000, 17500, 18000, 999999, 1000000, 17500000, 1.005, 0.004, '17500', 'junk']));
@@ -3185,7 +3202,8 @@ describe('guided-model: odd inputs', () => {
   agree('hasProcedure', pick(guidedModel, 'hasProcedure'), pick(legacyGuidedModel, 'hasProcedure'), product(RECIPES));
   agree('unassignedRows', pick(guidedModel, 'unassignedRows'), pick(legacyGuidedModel, 'unassignedRows'), product(RECIPES));
   agree('missingRefs', pick(guidedModel, 'missingRefs'), pick(legacyGuidedModel, 'missingRefs'), product(RECIPES));
-  agree('amountsFor', pick(guidedModel, 'amountsFor'), pick(legacyGuidedModel, 'amountsFor'), product(RECIPES, [...ODD, 4040, 100000, -5, '2000']));
+  // amountsFor is NOT compared any more: it draws a batch with the catalogue's scaleCatalogue, which Mise 2 rounds to clean steps
+  // (the owner's decision, 16 Nov 2026; js/ is the rollback copy). guided-model.spec.ts pins it to the port's own scaleCatalogue.
   agree('remainingMs', pick(guidedModel, 'remainingMs'), pick(legacyGuidedModel, 'remainingMs'), product(CLOCK, CLOCK));
   agree('timerState', pick(guidedModel, 'timerState'), pick(legacyGuidedModel, 'timerState'), product(CLOCK, CLOCK));
   agree('formatDuration', pick(guidedModel, 'formatDuration'), pick(legacyGuidedModel, 'formatDuration'), product([...ODD, 59, 240, 3600, 3905, -30, 0.2, 86400, '90', 1e12]));

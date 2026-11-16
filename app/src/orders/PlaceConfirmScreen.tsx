@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { useBlocker, useLocation } from 'react-router';
 import { Check } from 'lucide-react';
 import { ingredientDisplayLabel } from '@mise/shared/archive';
+import { draftQuantities } from '@mise/shared/awaiting-sent';
 import { dayPhrase, spellLongDate, todayISO } from '@mise/shared/day';
 import { sendOffers } from '@mise/shared/send-chooser';
 import { sentCheckPhrases, suppliersToRecord } from '@mise/shared/sent-check';
@@ -22,7 +23,7 @@ import { useOrders, useOrdersStore } from './OrdersContext';
 import { buildConfirmGroups, confirmedItems } from './confirmCopy';
 import type { ConfirmGroup } from './confirmCopy';
 import { dayTranslate } from './dayWords';
-import { PLACE_ALL_OPENER, PLACE_DOOR, SEND_OPENER, pendingOpener, supplierOpener, useHandBack } from './handBack';
+import { PLACE_ALL_OPENER, PLACE_DOOR, pendingOpener, supplierOpener, useHandBack } from './handBack';
 import { useLeave, useLeaveToList } from './ordersNav';
 import { stillPendingOn } from './pendingLatch';
 import { PLACE_ALL_PATH, supplierPath } from './ordersPath';
@@ -46,9 +47,10 @@ import styles from './PlaceConfirmScreen.module.css';
 //   3. «Order placed» asks «Did you send the order?» and only a Yes records, one supplier after the other (store.place).
 //
 // «Did you send the order?» has a third answer, «Send it now» (parity X4): the CONFIRMED numbers go out by a road that reaches
-// the supplier (useSendOrder) and only the suppliers it reached are recorded. Opened by the send screen (`afterSend` in the
-// navigation state, parity X10) the same screen says «Order sent» and «Mark as placed» and still asks: opening WhatsApp is not
-// sending.
+// the supplier (useSendOrder). ⚠️ NOTHING IS RECORDED BY IT (v1.145.0): what the road handed over waits for «did it go?» on every
+// device (store.waitForAnswer) with the CONFIRMED quantities and, as `draft`, what the order said for those suppliers BEFORE the editor
+// opened; the screen then goes back to the list. The send screen no longer comes here at all: opening WhatsApp is not sending, and
+// «did it go?» is what asks.
 //
 // Back is one level up (P20); a recorded order goes back to the LIST. Leaving with a corrected number asks first.
 
@@ -83,13 +85,9 @@ export function SupplierConfirmScreen({ id, lens }: { id: string; lens: OrdersLe
 export function PlaceAllConfirmScreen({ lens }: { lens: OrdersLens }) {
   const { state, key } = useLocation();
   const ids = useMemo(() => idsIn(state), [state]);
-  const afterSend = afterSendIn(state);
-  const leaveToPicker = useLeave(PLACE_ALL_PATH, nothing);
+  const leave = useLeave(PLACE_ALL_PATH, nothing);
   const handBack = useHandBack();
-  const toList = useLeaveToList(useCallback(() => { handBack.expect(afterSend ? SEND_OPENER : PLACE_ALL_OPENER); }, [handBack, afterSend]));
-  // ⚠️ AFTER A SEND, BACK IS THE LIST: behind this screen lies the send screen, which has nothing left to say, and the picker
-  // was never visited.
-  const leave = afterSend ? toList : leaveToPicker;
+  const toList = useLeaveToList(useCallback(() => { handBack.expect(PLACE_ALL_OPENER); }, [handBack]));
   const sent = useRef(false);
   useEffect(() => {
     if (ids.length === 0 && !sent.current) {
@@ -99,11 +97,6 @@ export function PlaceAllConfirmScreen({ lens }: { lens: OrdersLens }) {
   }, [ids.length, leave]);
   if (ids.length === 0) return null;
   return <PlaceConfirmScreen key={key} ids={ids} lens={lens} leave={leave} toList={toList} />;
-}
-
-// Opened by the send screen, after windows were opened for these suppliers.
-function afterSendIn(state: unknown): boolean {
-  return typeof state === 'object' && state !== null && (state as { afterSend?: unknown }).afterSend === true;
 }
 
 // A pending banner's «Placed yesterday» (step 3f-6, parity X9): the day the order really went out, as the banner showed it. Only a real
@@ -132,7 +125,7 @@ function PlaceConfirmScreen({ ids, lens, leave, toList }: Props) {
   const [ready, setReady] = useState<Ready | null>(null);
   const title = useRef<HTMLHeadingElement>(null);
   const { state } = useLocation();
-  const loadingTitle = afterSendIn(state) ? t('ord.orderSent') : t('ord.orderPlaced');
+  const loadingTitle = t('ord.orderPlaced');
 
   // The latest of everything the one-time check reads, so it never closes over an old render.
   const latest = useRef({ t, lens, leave, alert, say });
@@ -219,7 +212,6 @@ function ConfirmBody({ ids, ready, lens, leave, toList, alert, alertDialog }: Bo
   const [confirm, confirmDialog] = useConfirm();
   const [askSent, sentDialog] = useSentCheck();
   const [send, sendDialogs] = useSendOrder(lens);
-  const afterSend = afterSendIn(state);
   // From a pending banner's «Placed yesterday»: it WAS sent (that is what the button says), so it is not asked again (parity X9).
   const alreadySent = ready.pinnedDay !== null;
   const titleId = useId();
@@ -303,9 +295,8 @@ function ConfirmBody({ ids, ready, lens, leave, toList, alert, alertDialog }: Bo
   const several = ids.length > 1;
   const first = groups[0];
   const exists = !several && first?.exists === true;
-  const heading = afterSend ? t('ord.orderSent')
-    : several ? t('ord.confirm.titleMany') : exists ? t('ord.confirm.titleAdd') : t('ord.orderPlaced');
-  const action = afterSend ? t('ord.markAsPlaced') : !several && exists ? t('ord.confirm.addToIt') : t('ord.orderPlaced');
+  const heading = several ? t('ord.confirm.titleMany') : exists ? t('ord.confirm.titleAdd') : t('ord.orderPlaced');
+  const action = !several && exists ? t('ord.confirm.addToIt') : t('ord.orderPlaced');
 
   // The usual amount of each row whose typed quantity looks like a typing mistake, asked again on every keystroke of the
   // CURRENT history (not frozen with the working copy).
@@ -319,12 +310,8 @@ function ConfirmBody({ ids, ready, lens, leave, toList, alert, alertDialog }: Bo
   };
 
   // Records what was confirmed. The summary leads with what went wrong: a failure is never buried under a success.
-  // `notReached`: after «Send it now», the sentence naming the suppliers the road did not reach; it follows the summary and keeps
-  // it on screen long enough to read (the current app shows it as a warning for 8 seconds).
-  async function record(items: ReturnType<typeof confirmedItems>, notReached = '') {
-    const speak = (text: string, ms: number) => {
-      say(notReached === '' ? text : `${text} ${notReached}`, notReached === '' ? ms : LONG_MS);
-    };
+  async function record(items: ReturnType<typeof confirmedItems>) {
+    const speak = (text: string, ms: number) => { say(text, ms); };
     const report = await store.place(items, t('ord.noSupplier'));
     if (report.offline) {
       speak(t('ord.offline.place'), LONG_MS);
@@ -360,17 +347,12 @@ function ConfirmBody({ ids, ready, lens, leave, toList, alert, alertDialog }: Bo
         savedNames.length > 0 ? t('ord.andSaved', { names: joinList(t, savedNames) }) : t('ord.tryAgain')}`, LONG_MS);
       return;
     }
-    // ⚠️ THESE TWO RETURNS SAY NOTHING OF THEIR OWN, but the suppliers a send did not reach are still named (X17).
-    if (clashes.length > 0) {
-      if (notReached !== '') say(notReached, LONG_MS);
-      return;
-    }
+    if (clashes.length > 0) return;
     if (notCleared.length > 0) {
       speak(t('ord.savedNotCleared', { name: joinList(t, names(notCleared)) }), LONG_MS);
     } else if (saved.length > 0) {
       speak(t('ord.savedToHistory', { names: joinList(t, names(saved)) }), 5000);
     } else if (of('busy').length > 0) {
-      if (notReached !== '') say(notReached, LONG_MS);
       return;
     } else {
       speak(t('ord.nothingLeft'), 5000);
@@ -435,20 +417,33 @@ function ConfirmBody({ ids, ready, lens, leave, toList, alert, alertDialog }: Bo
         await record(items);
         return;
       }
-      // «Send it now»: the CONFIRMED numbers (never the live draft) go out first, and only the suppliers the road reached are
-      // recorded: a supplier it could not reach was not sent, whatever the screen shows.
+      // «Send it now»: the CONFIRMED numbers (never the live draft) go out. ⚠️ WHAT THE ORDER SAID FOR THESE SUPPLIERS IS TAKEN FIRST,
+      // before the editor opens: the confirmed numbers may be corrected ones, and «did it go?» clears the lines still reading what
+      // the order said then, so a corrected «5 → 3» does not stay behind as a phantom order.
+      const before = store.getSnapshot().draft.entries;
+      const draftBefore = Object.fromEntries(askedIds.map(id => [id, draftQuantities(lens.linesOf(id), before)]));
       const rows = confirmedSendRows(lens, items, Object.fromEntries(groups.map(group => [group.supplierId, group.name])));
       const result = await send({ rows, grouped: true, supplierRoadsOnly: true });
-      const reached = suppliersToRecord(askedIds, result?.kind === 'sent' ? result.ids : []);
-      const missed = askedIds.filter(id => !reached.includes(id))
+      const handed = suppliersToRecord(askedIds, result?.kind === 'sent' ? result.ids : []);
+      const missed = askedIds.filter(id => !handed.includes(id))
         .map(id => groups.find(group => group.supplierId === id)?.name ?? id);
       const notReached = missed.length > 0 ? t('ord.sentCheck.notReached', { names: joinList(t, missed) }) : '';
-      // Nothing reached: nothing is recorded and the screen stays, corrections kept.
-      if (reached.length === 0) {
+      // Nothing handed over: nothing is asked or recorded and the screen stays, corrections kept.
+      if (result?.kind !== 'sent' || handed.length === 0) {
         if (notReached !== '') say(notReached, LONG_MS);
         return;
       }
-      await record(items.filter(item => reached.includes(item.supplierId)), notReached);
+      // ⚠️ NOTHING IS RECORDED HERE: opening WhatsApp is not sending. What went waits for «did it go?» on every device, with the
+      // confirmed quantities on the day each group is for.
+      store.waitForAnswer(handed.flatMap(id => {
+        const item = items.find(candidate => candidate.supplierId === id);
+        return item === undefined ? [] : [{
+          supplierId: id, quantities: item.quantities, units: item.units, date: item.date, draft: draftBefore[id] ?? null,
+        }];
+      }), result.handOff);
+      if (notReached !== '') say(notReached, LONG_MS);
+      leaving.current = true;
+      toList();
     } finally {
       submittingRef.current = false;
     }

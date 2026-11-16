@@ -2,16 +2,16 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { useLocation } from 'react-router';
 import { ChevronRight } from 'lucide-react';
 import { dayLabel } from '@mise/shared/day';
-import { REQUEST_WINDOW_DAYS, isRequestDone, remainingIds, splitRequestsByAge, waitingRequests } from '@mise/shared/order-request-model';
+import { REQUEST_WINDOW_DAYS, isRequestDone, remainingIds, shownSender, splitRequestsByAge, waitingRequests } from '@mise/shared/order-request-model';
 import { useT } from '../i18n/useT';
 import { Button } from '../ui/Button';
 import { FormBar } from '../ui/FormBar';
-import { useOrders } from './OrdersContext';
+import { useOrders, useOrdersStore } from './OrdersContext';
 import { dayTranslate } from './dayWords';
 import { LISTS_DOOR, listOpener, useHandBack } from './handBack';
 import { cameFromList, useLeave } from './ordersNav';
 import { ORDERS_PATH } from './ordersPath';
-import type { StoredDoc } from './ordersSource';
+import type { RosterRow, StoredDoc } from './ordersSource';
 import styles from './OrderListsScreen.module.css';
 
 type Props = {
@@ -21,11 +21,29 @@ type Props = {
   onOpen: (id: string) => void;
 };
 
-// What the screens print for the person who sent a list. ⚠️ NEVER AN ADDRESS (his decision of 3 Nov 2026, P13): a list with no name
-// on it reads «Someone». Also on lists already stored: the current app, still live, writes an email into `fromName` for a person with
-// no roster name, so anything with an «@» in it is read as no name.
-export const senderOf = (request: StoredDoc, someone: string): string =>
-  typeof request.fromName === 'string' && request.fromName.trim() !== '' && !request.fromName.includes('@') ? request.fromName : someone;
+// What the screens print for the person who sent a list.
+//
+// ⚠️ THE ROSTER WINS OVER WHAT THE SENDER TYPED (security audit; the current app's a8500872, shownSender). `fromUid` is tied by the
+// rules to the account that wrote the list, but `fromName` is free text they can only measure: an employee could send a list «from
+// Federico». So the roster row for `fromUid` names the sender whenever the roster has one; `fromName` is only the fallback while the
+// roster is loading, when its read failed, or for a sender it no longer has. A roster row WITH NO NAME still wins: its silence reads
+// «Someone», never the typed name (a nameless employee could otherwise type «Federico»).
+// ⚠️ NEVER AN ADDRESS (his decision of 3 Nov 2026, P13): a list with no name on it reads «Someone». Also on lists already stored: the
+// current app, still live, writes an email into `fromName` for a person with no roster name, so anything with an «@» in it is read as
+// no name.
+export const senderOf = (request: StoredDoc, someone: string, rosterByUid: ReadonlyMap<string, RosterRow> | null = null): string => {
+  const onRoster = rosterByUid !== null && typeof request.fromUid === 'string' && rosterByUid.has(request.fromUid);
+  const name = shownSender(onRoster ? { fromUid: request.fromUid } : request, rosterByUid);
+  return name !== '' && !name.includes('@') ? name : someone;
+};
+
+// Starts the one read of the roster for the names above, when a lists screen is shown. The names redraw when it lands.
+export function useRosterForSenders(): ReadonlyMap<string, RosterRow> | null {
+  const store = useOrdersStore();
+  const { rosterByUid } = useOrders();
+  useEffect(() => { store.prepareRoster(); }, [store]);
+  return rosterByUid;
+}
 
 // «Order lists» (parity R1–R4), at /orders/lists, one level below the list: the lists somebody sent, those still to place first.
 //
@@ -36,6 +54,7 @@ export function OrderListsScreen({ hidden, onOpen }: Props) {
   const { t } = useT();
   const { state } = useLocation();
   const { requests, requestsLoaded, requestsBroken } = useOrders();
+  const rosterByUid = useRosterForSenders();
   const handBack = useHandBack();
   const leave = useLeave(ORDERS_PATH, useCallback(() => { handBack.expect(LISTS_DOOR); }, [handBack]));
   const titleId = useId();
@@ -106,7 +125,7 @@ export function OrderListsScreen({ hidden, onOpen }: Props) {
                     onClick={() => { onOpen(request.id); }}
                   >
                     <span className={styles.main}>
-                      <span className={styles.from}>{t('ord.request.from', { who: senderOf(request, t('ord.request.someone')) })}</span>
+                      <span className={styles.from}>{t('ord.request.from', { who: senderOf(request, t('ord.request.someone'), rosterByUid) })}</span>
                       <span className={styles.when}>{dayLabel(String(request.date ?? ''), now, dt)}</span>
                     </span>
                     <span className={styles.count} data-done={done ? 'true' : undefined}>

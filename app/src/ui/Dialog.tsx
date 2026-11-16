@@ -19,6 +19,10 @@ type Props = {
   role?: 'dialog' | 'alertdialog';
   // A press on the backdrop closes it too: a choice to back out of, never a question that needs an answer.
   dismissable?: boolean;
+  // A question that MUST be answered (Orders' «Order sent?», 16 Nov 2026): Escape does not close it either, only its own buttons do.
+  forced?: boolean;
+  // A small dialog, its words centred (the same question).
+  small?: boolean;
   children?: ReactNode;
   actions: ReactNode;
 };
@@ -29,7 +33,7 @@ type Props = {
 //
 // ⚠️ NEVER THE BROWSER'S confirm() / alert() — they cannot be styled, translated or tested, and
 // a phone can suppress them.
-export function Dialog({ isOpen, onClose, title, message, role = 'dialog', dismissable = false, children, actions }: Props) {
+export function Dialog({ isOpen, onClose, title, message, role = 'dialog', dismissable = false, forced = false, small = false, children, actions }: Props) {
   const messageId = useId();
   const paragraphs = message === undefined ? [] : typeof message === 'string' ? [message] : message;
 
@@ -37,10 +41,11 @@ export function Dialog({ isOpen, onClose, title, message, role = 'dialog', dismi
     <ModalOverlay
       isOpen={isOpen}
       onOpenChange={open => { if (!open) onClose(); }}
-      isDismissable={dismissable}
+      isDismissable={dismissable && !forced}
+      isKeyboardDismissDisabled={forced}
       className={styles.overlay}
     >
-      <Modal className={styles.modal}>
+      <Modal className={small ? `${styles.modal} ${styles.small}` : styles.modal}>
         <AriaDialog
           role={role}
           // ⚠️ WITHOUT A TITLE THE MESSAGE IS THE NAME: an unnamed dialog is announced as just

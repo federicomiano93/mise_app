@@ -66,9 +66,14 @@
   --r-pill: 999px;
   --hit: 48px;
   --hit-lg: 56px;
-  --rail-w: 92px;
+  --rail-w: 104px;
   --topbar-h: 60px;
   --list-w: 384px;
+  /* Orders' list column on the split (the redesign of 16 Nov 2026): about 300px of content between its paddings. */
+  --orders-list-w: 344px;
+  /* How far a sticky part sits from the top of the scroll area: under a section's title band where that band sticks (the split,
+     Page.module.css), nothing on a phone, where the band scrolls away. */
+  --band-h: 0px;
   /* The visible height. Every stylesheet reads var(--vh100); none writes a dvh line. 100vh here; the @supports block
      below switches it to 100dvh where that exists. Where it does not (Chrome < 108, the lab tablet),
      shell/viewportHeight.ts sets it inline on <html> to the real window height (96px less than 100vh); inline wins. */
@@ -78,6 +83,10 @@
   --shadow-2: 0 8px 24px oklch(0.2 0.01 60 / 0.10), 0 2px 6px oklch(0.2 0.01 60 / 0.06);
   --shadow-3: 0 24px 64px oklch(0.2 0.01 60 / 0.20);
   --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+@media (min-width: 1000px) {
+  :root { --band-h: 72px; }
 }
 
 @supports (height: 100dvh) {

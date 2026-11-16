@@ -21,7 +21,9 @@ type Choice = { readonly value: string; readonly kind: Kind; readonly day: strin
 // and the section says so.
 //
 // The result is announced politely in a live region that is on the page BEFORE it speaks; the focus stays on the select.
-export function DayLine({ supplier, lens }: { supplier: StoredDoc; lens: OrdersLens }) {
+// `slim`: the open supplier's bar since 16 Nov 2026 — «Order for [Today ▾]» and the expected delivery on one line, with no line of its
+// own (the bar draws the one line under it).
+export function DayLine({ supplier, lens, slim = false }: { supplier: StoredDoc; lens: OrdersLens; slim?: boolean }) {
   const { t } = useT();
   const store = useOrdersStore();
   const { draft } = useOrders();
@@ -72,7 +74,7 @@ export function DayLine({ supplier, lens }: { supplier: StoredDoc; lens: OrdersL
   const delivery = nextDeliveryAfter(supplier, selectedDay);
 
   return (
-    <div className={styles.line}>
+    <div className={slim ? `${styles.line} ${styles.slim}` : styles.line}>
       <div className={styles.row}>
         <label htmlFor={selectId} className={styles.label}>{t('ord.day.label')}</label>
         <select
@@ -90,7 +92,10 @@ export function DayLine({ supplier, lens }: { supplier: StoredDoc; lens: OrdersL
           {choices.map(choice => <option key={choice.value} value={choice.value}>{words(choice)}</option>)}
         </select>
       </div>
-      {delivery !== '' ? <p className={styles.delivery}>{t('ord.day.delivery', { day: spellLongDate(delivery, dt) })}</p> : null}
+      {/* The slim bar says the day short («Delivery Mon 23»), so the line holds the select, the delivery and «Saved ✓». */}
+      {delivery === '' ? null : slim
+        ? <p className={styles.delivery}>{t('ord.day.deliveryShort', { day: spellShortDate(delivery, dt) })}</p>
+        : <p className={styles.delivery}>{t('ord.day.delivery', { day: spellLongDate(delivery, dt) })}</p>}
       <div role="status" className="visually-hidden">
         {said.text === '' ? null : <p key={said.id}>{said.text}</p>}
       </div>

@@ -22,6 +22,15 @@ describe('StatusMessage', () => {
   beforeEach(() => { vi.useFakeTimers(); });
   afterEach(() => { vi.useRealTimers(); });
 
+  it('⚠️ a sentence said after the section has gone starts no timer (the «window is not defined» flake after a spec’s teardown)', () => {
+    const late: { say: ((text: string) => void) | null } = { say: null };
+    function Keep() { late.say = useStatusMessage(); return null; }
+    const view = render(<StatusMessageProvider><Keep /></StatusMessageProvider>);
+    view.unmount();
+    late.say?.('Saved');
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it('nothing to say takes the message away at once, and its timer with it', () => {
     draw('Saved', '');
     press('Saved');

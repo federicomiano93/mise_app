@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useId, useMemo, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router';
-import { Trash2 } from 'lucide-react';
+import { Share, Trash2 } from 'lucide-react';
+import type { Lines } from '@mise/shared/awaiting-sent';
 import { historyDocId, wholeNumber } from '@mise/shared/archive';
 import { dayLabel } from '@mise/shared/day';
 import { mergeHistory } from '@mise/shared/history-window';
 import { groupRequest,isRequestDone, liveDifference, remainingIds, supplierIdsOf } from '@mise/shared/order-request-model';
-import { indexById } from '@mise/shared/order-text';
+import { indexById, itemsFromQuantities } from '@mise/shared/order-text';
 import { outputLanguage } from '@mise/shared/market';
 import { entryUnit, qtyWithUnit, recordUnit, sameUnit } from '@mise/shared/order-unit';
 import { shownQty } from '@mise/shared/pack-type';
+import { sendOffers } from '@mise/shared/send-chooser';
 import { orderedToday } from '@mise/shared/untold-changes';
 import { useT } from '../i18n/useT';
 import { useSession } from '../session/SessionContext';
@@ -16,15 +18,19 @@ import { Button } from '../ui/Button';
 import { FormBar } from '../ui/FormBar';
 import { useStatusMessage } from '../ui/StatusMessage';
 import { useConfirm } from '../ui/useConfirm';
-import { senderOf } from './OrderListsScreen';
+import { joinList } from './orderWords';
+import { senderOf, useRosterForSenders } from './OrderListsScreen';
 import { useOrders, useOrdersStore } from './OrdersContext';
 import { dayTranslate } from './dayWords';
 import { listOpener, useHandBack } from './handBack';
 import { FROM_LIST, cameFromList, columnPart, useLeave } from './ordersNav';
 import { LISTS_PATH, supplierConfirmPath } from './ordersPath';
+import { sendTranslate } from './sendFlow';
+import type { SendRow } from './sendFlow';
 import type { OrdersLens } from './ordersLens';
-import type { StoredDoc } from './ordersSource';
+import type { RosterRow, StoredDoc } from './ordersSource';
 import { LONG_MS } from './useClearQuantities';
+import { useSendOrder } from './useSendOrder';
 import styles from './OrderListScreen.module.css';
 
 // One order list, open (parity R5–R12), at /orders/lists/<id>, one level below the lists: its lines under their suppliers, each with
@@ -39,6 +45,7 @@ import styles from './OrderListScreen.module.css';
 export function OrderListScreen({ id, lens }: { id: string; lens: OrdersLens }) {
   const { t } = useT();
   const { requests, requestsLoaded, requestsBroken } = useOrders();
+  const rosterByUid = useRosterForSenders();
   const handBack = useHandBack();
   const leave = useLeave(LISTS_PATH, useCallback(() => { handBack.expect(listOpener(id)); }, [handBack, id]));
   const request = useMemo(() => requests.find(candidate => candidate.id === id), [requests, id]);
@@ -66,7 +73,7 @@ export function OrderListScreen({ id, lens }: { id: string; lens: OrdersLens }) 
       </section>
     );
   }
-  return <Open request={request} lens={lens} leave={leave} left={left} titleId={titleId} />;
+  return <Open request={request} lens={lens} leave={leave} left={left} titleId={titleId} rosterByUid={rosterByUid} />;
 }
 
 type OpenProps = {
@@ -75,9 +82,10 @@ type OpenProps = {
   leave: () => void;
   left: { current: boolean };
   titleId: string;
+  rosterByUid: ReadonlyMap<string, RosterRow> | null;
 };
 
-function Open({ request, lens, leave, left, titleId }: OpenProps) {
+function Open({ request, lens, leave, left, titleId, rosterByUid }: OpenProps) {
   const { t } = useT();
   const { state } = useLocation();
   const navigate = useNavigate();
@@ -85,8 +93,11 @@ function Open({ request, lens, leave, left, titleId }: OpenProps) {
   const say = useStatusMessage();
   const { canManage, location } = useSession();
   const language = outputLanguage(location) ?? 'en';
-  const { history, olderHistory, draft } = useOrders();
+  const { history, olderHistory, draft, config } = useOrders();
   const [confirm, confirmDialog] = useConfirm();
+  const [send, sendDialogs] = useSendOrder(lens);
+  // One send at a time: a second press while the road chooser or an editor is up does nothing.
+  const sending = useRef(false);
   const title = useRef<HTMLHeadingElement>(null);
   const requestId = request.id;
 
@@ -128,6 +139,44 @@ function Open({ request, lens, leave, left, titleId }: OpenProps) {
     ),
     [request, draft.entries, ingredientsById, orderedById],
   );
+
+  // ⚠️ «SEND TO THE SUPPLIER» SENDS WHAT IS LEFT, WITH THE LIST'S OWN NUMBERS (decision P4 of the v1.145.0 port): per supplier of the list,
+  // in the list's order, only the lines not ticked as bought yet, with the quantities, names and units FROZEN in the list — never the
+  // shared order, which has moved on underneath it. Built like History's re-send (recordSendRows). Only suppliers the order knows now:
+  // a road to a supplier needs its phone or email.
+  //
+  // ⚠️ THE NAMES ARE THE LIST'S FROZEN ONES, never `item.name` (a deleted ingredient with no frozen name reads as the INTERFACE word
+  // there): what the supplier reads follows the venue's country, so a line with no name at all gets the venue-language word (itemsFromQuantities).
+  // ⚠️ A LINE WHOSE INGREDIENT NO LONGER EXISTS IS LEFT OUT, of the message and of the question: «Yes» files what went through the
+  // ingredients the order knows (sentLinesOf), so it could not record that line, and asking about it would promise a record never made.
+  const frozenNames = useMemo(() => {
+    const names = request.names;
+    return typeof names === 'object' && names !== null ? names as Record<string, unknown> : {};
+  }, [request]);
+  const toSend = useMemo(() => {
+    const rows: SendRow[] = [];
+    const lines: Record<string, Lines> = {};
+    for (const group of groups) {
+      if (group.supplierId === '' || lens.supplierById(group.supplierId) === undefined) continue;
+      const open = group.items.filter(item => !item.done && item.qty > 0 && ingredientsById[item.id] !== undefined);
+      const quantities = Object.fromEntries(open.map(item => [item.id, item.qty]));
+      const units = Object.fromEntries(open.flatMap(item => (item.unit === '' ? [] : [[item.id, item.unit]])));
+      const items = itemsFromQuantities(quantities, ingredientsById, frozenNames, units, language);
+      if (items.length === 0) continue;
+      rows.push({ id: group.supplierId, name: group.supplierName, items });
+      lines[group.supplierId] = { quantities, units };
+    }
+    return { rows, lines };
+  }, [groups, lens, ingredientsById, frozenNames, language]);
+  // Hidden when nothing is left to send, or no road reaches a supplier for it (the in-app list for the managers is not a road to a
+  // supplier): the same rule as «Send it now».
+  const canSend = toSend.rows.length > 0 && sendOffers({
+    settings: config.sendSettings,
+    canManage,
+    suppliers: toSend.rows.map(row => lens.supplierById(row.id)).filter(supplier => supplier !== undefined),
+    supplierRoadsOnly: true,
+    t: sendTranslate(t),
+  }).some(offer => offer.route !== 'manager');
 
   const dt = dayTranslate(t);
   const remaining = remainingIds(request);
@@ -188,6 +237,39 @@ function Open({ request, lens, leave, left, titleId }: OpenProps) {
     if (outcome !== 'saved') say(t('ord.request.deleteFailed'), LONG_MS);
   }
 
+  // ⚠️ CALLED FROM THE PRESS, with nothing awaited first (the unit check and the first editor run in that tick), and freed again whatever
+  // happens. The ticks are not changed by sending: «bought» is the buyer's word, not the sender's.
+  const sendToSuppliers = () => {
+    if (sending.current || !canSend) return;
+    sending.current = true;
+    const going = toSend;
+    const failed = (err: unknown) => {
+      console.error('Sending the order list failed:', err);
+      sending.current = false;
+      say(t('ord.send.failed'), LONG_MS);
+    };
+    let pending: ReturnType<typeof send>;
+    try {
+      pending = send({ rows: going.rows, grouped: true, supplierRoadsOnly: true });
+    } catch (err) {
+      failed(err);
+      return;
+    }
+    void pending.then(result => {
+      sending.current = false;
+      if (result?.kind !== 'sent') return;
+      // Handed over: «did it go?» with exactly these numbers, and no `draft` (the order is not what this list was sent from):
+      // «Yes» clears only draft lines that still read the same.
+      store.waitForAnswer(result.ids.flatMap(id => {
+        const lines = going.lines[id];
+        return lines === undefined ? [] : [{ supplierId: id, quantities: lines.quantities, units: lines.units }];
+      }), result.handOff);
+      const missed = going.rows.filter(row => !result.ids.includes(row.id)).map(row => row.name);
+      if (result.ids.length === 0 && result.blocked) say(t('ord.send.nothingOpened'), LONG_MS);
+      else if (missed.length > 0) say(t('ord.sentCheck.notReached', { names: joinList(t, missed) }), LONG_MS);
+    }).catch(failed);
+  };
+
   // ⚠️ THE HAND-OFF TO THE ROAD EVERYBODY ALREADY WALKS: recording the order is the app's own per-supplier confirm screen. A second way
   // to record an order here would be a second answer to «what was ordered». `toList: 1` brings a recorded order back to THIS list.
   const place = (supplierId: string) => { void navigate(supplierConfirmPath(supplierId), { state: { ...FROM_LIST, toList: 1, ...columnPart(state) } }); };
@@ -204,7 +286,7 @@ function Open({ request, lens, leave, left, titleId }: OpenProps) {
       />
       <div className={styles.body}>
         <div className={styles.head}>
-          <span className={styles.from}>{t('ord.request.from', { who: senderOf(request, t('ord.request.someone')) })}</span>
+          <span className={styles.from}>{t('ord.request.from', { who: senderOf(request, t('ord.request.someone'), rosterByUid) })}</span>
           <span className={styles.when}>{dayLabel(date, new Date(), dt)}</span>
         </div>
 
@@ -280,6 +362,12 @@ function Open({ request, lens, leave, left, titleId }: OpenProps) {
         })}
 
         <div className={styles.foot}>
+          {canSend ? (
+            <Button block onPress={sendToSuppliers}>
+              <Share aria-hidden="true" />
+              {t(toSend.rows.length === 1 ? 'ord.request.sendToSupplier' : 'ord.request.sendToSuppliers')}
+            </Button>
+          ) : null}
           {remaining.length > 0 ? (
             <Button variant="primary" block onPress={() => { void finish(); }}>{t('ord.request.finish')}</Button>
           ) : null}
@@ -294,6 +382,7 @@ function Open({ request, lens, leave, left, titleId }: OpenProps) {
         </div>
       </div>
       {confirmDialog}
+      {sendDialogs}
     </section>
   );
 }

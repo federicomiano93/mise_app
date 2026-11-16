@@ -1,0 +1,71 @@
+/* «Did it go?» under the Orders head: in the flow, so the list is pushed down; nothing clips (the head above must keep sticking).
+   Amber means «to check» (tokens.css). Every target is at least --hit tall. */
+
+.banners {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  min-width: 0;
+}
+
+/* The region is on the page before it speaks, and while it is empty it must not add the column's gap above the next block. */
+.banners:empty {
+  margin-block-end: calc(-1 * var(--s3));
+}
+
+.row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  min-width: 0;
+  padding: var(--s3);
+  border: 1px solid var(--warn);
+  border-radius: var(--r-md);
+  background: var(--warn-tint);
+  color: var(--warn-ink);
+}
+
+.sentence {
+  margin: 0;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+}
+
+/* Native buttons, not the shared Button: while an answer is under way they are aria-disabled (never disabled), because a disabled
+   button cannot hold the focus and the one just tapped must keep it. */
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  max-width: 100%;
+  min-height: var(--hit);
+  padding: 0 var(--s5);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: 600 var(--fs-md)/1.2 var(--font);
+  cursor: pointer;
+  overflow-wrap: anywhere;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.yes {
+  border: 0;
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.button[aria-disabled='true'] {
+  border-color: var(--line);
+  background: var(--sunken);
+  color: var(--ink-3);
+  cursor: default;
+}

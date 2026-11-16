@@ -522,7 +522,7 @@ describe('the «Type» menu', () => {
 // with the delete's own count. A warning, not a refusal.
 describe('⚠️ a food item that recipes use, turned into another kind', () => {
   const typeMenu = (region: Region) => region.getByRole('combobox', { name: /^(Type|Tipo)$/ });
-  const WARNING_1 = 'It is used in 1 recipe: it will no longer be among the ingredients of recipes and its allergens will no longer be shown. Save anyway?';
+  const WARNING_1 = 'It is used in 1 recipe: it can no longer be chosen as an ingredient in recipes and its allergens will no longer be shown. Save anyway?';
 
   it('used in 1 recipe: the question says so (singular), and Save writes the new kind', async () => {
     const source = seeded();
@@ -545,7 +545,7 @@ describe('⚠️ a food item that recipes use, turned into another kind', () => 
     await view.user.selectOptions(typeMenu(view.region), next);
     await view.user.click(view.region.getByRole('button', { name: 'Save' }));
     const dialog = await screen.findByRole('alertdialog');
-    expect(within(dialog).getByText(/^It is used in 3 recipes: it will no longer be among the ingredients of recipes/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/^It is used in 3 recipes: it can no longer be chosen as an ingredient in recipes/)).toBeInTheDocument();
   });
 
   it.each([[1, 'È usato in 1 ricetta:'], [2, 'È usato in 2 ricette:']] as const)('says it in Italian (%i)', async (n, words) => {
@@ -556,7 +556,7 @@ describe('⚠️ a food item that recipes use, turned into another kind', () => 
     await view.user.click(view.region.getByRole('button', { name: 'Salva' }));
     const dialog = await screen.findByRole('alertdialog');
     expect(within(dialog).getByText(
-      `${words} non sarà più tra gli ingredienti delle ricette e i suoi allergeni non verranno più mostrati. Salvare comunque?`,
+      `${words} non si potrà più scegliere come ingrediente nelle ricette e i suoi allergeni non verranno più mostrati. Salvare comunque?`,
     )).toBeInTheDocument();
   });
 
@@ -579,7 +579,7 @@ describe('⚠️ a food item that recipes use, turned into another kind', () => 
     await view.user.click(view.region.getByRole('button', { name: 'Save' }));
     const dialog = await dialogOf('Save resale item?');
     expect(within(dialog).getByText(
-      'It may be used in some recipes: it will no longer be among the ingredients of recipes and its allergens will no longer be shown. Save anyway?',
+      'It may be used in some recipes: it can no longer be chosen as an ingredient in recipes and its allergens will no longer be shown. Save anyway?',
     )).toBeInTheDocument();
   });
 
@@ -590,7 +590,7 @@ describe('⚠️ a food item that recipes use, turned into another kind', () => 
     await view.user.selectOptions(typeMenu(view.region), 'resale');
     await view.user.click(view.region.getByRole('button', { name: 'Salva' }));
     const dialog = await screen.findByRole('alertdialog');
-    expect(within(dialog).getByText(/^Potrebbe essere usato in alcune ricette: non sarà più tra gli ingredienti delle ricette/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/^Potrebbe essere usato in alcune ricette: non si potrà più scegliere come ingrediente nelle ricette/)).toBeInTheDocument();
   });
 
   it('while the count runs, Save is busy and nothing is asked yet', async () => {

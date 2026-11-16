@@ -81,53 +81,20 @@ const PENDING_DRAFT = {
   days: { 's-alp': YESTERDAY, 's-zed': TODAY },
 };
 
-describe('«Order today» over the list', () => {
-  it('draws nothing while no supplier is ordered today', async () => {
-    await atList(seeded());
-    expect(screen.queryByText('Order today')).not.toBeInTheDocument();
-    expect(screen.queryByText('Today’s orders are all placed')).not.toBeInTheDocument();
-  });
-
-  it('shows a button for each order still to place and a quiet check for each one placed', async () => {
+// The «Order today» strip over the list is gone since the redesign of 16 Nov 2026: a supplier still to order today is in the
+// list's «To order» group, tagged in its row (OrdersSection.dueToday.spec.tsx pins the tag and the order).
+describe('no «Order today» strip', () => {
+  it('draws no strip and no chip: the supplier\'s row is the only button with its name, in «To order»', async () => {
     const suppliers = [
       supplier('s-alp', { name: 'Alpine Mills', orderDays: [WEEKDAY(0)] }),
       supplier('s-bee', { name: 'Bee Farm', orderDays: [WEEKDAY(0)] }),
-      supplier('s-cat', { name: 'Not today', orderDays: [WEEKDAY(2)] }),
     ];
     await atList(seeded({ suppliers, records: { [`${TODAY}_s-bee`]: record(TODAY, 's-bee', { 'i-flour': 1 }) } }));
-    expect(await screen.findByText('Order today', undefined, LOAD)).toBeInTheDocument();
-    // Two buttons carry the name: the chip (first, over the list) and the supplier's row, which also says «To order today».
-    expect(screen.getAllByRole('button', { name: /^Alpine Mills/ })).toHaveLength(2);
-    // Placed: its name and a word for a screen reader, but nothing to press.
-    expect(screen.getAllByText('Bee Farm')).toHaveLength(2);
-    // Its row is the only button with its name.
-    expect(screen.getAllByRole('button', { name: 'Bee Farm' })).toHaveLength(1);
-    expect(screen.getAllByRole('button', { name: 'Not today' })).toHaveLength(1);
-  });
-
-  it('says so in one line when every order of the day is placed', async () => {
-    const suppliers = [supplier('s-alp', { name: 'Alpine Mills', orderDays: [WEEKDAY(0)] })];
-    await atList(seeded({ suppliers, records: { [`${TODAY}_s-alp`]: record(TODAY, 's-alp', { 'i-flour': 1 }) } }));
-    expect(await screen.findByText('Today’s orders are all placed', undefined, LOAD)).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 2, name: 'To order' }, LOAD)).toBeInTheDocument();
     expect(screen.queryByText('Order today')).not.toBeInTheDocument();
-  });
-
-  it('opens the supplier when a chip is pressed, like its row', async () => {
-    const suppliers = [supplier('s-alp', { name: 'Alpine Mills', orderDays: [WEEKDAY(0)] })];
-    const view = await atList(seeded({ suppliers }));
-    await screen.findByText('Order today', undefined, LOAD);
-    await view.user.click(screen.getAllByRole('button', { name: 'Alpine Mills' })[0] as HTMLElement);
-    await waitFor(() => { expect(view.router.state.location.pathname).toBe('/orders/supplier/s-alp'); });
-  });
-
-  it('⚠️ draws nothing before the records have arrived: a supplier placed this morning must not flash as not placed', async () => {
-    const suppliers = [supplier('s-alp', { name: 'Alpine Mills', orderDays: [WEEKDAY(0)] })];
-    const source = seeded({ suppliers });
-    source.watchRecentHistory = () => () => undefined;
-    await atList(source);
-    expect(screen.queryByText('Order today')).not.toBeInTheDocument();
-    // Only the supplier's own row.
-    expect(screen.getAllByRole('button', { name: 'Alpine Mills' })).toHaveLength(1);
+    expect(screen.queryByText('Today’s orders are all placed')).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /^Alpine Mills/ })).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: /^Bee Farm/ })).toHaveLength(1);
   });
 });
 
@@ -359,7 +326,8 @@ describe('what was added that nobody was told about', () => {
     expect(inside.getByText('This was already ordered')).toBeInTheDocument();
     expect(inside.getByText('Flour — 2 ordered, 5 now in the order')).toBeInTheDocument();
     expect(inside.getByText('If more is really needed, ring the supplier — the app cannot undo a phone call.')).toBeInTheDocument();
-    expect(inside.queryByRole('button')).not.toBeInTheDocument();
+    // The panel's own X is the only button (16 Nov 2026): nothing undoes what was ordered.
+    expect(inside.getAllByRole('button').map(button => button.getAttribute('aria-label'))).toEqual(['Close notices']);
     expect(inside.queryByText(/order changed/)).not.toBeInTheDocument();
   });
 });

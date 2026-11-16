@@ -1,0 +1,27 @@
+/* The send editor: the supplier's name (the dialog's title) and the box holding the message, which can be corrected. It sits inside
+   the shared dialog (440px wide at most, 24px of padding): at 296px the text still has 248px. Fixed pixel heights, never dvh: the lab
+   tablet's Chrome 101 has no dynamic viewport units. */
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  min-width: 0;
+}
+
+.text {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 170px;
+  padding: var(--s3);
+  border: 1.5px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: 450 var(--fs-md)/1.45 var(--font);
+  resize: vertical;
+}
+
+.text:focus-visible {
+  border-color: var(--accent);
+}

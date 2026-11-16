@@ -9,6 +9,7 @@ import hashlib
 import re
 import zipfile
 import xml.etree.ElementTree as ET
+from xml.parsers import expat
 from dataclasses import dataclass, field
 from email.utils import parsedate_to_datetime
 from pathlib import Path, PurePosixPath
@@ -31,6 +32,13 @@ METADATA_RE = re.compile(r"^(?P<base>.+?)(?P<pad>_PAD)?_MT_\d+\.xml$", re.I)
 
 # An e-invoice is a few hundred KB. A file far bigger than that is not one.
 MAX_XML_BYTES = 30_000_000
+
+# A month of invoices is a few hundred files of a few hundred KB. An archive that unpacks
+# to more than this, or holds more files than this, is not a month of invoices: every
+# entry is read into memory, so a zip of a thousand 30 MB files of zeros would otherwise
+# ask for 30 GB (security audit, 2 Nov 2026).
+MAX_ZIP_ENTRIES = 20_000
+MAX_ZIP_TOTAL_BYTES = 500_000_000
 
 
 @dataclass
@@ -97,7 +105,25 @@ def parse_xml(data: bytes) -> ET.Element:
     # ("billion laughs"). A FatturaPA never has a DTD: refuse any that does.
     if re.search(rb"<!\s*(DOCTYPE|ENTITY)", data, re.I):
         raise ValueError("DTD non ammessa in una fattura")
+    # ⚠️ AND ASKED OF THE PARSER TOO (security audit, 2 Nov 2026). The search above reads
+    # raw bytes, so the same DOCTYPE saved as UTF-16 ("<\0!\0D\0...") slipped past it and
+    # the entities were expanded. expat decodes first and reports every DOCTYPE and
+    # entity declaration whatever the encoding, so this pass refuses what the bytes hid.
+    _refuse_dtd(data)
     return strip_namespaces(ET.fromstring(data))
+
+
+def _refuse_dtd(data: bytes) -> None:
+    def refuse(*_args) -> None:
+        raise ValueError("DTD non ammessa in una fattura")
+
+    probe = expat.ParserCreate()
+    probe.StartDoctypeDeclHandler = refuse
+    probe.EntityDeclHandler = refuse
+    try:
+        probe.Parse(data, True)
+    except expat.ExpatError as err:
+        raise ValueError(f"XML non valido: {err}") from None
 
 
 def text(node: ET.Element | None, path: str) -> str:
@@ -238,7 +264,11 @@ def _zip_container(path: Path, skipped: list[SkippedFile]) -> tuple[Container, i
     entries: Container = {}
     p7m = 0
     with zipfile.ZipFile(path) as zf:
-        for info in zf.infolist():
+        infos = zf.infolist()
+        if len(infos) > MAX_ZIP_ENTRIES:
+            raise ValueError("archivio con troppi file")
+        total = 0
+        for info in infos:
             if info.is_dir():
                 continue
             name = PurePosixPath(info.filename.replace("\\", "/")).name
@@ -249,6 +279,10 @@ def _zip_container(path: Path, skipped: list[SkippedFile]) -> tuple[Container, i
                 if info.file_size > MAX_XML_BYTES:
                     skipped.append(SkippedFile(redact_file_name(name), "file troppo grande"))
                 else:
+                    # The declared size bounds what read() returns, so it is what counts.
+                    total += info.file_size
+                    if total > MAX_ZIP_TOTAL_BYTES:
+                        raise ValueError("archivio troppo grande")
                     entries[name] = zf.read(info)
     return entries, p7m
 
@@ -299,6 +333,10 @@ def load_invoices(fatture_dir: Path, novat_salt: str = "") -> LoadResult:
                     entries, p7m = _zip_container(zpath, result.skipped)
                 except zipfile.BadZipFile:
                     result.skipped.append(SkippedFile(redact_file_name(zpath.name), "archivio zip non leggibile"))
+                    continue
+                except ValueError as exc:
+                    # Too many files, or too big unpacked: listed and left out, never fatal.
+                    result.skipped.append(SkippedFile(redact_file_name(zpath.name), str(exc)))
                     continue
                 containers.append(entries)
                 result.p7m_count += p7m

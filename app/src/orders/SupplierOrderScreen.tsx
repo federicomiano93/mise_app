@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
-import { Check, ClipboardList, List, Plus } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, ClipboardList, Share, X } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router';
-import { fromOrdersList, fromOrdersSupplier, ingredientCardAddress, newIngredientAddress, supplierScreenAddress } from '@mise/shared/records-link';
+import { draftQuantities } from '@mise/shared/awaiting-sent';
+import { fromOrdersList, fromOrdersSupplier, ingredientCardAddress, supplierScreenAddress } from '@mise/shared/records-link';
 import { supplierLabel } from '@mise/shared/supplier-label';
 import { useT } from '../i18n/useT';
 import { KEEP_FOCUS } from '../shell/Page';
@@ -15,18 +16,28 @@ import { tabOfLine, useCardDoors } from './CardDoors';
 import { DayLine } from './DayLine';
 import { OrderLine } from './OrderLine';
 import { OrderTotals } from './OrderTotals';
+import { SaveStateLine } from './SaveStateLine';
 import { useOrders, useOrdersStore } from './OrdersContext';
-import { ADD_DOOR, ITEMS_DOOR, PLACE_DOOR, SUMMARY_DOOR, SUPPLIER_DOOR, SUPPLIER_TITLE, supplierOpener, useHandBack } from './handBack';
-import { ORDERS_PATH, supplierConfirmPath, supplierItemsPath, supplierSummaryPath } from './ordersPath';
+import { PLACE_DOOR, SUMMARY_DOOR, SUPPLIER_DOOR, SUPPLIER_TITLE, supplierOpener, useHandBack } from './handBack';
+import { ORDERS_PATH, supplierConfirmPath, supplierSummaryPath } from './ordersPath';
 import { cameFromList, confirmState, fromSupplierState, useLeave } from './ordersNav';
 import { recipeOriginOf, useBackToRecipe } from './recipeOrigin';
 import { LONG_MS, useClearQuantities } from './useClearQuantities';
 import { NO_SUPPLIER_ID } from './ordersLens';
 import { summaryFor } from './orderMoney';
+import { sayListOutcome } from './sayListOutcome';
+import { draftSendRows } from './sendFlow';
+import { useSendOrder } from './useSendOrder';
 import type { OrderRow, OrdersLens } from './ordersLens';
 import styles from './SupplierOrderScreen.module.css';
 
 // One supplier's order: the quantities to type, A→Z, and under them the lines switched off.
+//
+// The redesign of 16 Nov 2026 (item 5): the head is `[X] NAME ›` … `[send]` on the split (X closes the supplier — Back to the list,
+// nothing is lost — and › is the door to its card), `[←] NAME ›` … «Summary (N)» `[send]` on a phone, where the rows have no summary
+// button. «What they sell» and «+» are gone from it (the row's list icon is the first, and an item is added from the card behind ›).
+// Under the head one slim bar, «Order for [Today ▾]» … «Saved ✓», ONE line, the column names, and each item on one row on the split
+// (OrderLine `compact`), on two levels on a phone. The whole card is one colour; its inner controls are grey with no border.
 //
 // Back is one level up (P20): the browser's Back when the list is the entry behind, else it replaces itself with the list.
 //
@@ -54,21 +65,22 @@ export function SupplierOrderScreen({ id, lens }: { id: string; lens: OrdersLens
   const leave = origin === null ? leaveToList : leaveToRecipe;
   const say = useStatusMessage();
   const [clearQuantities, clearDialog] = useClearQuantities(lens);
+  const [send, sendDialogs] = useSendOrder(lens);
+  // One send at a time: a second press while the road chooser or an editor is up does nothing.
+  const sending = useRef(false);
+  // Closing the screen sends what waits for the autosave's pause at once (the iPad order of 14 Nov 2026).
+  useEffect(() => () => { store.sendWaitingDraft(); }, [store]);
   // The totals box above «Order placed» is for the split only (his choice C4, 6 Nov 2026).
   const split = useMediaQuery(SPLIT_QUERY);
 
-  // «What they sell» one level down: Back from it hands the focus back to this button.
-  const itemsNode = useCallback((node: HTMLButtonElement | null) => { handBack.register(ITEMS_DOOR, node); }, [handBack]);
-  // The summary one level down: Back from it hands the focus back to this button.
+  // The summary one level down (a phone's head only): Back from it hands the focus back to this button.
   const summaryNode = useCallback((node: HTMLButtonElement | null) => { handBack.register(SUMMARY_DOOR, node); }, [handBack]);
   // «Order placed…» one level down: Back from the confirm screen hands the focus back to this button.
   const placeNode = useCallback((node: HTMLButtonElement | null) => { handBack.register(PLACE_DOOR, node); }, [handBack]);
   // The doors to the cards (step 3f-8b), where the person may edit records. Back from a card hands the focus back to its door.
   const doors = useCardDoors();
-  const addNode = useCallback((node: HTMLButtonElement | null) => { handBack.register(ADD_DOOR, node); }, [handBack]);
   const supplierDoorNode = useCallback((node: HTMLButtonElement | null) => { handBack.register(SUPPLIER_DOOR, node); }, [handBack]);
-  // ⚠️ THE PSEUDO-SUPPLIER HAS NO SCREEN OF ITS OWN IN «Ingredients & suppliers»: its lines and its «+» come from the list's side, and its
-  // name is no door.
+  // ⚠️ THE PSEUDO-SUPPLIER HAS NO SCREEN OF ITS OWN IN «Ingredients & suppliers»: its name is no door.
   const pseudo = id === NO_SUPPLIER_ID;
 
   const supplier = lens.supplierById(id);
@@ -123,7 +135,7 @@ export function SupplierOrderScreen({ id, lens }: { id: string; lens: OrdersLens
     markDone();
   }, [shown, alertUp]);
 
-  // The column names stick right under the bar, whose height changes with the title's lines and the width.
+  // The column names stick right under the head, whose height changes with the width.
   const barHeight = useHeight();
 
   if (supplier === undefined) {
@@ -131,6 +143,7 @@ export function SupplierOrderScreen({ id, lens }: { id: string; lens: OrdersLens
       <section className={styles.screen} aria-label={t('section.orders')}>
         <FormBar backLabel={t('ui.back')} onBack={leave} title={t('section.orders')} titleRef={titleNode} />
         <p className={styles.nothing}>{t('ord.supplierGone')}</p>
+        {sendDialogs}
       </section>
     );
   }
@@ -150,15 +163,47 @@ export function SupplierOrderScreen({ id, lens }: { id: string; lens: OrdersLens
       row={row}
       entry={entries[row.ingredient.id]}
       showStock={showStock}
+      compact
       hint={row.elsewhere ? { kind: 'none' } : snapshot.suggester.hint(row.ingredient, entries[row.ingredient.id])}
       onEdit={(edited, edit) => { store.editLine(supplier, edited.ingredient, edit); }}
       onOpenCard={doors.may ? openCard : undefined}
+      onLeaveBox={() => { store.sendWaitingDraft(); }}
     />
   );
   const empty = rows.active.length === 0 && rows.inactive.length === 0;
   // What is typed for this supplier: «Order placed…» needs some, «Clear quantities…» is offered only when there is some.
   const filled = lens.filledFor(id);
   const placing = snapshot.placing.includes(id);
+  // «Send» on this supplier's own screen: ITS lines only, through the same roads and the same editor as the send screen.
+  // ⚠️ CALLED FROM THE PRESS, with nothing awaited first (the unit check runs in that tick), and freed again whatever happens: a send
+  // that throws or rejects must not leave the button dead. The log carries the error, never the order.
+  const sendOrder = () => {
+    if (sending.current || filled === 0) return;
+    sending.current = true;
+    const failed = (err: unknown) => {
+      console.error('Sending the order failed:', err);
+      sending.current = false;
+      say(t('ord.send.failed'), LONG_MS);
+    };
+    // ⚠️ WHAT GOES IS TAKEN AT THE PRESS, with the message: «did it go?» asks about exactly these numbers, whatever is typed meanwhile.
+    const went = draftQuantities(lens.linesOf(id), snapshot.draft.entries);
+    let going: ReturnType<typeof send>;
+    try {
+      going = send({ rows: draftSendRows(lens, snapshot.draft, [id]), grouped: true, supplierRoadsOnly: false });
+    } catch (err) {
+      failed(err);
+      return;
+    }
+    void going.then(result => {
+      sending.current = false;
+      // Handed over, whether or not this screen is still the one on show: the question is the only thing that gets it recorded.
+      if (result?.kind === 'sent' && result.ids.includes(id)) {
+        store.waitForAnswer([{ supplierId: id, quantities: went.quantities, units: went.units }], result.handOff);
+      }
+      if (result?.kind === 'list') sayListOutcome(say, t, result.outcome);
+      else if (result?.kind === 'sent' && result.blocked) say(t('ord.send.nothingOpened'), LONG_MS);
+    }).catch(failed);
+  };
   const place = () => {
     // Refused offline: the record and the clear would land at two different moments of connectivity (parity X3).
     if (navigator.onLine === false) {
@@ -169,74 +214,69 @@ export function SupplierOrderScreen({ id, lens }: { id: string; lens: OrdersLens
     void navigate(supplierConfirmPath(id), { state: confirmState(state) });
   };
 
+  const cardDoor = doors.may && !pseudo
+    ? () => { doors.open({ address: supplierScreenAddress(id), state: fromOrdersList('suppliers'), target: { kind: 'supplier' } }); }
+    : undefined;
+
   return (
     <section ref={screen} className={styles.screen} aria-labelledby={titleId}>
-      {/* The bar and the column names stick, the names over the boxes while the rows scroll. The day line between them
-          scrolls away: stuck too, on a phone it took half the screen from the rows. */}
+      {/* The head sticks, and the column names stick under it while the rows scroll; the slim bar between them scrolls away. */}
       <div ref={barHeight.ref} className={styles.sticky}>
-        <FormBar
-          backLabel={t('ui.back')}
-          onBack={leave}
-          title={label}
-          titleId={titleId}
-          titleRef={titleNode}
-          titleDoorRef={supplierDoorNode}
-          onTitle={doors.may && !pseudo ? () => { doors.open({ address: supplierScreenAddress(id), state: fromOrdersList('suppliers'), target: { kind: 'supplier' } }); } : undefined}
-          titleDoorLabel={t('ord.supplierDoor', { supplier: label })}
-          action={(
-            <div className={styles.barActions}>
-              {doors.may ? (
-                <Button
-                  ref={addNode}
-                  className={styles.add}
-                  aria-label={pseudo ? t('ord.addIngredientNoSupplier') : t('ord.addIngredientTo', { supplier: label })}
-                  onPress={() => {
-                    doors.open({
-                      address: newIngredientAddress(pseudo ? null : id),
-                      state: pseudo ? fromOrdersList('ingredients') : fromOrdersSupplier(id),
-                      target: { kind: 'add' },
-                    });
-                  }}
-                >
-                  <Plus aria-hidden="true" />
-                </Button>
-              ) : null}
-              <Button
-                ref={itemsNode}
-                variant="secondary"
-                onPress={() => {
-                  handBack.expect(ITEMS_DOOR);
-                  void navigate(supplierItemsPath(id), { state: fromSupplierState(state) });
-                }}
-              >
-                <List aria-hidden="true" />
-                {t('ord.whatTheySell')}
-              </Button>
-              {/* Always here, also at 0: he wants to see all he has typed without going back (3 Oct 2026). In the bar, which sticks
-                  while the rows scroll, so it is always in reach (choice C1). */}
-              <Button
-                ref={summaryNode}
-                variant="secondary"
-                onPress={() => {
-                  handBack.expect(SUMMARY_DOOR);
-                  void navigate(supplierSummaryPath(id), { state: fromSupplierState(state) });
-                }}
-              >
-                <ClipboardList aria-hidden="true" />
-                {t('ord.summaryDoor', { n: filled })}
-              </Button>
-            </div>
+        <header className={styles.head}>
+          {/* ⚠️ X ON THE SPLIT, AN ARROW ON A PHONE: beside the list the supplier is closed, on a phone the person goes back. Either way it is
+              the same one level up (useLeave), and nothing typed is lost. */}
+          <Button variant="bare" className={styles.icon} aria-label={split ? t('ord.supplier.close', { supplier: label }) : t('ui.back')} onPress={leave}>
+            {split ? <X aria-hidden="true" /> : <ChevronLeft aria-hidden="true" />}
+          </Button>
+          {cardDoor ? (
+            <h2 ref={titleNode} tabIndex={-1} className={styles.title} aria-labelledby={titleId}>
+              <button ref={supplierDoorNode} type="button" className={styles.door} aria-label={t('ord.supplierDoor', { supplier: label })} onClick={cardDoor}>
+                <span id={titleId} className={styles.name}>{label}</span>
+                <ChevronRight aria-hidden="true" />
+              </button>
+            </h2>
+          ) : (
+            <h2 ref={titleNode} id={titleId} tabIndex={-1} className={styles.title}><span className={styles.name}>{label}</span></h2>
           )}
-        />
+          {/* A phone keeps «Summary (N)» here: its rows have no summary button. Always drawn there, also at 0 (3 Oct 2026). */}
+          {split ? null : (
+            <Button
+              ref={summaryNode}
+              variant="bare"
+              className={styles.summary}
+              onPress={() => {
+                handBack.expect(SUMMARY_DOOR);
+                void navigate(supplierSummaryPath(id), { state: fromSupplierState(state) });
+              }}
+            >
+              <ClipboardList aria-hidden="true" />
+              {t('ord.summaryDoor', { n: filled })}
+            </Button>
+          )}
+          {/* ⚠️ AN ARROW OUT OF A TRAY: the roads are chosen next. Only this supplier's lines go. */}
+          <Button
+            variant="bare"
+            className={styles.icon}
+            aria-label={t('ord.supplierSendAria', { supplier: label })}
+            isDisabled={filled === 0}
+            onPress={sendOrder}
+          >
+            <Share aria-hidden="true" />
+          </Button>
+        </header>
       </div>
-      <DayLine supplier={supplier} lens={lens} />
+      <div className={styles.bar}>
+        <DayLine supplier={supplier} lens={lens} slim />
+        <SaveStateLine inBar />
+      </div>
       {empty ? null : (
         <div
           className={styles.columns}
           data-stock={showStock}
           style={{ top: barHeight.px }}
         >
-          <span />
+          <span className={styles.columnItem}>{t('ord.field.item')}</span>
+          <span className={`${styles.columnName} ${styles.columnUnit}`}>{t('ord.field.unit')}</span>
           <span className={styles.columnName}>{t('ord.field.order')}</span>
           {showStock ? <span className={styles.columnName}>{t('ord.field.stock')}</span> : null}
         </div>
@@ -271,6 +311,7 @@ export function SupplierOrderScreen({ id, lens }: { id: string; lens: OrdersLens
         </>
       )}
       {clearDialog}
+      {sendDialogs}
     </section>
   );
 }

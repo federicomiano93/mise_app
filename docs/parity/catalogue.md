@@ -2058,8 +2058,9 @@ The owner (14 Nov 2026): calculate the whole recipe from the amount of ONE ingre
 **Deliberate limits.**
 - The row menu is still not in the full-screen view (its rows are read-only text, as decided with item 32); the full screen SHOWS the batch
   worked out from a row, the chosen row exact.
-- A guided mix started from such a batch takes its total (`targetGrams`, the current app's session shape), so in an all-grams recipe the
-  chosen row can read a gram off inside the mix.
+- ~~A guided mix started from such a batch takes its total, so the chosen row can read a gram off inside the mix.~~ Fixed on
+  16 Nov 2026: the mix's snapshot also keeps the row (`fromRow`, an optional key the current app ignores; a batch by its total writes
+  the current app's shape unchanged), and the run draws it with the screen's own `scaledAmounts`.
 
 **Specs.** `shared/src/catalogue-model.spec.ts` («scaleFromRow: the whole recipe from one ingredient’s amount»: the owner's example, the
 chosen row exact even when largest, proportional others, pieces, ml, l and sub-recipe rows, rounding the typed amount, odd inputs → null,
@@ -2133,3 +2134,106 @@ recipe, the open counted, the door beside a recipe on the split, unreadable ingr
 - Left as built, for the owner to hear: a use of an ingredient that was deleted but is still linked from a recipe is not shown here
   (the recipe screen itself marks that row); the search and the open ingredients are remembered until the page reloads, so on the lab
   tablet the next person may find the previous search applied.
+
+## Clean-step rounding of a scaled recipe as built (16 Nov 2026) — differs from the current app ON PURPOSE
+
+The owner (16 Nov 2026, plan reviewed point by point): a scaled weight is rounded ONCE to a step a scale can weigh and a baker can
+read, every screen and file shows the same numbers, and the export stops asking whether to round. The current app (`js/`) is the
+rollback copy and keeps whole grams; its tests are untouched. The Calculator keeps its own dough maths for now (a later PR).
+
+**The step** (`shared/src/clean-step.ts`, NEW IN MISE 2, not paired). `TOLERANCE = 0.01`. A scaled amount in GRAMS is first rounded to the
+whole gram (half up), then that whole number to the largest of 10, 5 and 1 g whose half is at most 1% of it — 10 g from 500 g, 5 g from
+250 to 499 g, 1 g under 250 g — half up (`roundToCleanStep`, `cleanStepOf`). 249.5 g reads 250 g (5 g step), 499.5 g reads 500 g.
+
+**Where.** Inside `scaleCatalogue` and `scaleFromRow` of `shared/src/catalogue-model.ts`, so the table, the full screen, the guided run
+(`amountsFor`), the «Calculate from this ingredient» preview, the PDF, the Excel file and «Use as base recipe» all read the same numbers
+from one place.
+- Not scaled, or scaled to exactly its own total (`Math.round(target) === Math.round(weighableTotalGrams)`): the recipe as written
+  (`baseAmounts`, unchanged). The same holds when «Calculate from this ingredient» is given the row's own amount.
+- Rows in kg, l, dl, cl, mg, ml, pieces, spoons and «to taste»: as before (`roundInUnit`), never a step.
+- «Calculate from this ingredient»: the chosen row is EXACTLY the amount typed; every other gram row on its clean step; NO correction
+  of the total (the owner's example, sugar 800 g → 1000 g of the brioche: eggs read 970 g).
+- The guided run started from such a batch keeps the row in its snapshot (`fromRow`) and shows the same numbers (found by the review of
+  16 Nov 2026: by its total it read up to ~20 g off on big batches, the chosen row included).
+
+**One correction of the total** (`applyTargetTotal`, scale by TOTAL weight only, and only when every WEIGHABLE row is in grams —
+pieces and «to taste» do not stop it; a kg, l or ml row does). It replaces the residual-on-the-largest-row rounding there.
+`diff` = the typed total − the clean-rounded rows.
+1. Protections first: if |diff| is larger than Σ (half a step + half a gram) over the gram rows, or a correction would bring a row to
+   0 g or below, NOTHING is corrected and the recipe screen says one line under the Total: «The total is off by {diff} g: check the
+   recipe.» / «Il totale non torna di {diff} g: controlla la ricetta.» (`cat.totalOff`, the gap without its sign). Screen only, never
+   in a file.
+2. One gram at a time on the 1 g rows, each to the row whose relative error AFTER the move is smallest, only while it stays within 1%
+   (a 5 g vanilla row is never touched); a row may take more than one gram. A tie goes to the larger row.
+3. Then whole 5 g / 10 g steps on the stepped rows, the same way, while the gap holds a whole step.
+4. A few grams left: on the largest row (by its exact amount), which then loses its round number (1597 g). ⚠️ Measured on an invented
+   ten-row recipe (2990 g, three rows on the 10 g step, the small ones on 1 g): at every 100 g from 1 kg to 20 kg, about 7 batches in 10
+   end with the largest row off its round number by 1 to 9 g — not rare. ✅ Accepted by the owner (16 Nov 2026: «la farina non
+   tonda è ok»): the typed total wins, the rule stays as built.
+
+**Mixed units: no correction, but the gap is said** (the owner's decision, 16 Nov 2026, after the review of PR #563). A recipe with
+any kg, l or ml row (or mg, cl, dl) scaled by its TOTAL is still NOT corrected — each row is rounded in its own unit — but when the
+Total on screen is 1 g or more from the batch typed, the same `cat.totalOff` line appears under it. `diff` = the batch in whole grams
+− `shownTotalGrams` (the very function that writes the Total), so the line says exactly the gap the Total shows (invented example in
+the specs: 5056 g asked, Total 5110 g → «… di 54 g …»). None from a row, none unscaled or at the recipe's own total, never in a file.
+
+**The line is announced** (review of PR #563): it sits inside a polite live region (`role="status"`, `aria-live="polite"`) that is
+always under the table, empty without a warning — a screen reader reads out text that arrives in a region it already knows, not one
+that appears with its text — so the line is read out when a new batch brings it. Pinned by `RecipesSection.cleanStep.spec.tsx`.
+
+**The Total is the rows shown, added up** (`shownTotalGrams` of `shared/src/catalogue-model.ts`, called by
+`app/src/recipes/recipeAmounts.ts`): each weighable row converted to grams (0.714 l is 714 g), pieces, spoons and «to taste» left out,
+in whole grams — never the batch typed or a figure worked out again. The export model's `totalG` is that same number. Scaled by its
+total with every weighable row in grams it is the batch typed (unless the line under it says it is off); with kg, l or ml rows it can be
+a few grams from the batch, and then the line says by how much; from a row it can be a few grams from the batch, with no line. The
+EDITOR's Total is the same function over the rows as the recipe screen shows them (`totalText` = `shownTotalGrams(clean,
+baseAmounts(clean))`, review of PR #563): it used to add up the typed amounts exactly, which with half grams and a kg, l or ml row read
+a gram off the recipe screen (10.5 g + 10.5 g + 1 kg: 1021 in the editor, 1022 on the screen). All-gram recipes read as before. And
+typing that shown Total in the batch box is the recipe's own total, as typing the typed amounts' sum always was (`isOwnTotal` checks
+both): the recipe as written, never a 1 g warning. ⚠️ The batch box still shows the
+batch («Calculate from this ingredient»: box 5469, Total 5470 on the owner's brioche example).
+
+**The export prints what it receives.** The «Round the weights in the PDF» switch is gone (the dialog, its state, the `rounded`
+option of `buildPdfBlob` and `rowTextOf`, `hasRoundableRows`, `roundLabWeight` in the port, the keys `export.roundWeights` and
+`export.roundNote`). The PDF and the Excel file print the amounts the screen hands them; nothing is worked out again. The Calculator's
+PDF prints the card's whole grams. `js/recipe-export.js` keeps its switch (rollback copy): `recipe-export.spec.ts` runs the lab-rounding
+tests against it alone and lists the two functions as left out of the port on purpose.
+
+**The PDF page** (every PDF, recipe book AND Calculator; `shared/src/recipe-export.ts`). The first row sits 88 pt under the title
+(`FIRST_ROW_GAP`, was 48). A Total row closes the list: its label (the caller's word — «Total» / «Totale» in the recipe book,
+`calc.totalDough` in the Calculator, the same one the Excel file already had) and its weight both bold, a 0.75 pt line above it as wide
+as the 300 pt block with a divider's 14 pt of air; a divider under the last ingredient is that same line. Its weight is the rows AS
+PRINTED added up in grams (`printedTotalGrams`: weighable rows only, pieces, spoons and «to taste» left out); a list with nothing to
+weigh has NO Total row — nor, since the review of PR #563, does the Excel file (`xlsxSheet` used to write «Total 0 g» for a list of
+pieces; `js/` still does, the rollback copy). It takes part in the fit like any row (counted with its line and air on the vertical, its label measured bold on
+the horizontal). Weights stay right-aligned by per-character measurement (no kerning). `recipe-dividers.spec.ts` now checks the port's
+page against the original's moved down by 40 pt.
+
+**The file name** (recipe book only; `titleFileName`, handed to the export sheet by the recipe screen as `fileName`): the recipe's own
+title as written — spaces, capitals, accents and apostrophes kept («Torta di prova.pdf», «… .xlsx»); each of `/ \ : * ? " < > |`
+becomes «-»; control characters (C0, DEL, C1) and the invisible direction marks and overrides (U+061C, U+200E/F, U+202A–202E,
+U+2066–2069) are stripped, a tab or a line break (also U+0085, U+2028, U+2029) becoming a space (review of PR #563: an override could
+make a file name read backwards); leading dots and spaces and trailing dots and spaces trimmed; 80 characters at most, counted by
+grapheme with `Intl.Segmenter` (a composite emoji — a family, a flag, a skin tone — is one and never cut in half; by code point where
+the segmenter is missing), and never over 200 bytes in UTF-8 (a file name may not pass 255 bytes on Android and Linux: the name stops
+before the first whole character that would not fit, so 85 family emoji keep 11); the translated
+fallback word («ricetta») when nothing but dashes is left. No batch in the name. The CALCULATOR keeps `exportFileName` unchanged
+(«Pizza_x3.pdf», «Focaccia_12000g.pdf»): several batches of one recipe are made there in a day.
+
+**No longer compared with `js/`:** `scaleCatalogue` (`catalogue-model.spec.ts`, its three whole-gram tests now run against `js/` only;
+`odd-inputs.spec.ts`) and `amountsFor` (`odd-inputs.spec.ts`), which draws with it. `baseAmounts` is still compared.
+
+**Specs.** `shared/src/clean-step.spec.ts` (the steps, 249/250 and 499/500 g, half up, floating-point noise, junk);
+`catalogue-model.spec.ts` («clean-step rounding inside the recipe-book scaling»: grams on steps, ml / pieces / «to taste» / kg / l as
+before, not scaled and its own total, from a row; «one correction of the total»: up, down, steps 2-3-4 together, every batch to the
+gram, the protection, pieces and «to taste», a ml row and a kg row with their warning, from a row, «Use as base recipe»,
+`shownTotalGrams`); `clean-step.spec.ts` also covers
+`applyTargetTotal` alone (each step, both protections, junk); `app/src/recipes/RecipesSection.cleanStep.spec.tsx` (the table, the
+warning line under the Total in English and Italian, the Total as the rows added up, the mixed-unit warning and where it is not); `app/src/recipes/cleanStepReaders.spec.ts`
+(the table, the guided run, the export model and «Use as base recipe» agree at several batches, by total and from a row, and every
+Total is its rows added up); `shared/src/recipe-export.spec.ts` («Mise 2 PDF: the first row lower, and a Total row»: 158 pt, the
+Total as the printed rows added up for several models, none for pieces only, bold with its line and air, a divider under the last row,
+the vertical and horizontal fit, 1-4 digit weights on one right edge within 0.1 pt; «titleFileName»); `app/src/ui/recipeExport.spec.ts`
+(a real PDF with its Total row, no rounding of its own), `ExportSheet.spec.tsx` (no rounding question), `RecipesSection.export.spec.tsx`
+(the title as the file name, the Total word handed to the PDF). Not driven on the emulator or a device; the owner checks the PDFs
+against his references on his PC.

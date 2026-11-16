@@ -226,3 +226,153 @@
   color: var(--danger-ink);
   font-weight: 600;
 }
+
+/* ── The open supplier's row (`compact`, 16 Nov 2026) ──────────────────────────────────────────────────────────────────────────────
+   One ~60px row on the split: name (weight under it) · unit · `[−] qty [+]` · stock, with no line between rows; on a phone two levels,
+   name · unit above, `[−] qty [+]` · stock under them (at 296px three controls on one line left the number 8px wide). The card is ONE colour: the controls are grey fields (--sunken) with no border, and a
+   quantity tints only its block (accent tint, accent ink), never the row. The column widths are the SAME as the column names'
+   (SupplierOrderScreen.module.css .columns; orderLineCss.spec.ts compares them). */
+.compact {
+  grid-template-columns: minmax(0, 1fr) 88px;
+  grid-template-areas:
+    "main unit"
+    "qty stock";
+  align-items: center;
+  gap: var(--s2);
+  padding: var(--s2) var(--s3);
+  border-bottom: 0;
+}
+
+/* Without the Stock column the block takes the second level's whole width. */
+.compact[data-stock="false"] {
+  grid-template-areas:
+    "main unit"
+    "qty qty";
+}
+
+.compact[data-filled="true"] {
+  background: none;
+}
+
+.compact .main {
+  grid-area: main;
+}
+
+.unitCell {
+  grid-area: unit;
+  min-width: 0;
+  text-align: center;
+}
+
+.compact .stepper {
+  grid-area: qty;
+}
+
+.compact .stock {
+  grid-area: stock;
+}
+
+@media (min-width: 1000px) {
+  .compact {
+    grid-template-columns: minmax(0, 1fr) 96px 148px 64px;
+    grid-template-areas: "main unit qty stock";
+    gap: 10px;
+    min-height: 60px;
+    padding: var(--s2) var(--s4);
+  }
+
+  .compact[data-stock="false"] {
+    grid-template-columns: minmax(0, 1fr) 96px 148px;
+    grid-template-areas: "main unit qty";
+  }
+}
+
+/* The name door inside a compact row: the name and the weight under it, one 44px target, grown by real padding only (the rows are
+   close, with nothing between them to lend). */
+.compact .door,
+.compact .plain {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 44px;
+  margin-top: 0;
+  padding: var(--s1) 0;
+}
+
+.compact .weight {
+  margin-top: 2px;
+}
+
+.compact .name {
+  font-size: 15px;
+  line-height: 1.25;
+}
+
+.compact .weight {
+  color: var(--ink-2);
+  font-size: 13px;
+}
+
+/* The grey fields: the unit menu, the stock box, and the − / box / + block. */
+.compact .unitSelect {
+  width: 100%;
+  min-height: 44px;
+  margin-top: 0;
+  border: 0;
+  background: var(--sunken);
+}
+
+.compact .stock .box {
+  min-height: 44px;
+  border: 0;
+  background: var(--sunken);
+}
+
+.stepper {
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+  height: 44px;
+  overflow: hidden;
+  border-radius: var(--r-md);
+  background: var(--sunken);
+}
+
+.stepper .step {
+  flex: none;
+  width: 44px;
+  min-height: 44px;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--ink-2);
+}
+
+/* The number between the two steps, set off from them by the card's own colour. */
+.stepper .box {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 var(--s1);
+  border: 0;
+  border-inline: 2px solid var(--surface);
+  border-radius: 0;
+  background: none;
+  font-size: 17px;
+  font-weight: 600;
+}
+
+/* A quantity: only its block is tinted, the number in the accent ink (the number itself says it, not the colour alone). */
+.compact[data-filled="true"] .stepper {
+  background: var(--accent-tint);
+}
+
+.compact[data-filled="true"] .stepper .box {
+  color: var(--accent-ink);
+}
+
+/* Inside the block (which clips its corners) the rings are drawn inwards, so they are never cut. */
+.stepper .step:focus-visible,
+.stepper .box:focus-visible {
+  outline-offset: -3px;
+}

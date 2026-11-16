@@ -1,7 +1,7 @@
 // Order lists in the store (ordersStore.ts, step 3f-7): sending a list (parity R14, R15), the warning before it (R17), the ticks and
 // «Finish» (R19, R20), delete (R21) and this phone's mute switch (M7).
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fakeOrdersSource } from '../testing/fakeOrdersSource';
 import type { FakeOrdersSource } from '../testing/fakeOrdersSource';
 import { LIST_ANSWER_MS, LIST_READ_MS, createOrdersStore } from './ordersStore';
@@ -369,5 +369,39 @@ describe('this phone\'s mute switch', () => {
     expect(source.mutes).toStrictEqual([{ token: 'tok', mute: true }]);
     source.failRequest = true;
     await expect(store.setPhoneMute('tok', false)).resolves.toBe('refused');
+  });
+});
+
+describe('the roster for the names on the received lists (security audit, shownSender)', () => {
+  const settle = () => new Promise(resolve => { setTimeout(resolve, 0); });
+
+  it('is null until asked, then a Map by uid; asked twice, it is read once', async () => {
+    const { source, store } = await started();
+    source.roster = [{ uid: 'boss', role: 'owner', firstName: 'Ada', lastName: 'Rossi' }];
+    expect(store.getSnapshot().rosterByUid).toBeNull();
+    const before = source.reads;
+    store.prepareRoster();
+    store.prepareRoster();
+    await settle();
+    expect(store.getSnapshot().rosterByUid?.get('boss')?.firstName).toBe('Ada');
+    store.prepareRoster();
+    await settle();
+    expect(source.reads - before).toBe(1);
+  });
+
+  it('⚠️ never rejects: a refused read stays null (the typed name stands in), and the next call tries again', async () => {
+    const { source, store } = await started();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    source.failRead = true;
+    store.prepareRoster();
+    await settle();
+    expect(store.getSnapshot().rosterByUid).toBeNull();
+    expect(warn).toHaveBeenCalled();
+    source.failRead = false;
+    source.roster = [{ uid: 'boss', role: 'owner', firstName: 'Ada', lastName: '' }];
+    store.prepareRoster();
+    await settle();
+    expect(store.getSnapshot().rosterByUid?.has('boss')).toBe(true);
+    warn.mockRestore();
   });
 });

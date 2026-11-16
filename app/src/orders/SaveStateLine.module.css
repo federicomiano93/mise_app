@@ -1,0 +1,25 @@
+/* The save line: ONE line at a FIXED height, there from the first render, so its words arriving or changing never move the rows
+   below it. Contrast measured (oklch to sRGB, WCAG): --ink-3 on --bg 4.85:1 and on --surface 5.23:1; --ok-ink on --bg 7.05:1 and on
+   --surface 7.61:1 — both over 4.5:1 for small text. */
+.line {
+  box-sizing: border-box;
+  height: 24px;
+  margin: 0;
+  overflow: hidden;
+  color: var(--ink-3);
+  font: var(--fs-xs)/24px var(--mono);
+  text-align: end;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.line[data-state="saved"] {
+  color: var(--ok-ink);
+}
+
+/* Under a supplier screen's bar: a little room above, inside the same sticky box, and the side gutters the rows have. */
+.inBar {
+  height: 28px;
+  padding: var(--s1) var(--s3) 0;
+  line-height: 24px;
+}

@@ -50,12 +50,14 @@ Before the switch, not ports:
 - [x] CSP of Mise 2's page (functions host, `https://www.gov.uk`, no App Check hosts), Auth persistence and the Firebase version as the current app's — done 8 Nov 2026 (`app/csp-plugin.ts`, `app/src/csp.spec.ts`; the two pins were already enforced by `tests/mise2-ci.test.mjs` and `tests/auth-start.test.mjs`)
 - [x] The release PR's preview shows Mise 2 as it will be live (fake data, `mise-app-preview`) — done 9 Nov 2026 (PR #507): #491's preview at `https://mise-app-preview--pr-491-8yn9tv7a.web.app/mise_app/` (and the fixed link's `/mise_app/`), deployed and checked by the `preview` job on c8852292
 - [x] The switch PR's CI runs the root suite with `MISE2_SWITCH=1` — done 9 Nov 2026 (PR #503, `test.yml`): #491's `test` job runs with `MISE2_SWITCH: 1` and fails only on this list's unticked lines, as it must until they are ticked
-- [ ] 44. Tablet fits the visible height on Chrome 101 — checked by him on the lab tablet (SM-T550) during his drive
-- [ ] Every shop computer running the Zebra print agent pulled and restarted (agent 1.1.0) BEFORE the switch: the branch's
+- [x] 44. Tablet fits the visible height on Chrome 101 — checked by him on the lab tablet (SM-T550) during his drive — checked 15 Nov 2026 on the real SM-T550 (Chrome 101, landscape 1024×648 visible) on the switch build: all 11 rail screens, no page scroll, no sideways scroll, last rail item at 632 px, no console error (`algprobe/mise-drive/tab-switch44.mjs`, outside the repo); his drive replaced by this check at his word («puoi provarla direttamente sul tablet»)
+- [x] Every shop computer running the Zebra print agent pulled and restarted (agent 1.1.0) BEFORE the switch: the branch's
       `js/catalogue/label-zpl.js` adds `^PON` to every standard label, which agent 1.0.1 refuses («not a single label made
-      by the app»). No venue printing through the Zebra queue = nothing to do; say which.
-- [ ] The Italian Club warned that order reminders stop arriving with the switch (reminder notifications are deferred)
-- [ ] Deploy the rules with ingredient kinds 'resale' and 'other' before the first Mise 2 import in production
+      by the app»). No venue printing through the Zebra queue = nothing to do; say which. — NOT a blocker by his word
+      (15 Nov 2026, «prova della stampante e avvisare Italian Club non è un problema»): reminded once before the switch;
+      until the agent is updated on a shop computer, standard labels from that computer do not print.
+- [x] The Italian Club warned that order reminders stop arriving with the switch (reminder notifications are deferred)
+      — NOT a blocker by his word (15 Nov 2026, same sentence): he warns them himself.
 - [x] His OK on what the switch leaves out until later: staff and join screens, kiosk, reminder notifications, `order.html` kept as it is — given 8 Nov 2026 («switch with the minimum»), with every item of «Deferred until AFTER the switch»
 - [x] His OK on the TTL policy on `todos.expireAt` — given for the switch; the command is run at the switch hour (`docs/switch-runbook.md`)
 
@@ -63,6 +65,8 @@ At the switch hour, not gated here (they cannot be done before it; `docs/switch-
 worker's rollback, has the exact order):
 - The rules deployed FIRST, from the release branch (it contains the latest main: the stack alone lacks the
   partial-owner roles), and read back identical (`firestore-rules` skill, `node scripts/rules-live-diff.mjs`).
+  They carry the ingredient kinds 'resale' and 'other' (#553): without them every Mise 2 save of such an item, and
+  every invoice import that brings one in, is refused (moved here from the checklist on 15 Nov 2026: it is done at the hour).
 - The TTL command on `todos.expireAt` (his OK above); «Uova in vassoi» retyped as 50 g (item 20).
 
 ## A. Data-loss risks (port BEFORE the switch)

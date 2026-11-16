@@ -69,6 +69,7 @@ export class Node {
     const tags = String(selector).split(',').map(t => t.trim().toUpperCase());
     return walk(this).filter(n => n !== this && tags.includes(n.tagName));
   }
+  set type(value) { this.attributes.type = String(value); }
   get type() {
     if (this.attributes.type !== undefined) return this.attributes.type;
     return this.tagName === 'SELECT' ? 'select-one' : (this.tagName === 'TEXTAREA' ? 'textarea' : 'text');

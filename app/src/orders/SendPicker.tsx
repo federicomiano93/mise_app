@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { Share } from 'lucide-react';
+import { draftQuantities } from '@mise/shared/awaiting-sent';
 import { MAX_LINES } from '@mise/shared/order-request-model';
 import { useT } from '../i18n/useT';
 import { Button } from '../ui/Button';
-import { announceAction } from '../telemetry/usage';
 import { useStatusMessage } from '../ui/StatusMessage';
+import { useOrdersStore } from './OrdersContext';
 import { joinList } from './orderWords';
+import { sayListOutcome } from './sayListOutcome';
 import type { OrdersLens } from './ordersLens';
 import type { SendRow } from './sendFlow';
 import { LONG_MS } from './useClearQuantities';
@@ -23,15 +25,13 @@ type Props = {
   emptyText: string;
   // A recorded order sent again (History): nothing is recorded after it and the same-day unit check is skipped.
   resend?: boolean;
-  // A send reached these suppliers. Called before the «not reached» line is spoken; the screen goes on from here.
+  // A send reached these suppliers (for the draft's own send, «did it go?» is already written: store.waitForAnswer). Called before
+  // the «not reached» line is spoken; the screen goes on from here.
   onReached: (ids: readonly string[]) => void;
   // The in-app list was written (or is waiting for the connection): the screen leaves. Not given where the list road is never
   // offered (History's re-send).
   onListSent?: () => void;
 };
-
-// How long «List sent ✓ — Everybody who runs this place will be told.» stays: long enough to read who will be told.
-const LIST_SENT_MS = 6000;
 
 // The body both send screens share (the draft's «Send order» and History's «Send <day>»): the tick of every row, «Select all», how
 // the message is written and the one «Send» button. What happens AFTER a send that reached somebody is the screen's own (the
@@ -44,6 +44,7 @@ const LIST_SENT_MS = 6000;
 export function SendPicker({ lens, rows, titleId, emptyText, resend = false, onReached, onListSent }: Props) {
   const { t } = useT();
   const say = useStatusMessage();
+  const store = useOrdersStore();
   const [send, sendDialogs] = useSendOrder(lens);
   const action = useRef<HTMLButtonElement>(null);
   const mounted = useRef(true);
@@ -89,14 +90,8 @@ export function SendPicker({ lens, rows, titleId, emptyText, resend = false, onR
     });
   };
 
-  // What a list that was written (or refused) is told as, on the screen or after it was left. The statistic is counted once per list,
-  // for the two outcomes where the list is in the app (the current app announces `order-request` at the same moment).
-  const tellList = (outcome: 'sent' | 'queued' | 'failed') => {
-    if (outcome === 'sent') say(`${t('ord.request.sent')} — ${t('ord.request.sentToManagers')}`, LIST_SENT_MS);
-    else if (outcome === 'queued') say(t('ord.request.queued'), LIST_SENT_MS);
-    else say(t('ord.request.sendFailed'), LONG_MS);
-    if (outcome !== 'failed') announceAction('order-request');
-  };
+  // What a list that was written (or refused) is told as, on the screen or after it was left (sayListOutcome.ts).
+  const tellList = (outcome: 'sent' | 'queued' | 'failed') => { sayListOutcome(say, t, outcome); };
 
   const press = () => {
     if (pendingRef.current || chosen.length === 0) return;
@@ -112,6 +107,12 @@ export function SendPicker({ lens, rows, titleId, emptyText, resend = false, onR
       say(t('ord.send.failed'), LONG_MS);
     };
     const going = chosen;
+    // ⚠️ WHAT WENT IS TAKEN AT THE PRESS, the same moment as the message is built: the order is live on every device, and by the time
+    // the editor has been answered somebody may have typed. «Did it go?» asks about exactly these numbers. Not for a recorded order
+    // sent again (History): that one is already in the record.
+    const sentSoFar = resend ? {} : Object.fromEntries(
+      going.map(row => [row.id, draftQuantities(lens.linesOf(row.id), store.getSnapshot().draft.entries)]),
+    );
     let sending: ReturnType<typeof send>;
     try {
       // ⚠️ CALLED HERE, IN THE PRESS: takeRoad opens its first window before its first await.
@@ -122,6 +123,14 @@ export function SendPicker({ lens, rows, titleId, emptyText, resend = false, onR
     }
     void sending.then(result => {
       pendingRef.current = false;
+      // ⚠️ BEFORE ANYTHING ELSE, AND WHETHER OR NOT THE SCREEN IS STILL THERE: the order was handed over, and «did it go?» is the one
+      // thing that gets it recorded.
+      if (!resend && result?.kind === 'sent' && result.ids.length > 0) {
+        store.waitForAnswer(result.ids.flatMap(id => {
+          const lines = sentSoFar[id];
+          return lines === undefined ? [] : [{ supplierId: id, quantities: lines.quantities, units: lines.units }];
+        }), result.handOff);
+      }
       if (!mounted.current) {
         // ⚠️ A LIST THAT WAS WRITTEN AFTER THE PERSON WENT BACK IS STILL SAID (sent, queued or failed), and nobody is moved: the status
         // line outlives this screen. A send that was stopped by leaving ('nothing', or no answer at all) says nothing, and takes its

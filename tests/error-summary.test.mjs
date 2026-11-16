@@ -182,23 +182,29 @@ test('the hook asks gcloud ONCE and both counts share that token (two calls push
   const ms = name => Number(new RegExp(`const ${name} = (\\d+);`).exec(src)[1]);
   assert.ok(ms('TOKEN_MS') + 1000 < ms('CHECK_LIMIT_MS'));
   assert.ok(ms('CHECK_LIMIT_MS') < 15000);
-  assert.match(src, /withDeadline\(job, TOKEN_MS \+ GRACE_MS\)\.then\(out => \(TOKEN_SHAPE\.test\(out\) \? out : null\), \(\) => null\)/);
+  // It resolves { token } (never rejects): only a token-shaped output is passed on, and any failure
+  // gives token null — with slow: true when gcloud ran out of time, so the line can say why.
+  assert.match(src, /withDeadline\(job, TOKEN_MS \+ GRACE_MS\)\.then\(\s*out => \(\{ token: TOKEN_SHAPE\.test\(out\) \? out : null \}\),\s*error => \(\{ token: null, slow: [^\n]*\}\),\s*\);/);
   // The token reaches only the two count scripts, never git, gh or the output: the word appears
   // only in the token function, countEnv, the two count checks and the two report lines.
   assert.equal(src.match(/NOTES_MS, countEnv\(token\)\)/g).length, 2);
   assert.equal(src.match(/countEnv\(/g).length, 3); // the definition and those two calls
   assert.doesNotMatch(src, /CHILD_ENV = \{[^}]*MISE_GCLOUD_TOKEN/);
   assert.doesNotMatch(src, /\$\{token/);
+  // A missing token prints only noTokenReason(login), which reads `slow`, never the token.
+  assert.match(src, /function noTokenReason\(\{ slow \}\) \{/);
   const uses = src.split('\n').filter(line => /\btoken\b/.test(line) && !/^\s*\/\//.test(line)).map(line => line.trim());
   assert.deepEqual(uses, [
     "const child = exec('gcloud auth print-access-token', {",
+    "out => ({ token: TOKEN_SHAPE.test(out) ? out : null }),",
+    "error => ({ token: null, slow: Boolean(error?.killed || error?.message === 'timed out') }),",
     "function countEnv(token) {",
     "return { ...CHILD_ENV, MISE_GCLOUD_TOKEN: token };",
-    "async function checkAppNotes(token) {",
-    "if (!token) throw new Error('no token');",
+    "const { token } = login;",
+    "if (!token) return `- could not count the notes from the app (${noTokenReason(login)})`;",
     "count = Number((await run(process.execPath, ['scripts/read-feedback.mjs', '--count'], NOTES_MS, countEnv(token))).trim());",
-    "async function checkAppErrors(token) {",
-    "if (!token) throw new Error('no token');",
+    "const { token } = login;",
+    "if (!token) return `- could not count the errors from the app (${noTokenReason(login)})`;",
     "count = Number((await run(process.execPath, ['scripts/read-errors.mjs', '--count'], NOTES_MS, countEnv(token))).trim());",
     "const token = gcloudToken();",
     "report('the notes from the app', () => token.then(checkAppNotes)),",

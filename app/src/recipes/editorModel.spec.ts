@@ -5,6 +5,7 @@ import {
   NAME_MAX_LENGTH, addRow, cleanWorking, dropWorkingRow, duplicateWorking, haccpStorageText, linkRowTo, moveWorkingRow, netWeightText, notWeighedCount, removeRow, setRowFields, shelfLifeText, stepWorkingRow, totalText, workingFrom, workingFromDraft, restoreWorking, setCategory,
   rowHasDivider, toggleDivider,
 } from './editorModel';
+import { recipeAmounts } from './recipeAmounts';
 
 // The editor's working copy and the rules that turn it into what is saved (the pure half of catalogue-editor.js).
 
@@ -128,6 +129,24 @@ describe('the total', () => {
     const clean = cleanWorking(working);
     expect(totalText(clean)).toBe('1500');
     expect(notWeighedCount(clean)).toBe(1);
+  });
+
+  it('⚠️ is the recipe screen’s Total, by the same function: half grams with a kg row no longer read a gram apart', () => {
+    let working = workingFrom(null);
+    working = setRowFields(working, working.rows[0]!.key, { label: 'Zucchero di prova', grams: '10.5', unit: 'g' });
+    working = addRow(working);
+    working = setRowFields(working, working.rows[1]!.key, { label: 'Sale di prova', grams: '10.5', unit: 'g' });
+    working = addRow(working);
+    working = setRowFields(working, working.rows[2]!.key, { label: 'Farina di prova', grams: '1', unit: 'kg' });
+    const clean = cleanWorking(working);
+    // The screen shows 11 g, 11 g and 1 kg: 1022 g (the typed amounts added up exactly would be 1021).
+    expect(totalText(clean)).toBe('1022');
+    expect(totalText(clean)).toBe(recipeAmounts(clean as unknown as CatalogueRecipe, null, key => key, 'en-GB').total.num);
+    // All in grams nothing moves: 10.5 + 10.5 + 1000 = 1021 g, and the screen's rows add up to it too.
+    working = setRowFields(working, working.rows[2]!.key, { label: 'Farina di prova', grams: '1000', unit: 'g' });
+    const grams = cleanWorking(working);
+    expect(totalText(grams)).toBe('1021');
+    expect(totalText(grams)).toBe(recipeAmounts(grams as unknown as CatalogueRecipe, null, key => key, 'en-GB').total.num);
   });
 
   it('leaves the rows with no name out of both', () => {

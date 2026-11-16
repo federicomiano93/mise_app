@@ -338,14 +338,21 @@ export function isApplied(order) {
 // `liveNameOf(id)` is injected rather than imported so this stays pure: the live
 // product name wins (a rename should show), the frozen one is the fallback, and a
 // product that has been deleted still says what it was instead of showing an id.
+//
+// ⚠️ EVERY NAME IS FORCED TO TEXT (security audit, 2 Nov 2026). The order is written
+// by the CLIENT's phone, and the rules can count the keys of `names` but cannot look
+// at its values — they cannot iterate a map. So a link holder could send a name that
+// is a number or a map, and the sort below threw on it: the bakery's day panel
+// stopped drawing at that card, hiding every OTHER client's order after it. A frozen
+// name that is not a string is treated as no name at all.
 export function orderRows(order, liveNameOf) {
-  const quantities = (order && order.quantities) || {};
-  const frozen = (order && order.names) || {};
+  const quantities = (order && typeof order.quantities === 'object' && order.quantities) || {};
+  const frozen = (order && typeof order.names === 'object' && order.names) || {};
   const rows = Object.keys(quantities).map(id => ({
     id,
-    name: (typeof liveNameOf === 'function' && liveNameOf(id))
-      || frozen[id]
-      || t('co.deletedProduct'),
+    name: String((typeof liveNameOf === 'function' && liveNameOf(id))
+      || (typeof frozen[id] === 'string' && frozen[id])
+      || t('co.deletedProduct')),
     qty: num(quantities[id]),
     // The row is still shown, but the screen can mark it: a product nobody sells any
     // more cannot be put into the Calculator, because there is no field for it.
