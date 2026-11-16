@@ -19,9 +19,17 @@ type Live = {
 };
 
 // Whether two answers hold the same plain data (documents, a skipped map): objects by their keys, arrays by their items.
+// ⚠️ Only PLAIN objects and arrays are walked: a Firestore value (a Timestamp, a DocumentReference, which points back at the whole
+// Firestore instance) is compared by its own isEqual, never walked, or the walk could run in a circle.
+const isPlain = (v: object): boolean => Array.isArray(v) || Object.getPrototypeOf(v) === Object.prototype || Object.getPrototypeOf(v) === null;
 function sameData(a: unknown, b: unknown): boolean {
   if (Object.is(a, b)) return true;
   if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) return false;
+  if (!isPlain(a) || !isPlain(b)) {
+    const eq = (a as { isEqual?: unknown }).isEqual;
+    if (typeof eq !== 'function' || Object.getPrototypeOf(a) !== Object.getPrototypeOf(b)) return false;
+    try { return (eq as (other: unknown) => boolean).call(a, b) === true; } catch { return false; }
+  }
   if (Array.isArray(a) !== Array.isArray(b)) return false;
   const left = a as Record<string, unknown>;
   const right = b as Record<string, unknown>;
