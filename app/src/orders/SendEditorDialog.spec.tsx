@@ -207,7 +207,9 @@ describe('the picture road', () => {
     await waitFor(() => { expect(screen.getByRole('dialog')).toHaveFocus(); });
     act(() => { finish(new File(['x'], 'x.png', { type: 'image/png' })); });
     await pictureReady();
-    expect(sendButton()).toHaveAttribute('aria-busy', 'false');
+    // ⚠️ aria-busy is set on the node in a PASSIVE EFFECT (SendEditorDialog: React Aria's Button does not pass it on), which React may
+    // run a tick after «Send» is enabled: read straight after it raced, and lost on a loaded CI runner (PR #565's push run).
+    await waitFor(() => { expect(sendButton()).toHaveAttribute('aria-busy', 'false'); });
     expect(renderOrderImage).toHaveBeenCalledWith(TEXT, { language: 'en' });
   });
 
