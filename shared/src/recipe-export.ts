@@ -14,7 +14,8 @@
 // ⚠️ DIFFERS ON PURPOSE (the owner's decision, 16 Nov 2026): the PDF's first row sits lower (FIRST_ROW_GAP 88, the original's 48),
 // and `pdfLayout` takes an optional `total` — a Total row closing the list, label and weight bold, a line above it. Mise 2 only:
 // `printedTotalGrams`, the rows as printed added up. The original's pdfLayout is no longer compared output for output. Also Mise 2
-// only: `titleFileName`, the recipe book's file name (its title, as written). What the
+// only: `titleFileName`, the recipe book's file name (its title, as written); and `xlsxSheet` writes NO Total row when nothing in the
+// list can be weighed (pieces only), where the original writes «Total 0 g». What the
 // app's loader needs from here to make the SAME error the two functions below recognise is `LIBRARY_ERROR`
 // and `libraryError(cause)` (new in the port: in the original they are private to the loader).
 //
@@ -421,7 +422,9 @@ export function sheetNameOf(name: unknown, fallback: string = 'Recipe'): string 
 // would not round to `totalG`, the cell is the screen's number as a plain value instead.
 // ⚠️ THE CHECK COVERS THE PLAIN SUM TOO: grams and ml rows both count 1:1, but a catalogue recipe
 // that mixes them rounds each row on its own (no exact-sum step), so even a SUM can miss by a gram.
-function totalCell(list: ExportRow[], last: number, totalG: unknown): SheetCell {
+// ⚠️ NOTHING TO WEIGH, NO TOTAL ROW (Mise 2 only, review of PR #563): a list of pieces, spoons and «to taste» answers null, and the
+// sheet has no Total row — never «Total 0 g», as the PDF has none (printedTotalGrams). js/ still writes the 0 (rollback copy).
+function totalCell(list: ExportRow[], last: number, totalG: unknown): SheetCell | null {
   const cell: SheetCell = { fontWeight: 'bold', format: GRAMS_FORMAT };
   const terms: string[] = [];
   let computed = 0;
@@ -431,7 +434,7 @@ function totalCell(list: ExportRow[], last: number, totalG: unknown): SheetCell 
       computed += r.value * r.factor;
     }
   });
-  if (terms.length === 0) return { ...cell, value: 0, type: Number };
+  if (terms.length === 0) return null;
   if (Number.isFinite(Number(totalG)) && Math.round(computed) !== Number(totalG)) {
     return { ...cell, value: Number(totalG), type: Number };
   }
@@ -457,11 +460,10 @@ export function xlsxSheet({ title, name, rows, totalLabel, sheetFallback = 'Reci
     ]);
   }
   const last = list.length + 2;
-  data.push([
-    { value: totalLabel, type: String, fontWeight: 'bold' },
-    totalCell(list, last, totalG),
-  ]);
-  const longest = list.reduce((w, r) => Math.max(w, String(r.name ?? '').length), String(totalLabel ?? '').length);
+  const total = totalCell(list, last, totalG);
+  if (total !== null) data.push([{ value: totalLabel, type: String, fontWeight: 'bold' }, total]);
+  // The first column fits the longest name, and the Total's label when there is a Total row.
+  const longest = list.reduce((w, r) => Math.max(w, String(r.name ?? '').length), total === null ? 0 : String(totalLabel ?? '').length);
   const sheet = sheetNameOf(name ?? title, sheetFallback);
   return {
     data,

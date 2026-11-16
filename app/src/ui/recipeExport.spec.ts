@@ -171,6 +171,17 @@ describe('a real PDF', () => {
     expect(sheet).toMatch(/<f>SUM\(B3:B4\)<\/f>/);
   });
 
+  it('a list with nothing to weigh (pieces and «to taste» only) has no Total row in the Excel file either: never «Totale 0 g»', async () => {
+    const { sheet, strings } = await sheetFiles(await buildXlsxBlob(ONLY_PIECES, 'Totale'));
+    expect(strings).not.toContain('Totale');
+    // The title, a blank row, then the two rows (3 and 4): nothing under them.
+    expect(sheet).toContain('r="A4"');
+    expect(sheet).not.toContain('r="A5"');
+    expect(sheet).not.toContain('<f>');
+    // A list with something to weigh still closes with its Total.
+    expect((await sheetFiles(await buildXlsxBlob(MIXED, 'Totale'))).strings).toContain('Totale');
+  });
+
   it('a recipe-book row on its clean step prints as it is: 1597 g stays 1597 g', async () => {
     const model: ExportModel = {
       name: 'Pane di prova',

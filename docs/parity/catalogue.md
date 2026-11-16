@@ -2199,7 +2199,8 @@ tests against it alone and lists the two functions as left out of the port on pu
 `calc.totalDough` in the Calculator, the same one the Excel file already had) and its weight both bold, a 0.75 pt line above it as wide
 as the 300 pt block with a divider's 14 pt of air; a divider under the last ingredient is that same line. Its weight is the rows AS
 PRINTED added up in grams (`printedTotalGrams`: weighable rows only, pieces, spoons and «to taste» left out); a list with nothing to
-weigh has NO Total row. It takes part in the fit like any row (counted with its line and air on the vertical, its label measured bold on
+weigh has NO Total row — nor, since the review of PR #563, does the Excel file (`xlsxSheet` used to write «Total 0 g» for a list of
+pieces; `js/` still does, the rollback copy). It takes part in the fit like any row (counted with its line and air on the vertical, its label measured bold on
 the horizontal). Weights stay right-aligned by per-character measurement (no kerning). `recipe-dividers.spec.ts` now checks the port's
 page against the original's moved down by 40 pt.
 

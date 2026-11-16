@@ -292,13 +292,24 @@ describe.each([
     expect([total.value, total.type, total.format, total.fontWeight]).toStrictEqual([1841, Number, '0 "g"', 'bold']);
   });
 
-  test('xlsx total: no weighable row is a plain 0; gram-only rows keep SUM exactly', () => {
+  test('xlsx total: no weighable row → no Total row in Mise 2 (a plain 0 in js/); gram-only rows keep SUM exactly', () => {
     const lastOf = (rows: Loose[], totalG: number): Loose => {
       const { data } = xlsxSheet({ title: 'T', rows, totalLabel: 'Total', totalG });
       return (data[data.length - 1] as Loose)[1];
     };
-    const none = lastOf(ONLY_PIECES.rows, 0);
-    expect([none.value, none.type, none.format]).toStrictEqual([0, Number, '0 "g"']);
+    const pieces = xlsxSheet({ title: 'T', rows: ONLY_PIECES.rows, totalLabel: 'Total', totalG: 0 }).data;
+    if (isPort) {
+      // The title, the blank line and the rows: nothing after the last row, and no cell says «Total» anywhere.
+      expect(pieces).toHaveLength(2 + ONLY_PIECES.rows.length);
+      expect((pieces[pieces.length - 1] as Loose)[0].value).toBe((ONLY_PIECES.rows.at(-1) as Loose).name);
+      expect(pieces.flat().some((cell: Loose) => cell?.value === 'Total')).toBe(false);
+      // With no Total row, a long Total word does not widen the first column either.
+      const widthOf = (label: string) => (xlsxSheet({ title: 'T', rows: ONLY_PIECES.rows, totalLabel: label, totalG: 0 }).options as Loose).columns[0].width;
+      expect(widthOf('A very long word for the total of a dough')).toBe(widthOf('Total'));
+    } else {
+      const none = lastOf(ONLY_PIECES.rows, 0);
+      expect([none.value, none.type, none.format]).toStrictEqual([0, Number, '0 "g"']);
+    }
     const grams = [{ name: 'a', value: 5, unit: 'g', factor: 1 }, { name: 'b', value: 7, unit: 'g', factor: 1 }];
     expect(lastOf(grams, 12).value).toBe('SUM(B3:B4)');
   });
