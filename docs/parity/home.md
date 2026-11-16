@@ -445,5 +445,6 @@ Piece B (item 7) of the Orders redesign agreed on the lab tablet (`docs/mockups/
   field, rule or index. They live while the Home is on screen (`useOrdersDue`), and move to the new day at midnight (`useTodayKey`).
 - **No flash.** Nobody is listed before the SERVER has answered for the records and the draft (`fromServer`): offline, the card stays
   hidden. A dead stream hides it too (the card is a shortcut, never the only way to Orders).
-- **Layout.** From 1000px «Da fare» and «Ordini da fare» are two columns (`.cards`, the Home's column widened to 72rem); one under the
-  other below. Each card is its own `PartBoundary`.
+- **Layout.** From 1000px, and only while the card is drawn, «Da fare» and «Ordini da fare» are two columns (`.cards[data-two]`, the Home's
+  column widened to 72rem); without the card «Da fare» keeps its one readable column, and below 1000px one stands under the other. The card's
+  data is read in its own part (`OrdersDuePart`), which tells the Home only whether the card is drawn. Each card is its own `PartBoundary`.

@@ -18,6 +18,25 @@ type Live = {
   readonly broken: boolean;
 };
 
+// Whether two answers hold the same plain data (documents, a skipped map): objects by their keys, arrays by their items.
+// ⚠️ Only PLAIN objects and arrays are walked: a Firestore value (a Timestamp, a DocumentReference, which points back at the whole
+// Firestore instance) is compared by its own isEqual, never walked, or the walk could run in a circle.
+const isPlain = (v: object): boolean => Array.isArray(v) || Object.getPrototypeOf(v) === Object.prototype || Object.getPrototypeOf(v) === null;
+function sameData(a: unknown, b: unknown): boolean {
+  if (Object.is(a, b)) return true;
+  if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) return false;
+  if (!isPlain(a) || !isPlain(b)) {
+    const eq = (a as { isEqual?: unknown }).isEqual;
+    if (typeof eq !== 'function' || Object.getPrototypeOf(a) !== Object.getPrototypeOf(b)) return false;
+    try { return (eq as (other: unknown) => boolean).call(a, b) === true; } catch { return false; }
+  }
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  const left = a as Record<string, unknown>;
+  const right = b as Record<string, unknown>;
+  const keys = Object.keys(left);
+  return keys.length === Object.keys(right).length && keys.every(key => key in right && sameData(left[key], right[key]));
+}
+
 const NOTHING: Live = {
   suppliers: [], suppliersLoaded: false, placed: [], placedFromServer: false, skipped: null, draftFromServer: false, broken: false,
 };
@@ -43,20 +62,28 @@ export function useOrdersDue(): readonly StoredDoc[] {
   useEffect(() => {
     if (!seesOrders || !locationId) return undefined;
     const source = services.ordersDue(locationId);
-    const patch = (next: Partial<Live>) => { setLive(before => ({ ...before, ...next })); };
-    const broke = () => { patch({ broken: true }); };
+    // ⚠️ THE SAME OBJECT COMES BACK WHILE WHAT THE CARD USES DOES NOT CHANGE: another phone writes drafts/current on every keystroke,
+    // and a new state each time would redraw the card for nothing (React bails out of a state it already holds).
+    const broke = () => { setLive(before => (before.broken ? before : { ...before, broken: true })); };
     const stops = [
-      source.watchSuppliers(list => { patch({ suppliers: list, suppliersLoaded: true }); }, broke),
+      source.watchSuppliers(list => {
+        setLive(before => (before.suppliersLoaded && sameData(before.suppliers, list) ? before : { ...before, suppliers: list, suppliersLoaded: true }));
+      }, broke),
       source.watchPlaced(today, (list, meta) => {
-        setLive(before => ({ ...before, placed: list, placedFromServer: before.placedFromServer || meta.fromServer }));
+        setLive(before => {
+          const fromServer = before.placedFromServer || meta.fromServer;
+          if (fromServer === before.placedFromServer && sameData(before.placed, list)) return before;
+          return { ...before, placed: list, placedFromServer: fromServer };
+        });
       }, broke),
       source.watchDraft((data, meta) => {
-        const skipped = data?.skipped;
-        setLive(before => ({
-          ...before,
-          skipped: typeof skipped === 'object' && skipped !== null ? skipped as Record<string, unknown> : null,
-          draftFromServer: before.draftFromServer || meta.fromServer,
-        }));
+        const raw = data?.skipped;
+        const skipped = typeof raw === 'object' && raw !== null ? raw as Record<string, unknown> : null;
+        setLive(before => {
+          const fromServer = before.draftFromServer || meta.fromServer;
+          if (fromServer === before.draftFromServer && sameData(before.skipped, skipped)) return before;
+          return { ...before, skipped, draftFromServer: fromServer };
+        });
       }, broke),
     ];
     // ⚠️ The old answers go WITH the listeners: the next listen (Orders switched back on, a new day) must not draw them for a frame.
