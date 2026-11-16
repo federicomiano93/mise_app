@@ -174,18 +174,55 @@ export function exportFileName(m: ExportModel, ext: string, fallback: string = '
   return `${base}${suffix}.${ext}`;
 }
 
+// The first `max` characters of a text as a person counts them: by GRAPHEME (Intl.Segmenter), so a composite emoji — a family joined
+// by zero-width joiners, a flag, a skin tone — counts as one and is never cut in half into a broken one. Where Intl.Segmenter is
+// missing (a browser older than the Chrome 101 floor, an old Node), by code point: a lone emoji is still whole, a composite one may
+// lose its tail but never leaves half a surrogate pair.
+// ⚠️ AND NEVER MORE THAN `maxBytes` IN UTF-8: a grapheme has no length limit (a family emoji is 18 bytes, a letter under a pile of
+// accents can be thousands), and Android and Linux refuse a file name over 255 bytes — or the browser shortens it by bytes, cutting a
+// character in half. The text stops BEFORE the first whole character that would not fit.
+function firstCharacters(text: string, max: number, maxBytes: number): string {
+  const Segmenter = (Intl as { Segmenter?: typeof Intl.Segmenter }).Segmenter;
+  const pieces = typeof Segmenter === 'function'
+    ? Array.from(new Segmenter(undefined, { granularity: 'grapheme' }).segment(text), part => part.segment)
+    : Array.from(text);
+  let out = '';
+  let bytes = 0;
+  for (const piece of pieces.slice(0, max)) {
+    bytes += utf8Length(piece);
+    if (bytes > maxBytes) break;
+    out += piece;
+  }
+  return out;
+}
+
+// The bytes a text takes in UTF-8 (no TextEncoder in shared/: plain ES2022).
+function utf8Length(text: string): number {
+  let bytes = 0;
+  for (const ch of text) {
+    const code = ch.codePointAt(0)!;
+    bytes += code < 0x80 ? 1 : code < 0x800 ? 2 : code < 0x10000 ? 3 : 4;
+  }
+  return bytes;
+}
+
 // The RECIPE BOOK's file name: the recipe's own title, as a person wrote it («Torta di prova.pdf»). Mise 2 only (the owner's decision,
-// 16 Nov 2026): spaces, capitals, accents and apostrophes are kept; each character a file system refuses (/ \ : * ? " < > | and
-// control characters) becomes «-»; leading dots and spaces, and trailing dots and spaces (Windows drops them), are trimmed; 80
-// characters at most; `fallback` (the caller's translated word) when nothing but dashes is left. No batch suffix: the recipe book exports one recipe at a
-// time. ⚠️ THE CALCULATOR KEEPS exportFileName («Pizza_x3.pdf», «Focaccia_12000g.pdf»): several batches of one recipe are made
-// there in a day, and the suffix keeps their files apart.
+// 16 Nov 2026): spaces, capitals, accents and apostrophes are kept; each character a file system refuses (/ \ : * ? " < > |) becomes
+// «-»; control characters (C0, DEL, C1) and the invisible direction marks and overrides (U+061C, U+200E/F, U+202A–202E, U+2066–2069)
+// are STRIPPED — an override could make «gpj.exe» read «exe.jpg» in a file list (review of PR #563) — save that a tab or a line
+// break (also U+0085, U+2028, U+2029) becomes a space, so two words never run together; leading dots and spaces, and trailing dots and
+// spaces (Windows drops them), are trimmed; 80 characters at most, counted by grapheme, and never over 200 bytes (room for the
+// extension under the 255-byte limit of a file name); `fallback` (the caller's translated word) when nothing but dashes is left.
+// No batch suffix: the recipe book exports one recipe at a time. ⚠️ THE CALCULATOR KEEPS exportFileName («Pizza_x3.pdf»,
+// «Focaccia_12000g.pdf»): several batches of one recipe are made there in a day, and the suffix keeps their files apart.
 export function titleFileName(name: unknown, ext: string, fallback: string = 'recipe'): string {
   const clean = String(name ?? '')
-    .replace(/[\\/:*?"<>|\u0000-\u001f\u007f]/g, '-')
+    .replace(/[\t\n\v\f\r\u0085\u2028\u2029]/g, ' ')
+    .replace(/[\u0000-\u001f\u007f-\u009f\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, '')
+    .replace(/[\\/:*?"<>|]/g, '-')
     .replace(/^[.\s]+/, '');
-  // 80 CHARACTERS, counted as a person counts them: an emoji is one, never cut in half into a broken character.
-  const base = Array.from(clean).slice(0, 80).join('').replace(/[.\s]+$/, '');
+  // 80 CHARACTERS, counted as a person counts them: an emoji is one, never cut in half into a broken character; 200 bytes at most.
+  const base = firstCharacters(clean, 80, 200).replace(/[.\s]+$/, '');
   // A title made only of refused characters («///») would be a file called «---»: the fallback word says more.
   return `${/^[-.\s]*$/.test(base) ? fallback : base}.${ext}`;
 }

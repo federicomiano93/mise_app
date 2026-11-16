@@ -2204,8 +2204,13 @@ the horizontal). Weights stay right-aligned by per-character measurement (no ker
 page against the original's moved down by 40 pt.
 
 **The file name** (recipe book only; `titleFileName`, handed to the export sheet by the recipe screen as `fileName`): the recipe's own
-title as written — spaces, capitals, accents and apostrophes kept («Torta di prova.pdf», «… .xlsx»); each of `/ \ : * ? " < > |` and
-every control character becomes «-»; leading dots and spaces and trailing dots and spaces trimmed; 80 characters at most; the translated
+title as written — spaces, capitals, accents and apostrophes kept («Torta di prova.pdf», «… .xlsx»); each of `/ \ : * ? " < > |`
+becomes «-»; control characters (C0, DEL, C1) and the invisible direction marks and overrides (U+061C, U+200E/F, U+202A–202E,
+U+2066–2069) are stripped, a tab or a line break (also U+0085, U+2028, U+2029) becoming a space (review of PR #563: an override could
+make a file name read backwards); leading dots and spaces and trailing dots and spaces trimmed; 80 characters at most, counted by
+grapheme with `Intl.Segmenter` (a composite emoji — a family, a flag, a skin tone — is one and never cut in half; by code point where
+the segmenter is missing), and never over 200 bytes in UTF-8 (a file name may not pass 255 bytes on Android and Linux: the name stops
+before the first whole character that would not fit, so 85 family emoji keep 11); the translated
 fallback word («ricetta») when nothing but dashes is left. No batch in the name. The CALCULATOR keeps `exportFileName` unchanged
 («Pizza_x3.pdf», «Focaccia_12000g.pdf»): several batches of one recipe are made there in a day.
 
