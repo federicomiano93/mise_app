@@ -136,4 +136,29 @@ describe('the «Ordini da fare» card', () => {
     await waitFor(() => { expect(card()).toBeNull(); });
     await waitFor(() => { expect(screen.getByRole('heading', { level: 2, name: 'To do' })).toHaveFocus(); });
   });
+
+  // Review of PR #565: a click on blank space (focus to the body, no related target) must not make a later snapshot steal the focus.
+  it('leaves the focus alone when it went to the page and a snapshot removes no row', async () => {
+    const source = fakeOrdersDueSource({ suppliers: suppliers() });
+    show(source);
+    await waitFor(() => { expect(card()).not.toBeNull(); }, LOAD);
+    const row = within(card() as HTMLElement).getByRole('link', { name: 'Alpine Mills' });
+    row.focus();
+    act(() => { row.blur(); });
+    expect(document.body).toHaveFocus();
+    act(() => { source.records = [placed('s-cat')]; source.emit(); });
+    await waitFor(() => { expect(names()).toEqual(['Alpine Mills', 'Bee Farm']); });
+    expect(document.body).toHaveFocus();
+  });
+
+  // Review of PR #565: the card’s data is read inside its own part, so a failure there takes the card down, never the Home.
+  it('⚠️ keeps the Home when the card’s own data breaks while drawing', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const broken = { id: 's-bad', name: 'Bad', get orderDays(): string[] { throw new Error('boom'); } };
+    show(fakeOrdersDueSource({ suppliers: [broken] }));
+    expect(await screen.findByRole('heading', { level: 2, name: 'To do' }, LOAD)).toBeInTheDocument();
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 50)); });
+    expect(screen.getByRole('heading', { level: 2, name: 'To do' })).toBeInTheDocument();
+    expect(card()).toBeNull();
+  });
 });

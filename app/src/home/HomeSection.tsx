@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Navigate, useLocation } from 'react-router';
 import { PartBoundary } from '../errors/PartBoundary';
 import { useT } from '../i18n/useT';
@@ -7,8 +7,7 @@ import { useFocusOnBack } from '../shell/away/useFocusOnBack';
 import { StatusMessageProvider, useStatusMessage } from '../ui/StatusMessage';
 import { AwayBand } from './AwayBand';
 import { InstallHint } from './InstallHint';
-import { OrdersDueCard } from './OrdersDueCard';
-import { useOrdersDue } from './useOrdersDue';
+import { OrdersDuePart } from './OrdersDuePart';
 import { TodoCard } from './TodoCard';
 import { TodosProvider, useTodosStore } from './TodosContext';
 import styles from './HomeSection.module.css';
@@ -18,18 +17,18 @@ import styles from './HomeSection.module.css';
 // order today, for somebody the venue shows Orders to. Loaded only when somebody opens it (shell/sectionScreens.ts).
 //
 // Its data lives exactly as long as it is on screen: TodosProvider starts the to-do listener on mount and stops it on unmount, and the
-// orders card its own three (useOrdersDue) (P14).
+// orders card its own three (useOrdersDue, inside OrdersDuePart) (P14).
 export default function HomeSection() {
   const { t } = useT();
   const { pathname } = useLocation();
   // After «I am back» from the band (which then goes away) the focus goes to the card's «Add», or to its title when Add is absent.
   const armFocus = useFocusOnBack(() => document.getElementById('home-todo-add') ?? document.getElementById('home-todo-title'));
   // ⚠️ THE PAGE IS LAID OUT BY WHETHER THE ORDERS CARD IS DRAWN (review of PR #565): two columns only while it is, so on most days — and
-  // always for somebody without Orders — «Da fare» keeps its readable width instead of a half page beside an empty one.
-  const due = useOrdersDue();
-  const two = due.length > 0;
+  // always for somebody without Orders — «Da fare» keeps its readable width instead of a half page beside an empty one. The card's
+  // data lives in its own part, which reports only this boolean: the Home is not redrawn by every snapshot of it.
+  const [two, setTwo] = useState(false);
   // The Home has no address below it: anything typed after /home goes back to the Home, as the other sections send a junk
-  // address back to their list (nothing is started for it).
+  // address back to their list (nothing is started for it: the redirect returns before the parts, and their listeners, are drawn).
   if (pathname !== '/home') return <Navigate to="/home" replace />;
   return (
     <Page title={t('section.home')}>
@@ -47,7 +46,7 @@ export default function HomeSection() {
                 <TodoCard />
               </PartBoundary>
               <PartBoundary>
-                <OrdersDueCard due={due} />
+                <OrdersDuePart onShownChange={setTwo} />
               </PartBoundary>
             </div>
           </div>
