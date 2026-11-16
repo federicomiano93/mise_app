@@ -2007,3 +2007,40 @@ Pieces 4 and 5 of the plan above, slice 4 of 4.
   used them. (3) A question this device could not share is asked in the dialog too when the send was a share (the take-back snapshot may
   arrive before the rejection). (4) The banner buttons are native `<button>`s with the Button look: the shared `Button` does not pass
   `aria-disabled`.
+
+## Tablet redesign (16 Nov 2026) — as built
+
+Piece A of `docs/mockups/orders-tablet-2026-11.md` (items 1–6 and the phone); piece B (the Home's «Ordini da fare») is a later PR.
+No Firestore data, rules or queries changed: every point reads the streams Orders already had.
+
+- **Shell.** The top bar (venue · date · connection) is drawn on the Home only (`AppShell`, `data-topbar`); off the Home `--topbar-h`
+  is 0, so the split panes keep no room for it. `Page` holds the offline strip (`OfflineBanner`, «Offline: salvo qui e invio appena
+  torna la rete») under every title, hidden from 700px on the Home only. The rail is 104px, icons 27px stroke 2, labels 13.5px/500 in
+  `--rail-ink-strong`; the short-window steps trim the padding and drop the brand letter from 755px (646px needed at 648).
+- **Title band.** `Page` takes a `band`: white, no line, sticky on the split at exactly `--band-h` (72px; 0 on a phone, where it scrolls
+  away and wraps). `OrdersBand`: settings, History, the bell, `ListsDoor` (icon, words, count; words visually hidden under 340px) and,
+  at the far right, the send icon, hidden while a supplier is open. Gone: the word row of `OrdersHead`, `TodayOrders` (deleted with
+  its keys) and the supplier list's `OrdersFilter`.
+- **The grid.** `OrdersGrid` (in `OrdersSection.tsx`): on the split the list column spans both rows (`--orders-list-w`, 344px), `.top`
+  holds `DeliveryDoors` and under them `DebtBanner` or «Scegli un fornitore» (`ord.pane.title`), `.detail` the open screen. The two
+  lines meet because the list's head (tabs 48px, search 48px, s3/s4 padding) and `.top` are built of the same rows. On a phone the
+  doors and the notices are drawn inside `OrdersList` instead (by `split`, as the summary button already was).
+- **Tabs.** `OrdersHead` draws «Fornitori» / «Ingredienti» (`aria-pressed`, a `group` named «Vista»), always; `SWAP_OPENER` is the tab
+  of the view that arrives. With a screen open beside the list a tab REPLACES that screen's entry with the other view.
+- **Groups.** `supplierGroups` (ordersLens): «Da ordinare» (`dueTodayIds` once the server answered, or quantities typed; never one
+  closed today), «Preferiti», «Altri fornitori»; each supplier once; no heading when only one group is left. A row moving group is a
+  new node: the list hands the focus back to the same supplier's row. «N articoli» sits under the name beside «Da ordinare oggi».
+- **«Riapri».** The row's summary button (split) is drawn for a supplier closed today too; on a phone the supplier's head keeps
+  «Riepilogo (N)». `FROM_CHIP`, `cameFromChip` and `todayOpener` are gone with the chips.
+- **Notices.** `NoticesPanel` has a head (X «Chiudi gli avvisi», «Avvisi»); on the split it takes the bottom-right pane, the open screen
+  staying mounted and hidden behind it, and any move gives the pane back.
+- **Open supplier.** `SupplierOrderScreen`'s own head: `[X] NAME ›` … `[send]` on the split (X = `useLeave`, named «Chiudi NAME»),
+  `[←] NAME ›` … «Riepilogo (N)» `[send]` on a phone; «Cosa vendono» and «+» are gone from it (ITEMS_DOOR / ADD_DOOR no longer
+  registered there). The slim bar: `DayLine slim` («Ordine per», `ord.day.deliveryShort`) and «Salvato ✓», then one line, the column
+  names Articolo · Unità · Ordine · Giacenza, and `OrderLine compact`: name with the weight inside its button · unit · `[−] qty [+]` ·
+  stock, 60px on the split, two levels on a phone, no ×, grey fields, only the block tinted by a quantity.
+- **Sending.** `RoadChooser`: «Invia a», one word per road (`ord.send.to.*`), no notes. `SendEditorDialog`: the title is the name
+  («ROSSI», «ROSSI (1 di 3)»; one supplier's WhatsApp-chat message is now named too), only the box, named «Messaggio a NAME». The photo
+  is off by `ORDER_PHOTO_ON = false` (`orderImage.ts`; `useSendOrder` answers `canSharePhotos` false), its code untouched.
+- **«Ordine inviato?».** `AskHereDialog` is the shared `Dialog` with `forced` (no Escape, no backdrop) and `small`: the name, «Ordine
+  inviato?», «No» (focused) / «Sì». Every other device keeps the line (`AwaitingBanners`). Asked on any Orders screen.
