@@ -2712,6 +2712,7 @@ export const it: Messages = {
   'ord.sequence.saving': 'Salvataggio…',
   'ord.sequence.none': 'Nessun fornitore attivo.',
   'ord.sequence.err': 'Impossibile salvare l’ordine. Controlla la connessione e riprova.',
+  'home.ordersDue.title': 'Ordini da fare',
   'home.title': 'Da fare',
   'home.add': 'Aggiungi',
   'home.overdue': 'In ritardo',

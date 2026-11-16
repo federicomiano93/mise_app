@@ -10,6 +10,8 @@ import { createFirestoreFoodcostSource } from '../foodcost/foodcostSource';
 import type { FoodcostSource } from '../foodcost/foodcostSource';
 import { createFirestoreSettingsSource } from '../settings/settingsSource';
 import type { SettingsSource } from '../settings/settingsSource';
+import { createFirestoreOrdersDueSource } from '../home/ordersDueSource';
+import type { OrdersDueSource } from '../home/ordersDueSource';
 import { createFirestoreTodosSource } from '../home/todosSource';
 import type { TodosSource } from '../home/todosSource';
 import { createFirestorePastriesSource } from '../pastries/pastriesSource';
@@ -61,6 +63,8 @@ export interface DataServices {
   orders(locationId: string): OrdersSource;
   // The venue's «Da fare» list on the Home (step 3g-1).
   todos(locationId: string): TodosSource;
+  // The Home's «Ordini da fare» card (16 Nov 2026): suppliers, today's order records and the draft's closes, read-only.
+  ordersDue(locationId: string): OrdersDueSource;
   // Settings (step 3g-2): this person's holiday (read once), the venue's app language and the sections shown to employees.
   settings(locationId: string): SettingsSource;
 }
@@ -102,6 +106,7 @@ export function createDataServices(
     }),
     orders: locationId => createFirestoreOrdersSource(firestore, locationId),
     todos: locationId => createFirestoreTodosSource(firestore, locationId),
+    ordersDue: locationId => createFirestoreOrdersDueSource(firestore, locationId),
     settings: locationId => createFirestoreSettingsSource(firestore,
       (name, data, timeoutMs) => auth.callFunction(name, data, timeoutMs), locationId),
   };
