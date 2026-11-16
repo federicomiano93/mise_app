@@ -56,11 +56,15 @@ describe('one set of numbers for every reader of a batch', () => {
     for (const target of [1234, 3664, 4000, 4800, 7777, 12500]) expect(recipeAmounts(PROVA, target, t, 'en-GB').totalGrams).toBe(target);
   });
 
-  it('with litres and kilos nothing is corrected: the Total says what the rows weigh, a few grams from the batch', () => {
-    const table = recipeAmounts(MIXED, 4000, t, 'en-GB');
-    expect(table.warning).toBe(null);
-    expect(table.totalGrams).toBe(addedUp(MIXED, table.values));
-    expect(Math.abs(table.totalGrams - 4000)).toBeLessThanOrEqual(10);
+  it('with litres and kilos nothing is corrected: the Total says what the rows weigh, and a warning says any gap of 1 g or more', () => {
+    for (const target of [1234, 3664, 4000, 4800, 7777, 12500]) {
+      const table = recipeAmounts(MIXED, target, t, 'en-GB');
+      expect(table.totalGrams, String(target)).toBe(addedUp(MIXED, table.values));
+      expect(Math.abs(table.totalGrams - target), String(target)).toBeLessThanOrEqual(10);
+      // The warning's gap is exactly the batch less the Total shown, and there is none when they agree.
+      const gap = target - table.totalGrams;
+      expect(table.warning, String(target)).toStrictEqual(gap === 0 ? null : { diff: gap });
+    }
   });
 
   it('from a row: the preview, the table, the export and «Use as base» agree; the chosen row exact; Total = the rows added up', () => {

@@ -2171,10 +2171,17 @@ pieces and «to taste» do not stop it; a kg, l or ml row does). It replaces the
    end with the largest row off its round number by 1 to 9 g — not rare. ✅ Accepted by the owner (16 Nov 2026: «la farina non
    tonda è ok»): the typed total wins, the rule stays as built.
 
-**The Total is the rows shown, added up** (`app/src/recipes/recipeAmounts.ts`): each weighable row converted to grams (0.714 l is
-714 g), pieces, spoons and «to taste» left out, in whole grams — never the batch typed or a figure worked out again. The export
-model's `totalG` is that same number. Scaled by its total with every weighable row in grams it is the batch typed (unless the line
-under it says it is off); from a row, or with kg, l or ml rows, it can be a few grams from the batch. ⚠️ The batch box still shows the
+**Mixed units: no correction, but the gap is said** (the owner's decision, 16 Nov 2026, after the review of PR #563). A recipe with
+any kg, l or ml row (or mg, cl, dl) scaled by its TOTAL is still NOT corrected — each row is rounded in its own unit — but when the
+Total on screen is 1 g or more from the batch typed, the same `cat.totalOff` line appears under it. `diff` = the batch in whole grams
+− `shownTotalGrams` (the very function that writes the Total), so the line says exactly the gap the Total shows (invented example in
+the specs: 5056 g asked, Total 5110 g → «… di 54 g …»). None from a row, none unscaled or at the recipe's own total, never in a file.
+
+**The Total is the rows shown, added up** (`shownTotalGrams` of `shared/src/catalogue-model.ts`, called by
+`app/src/recipes/recipeAmounts.ts`): each weighable row converted to grams (0.714 l is 714 g), pieces, spoons and «to taste» left out,
+in whole grams — never the batch typed or a figure worked out again. The export model's `totalG` is that same number. Scaled by its
+total with every weighable row in grams it is the batch typed (unless the line under it says it is off); with kg, l or ml rows it can be
+a few grams from the batch, and then the line says by how much; from a row it can be a few grams from the batch, with no line. ⚠️ The batch box still shows the
 batch («Calculate from this ingredient»: box 5469, Total 5470 on the owner's brioche example).
 
 **The export prints what it receives.** The «Round the weights in the PDF» switch is gone (the dialog, its state, the `rounded`
@@ -2204,9 +2211,10 @@ fallback word («ricetta») when nothing but dashes is left. No batch in the nam
 **Specs.** `shared/src/clean-step.spec.ts` (the steps, 249/250 and 499/500 g, half up, floating-point noise, junk);
 `catalogue-model.spec.ts` («clean-step rounding inside the recipe-book scaling»: grams on steps, ml / pieces / «to taste» / kg / l as
 before, not scaled and its own total, from a row; «one correction of the total»: up, down, steps 2-3-4 together, every batch to the
-gram, the protection, pieces and «to taste», a ml row, from a row, «Use as base recipe»); `clean-step.spec.ts` also covers
+gram, the protection, pieces and «to taste», a ml row and a kg row with their warning, from a row, «Use as base recipe»,
+`shownTotalGrams`); `clean-step.spec.ts` also covers
 `applyTargetTotal` alone (each step, both protections, junk); `app/src/recipes/RecipesSection.cleanStep.spec.tsx` (the table, the
-warning line under the Total in English and Italian, the Total as the rows added up); `app/src/recipes/cleanStepReaders.spec.ts`
+warning line under the Total in English and Italian, the Total as the rows added up, the mixed-unit warning and where it is not); `app/src/recipes/cleanStepReaders.spec.ts`
 (the table, the guided run, the export model and «Use as base recipe» agree at several batches, by total and from a row, and every
 Total is its rows added up); `shared/src/recipe-export.spec.ts` («Mise 2 PDF: the first row lower, and a Total row»: 158 pt, the
 Total as the printed rows added up for several models, none for pieces only, bold with its line and air, a divider under the last row,
