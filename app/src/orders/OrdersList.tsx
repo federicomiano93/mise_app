@@ -1,8 +1,8 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Check, ChevronRight, ClipboardList, List } from 'lucide-react';
 import { spellShortDate, todayISO } from '@mise/shared/day';
 import { isFutureDay, nextDeliveryAfter } from '@mise/shared/order-day';
-import { dueFirst } from '@mise/shared/due-first';
+import { skippedOn } from '@mise/shared/reminders';
 import type { PlacedRecord } from '@mise/shared/reminders';
 import { supplierLabel } from '@mise/shared/supplier-label';
 import type { MessageKey } from '../i18n/en';
@@ -11,20 +11,16 @@ import { useDueSuppliers } from '../shell/useDueSuppliers';
 import { useFocusAcrossReorder } from '../shell/useFocusAcrossReorder';
 import { useT } from '../i18n/useT';
 import { Button } from '../ui/Button';
-import { SPLIT_QUERY } from '../ui/split';
-import { useMediaQuery } from '../ui/useMediaQuery';
-import { DeliveryDoors } from './DeliveryDoors';
-import { ListsDoor } from './ListsDoor';
+import { DebtBanner, DeliveryDoors } from './DeliveryDoors';
 import { AwaitingBanners } from './AwaitingBanners';
 import { NoticesPanel } from './NoticesPanel';
-import { OrdersFilter } from './OrdersFilter';
 import { OrdersHead } from './OrdersHead';
-import { TodayOrders } from './TodayOrders';
+import { SaveStateLine } from './SaveStateLine';
 import { useOrders } from './OrdersContext';
 import { dayTranslate, deliveryDaysText } from './dayWords';
 import { CLEAR_OPENER, PLACE_ALL_OPENER, itemsOpener, summaryOpener, supplierOpener, useHandBack } from './handBack';
-import { orderingCount, supplierListGroups } from './ordersLens';
-import type { OrdersLens } from './ordersLens';
+import { orderingCount, supplierGroups } from './ordersLens';
+import type { OrdersLens, SupplierGroupKey } from './ordersLens';
 import type { StoredDoc } from './ordersSource';
 import styles from './OrdersList.module.css';
 
@@ -35,6 +31,9 @@ type Props = {
   earlyLens: OrdersLens | null;
   // Suppliers, ingredients and the draft have all arrived (or failed): before that nothing may say «no suppliers» (parity L8).
   ready: boolean;
+  // The tablet's split: the doors and the notices are in the right-hand column (OrdersSection), not here, and a row has its summary
+  // button. On a phone they are here: the doors under the search box, the notices above the list.
+  split: boolean;
   // The supplier open beside the list (the tablet's split), marked as the current one.
   openId: string | null;
   // The supplier tapped while the list was drawn from the copy, waiting for the live data: its row is dimmed and busy.
@@ -43,63 +42,54 @@ type Props = {
   onLookingElsewhere: () => void;
   onOpenSupplier: (id: string) => void;
   onOpenItems: (id: string) => void;
-  // The clipboard button of a row (the split only, while the supplier has quantities): the order summary beside the list.
+  // The clipboard button of a row (the split only): the order summary beside the list — while the supplier has quantities, and for a
+  // supplier closed today as «not needed», whose summary holds «Reopen» (its door used to be the «Order today» chip, now gone).
   onOpenSummary: (id: string) => void;
-  // A closed supplier's chip in «Order today»: its summary, where «Reopen» is; Back from it returns to the chip.
-  onOpenClosed: (id: string) => void;
   // The two buttons under the list: the picker of the suppliers to record together, and the one to clear.
   onPlaceAll: () => void;
   onClearAll: () => void;
-  // The swap button in the head: the flat view, «by ingredient» (step 3f-8b).
-  swapOpen: boolean;
+  // The Ingredients tab: the flat view (step 3f-8b).
   onSwap: () => void;
-  // The arrow beside the search box: the send screen.
+  // «Send the list again» in the notices: the send screen.
   onSend: () => void;
-  // The gear at the end of the head: the Orders settings (step 3f-4).
-  onSettings: () => void;
-  onHistory: () => void;
-  // The debt banner and the two doors under the head (step 3f-5), drawn only while the venue checks deliveries.
+  // The phone's debt banner and two doors (step 3f-5), drawn only while the venue checks deliveries.
   onIncoming: () => void;
   onReorder: () => void;
-  // The «Order lists» door under them (step 3f-7), independent from the delivery switch.
-  onLists: () => void;
   // «Placed yesterday» on a pending banner (step 3f-6): the supplier's confirm screen, recording under that day.
   onOpenPending: (id: string, day: string) => void;
-  // A supplier's screen is open beside the list: its save line speaks, the head's keeps its room (SaveStateLine).
+  // A supplier's screen is open beside the list: its save line speaks, this one keeps its room (SaveStateLine).
   saveSilent: boolean;
 };
 
-const HEADING_KEY = {
-  'orders.favourites.title': 'ord.favourites.title',
-  'orders.favourites.others': 'ord.favourites.others',
-} as const satisfies Record<string, MessageKey>;
+const HEADING_KEY: Record<SupplierGroupKey, MessageKey> = {
+  due: 'ord.group.due',
+  favourites: 'ord.favourites.title',
+  others: 'ord.favourites.others',
+};
 
-// The left column: the head (OrdersHead: the search box, the send arrow, the tools and the All / Ordering filter, which stay put
-// while the rows scroll), over the suppliers. The search box's text lives HERE, in a component that stays mounted, so a data
-// snapshot never remounts the box (see OrdersHead).
-export function OrdersList({ lens, earlyLens, ready, openId, heldId, onLookingElsewhere, onOpenSupplier, onOpenItems, onOpenSummary, onOpenClosed, onPlaceAll, onClearAll, swapOpen, onSwap, onSend, onSettings, onHistory, onIncoming, onReorder, onLists, onOpenPending, saveSilent }: Props) {
+// The left column: the head (OrdersHead: the tabs and the search box, which sticks while the rows scroll), then «Saved ✓» and the
+// suppliers in three groups — «To order», «Favourites», «Other suppliers» (the redesign of 16 Nov 2026, item 4). The search box's text
+// lives HERE, in a component that stays mounted, so a data snapshot never remounts the box (see OrdersHead).
+export function OrdersList({ lens, earlyLens, ready, split, openId, heldId, onLookingElsewhere, onOpenSupplier, onOpenItems, onOpenSummary, onPlaceAll, onClearAll, onSwap, onSend, onIncoming, onReorder, onOpenPending, saveSilent }: Props) {
   const { t } = useT();
-  const { config, draft, suppliers, suppliersLoaded, history, historyBroken, draftBroken, serverSeen, suppliersBroken, ingredientsBroken } = useOrders();
+  const { config, draft, suppliers, suppliersLoaded, history, historyBroken, draftBroken, draftLoaded, serverSeen, suppliersBroken, ingredientsBroken } = useOrders();
   const [query, setQuery] = useState('');
-  const [orderingOnly, setOrderingOnly] = useState(false);
   const handBack = useHandBack();
-  const split = useMediaQuery(SPLIT_QUERY);
   // Back from a picker hands the focus back to the button that opened it.
   const placeAllNode = useCallback((node: HTMLButtonElement | null) => { handBack.register(PLACE_ALL_OPENER, node); }, [handBack]);
   const clearNode = useCallback((node: HTMLButtonElement | null) => { handBack.register(CLEAR_OPENER, node); }, [handBack]);
 
-  // ⚠️ THE ROWS, THE FILTER COUNTS AND THEIR ORDER READ `drawn`: the copy while the live lists have not landed, the live lens
-  // otherwise. The search box above is the same mounted element either way, so what was typed on the copy survives the move to
-  // live and still filters. THE SEND AND BULK BUTTONS BELOW STAY ON `ready` (when it is true `drawn` IS the live lens): nothing is
-  // sent or recorded from an old list, and «No suppliers yet» is never said from it.
+  // ⚠️ THE ROWS AND THEIR ORDER READ `drawn`: the copy while the live lists have not landed, the live lens otherwise. The search box
+  // above is the same mounted element either way, so what was typed on the copy survives the move to live and still filters. THE BULK
+  // BUTTONS BELOW STAY ON `ready` (when it is true `drawn` IS the live lens): nothing is recorded from an old list, and «No suppliers
+  // yet» is never said from it.
   const drawn = earlyLens ?? lens;
   const ordering = orderingCount(drawn);
-  // ⚠️ THE SUPPLIERS STILL TO ORDER TODAY (reminders dueTodayIds, the rule of the «Order today» strip), lit and put first ONLY once
-  // the suppliers have arrived AND THE SERVER has answered for today's records and the draft (not the phone's saved copy, which can
-  // lack an order placed this morning on another phone and would flash that supplier as due, then move it): before that — and
-  // offline with no server answer — nobody is lit and the order is the usual one. (The «Order today» strip above waits less, on
-  // purpose; it is left as it is.) A dead records stream says nothing (nothing to read them from); a dead draft counts as
-  // arrived with no closes.
+  // ⚠️ THE SUPPLIERS STILL TO ORDER TODAY (reminders dueTodayIds) count for «To order» ONLY once the suppliers have arrived AND THE
+  // SERVER has answered for today's records and the draft (not the phone's saved copy, which can lack an order placed this morning on
+  // another phone and would flash that supplier as due, then move it): before that — and offline with no server answer — only the
+  // quantities typed decide. A dead records stream says nothing (nothing to read them from); a dead draft counts as arrived with no
+  // closes.
   const dueReady = suppliersLoaded && !historyBroken && serverSeen.history && (serverSeen.draft || draftBroken);
   const due = useDueSuppliers({
     suppliers,
@@ -107,21 +97,31 @@ export function OrdersList({ lens, earlyLens, ready, openId, heldId, onLookingEl
     skipped: draftBroken ? null : draft.skipped,
     ready: dueReady,
   });
-  useFocusAcrossReorder(due);
-  // Due first WITHIN each group (Favourites keep their heading), each part in its usual order. Rows are keyed by id, so the row
-  // open beside the list keeps its node, its `aria-current` and its focus when the order changes.
+  const today = todayISO();
+  // Closed today as «not needed» (drafts/current.skipped): out of «To order», and its row keeps the door to «Reopen». A dead draft
+  // closes nobody, as in useDueSuppliers.
+  const closedToday = useMemo(
+    () => (draftLoaded && !draftBroken ? skippedOn(draft.skipped, today) : new Set<string>()),
+    [draftLoaded, draftBroken, draft.skipped, today],
+  );
   const groups = useMemo(
-    () => supplierListGroups(drawn, { query, orderingOnly, favourites: config.favouriteSuppliers })
-      .map(group => ({ ...group, suppliers: dueFirst(group.suppliers, due) })),
-    [drawn, query, orderingOnly, config.favouriteSuppliers, due],
+    () => supplierGroups(drawn, { query, favourites: config.favouriteSuppliers, due, closedToday }),
+    [drawn, query, config.favouriteSuppliers, due, closedToday],
   );
   const shown = groups.reduce((n, group) => n + group.suppliers.length, 0);
   const broken = suppliersBroken || ingredientsBroken;
+  useFocusAcrossReorder(due);
+  // ⚠️ A ROW THAT MOVES FROM ONE GROUP TO ANOTHER IS A NEW NODE (another list): a focus that fell with the old one is handed to the new
+  // row of the same supplier. Only when it fell to nothing: a person who moved on is never overridden.
+  const focusedRow = useRef<string | null>(null);
+  useLayoutEffect(() => {
+    const id = focusedRow.current;
+    if (id === null) return;
+    const now = document.activeElement;
+    if (now !== null && now !== document.body) return;
+    handBack.focus(supplierOpener(id));
+  }, [groups, handBack]);
 
-  // Nothing typed anywhere: there is no «just what I'm ordering» to offer — unless it is on (it must be possible to leave it).
-  const showFilter = ordering > 0 || orderingOnly;
-
-  const today = todayISO();
   const dt = dayTranslate(t);
 
   return (
@@ -134,40 +134,29 @@ export function OrdersList({ lens, earlyLens, ready, openId, heldId, onLookingEl
         onLookingElsewhere={onLookingElsewhere}
         ready={ready}
         hasSuppliers={lens.suppliers.length > 0}
-        swapOpen={swapOpen}
         onSwap={onSwap}
-        onSend={onSend}
-        onSettings={onSettings}
-        onHistory={onHistory}
-        saveSilent={saveSilent}
-      >
-        {showFilter ? (
-          <OrdersFilter
-            label={t('ord.whichSuppliers')}
-            ordering={orderingOnly}
-            allText={t('ord.filter.all', { n: drawn.suppliers.length })}
-            orderingText={t('ord.filter.ordering', { n: ordering })}
-            onChoose={setOrderingOnly}
-          />
-        ) : null}
-      </OrdersHead>
+      />
 
-      {/* «Did it go?»: always on the page, above everything the bell holds (decision P2 of the v1.145.0 port). */}
+      {/* A phone: the debt and the two doors under the search box, then the notices above the list. On the split they are in the
+          right-hand column. */}
+      {split ? null : (
+        <>
+          <DebtBanner onIncoming={onIncoming} />
+          <DeliveryDoors onIncoming={onIncoming} onReorder={onReorder} />
+          <PartBoundary>
+            <NoticesPanel onOpenSupplier={onOpenSupplier} onOpenPending={onOpenPending} onSend={onSend} />
+          </PartBoundary>
+        </>
+      )}
+
+      {/* ⚠️ In the column, above the suppliers, so the list shows whether what was typed has reached the server (the iPad order of
+          14 Nov 2026). Silent while a supplier is open: its own line speaks. */}
+      <SaveStateLine silent={saveSilent} />
+
+      {/* «Did it go?» on every device, as a line that blocks nothing; the device that sent it asks in a dialog (AskHereDialog). */}
       <PartBoundary>
         <AwaitingBanners lens={lens} />
       </PartBoundary>
-
-      <PartBoundary>
-        <NoticesPanel onOpenSupplier={onOpenSupplier} onOpenPending={onOpenPending} onSend={onSend} />
-      </PartBoundary>
-
-      <PartBoundary>
-        <TodayOrders onOpenSupplier={onOpenSupplier} onOpenClosed={onOpenClosed} />
-      </PartBoundary>
-
-      <DeliveryDoors onIncoming={onIncoming} onReorder={onReorder} />
-
-      <ListsDoor onOpen={onLists} />
 
       {!ready && earlyLens === null ? (
         <p className={styles.loading} aria-busy="true">{t('session.loading')}</p>
@@ -180,11 +169,11 @@ export function OrdersList({ lens, earlyLens, ready, openId, heldId, onLookingEl
           </div>
         )
       ) : shown === 0 ? (
-        <p className={styles.nothing}>{query.trim() !== '' ? t('ord.noSupplierMatch') : t('ord.nothingOrdered')}</p>
+        <p className={styles.nothing}>{t('ord.noSupplierMatch')}</p>
       ) : (
         groups.map(group => (
-          <div key={group.headingKey ?? 'all'} className={styles.group}>
-            {group.headingKey === null ? null : <h2 className={styles.groupTitle}>{t(HEADING_KEY[group.headingKey as keyof typeof HEADING_KEY])}</h2>}
+          <div key={group.key} className={styles.group} data-group={group.key}>
+            {group.heading ? <h2 className={styles.groupTitle}>{t(HEADING_KEY[group.key])}</h2> : null}
             <ul className={styles.rows}>
               {group.suppliers.map(supplier => {
                 const filled = drawn.filledFor(supplier.id);
@@ -195,6 +184,7 @@ export function OrdersList({ lens, earlyLens, ready, openId, heldId, onLookingEl
                 const tag = !forLater ? ''
                   : delivery !== '' ? t('day.delivery', { day: spellShortDate(delivery, dt) })
                     : t('day.for', { day: spellShortDate(stamp, dt) });
+                const closed = closedToday.has(supplier.id);
                 return (
                   <SupplierRow
                     key={supplier.id}
@@ -209,6 +199,8 @@ export function OrdersList({ lens, earlyLens, ready, openId, heldId, onLookingEl
                     onOpenSupplier={onOpenSupplier}
                     onOpenItems={onOpenItems}
                     onOpenSummary={split ? onOpenSummary : undefined}
+                    summaryOffered={filled > 0 || closed}
+                    onRowFocus={id => { focusedRow.current = id; }}
                   />
                 );
               })}
@@ -245,13 +237,17 @@ type RowProps = {
   onOpenItems: (id: string) => void;
   // Undefined on a phone: neither the summary button nor its spacer is drawn there.
   onOpenSummary: ((id: string) => void) | undefined;
+  // The summary button is drawn (quantities typed, or closed today: «Reopen» is in the summary); otherwise its spacer.
+  summaryOffered: boolean;
+  // The row's open button took the focus: kept by the list, which hands the focus back if the row moves to another group.
+  onRowFocus: (id: string) => void;
 };
 
 // ⚠️ SIBLING BUTTONS, NOT ONE WITH SOMETHING CLICKABLE INSIDE IT: a button in a button is invalid, and a tap on the inner one ran
 // the outer one's handler too. The row is a plain container holding siblings: the wide one opens the order, a narrow one opens the
-// read-only list of what the supplier sells, and on the split a third opens the order summary beside the list (only while the
-// supplier has quantities; an invisible spacer of the same width keeps the rows aligned).
-function SupplierRow({ supplier, meta, count, tag, due, isOpen, isWaiting, onOpenSupplier, onOpenItems, onOpenSummary }: RowProps) {
+// read-only list of what the supplier sells, and on the split a third opens the order summary beside the list (while the supplier
+// has quantities or was closed today; an invisible spacer of the same width keeps the rows aligned).
+function SupplierRow({ supplier, meta, count, tag, due, isOpen, isWaiting, onOpenSupplier, onOpenItems, onOpenSummary, summaryOffered, onRowFocus }: RowProps) {
   const { t } = useT();
   const handBack = useHandBack();
   const id = supplier.id;
@@ -268,16 +264,27 @@ function SupplierRow({ supplier, meta, count, tag, due, isOpen, isWaiting, onOpe
         className={styles.open}
         aria-current={isOpen ? 'true' : undefined}
         aria-busy={isWaiting ? 'true' : undefined}
+        onFocus={() => { onRowFocus(id); }}
         onClick={() => { onOpenSupplier(id); }}
       >
         <span className={styles.main}>
           <span className={styles.name}>{label}</span>
           {meta !== '' ? <span className={styles.meta}>{meta}</span> : null}
           {tag !== '' ? <span className={styles.tag}>{tag}</span> : null}
-          {/* ⚠️ A REAL SPACE before the tag: without it the name read out is «Bee FarmTo order today». */}
-          {due ? <>{' '}<span className={styles.dueTag}>{t('ord.dueToday')}</span></> : null}
+          {/* «To order today» and «N items» on one line under the name (16 Nov 2026). ⚠️ A REAL SPACE before each: without it the
+              name read out is «Bee FarmTo order today». */}
+          {/* ⚠️ THE SPACES ARE OUTSIDE THE SPANS: a space that opens a nested span is dropped from the accessible name. */}
+          {due || count > 0 ? (
+            <>
+              {' '}
+              <span className={styles.facts}>
+                {due ? <span className={styles.dueTag}>{t('ord.dueToday')}</span> : null}
+                {due && count > 0 ? ' ' : null}
+                {count > 0 ? <span className={styles.count}>{t('ord.itemsCount', { n: count })}</span> : null}
+              </span>
+            </>
+          ) : null}
         </span>
-        {count > 0 ? <span className={styles.count}>{t('ord.itemsCount', { n: count })}</span> : null}
         <ChevronRight aria-hidden="true" className={styles.chevron} />
       </button>
       <button
@@ -289,7 +296,7 @@ function SupplierRow({ supplier, meta, count, tag, due, isOpen, isWaiting, onOpe
       >
         <List aria-hidden="true" />
       </button>
-      {onOpenSummary === undefined ? null : count > 0 ? (
+      {onOpenSummary === undefined ? null : summaryOffered ? (
         <button
           ref={summaryNode}
           type="button"
