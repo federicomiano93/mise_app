@@ -292,13 +292,24 @@ describe.each([
     expect([total.value, total.type, total.format, total.fontWeight]).toStrictEqual([1841, Number, '0 "g"', 'bold']);
   });
 
-  test('xlsx total: no weighable row is a plain 0; gram-only rows keep SUM exactly', () => {
+  test('xlsx total: no weighable row → no Total row in Mise 2 (a plain 0 in js/); gram-only rows keep SUM exactly', () => {
     const lastOf = (rows: Loose[], totalG: number): Loose => {
       const { data } = xlsxSheet({ title: 'T', rows, totalLabel: 'Total', totalG });
       return (data[data.length - 1] as Loose)[1];
     };
-    const none = lastOf(ONLY_PIECES.rows, 0);
-    expect([none.value, none.type, none.format]).toStrictEqual([0, Number, '0 "g"']);
+    const pieces = xlsxSheet({ title: 'T', rows: ONLY_PIECES.rows, totalLabel: 'Total', totalG: 0 }).data;
+    if (isPort) {
+      // The title, the blank line and the rows: nothing after the last row, and no cell says «Total» anywhere.
+      expect(pieces).toHaveLength(2 + ONLY_PIECES.rows.length);
+      expect((pieces[pieces.length - 1] as Loose)[0].value).toBe((ONLY_PIECES.rows.at(-1) as Loose).name);
+      expect(pieces.flat().some((cell: Loose) => cell?.value === 'Total')).toBe(false);
+      // With no Total row, a long Total word does not widen the first column either.
+      const widthOf = (label: string) => (xlsxSheet({ title: 'T', rows: ONLY_PIECES.rows, totalLabel: label, totalG: 0 }).options as Loose).columns[0].width;
+      expect(widthOf('A very long word for the total of a dough')).toBe(widthOf('Total'));
+    } else {
+      const none = lastOf(ONLY_PIECES.rows, 0);
+      expect([none.value, none.type, none.format]).toStrictEqual([0, Number, '0 "g"']);
+    }
     const grams = [{ name: 'a', value: 5, unit: 'g', factor: 1 }, { name: 'b', value: 7, unit: 'g', factor: 1 }];
     expect(lastOf(grams, 12).value).toBe('SUM(B3:B4)');
   });
@@ -519,9 +530,25 @@ describe('titleFileName: the recipe book names the file after the recipe, as wri
     expect(pdfName('Più è buona: sì')).toBe('Più è buona- sì.pdf');
   });
 
-  test('each character a file system refuses becomes «-»; control characters too', () => {
+  test('each character a file system refuses becomes «-»; control characters are stripped, a tab or a line break is a space', () => {
     expect(pdfName('a/b\\c:d*e?f"g<h>i|j')).toBe('a-b-c-d-e-f-g-h-i-j.pdf');
-    expect(pdfName('Riga\nnuova\tdi prova\u007f')).toBe('Riga-nuova-di prova-.pdf');
+    expect(pdfName('Riga\nnuova\tdi prova\u007f')).toBe('Riga nuova di prova.pdf');
+    // C0 (other than the whitespace ones), DEL and C1 controls leave nothing behind.
+    expect(pdfName('Pa\u0000ne\u0007 di\u001b prova\u0080\u009f')).toBe('Pane di prova.pdf');
+    // The other line breaks (next line, line and paragraph separators) are spaces too.
+    expect(pdfName('Pane\u0085di\u2028prova\u2029bis')).toBe('Pane di prova bis.pdf');
+  });
+
+  test('the invisible direction marks and overrides are stripped: a title can never make its file read backwards', () => {
+    // U+202E (right-to-left override) before «fdp.exe» would make the file read «Torta di provaexe.pdf» in a file list.
+    expect(pdfName('Torta di prova\u202Efdp.exe')).toBe('Torta di provafdp.exe.pdf');
+    for (const mark of ['\u061C', '\u200E', '\u200F', '\u202A', '\u202B', '\u202C', '\u202D', '\u202E', '\u2066', '\u2067', '\u2068', '\u2069']) {
+      expect(pdfName(`Pane${mark} di prova${mark}`), mark.codePointAt(0)!.toString(16)).toBe('Pane di prova.pdf');
+    }
+    // Only marks: the fallback word.
+    expect(ported.titleFileName('\u202E\u2066\u200F', 'pdf', 'ricetta')).toBe('ricetta.pdf');
+    // A zero-width joiner is NOT a direction mark: it holds a composite emoji together, and stays.
+    expect(pdfName('Torta 👨‍🍳 di prova')).toBe('Torta 👨‍🍳 di prova.pdf');
   });
 
   test('leading dots and spaces, trailing dots and spaces are trimmed; 80 characters at most', () => {
@@ -534,6 +561,34 @@ describe('titleFileName: the recipe book names the file after the recipe, as wri
     // An emoji at the 80th character is kept whole or left out, never cut in half.
     const emoji = pdfName(`${'a'.repeat(79)}🍞🍞`);
     expect(emoji).toBe(`${'a'.repeat(79)}🍞.pdf`);
+  });
+
+  test('the 80 are counted by grapheme: a composite emoji (a family, a flag, a skin tone) is one, and is never cut', () => {
+    const family = '👨‍👩‍👧'; // three people and two zero-width joiners: five code points, one character on screen
+    expect(pdfName(`${'a'.repeat(79)}${family}${family}`)).toBe(`${'a'.repeat(79)}${family}.pdf`);
+    expect(pdfName(`${'a'.repeat(79)}🇮🇹🇮🇹`)).toBe(`${'a'.repeat(79)}🇮🇹.pdf`);
+    expect(pdfName(`${'a'.repeat(79)}👍🏽👍🏽`)).toBe(`${'a'.repeat(79)}👍🏽.pdf`);
+    // Each counts one character, but the name stops at 200 bytes: a family is 18 bytes, so 11 of them (198), never a broken twelfth.
+    expect(pdfName(family.repeat(85))).toBe(`${family.repeat(11)}.pdf`);
+    // A letter under a pile of accents is ONE character of 1001 bytes: it does not fit, and is left out whole.
+    expect(pdfName(`Pane di prova ${'a'}${'\u0301'.repeat(500)}`)).toBe('Pane di prova.pdf');
+    // Plain letters reach the 80 long before the 200 bytes; accented ones (2 bytes) too.
+    expect(pdfName('è'.repeat(90))).toBe(`${'è'.repeat(80)}.pdf`);
+  });
+
+  test('where Intl.Segmenter is missing, the 80 are counted by code point: never half a surrogate pair', () => {
+    const real = Intl.Segmenter;
+    try {
+      Reflect.deleteProperty(Intl, 'Segmenter');
+      expect((Intl as { Segmenter?: unknown }).Segmenter).toBeUndefined();
+      expect(pdfName(`${'a'.repeat(79)}🍞🍞`)).toBe(`${'a'.repeat(79)}🍞.pdf`);
+      const out = pdfName(`${'a'.repeat(79)}👍🏽`);
+      expect(out).toBe(`${'a'.repeat(79)}👍.pdf`);
+      expect(out).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/);
+    } finally {
+      Object.defineProperty(Intl, 'Segmenter', { value: real, configurable: true, writable: true, enumerable: false });
+    }
+    expect(Intl.Segmenter).toBe(real);
   });
 
   test('nothing usable left: the caller\'s translated word', () => {

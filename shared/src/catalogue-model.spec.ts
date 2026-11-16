@@ -1244,11 +1244,60 @@ describe('one correction of the total when scaling by TOTAL weight (Mise 2 only)
     expect(out.warning).toBe(null);
   });
 
-  test('mixed units (a ml row): each row in its own unit, NO correction, never a warning', () => {
+  test('mixed units (a ml row): each row in its own unit, NO correction; here the rows happen to add up, so no warning', () => {
     const recipe = { ingredients: PROVA.ingredients.map((row, i) => (i === 2 ? { ...row, unit: 'ml' } : row)) };
     const out = ported.scaleCatalogueResult(recipe, 3664);
-    // The clean steps and 882 ml as rounded: 3662 g, two short of the batch, and no gram moved.
+    // The clean steps and 882 ml as rounded, no gram moved: 3664 g, the batch exactly.
     expect(out).toStrictEqual({ amounts: [1230, 780, 882, 380, 221, 116, 27, 17, 7, 4], warning: null });
+    expect(ported.shownTotalGrams(recipe, out.amounts)).toBe(3664);
+    // At 4000 g the same rows read 1340, 860, 963 ml, 415, 241, 127, 29, 19, 8, 4: 4006 g, 6 g over.
+    expect(ported.scaleCatalogueResult(recipe, 4000).warning).toStrictEqual({ diff: -6 });
+  });
+
+  // Invented: ten gram rows of 2523 g and 0.05 kg of yeast, 25280 g. At 5056 g (×0.2) every gram row is 504.6 g, which reads 510.
+  const KG = { ingredients: [
+    ...Array.from({ length: 10 }, (_, i) => ({ label: `Farina ${i + 1} di prova`, grams: 2523, unit: 'g' })),
+    { label: 'Lievito di prova', grams: 0.05, unit: 'kg' },
+  ] };
+
+  test('mixed units (a kg row): 5056 g asked, the rows come to 5110 g — no correction, the warning says 54 g over', () => {
+    const out = ported.scaleCatalogueResult(KG, 5056);
+    expect(out.amounts).toStrictEqual([...Array.from({ length: 10 }, () => 510), 0.01]);
+    expect(ported.shownTotalGrams(KG, out.amounts)).toBe(5110);
+    expect(out.warning).toStrictEqual({ diff: -54 });
+  });
+
+  test('mixed units: no warning when the rows come to the batch, none from a row, none unscaled', () => {
+    // ×0.25: 630.75 g → 631 → 630 each, and 12.5 g of yeast: 6300 + 12.5 = 6312.5 g → the Total 6313 g for 6320 asked.
+    expect(ported.scaleCatalogueResult(KG, 6320).warning).toStrictEqual({ diff: 7 });
+    // The recipe's own total reads as written: no batch, no warning.
+    expect(ported.scaleCatalogueResult(KG, 25280)).toStrictEqual({ amounts: ported.baseAmounts(KG), warning: null });
+    // A batch whose rows land on the batch exactly: no warning.
+    const EXACT = { ingredients: [{ label: 'Farina di prova', grams: 1000, unit: 'g' }, { label: 'Latte di prova', grams: 1, unit: 'l' }] };
+    expect(ported.scaleCatalogueResult(EXACT, 4000)).toStrictEqual({ amounts: [2000, 2], warning: null });
+    const fromRow = ported.scaleFromRow(KG, 0, 510)!;
+    expect(ported.scaledResult(KG, fromRow.target, { index: 0, amount: 510 }).warning).toBe(null);
+  });
+
+  test('typing the Total the screen shows is the recipe as written: no batch, no warning (half grams with a kg row)', () => {
+    const HALF = { ingredients: [
+      { label: 'Zucchero di prova', grams: 10.5, unit: 'g' }, { label: 'Sale di prova', grams: 10.5, unit: 'g' },
+      { label: 'Farina di prova', grams: 1, unit: 'kg' },
+    ] };
+    // The rows as written read 11 g, 11 g and 1 kg: the screen and the editor show 1022; the typed amounts add up to 1021.
+    expect(ported.shownTotalGrams(HALF, ported.baseAmounts(HALF))).toBe(1022);
+    for (const target of [1022, 1021]) {
+      expect(ported.scaleCatalogueResult(HALF, target), String(target)).toStrictEqual({ amounts: ported.baseAmounts(HALF), warning: null });
+    }
+  });
+
+  test('shownTotalGrams: each row through the unit table, pieces and «to taste» left out, whole grams', () => {
+    const recipe = { ingredients: [
+      { label: 'Farina di prova', unit: 'g' }, { label: 'Latte di prova', unit: 'l' }, { label: 'Uova di prova', unit: 'pcs' },
+      { label: 'Scorza di prova', unit: 'to taste' }, { label: 'Panna di prova', unit: 'ml' },
+    ] };
+    expect(ported.shownTotalGrams(recipe, [10.5, 0.714, 3, null, 0.4])).toBe(725);
+    expect(ported.shownTotalGrams({ ingredients: [] }, [])).toBe(0);
   });
 
   test('from a row: never corrected, never a warning', () => {
@@ -1624,9 +1673,10 @@ describe('the port against the original', () => {
   // `calculatorImportKind` is new in Mise 2 with the linked import (18 Oct 2026).
   // `rebaseAmounts` and `rowsLostByRebase` are new in Mise 2 with «Use as base recipe», `scaleFromRow` and `scaledAmounts` with
   // «Calculate from this ingredient» (14 Nov 2026).
-  // `scaleCatalogueResult` and `scaledResult` are new with the clean-step rounding (16 Nov 2026): the batch and its total's warning.
+  // `scaleCatalogueResult` and `scaledResult` are new with the clean-step rounding (16 Nov 2026): the batch and its total's warning;
+  // `shownTotalGrams` with the mixed-unit warning (16 Nov 2026): the one Total of the recipe book.
   const ADDED = ['unitTextKey', 'nameTaken', 'supplierLabel', 'calculatorImportKind', 'calculatorRefusal', 'rebaseAmounts',
-    'rowsLostByRebase', 'scaleFromRow', 'scaledAmounts', 'scaleCatalogueResult', 'scaledResult'];
+    'rowsLostByRebase', 'scaleFromRow', 'scaledAmounts', 'scaleCatalogueResult', 'scaledResult', 'shownTotalGrams'];
   // One more parameter each: batchWarning's translator; mergeImportedRecipe's catalogue rows, so a linked copy keeps its
   // yeast knob (Mise 2 only, 18 Oct 2026).
   const ARITY_DIFFERS = ['batchWarning', 'mergeImportedRecipe'];

@@ -7,8 +7,8 @@
 // editor owns (label, grams, unit) are rewritten.
 
 import {
-  applyLink, isSameLink, isWeighableUnit, keepRows, linkOf, linkedItemName, moveRow, normalizeShelfLifeDays, normalizeWeight,
-  unitOf, weighableTotalGrams, withoutTrailingDivider,
+  applyLink, baseAmounts, isSameLink, isWeighableUnit, keepRows, linkOf, linkedItemName, moveRow, normalizeShelfLifeDays,
+  normalizeWeight, shownTotalGrams, unitOf, withoutTrailingDivider,
 } from '@mise/shared/catalogue-model';
 import type { CatalogueRecipe } from '@mise/shared/catalogue-model';
 import { categoryOf } from '@mise/shared/recipe-shelf';
@@ -376,7 +376,11 @@ export function cleanWorking(working: Working): RecipeToSave {
 // Whole grams, no thousands separator — the same reading as the recipe view.
 const grams = new Intl.NumberFormat('en-GB', { maximumFractionDigits: 0, useGrouping: false });
 
-export const totalText = (clean: RecipeToSave): string => grams.format(weighableTotalGrams(clean));
+// ⚠️ THE SAME TOTAL AS THE RECIPE SCREEN, BY THE SAME FUNCTION (review of PR #563): the rows as the recipe screen shows them
+// (baseAmounts) added up by shared shownTotalGrams. It used to be the typed amounts added up exactly, which with half grams and a kg,
+// l or ml row read a gram off the recipe screen (10.5 g + 10.5 g + 1 kg: 1021 here, 1022 there — each row is rounded on the screen).
+// For an all-gram recipe nothing changes: its rows on the screen already add up to the exact total, rounded.
+export const totalText = (clean: RecipeToSave): string => grams.format(shownTotalGrams(clean, baseAmounts(clean)));
 
 // How many named rows are left out of the total (pieces, spoons, pinches, «to taste»).
 export const notWeighedCount = (clean: RecipeToSave): number =>

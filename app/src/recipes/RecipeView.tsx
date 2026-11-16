@@ -703,11 +703,15 @@ function IngredientsCard({ recipe, scale }: { recipe: CatalogueRecipe; scale: Re
         </tfoot>
       </table>
 
-      {/* A batch whose rows could not be made to add up to the total typed (shared applyTargetTotal refused): said here, under the
-          Total, and nowhere else — the file prints the rows as they are. */}
-      {amounts.warning === null ? null : (
-        <p className={styles.totalOff}>{t('cat.totalOff', { diff: wholeNumber(Math.abs(amounts.warning.diff)) })}</p>
-      )}
+      {/* A batch whose rows do not add up to the total typed (all grams: shared applyTargetTotal refused; kg, l or ml rows: the Total
+          is 1 g or more off): said here, under the Total, and nowhere else — the file prints the rows as they are.
+          ⚠️ THE LIVE REGION IS ALWAYS THERE, EMPTY WITHOUT A WARNING: a screen reader announces text that ARRIVES in a region it
+          already knows, not a region that appears with its text, so the line is read out when a new batch brings it. */}
+      <div role="status" aria-live="polite">
+        {amounts.warning === null ? null : (
+          <p className={styles.totalOff}>{t('cat.totalOff', { diff: wholeNumber(Math.abs(amounts.warning.diff)) })}</p>
+        )}
+      </div>
 
       {fromRow === null ? null : (() => {
         const ing = recipe.ingredients[fromRow.index];

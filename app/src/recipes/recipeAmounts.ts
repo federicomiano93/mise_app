@@ -1,4 +1,4 @@
-import { baseAmounts, ingredientGrams, roundInUnit, scaledResult, unitDecimals, unitOf, unitTextKey } from '@mise/shared/catalogue-model';
+import { baseAmounts, roundInUnit, scaledResult, shownTotalGrams, unitDecimals, unitOf, unitTextKey } from '@mise/shared/catalogue-model';
 import type { CatalogueRecipe, RowScale } from '@mise/shared/catalogue-model';
 import type { TotalWarning } from '@mise/shared/clean-step';
 import type { MessageKey } from '../i18n/en';
@@ -33,8 +33,9 @@ export type RecipeAmounts = {
   // unit as shown (null = «to taste»), and the Total's grams: those rows added up.
   readonly values: readonly (number | null)[];
   readonly totalGrams: number;
-  // Set when a batch scaled by its total could not be made to add up to it (shared applyTargetTotal refused): the screen says
-  // «The total is off by … g» under the Total. Never in a file.
+  // Set when a batch scaled by its total does not add up to it — all grams: shared applyTargetTotal refused; with kg, l or ml rows:
+  // the Total is 1 g or more from the batch — and the screen says «The total is off by … g» under the Total. Never from a row,
+  // never unscaled, never in a file.
   readonly warning: TotalWarning | null;
 };
 
@@ -49,8 +50,9 @@ export function unitWord(t: Translate, unit: string): string {
 // `locale` is the interface's (useT().locale), for the decimal mark.
 // ⚠️ THE TOTAL IS THE ROWS SHOWN, ADDED UP (the owner's decision, 16 Nov 2026): each weighable row (weight and volume) converted to
 // grams, pieces and «to taste» left out — never the batch typed, never a figure worked out again. Scaled by its total with every
-// weighable row in grams it IS the batch typed (the rows were corrected to it), unless the screen says under it that it is off; from a
-// row, or with kg, l or ml rows, it can be a few grams from the batch, and it says what the rows really weigh.
+// weighable row in grams it IS the batch typed (the rows were corrected to it), unless the screen says under it that it is off; with
+// kg, l or ml rows nothing is corrected, and the line under it says by how much it is off; from a row it can be a few grams from the
+// batch with no line (the row typed is the batch), and it says what the rows really weigh.
 // `row`: the batch was worked out from that row («Calculate from this ingredient»), which then shows exactly the amount typed
 // (shared `scaledResult`, the one rule «Use as base recipe» saves by too).
 export function recipeAmounts(recipe: CatalogueRecipe, target: number | null, t: Translate, locale: string, row?: RowScale | null): RecipeAmounts {
@@ -63,6 +65,8 @@ export function recipeAmounts(recipe: CatalogueRecipe, target: number | null, t:
       ? { label: ing.label, num: '', unit: unitWord(t, 'to taste') }
       : { label: ing.label, num: amountNumber(value, unitOf(ing), locale), unit: unitWord(t, unitOf(ing)) };
   });
+  // The rows as shown, in grams, added up (shared shownTotalGrams: 0.714 l counts 714 g, pieces nothing, whole grams) — the same
+  // function the mixed-unit warning measures against, so the line under the Total says exactly the gap the Total shows.
   const totalGrams = shownTotalGrams(recipe, amounts);
   return {
     rows,
@@ -71,16 +75,6 @@ export function recipeAmounts(recipe: CatalogueRecipe, target: number | null, t:
     totalGrams,
     warning: scaled?.warning ?? null,
   };
-}
-
-// The rows as shown, in grams, added up: each through the catalogue's own unit table (ingredientGrams), so 0.714 l counts 714 g and
-// pieces count nothing. Whole grams: every row is shown to the gram or finer, and the Total is written in whole grams.
-function shownTotalGrams(recipe: CatalogueRecipe, amounts: readonly (number | null)[]): number {
-  const grams = recipe.ingredients.reduce((sum, ing, index) => {
-    const value = amounts[index];
-    return value === null || value === undefined ? sum : sum + ingredientGrams({ unit: unitOf(ing), grams: value });
-  }, 0);
-  return Math.round(grams);
 }
 
 // «250 g», «3 pcs», «to taste»: one row's amount as a single piece of text (the full-screen view).

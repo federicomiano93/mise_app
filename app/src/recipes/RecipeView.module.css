@@ -303,7 +303,8 @@
   margin-top: var(--s3);
 }
 
-/* «The total is off by 3 g: check the recipe.» right under the Total, in the warning ink: rare, and it must be read. */
+/* «The total is off by 3 g: check the recipe.» right under the Total, in the warning ink: it must be read. Rare for an all-gram
+   recipe (the correction refused); common for one with kg, l or ml rows, which are never corrected (the owner's rule: any 1 g gap). */
 .totalOff {
   margin: var(--s3) 0 0;
   color: var(--warn-ink);
