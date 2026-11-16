@@ -40,6 +40,21 @@
   flex: 1 0 100%;
 }
 
+/* A section's own title band (Orders): the title, then its controls on the same line, wrapping on a narrow phone. White, with no
+   line under it (the split's grid draws its own lines below it). Stuck to the top of the scroll area only on the split
+   (below): on a phone a sticky band of five buttons would take the rows' room (the trap in docs/architecture.md). */
+.band {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+  border-bottom: 0;
+}
+
+.band .title {
+  margin-right: var(--s2);
+}
+
 .title {
   font-size: var(--fs-xl);
   font-weight: 650;
@@ -69,7 +84,21 @@
     font-size: var(--fs-2xl);
   }
 
+  .band {
+    padding-block: var(--s3);
+    background: var(--surface);
+  }
+
   .body {
     padding: 0 calc(var(--s8) + env(safe-area-inset-right)) var(--s8) var(--s8);
+  }
+}
+
+/* ⚠️ THE BAND STICKS ONLY ON THE SPLIT, and only because nothing between it and the scroll area (the shell's main) clips. */
+@media (min-width: 1000px) {
+  .band {
+    position: sticky;
+    top: 0;
+    z-index: 5;
   }
 }

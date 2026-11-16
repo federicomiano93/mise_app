@@ -705,8 +705,8 @@ export const en = {
 
   'status.online': 'Online',
   'status.offline': 'No connection',
-  // The phone has no top bar to say it, so a notice at the top of the screen does.
-  'offline.banner': 'No connection. What you change stays on this phone and is sent when the signal is back.',
+  // Under the title of every screen but the tablet's Home, whose top bar says it with a dot (16 Nov 2026: short, the lab has no time to read).
+  'offline.banner': 'Offline: saved here, sent when the signal is back',
 
   'part.failed.title': 'This part didn’t load.',
   'part.failed.body': 'The rest of the screen works.',

@@ -173,19 +173,19 @@ describe('the venue in the top bar', () => {
   };
 
   it('is just its name when the account has one venue', () => {
-    renderApp('/orders', { session: { name: 'The Bakery' } });
+    renderApp('/home', { session: { name: 'The Bakery' } });
     const header = topBar();
     expect(header.getByText('The Bakery')).toBeInTheDocument();
     expect(header.queryByRole('button')).not.toBeInTheDocument();
   });
 
   it('shows the venue\'s first letter in a small square', () => {
-    renderApp('/orders', { session: { name: 'the bakery' } });
+    renderApp('/home', { session: { name: 'the bakery' } });
     expect(topBar().getByText('T')).toBeInTheDocument();
   });
 
   it('is a button that opens the other venues when the account has several', async () => {
-    const { user } = renderApp('/orders', { session: TWO });
+    const { user } = renderApp('/home', { session: TWO });
 
     const chip = topBar().getByRole('button', { name: 'The Bakery, switch venue' });
     expect(chip).toHaveAttribute('aria-haspopup', 'dialog');
@@ -196,7 +196,7 @@ describe('the venue in the top bar', () => {
   });
 
   it('switches to the venue picked, after asking whether anything is waiting to be sent', async () => {
-    const { store, user } = renderApp('/orders', { session: TWO });
+    const { store, user } = renderApp('/home', { session: TWO });
     await user.click(topBar().getByRole('button', { name: 'The Bakery, switch venue' }));
     await user.click(await screen.findByRole('button', { name: 'The Restaurant' }));
 
@@ -205,7 +205,7 @@ describe('the venue in the top bar', () => {
   });
 
   it('warns first, and does not switch, when something has not reached the server', async () => {
-    const { store, user } = renderApp('/orders', { session: TWO });
+    const { store, user } = renderApp('/home', { session: TWO });
     store.changesStillWaiting.mockResolvedValue(true);
     await user.click(topBar().getByRole('button', { name: 'The Bakery, switch venue' }));
     await user.click(await screen.findByRole('button', { name: 'The Restaurant' }));

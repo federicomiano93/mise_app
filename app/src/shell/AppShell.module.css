@@ -372,8 +372,14 @@
     display: flex;
   }
 
-  .main {
+  /* The top bar is drawn on the Home only (AppShell.tsx): elsewhere the scroll area is the whole column, and the split panes that
+     subtract the bar's height from the window (`--topbar-h`) subtract nothing. */
+  .shell[data-topbar="on"] .main {
     grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .shell[data-topbar="off"] {
+    --topbar-h: 0px;
   }
 
   .topbar {
