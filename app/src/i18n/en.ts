@@ -2930,6 +2930,8 @@ export const en = {
   'ord.sequence.saving': 'Saving…',
   'ord.sequence.none': 'No active suppliers.',
   'ord.sequence.err': 'Could not save the order. Check the connection and try again.',
+  // The Home's card of the suppliers still to order today (16 Nov 2026).
+  'home.ordersDue.title': 'Orders to place',
   'home.title': 'To do',
   'home.add': 'Add',
   'home.overdue': 'Overdue',

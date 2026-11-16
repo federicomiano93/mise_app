@@ -1,6 +1,25 @@
-/* The Home: one readable column, as wide as a list is comfortable to read, full width on a phone. */
+/* The Home: one readable column on a phone and a portrait tablet, the holiday band on top and the cards under it, one under the
+   other (the band keeps its own space under it, and is not drawn at all when nobody is away). From the split's width (1000px, the lab tablet held sideways) the cards are two columns — «Da fare» on the left, «Ordini da
+   fare» on the right (16 Nov 2026) — so the page grows to hold them. */
 
 .column {
   width: 100%;
   max-width: 40rem;
+}
+
+.cards {
+  display: grid;
+  gap: var(--s4);
+  align-items: start;
+}
+
+@media (min-width: 1000px) {
+  .column {
+    max-width: 72rem;
+  }
+
+  .cards {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: var(--s6);
+  }
 }

@@ -1,0 +1,70 @@
+/* «Ordini da fare»: the same card as «Da fare», then one row per supplier still to order today. Amber means «to do» (tokens.css):
+   the rows wear the warn family, like the «Da ordinare oggi» tag of the Orders list; the words carry the meaning, the colour backs
+   them up. Every row is a 48px target that wraps a long name instead of widening the page. */
+
+.card {
+  padding: var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+}
+
+.title {
+  display: flex;
+  align-items: center;
+  min-height: var(--hit);
+  font-size: var(--fs-lg);
+  font-weight: 650;
+}
+
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  margin: var(--s3) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  min-height: var(--hit);
+  padding: var(--s2) var(--s3) var(--s2) var(--s4);
+  border: 1px solid var(--warn);
+  border-radius: var(--r-md);
+  background: var(--warn-tint);
+  color: var(--ink);
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.row > svg {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  color: var(--warn-ink);
+}
+
+.row:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Cancels base.css's link hover colour, which would stick after a tap on a touch screen. */
+@media (hover: hover) {
+  .row:hover {
+    color: var(--ink);
+    background: var(--sunken);
+  }
+}
+
+.name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--fs-md);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}

@@ -7,16 +7,17 @@ import { useFocusOnBack } from '../shell/away/useFocusOnBack';
 import { StatusMessageProvider, useStatusMessage } from '../ui/StatusMessage';
 import { AwayBand } from './AwayBand';
 import { InstallHint } from './InstallHint';
+import { OrdersDueCard } from './OrdersDueCard';
 import { TodoCard } from './TodoCard';
 import { TodosProvider, useTodosStore } from './TodosContext';
 import styles from './HomeSection.module.css';
 
-// The Home (step 3g-1): where the app opens, for everybody who has the venue open. Today it holds the
-// venue's «Da fare» card; later slices of 3g may add to it. Loaded only when somebody opens it
-// (shell/sectionScreens.ts).
+// The Home (step 3g-1): where the app opens, for everybody who has the venue open. It holds the venue's «Da fare» card and, since
+// the Orders redesign of 16 Nov 2026 (item 7), «Ordini da fare» beside it on a tablet (under it on a phone): the suppliers still to
+// order today, for somebody the venue shows Orders to. Loaded only when somebody opens it (shell/sectionScreens.ts).
 //
-// Its data lives exactly as long as it is on screen: TodosProvider starts the one listener on mount and
-// stops it on unmount (P14).
+// Its data lives exactly as long as it is on screen: TodosProvider starts the to-do listener on mount and stops it on unmount, and the
+// orders card its own three (useOrdersDue) (P14).
 export default function HomeSection() {
   const { t } = useT();
   const { pathname } = useLocation();
@@ -34,9 +35,16 @@ export default function HomeSection() {
             <PartBoundary>
               <AwayBand onBack={armFocus} />
             </PartBoundary>
-            <PartBoundary>
-              <TodoCard />
-            </PartBoundary>
+            {/* Two columns from the split's width: «Da fare» on the left, «Ordini da fare» on the right; one under the other on a phone.
+                Each in a part of its own: one failing must not take the other down. */}
+            <div className={styles.cards}>
+              <PartBoundary>
+                <TodoCard />
+              </PartBoundary>
+              <PartBoundary>
+                <OrdersDueCard />
+              </PartBoundary>
+            </div>
           </div>
         </StatusMessageProvider>
       </TodosProvider>
