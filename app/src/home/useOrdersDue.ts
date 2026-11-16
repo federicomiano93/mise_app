@@ -42,7 +42,6 @@ export function useOrdersDue(): readonly StoredDoc[] {
 
   useEffect(() => {
     if (!seesOrders || !locationId) return undefined;
-    setLive(NOTHING);
     const source = services.ordersDue(locationId);
     const patch = (next: Partial<Live>) => { setLive(before => ({ ...before, ...next })); };
     const broke = () => { patch({ broken: true }); };
@@ -60,7 +59,11 @@ export function useOrdersDue(): readonly StoredDoc[] {
         }));
       }, broke),
     ];
-    return () => { for (const stop of stops) stop(); };
+    // ⚠️ The old answers go WITH the listeners: the next listen (Orders switched back on, a new day) must not draw them for a frame.
+    return () => {
+      for (const stop of stops) stop();
+      setLive(NOTHING);
+    };
   }, [services, locationId, seesOrders, today]);
 
   const ready = seesOrders && !live.broken && live.suppliersLoaded && live.placedFromServer && live.draftFromServer;

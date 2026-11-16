@@ -8,6 +8,7 @@ import { StatusMessageProvider, useStatusMessage } from '../ui/StatusMessage';
 import { AwayBand } from './AwayBand';
 import { InstallHint } from './InstallHint';
 import { OrdersDueCard } from './OrdersDueCard';
+import { useOrdersDue } from './useOrdersDue';
 import { TodoCard } from './TodoCard';
 import { TodosProvider, useTodosStore } from './TodosContext';
 import styles from './HomeSection.module.css';
@@ -23,6 +24,10 @@ export default function HomeSection() {
   const { pathname } = useLocation();
   // After «I am back» from the band (which then goes away) the focus goes to the card's «Add», or to its title when Add is absent.
   const armFocus = useFocusOnBack(() => document.getElementById('home-todo-add') ?? document.getElementById('home-todo-title'));
+  // ⚠️ THE PAGE IS LAID OUT BY WHETHER THE ORDERS CARD IS DRAWN (review of PR #565): two columns only while it is, so on most days — and
+  // always for somebody without Orders — «Da fare» keeps its readable width instead of a half page beside an empty one.
+  const due = useOrdersDue();
+  const two = due.length > 0;
   // The Home has no address below it: anything typed after /home goes back to the Home, as the other sections send a junk
   // address back to their list (nothing is started for it).
   if (pathname !== '/home') return <Navigate to="/home" replace />;
@@ -31,18 +36,18 @@ export default function HomeSection() {
       <TodosProvider>
         <StatusMessageProvider>
           <StoreMessages />
-          <div className={styles.column}>
+          <div className={styles.column} data-two={two ? 'true' : undefined}>
             <PartBoundary>
               <AwayBand onBack={armFocus} />
             </PartBoundary>
             {/* Two columns from the split's width: «Da fare» on the left, «Ordini da fare» on the right; one under the other on a phone.
                 Each in a part of its own: one failing must not take the other down. */}
-            <div className={styles.cards}>
+            <div className={styles.cards} data-two={two ? 'true' : undefined}>
               <PartBoundary>
                 <TodoCard />
               </PartBoundary>
               <PartBoundary>
-                <OrdersDueCard />
+                <OrdersDueCard due={due} />
               </PartBoundary>
             </div>
           </div>

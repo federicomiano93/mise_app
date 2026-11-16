@@ -109,6 +109,31 @@ describe('the «Ordini da fare» card', () => {
     const css = homeCss.replace(/\/\*[\s\S]*?\*\//g, '');
     const [phone = '', tablet = ''] = css.split('@media (min-width: 1000px)');
     expect(phone).not.toMatch(/grid-template-columns/);
-    expect(tablet).toMatch(/\.cards\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) minmax\(0, 1fr\)/);
+    expect(tablet).toMatch(/\.cards\[data-two="true"\]\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) minmax\(0, 1fr\)/);
+    expect(tablet).not.toMatch(/\.cards\s*\{/);
+    expect(tablet).toMatch(/\.column\[data-two="true"\]\s*\{[^}]*max-width:\s*72rem/);
+    expect(todo.closest('[data-two]')).toHaveAttribute('data-two', 'true');
+  });
+
+  // Review of PR #565: without the card «Da fare» keeps its one readable column, never half a page beside an empty one.
+  it('keeps «Da fare» in one column when the card is not drawn', async () => {
+    show(fakeOrdersDueSource({ suppliers: [] }));
+    const todo = await screen.findByRole('heading', { level: 2, name: 'To do' }, LOAD);
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 50)); });
+    expect(card()).toBeNull();
+    expect(todo.closest('[data-two]')).toBeNull();
+  });
+
+  it('hands a keyboard\'s focus to the card\'s title when its row goes, and to «Da fare» when the card goes', async () => {
+    const source = fakeOrdersDueSource({ suppliers: suppliers() });
+    show(source);
+    await waitFor(() => { expect(card()).not.toBeNull(); }, LOAD);
+    within(card() as HTMLElement).getByRole('link', { name: 'Alpine Mills' }).focus();
+    act(() => { source.records = [placed('s-alp')]; source.emit(); });
+    await waitFor(() => { expect(screen.getByRole('heading', { level: 2, name: 'Orders to place' })).toHaveFocus(); });
+    within(card() as HTMLElement).getByRole('link', { name: 'Bee Farm' }).focus();
+    act(() => { source.records = ['s-alp', 's-bee', 's-cat'].map(placed); source.emit(); });
+    await waitFor(() => { expect(card()).toBeNull(); });
+    await waitFor(() => { expect(screen.getByRole('heading', { level: 2, name: 'To do' })).toHaveFocus(); });
   });
 });

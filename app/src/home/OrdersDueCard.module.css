@@ -18,6 +18,10 @@
   font-weight: 650;
 }
 
+.title:focus:not(:focus-visible) {
+  outline: none;
+}
+
 .rows {
   display: flex;
   flex-direction: column;
