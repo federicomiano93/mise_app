@@ -41,3 +41,11 @@ describe('«Order lists» on a 296px phone', () => {
     expect(listsSource).toContain('className={`visually-hidden ${styles.label}`}');
   });
 });
+
+describe('the bell on the flat view (split)', () => {
+  it('draws the pane while the notices are open, the flat view back in the left column', () => {
+    const split = after(sectionCss, '@media (min-width: 1000px)');
+    expect(split).toMatch(/\.layout\[data-view="ingredients"\]\[data-pane="notices"\] \.detail\s*\{\s*display:\s*block;/);
+    expect(split).toMatch(/\.layout\[data-view="ingredients"\]\[data-pane="notices"\] \.list\s*\{\s*grid-column:\s*1;/);
+  });
+});

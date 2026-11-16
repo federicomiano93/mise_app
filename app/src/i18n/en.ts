@@ -2582,7 +2582,7 @@ export const en = {
   'ord.summary.closedToday': 'Closed as not ordered today',
   'ord.summary.reopen': 'Reopen',
   'ord.summary.closeTitle': 'Close {supplier} as not ordered?',
-  'ord.summary.closeMessage': 'Nothing is ordered from them today. They leave “Order today” on every device, and you can reopen them from this summary.',
+  'ord.summary.closeMessage': 'Nothing is ordered from them today. They leave “To order” on every device, and you can reopen them from this summary.',
   'ord.summary.closeOk': 'Close',
   'ord.summary.closedDone': '{supplier} closed as not ordered.',
   'ord.summary.reopened': '{supplier} is back on today’s orders.',

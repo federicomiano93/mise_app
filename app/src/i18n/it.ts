@@ -2356,7 +2356,7 @@ export const it: Messages = {
   'ord.summaryCount': { one: 'Riepilogo ordine · {n} articolo', other: 'Riepilogo ordine · {n} articoli' },
   'ord.summaryEmpty': 'Nessuna quantità scritta',
   'ord.summary.closeNotOrdered': 'Chiudi come non ordinato',
-  'ord.summary.closeHint': 'Oggi non serve niente? Chiudilo e esce da “Da ordinare”.',
+  'ord.summary.closeHint': 'Oggi non serve niente? Chiudilo ed esce da “Da ordinare”.',
   'ord.summary.closedToday': 'Chiuso come non ordinato oggi',
   'ord.summary.reopen': 'Riapri',
   'ord.summary.closeTitle': 'Vuoi chiudere {supplier} come non ordinato?',

@@ -102,6 +102,21 @@ describe('the title band (item 3)', () => {
   });
 });
 
+describe('a tab pressed with a supplier open beside the list', () => {
+  it('starts the other view at the top', async () => {
+    split();
+    const view = await loaded();
+    await view.user.click(screen.getAllByRole('button', { name: /^Alpine Mills/ })[0] as HTMLElement);
+    await screen.findByRole('spinbutton', { name: 'Flour quantity to order' }, LOAD);
+    // jsdom does not scroll: the place is planted on the scroll area.
+    screen.getByRole('main').scrollTop = 640;
+    await waitFor(() => { expect(screen.getByRole('button', { name: 'Ingredients' })).not.toHaveAttribute('aria-disabled'); });
+    await view.user.click(screen.getByRole('button', { name: 'Ingredients' }));
+    await waitFor(() => { expect(path(view)).toBe('/orders/ingredients'); });
+    expect(screen.getByRole('main').scrollTop).toBe(0);
+  });
+});
+
 describe('the top right of the split (item 4)', () => {
   // The two doors, by the words drawn.
   const doors = () => screen.queryAllByRole('button').filter(button => /^(Incoming|To re-order)/.test(button.textContent ?? ''));
@@ -183,6 +198,31 @@ describe('the notices in the pane (item 6)', () => {
     await waitFor(() => { expect(path(view)).toBe('/orders/supplier/s-bee'); });
     expect(await screen.findByRole('spinbutton', { name: 'Honey quantity to order' }, LOAD)).toBeInTheDocument();
     expect(pane()).not.toBeInTheDocument();
+  });
+
+  it('give the pane back when the row of the supplier already open behind them is tapped (the same address)', async () => {
+    split();
+    const view = await loaded();
+    await view.user.click(screen.getAllByRole('button', { name: /^Alpine Mills/ })[0] as HTMLElement);
+    await screen.findByRole('spinbutton', { name: 'Flour quantity to order' }, LOAD);
+    await view.user.click(within(band()).getByRole('button', { name: 'Notices' }));
+    await screen.findByRole('region', { name: 'Notices' });
+    await view.user.click(screen.getAllByRole('button', { name: /^Alpine Mills/ })[0] as HTMLElement);
+    await waitFor(() => { expect(pane()).not.toBeInTheDocument(); });
+    expect(screen.getByRole('spinbutton', { name: 'Flour quantity to order' })).toBeInTheDocument();
+    expect(path(view)).toBe('/orders/supplier/s-alp');
+  });
+
+  it('open in the pane from the flat view too, which steps back into the left column meanwhile', async () => {
+    split();
+    const view = renderOrders('/orders/ingredients', { source: seeded() });
+    await screen.findAllByRole('spinbutton', undefined, LOAD);
+    await view.user.click(within(band()).getByRole('button', { name: 'Notices' }));
+    const notices = await screen.findByRole('region', { name: 'Notices' });
+    const layout = notices.closest('[data-view]') as HTMLElement;
+    expect(layout).toHaveAttribute('data-view', 'ingredients');
+    expect(layout).toHaveAttribute('data-pane', 'notices');
+    // The stylesheet draws the pane for exactly this pair (ordersBandCss.spec.ts).
   });
 
   it('on a phone open above the list, with the same X', async () => {

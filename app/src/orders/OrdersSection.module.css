@@ -25,6 +25,21 @@
     display: none;
   }
 
+  /* ⚠️ THE BELL ON THE FLAT VIEW: its notices need the pane like everywhere else, so while they are open the flat view steps back into
+     the left column and the pane is drawn (review of 16 Nov 2026: with the pane hidden the bell opened nothing). */
+  .layout[data-view="ingredients"][data-pane="notices"] .list {
+    grid-column: 1;
+    border-right: 1px solid var(--line);
+  }
+
+  .layout[data-view="ingredients"][data-pane="notices"] .top {
+    border-left: 0;
+  }
+
+  .layout[data-view="ingredients"][data-pane="notices"] .detail {
+    display: block;
+  }
+
   .layout[data-view="detail"] .list {
     display: none;
   }
@@ -91,6 +106,21 @@
 
   .layout[data-view="ingredients"] .detail {
     display: none;
+  }
+
+  /* ⚠️ THE BELL ON THE FLAT VIEW: its notices need the pane like everywhere else, so while they are open the flat view steps back into
+     the left column and the pane is drawn (review of 16 Nov 2026: with the pane hidden the bell opened nothing). */
+  .layout[data-view="ingredients"][data-pane="notices"] .list {
+    grid-column: 1;
+    border-right: 1px solid var(--line);
+  }
+
+  .layout[data-view="ingredients"][data-pane="notices"] .top {
+    border-left: 0;
+  }
+
+  .layout[data-view="ingredients"][data-pane="notices"] .detail {
+    display: block;
   }
 
   .detail {

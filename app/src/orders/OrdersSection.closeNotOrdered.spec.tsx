@@ -75,7 +75,7 @@ describe('the order summary: today\'s order', () => {
     const view = await summaryAt(source);
     await view.user.click(await pane().findByRole('button', { name: 'Close as not ordered' }, LOAD));
     const ask = await screen.findByRole('alertdialog', { name: 'Close Alpine Mills as not ordered?' });
-    expect(ask).toHaveAccessibleDescription('Nothing is ordered from them today. They leave “Order today” on every device, and you can reopen them from this summary.');
+    expect(ask).toHaveAccessibleDescription('Nothing is ordered from them today. They leave “To order” on every device, and you can reopen them from this summary.');
     await view.user.click(within(ask).getByRole('button', { name: 'Cancel' }));
     expect(source.skippedWrites).toEqual([]);
     expect(path(view)).toBe('/orders/supplier/s-alp/summary');

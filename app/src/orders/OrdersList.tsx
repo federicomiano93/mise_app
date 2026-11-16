@@ -112,14 +112,16 @@ export function OrdersList({ lens, earlyLens, ready, split, openId, heldId, onLo
   const broken = suppliersBroken || ingredientsBroken;
   useFocusAcrossReorder(due);
   // ⚠️ A ROW THAT MOVES FROM ONE GROUP TO ANOTHER IS A NEW NODE (another list): a focus that fell with the old one is handed to the new
-  // row of the same supplier. Only when it fell to nothing: a person who moved on is never overridden.
-  const focusedRow = useRef<string | null>(null);
+  // row of the same supplier. ONLY when that old node is gone and the focus fell to nothing: a person who moved on, or a focus that left
+  // the row by itself (a tap on blank space after typing beside it), is never pulled back to the list (review of 16 Nov 2026).
+  const focusedRow = useRef<{ id: string; node: HTMLElement } | null>(null);
   useLayoutEffect(() => {
-    const id = focusedRow.current;
-    if (id === null) return;
+    const was = focusedRow.current;
+    if (was === null || was.node.isConnected) return;
+    focusedRow.current = null;
     const now = document.activeElement;
     if (now !== null && now !== document.body) return;
-    handBack.focus(supplierOpener(id));
+    handBack.focus(supplierOpener(was.id));
   }, [groups, handBack]);
 
   const dt = dayTranslate(t);
@@ -200,7 +202,7 @@ export function OrdersList({ lens, earlyLens, ready, split, openId, heldId, onLo
                     onOpenItems={onOpenItems}
                     onOpenSummary={split ? onOpenSummary : undefined}
                     summaryOffered={filled > 0 || closed}
-                    onRowFocus={id => { focusedRow.current = id; }}
+                    onRowFocus={(id, node) => { focusedRow.current = { id, node }; }}
                   />
                 );
               })}
@@ -240,7 +242,7 @@ type RowProps = {
   // The summary button is drawn (quantities typed, or closed today: «Reopen» is in the summary); otherwise its spacer.
   summaryOffered: boolean;
   // The row's open button took the focus: kept by the list, which hands the focus back if the row moves to another group.
-  onRowFocus: (id: string) => void;
+  onRowFocus: (id: string, node: HTMLElement) => void;
 };
 
 // ⚠️ SIBLING BUTTONS, NOT ONE WITH SOMETHING CLICKABLE INSIDE IT: a button in a button is invalid, and a tap on the inner one ran
@@ -264,7 +266,7 @@ function SupplierRow({ supplier, meta, count, tag, due, isOpen, isWaiting, onOpe
         className={styles.open}
         aria-current={isOpen ? 'true' : undefined}
         aria-busy={isWaiting ? 'true' : undefined}
-        onFocus={() => { onRowFocus(id); }}
+        onFocus={event => { onRowFocus(id, event.currentTarget); }}
         onClick={() => { onOpenSupplier(id); }}
       >
         <span className={styles.main}>

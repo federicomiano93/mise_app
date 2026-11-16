@@ -274,16 +274,17 @@ function OrdersLayout({ view }: { view: ShownView }) {
   const openClear = () => { open(CLEAR_OPENER, CLEAR_PATH); };
   const openSend = () => { open(SEND_OPENER, SEND_PATH); };
   // ⚠️ THE SWAP IS A MOVE AT THE LIST'S LEVEL, NOT A STEP DOWN: it REPLACES the entry, so Back never walks through the views, and the
-  // new view starts at the top (the scroll effect below). The focus goes to the swap button of the view that arrives. The button is drawn
-  // ONLY at list level (OrdersHead `swapOpen`): with a screen open beside the list the person closes it with Back first, so there is no
-  // step back to arm, no duplicate entry to avoid and nothing left pending when a «discard changes?» question is answered Cancel.
+  // new view starts at the top (the scroll effect below, told by `swapped`). The focus goes to the tab of the view that arrives.
   // ⚠️ SINCE 16 NOV 2026 THE TABS ARE ALWAYS ON SCREEN (the split shows them beside an open supplier too): from a screen open beside the
   // list a tab REPLACES that screen's entry with the other view, so the screen closes (nothing is lost: the draft is saved) and Back
   // still steps up to whatever was behind it. Which view is in the column comes from where the person is, not from the address.
+  // (A screen that holds the move with its «discard changes?» question and is answered Cancel leaves the tab's hand-back armed: the
+  // next Back to the list then focuses the tab — a known leftover, harmless.)
   const swap = () => {
     // The box that had the focus is about to be removed, which may not count as leaving it: what waits goes now.
     store.sendWaitingDraft();
     handBack.expect(SWAP_OPENER);
+    swapped.current = true;
     void navigate(flatColumn ? ORDERS_PATH : INGREDIENTS_PATH, { replace: true, state: KEEP_FOCUS });
   };
   // «Placed yesterday» on a pending banner: the supplier's confirm screen, recording under the banner's day without asking whether it
@@ -399,10 +400,14 @@ function OrdersLayout({ view }: { view: ShownView }) {
   //  - On a phone, Back to the list restores the place written down when a screen opened; any other move starts at the top.
   //  - The first render does nothing: the shell reset the area when the section was entered.
   const shown = useRef<string | null>(null);
+  // A tab was pressed (swap): the view that arrives starts at the top, also when it replaced a screen open beside the list.
+  const swapped = useRef(false);
   const shownKind = useRef(view.kind);
   useLayoutEffect(() => {
     const before = shown.current;
     const kindBefore = shownKind.current;
+    const wasSwap = swapped.current;
+    swapped.current = false;
     shown.current = pathname;
     shownKind.current = view.kind;
     const area = scrollArea();
@@ -411,7 +416,7 @@ function OrdersLayout({ view }: { view: ShownView }) {
     if (split) {
       listTop.current = null;
       // The swap between the two views is a new list, not Back to one: it starts at the top.
-      if (atList && kindBefore !== view.kind && (kindBefore === 'list' || kindBefore === 'ingredients')) area.scrollTop = 0;
+      if (atList && kindBefore !== view.kind && (wasSwap || kindBefore === 'list' || kindBefore === 'ingredients')) area.scrollTop = 0;
     } else if (atList && listTop.current !== null) {
       area.scrollTop = listTop.current;
       listTop.current = null;
@@ -580,14 +585,16 @@ function OrdersGrid({ view, split, detailRef, list, hint, onIncoming, onReorder,
 }) {
   const { t } = useT();
   const { open: noticesOpen, setOpen: setNoticesOpen } = useNotices();
-  const { pathname } = useLocation();
+  const { key } = useLocation();
   // ⚠️ THE NOTICES GIVE THE PANE BACK AT EVERY MOVE: a supplier opened from them (or from a row) must be seen, not hidden behind them.
-  const firstPath = useRef(pathname);
+  // By the history entry, not the address: tapping the row of the supplier already open behind them replaces the entry with the SAME
+  // address, and must bring that supplier back too (review of 16 Nov 2026).
+  const firstKey = useRef(key);
   useEffect(() => {
-    if (pathname === firstPath.current) return;
-    firstPath.current = pathname;
+    if (key === firstKey.current) return;
+    firstKey.current = key;
     if (split) setNoticesOpen(false);
-  }, [pathname]);
+  }, [key]);
   const notices = split && noticesOpen;
   const owesDebt = useDebtOwed();
   return (
