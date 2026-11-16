@@ -9,9 +9,14 @@ export async function saveDoc(name, id, data) { globalThis.__draftWrites.push({ 
 export async function patchDoc(name, id, data) { globalThis.__draftWrites.push({ name, id, data, patch: true }); }
 export async function watchDoc() { return () => {}; }
 export async function watchServerAnswer() { return () => {}; }
+export async function watchPendingWrites() { return () => {}; }
 export const currentBakery = () => 'venue-a';
 export async function getRecentHistoryFromServer() { return []; }
 export async function clearFields() {}
 export async function transactDoc() {}
 export async function replaceDoc() {}
 export async function removeDoc() {}
+// The «did it go?» question (js/orders/awaiting-sent.js) writes through these two.
+export async function saveFields(name, id, data, fieldPaths) { globalThis.__draftWrites.push({ name, id, data, fieldPaths }); }
+export async function clearFieldsIf() { return false; }
+export async function saveFieldsIf() { return false; }

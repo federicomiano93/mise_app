@@ -24,8 +24,12 @@ export function StatusMessageProvider({ children }: { children: ReactNode }) {
   const [shown, setShown] = useState<{ id: number; text: string } | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const counter = useRef(0);
+  // ⚠️ A SENTENCE SAID AFTER THE SECTION HAS GONE (a write answered late) IS DROPPED: a timer started then outlived everything,
+  // and fired into a page that no longer existed — the «window is not defined» flake of the Orders specs after their teardown.
+  const live = useRef(true);
 
   const say = useCallback<Say>((text, ms = MESSAGE_MS) => {
+    if (!live.current) return;
     if (timer.current !== null) clearTimeout(timer.current);
     // Nothing to say takes the message away now, for one that stopped being true before its time was up.
     if (text === '') {
@@ -41,8 +45,14 @@ export function StatusMessageProvider({ children }: { children: ReactNode }) {
     }, ms);
   }, []);
 
-  useEffect(() => () => {
-    if (timer.current !== null) clearTimeout(timer.current);
+  // Set on every mount: StrictMode runs the cleanup and then the effect again.
+  useEffect(() => {
+    live.current = true;
+    return () => {
+      live.current = false;
+      if (timer.current !== null) clearTimeout(timer.current);
+      timer.current = null;
+    };
   }, []);
 
   return (

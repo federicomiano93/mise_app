@@ -164,6 +164,15 @@ function clearWrite(path, patch, deletePaths, headers = asUser()) {
   });
 }
 
+// setDoc(ref, data, { mergeFields: [...] })  →  saveFields(): only the named DOTTED paths are
+// written, each one whole — the mask names them, the body carries them nested.
+function pathWrite(path, data, maskPaths, headers = asUser()) {
+  const mask = maskPaths.map(k => `updateMask.fieldPaths=${encodeURIComponent(k)}`).join('&');
+  return fetch(`${FS}/${path}?${mask}`, {
+    method: 'PATCH', headers, body: JSON.stringify({ fields: toFields(data) }),
+  });
+}
+
 // addDoc()  →  createDoc()
 function createWrite(collection, data, headers = asUser()) {
   return fetch(`${FS}/${collection}`, {
@@ -827,6 +836,56 @@ async function drafts() {
   await expectDenied('a member of ANOTHER venue closing a supplier here',
     () => mergeWrite('locations/main/drafts/current', { skipped: { SUP_LEGACY: '2026-11-06' }, bakery: 'main' },
       asAccount(BOB)));
+
+  // «Ordine a X inviato alle 10:42: è partito?» (14 Nov 2026, js/orders/awaiting-sent.js). The
+  // send editor writes ONE supplier's question whole (saveFields → a dotted mask), from an
+  // EMPLOYEE's phone too — sending the order is daily work; «No» and the «Sì» claim both remove
+  // the one key (the claim is a transaction whose update carries the bakery stamp).
+  const waiting = {
+    at: '2026-11-14T10:42:00.000Z', date: '2026-11-14',
+    quantities: { ING_LEGACY: 3 }, units: { ING_LEGACY: 'cartone' },
+  };
+  await expectAllowed('an employee asks «did it go?» for one supplier (awaitingSent.<id>, written whole)', () =>
+    pathWrite('locations/main/drafts/current',
+      { bakery: 'main', awaitingSent: { SUP_LEGACY: waiting } },
+      ['bakery', 'awaitingSent.SUP_LEGACY'], asAccount(SAM)));
+  await expectAllowed('…the autosave still writes onto a draft that carries the question', () =>
+    mergeWrite('locations/main/drafts/current', {
+      entries: { ING_LEGACY: { qty: 5, stock: 0 } },
+      updatedAt: new Date().toISOString(),
+      bakery: 'main',
+    }, asAccount(SAM)));
+  const asked = await readDoc('locations/main/drafts/current');
+  check('the question is stored with its quantities',
+    asked?.fields?.awaitingSent?.mapValue?.fields?.SUP_LEGACY?.mapValue?.fields?.quantities
+      ?.mapValue?.fields?.ING_LEGACY?.integerValue === '3');
+  await expectAllowed('…«Sì» on another device: the claim removes the key (transaction update)', () =>
+    clearWrite('locations/main/drafts/current', { bakery: 'main' }, ['awaitingSent.SUP_LEGACY'], asAccount(MAYA)));
+  await expectAllowed('…a newer send asks again, and «No» removes it', async () => {
+    const res = await pathWrite('locations/main/drafts/current',
+      { bakery: 'main', awaitingSent: { SUP_LEGACY: waiting } },
+      ['bakery', 'awaitingSent.SUP_LEGACY'], asAccount(SAM));
+    if (!res.ok) return res;
+    return clearWrite('locations/main/drafts/current', { bakery: 'main' }, ['awaitingSent.SUP_LEGACY'], asAccount(SAM));
+  });
+  await expectDenied('awaitingSent sent as a string instead of a map',
+    () => mergeWrite('locations/main/drafts/current', { awaitingSent: 'SUP_LEGACY', bakery: 'main' }));
+  const manyWaiting = {};
+  for (let i = 0; i < 201; i++) manyWaiting[`S${i}`] = waiting;
+  await expectDenied('a draft stuffed with 201 suppliers waiting for an answer',
+    () => mergeWrite('locations/main/drafts/current', { awaitingSent: manyWaiting, bakery: 'main' }));
+  await expectDenied('a member of ANOTHER venue asking «did it go?» here',
+    () => pathWrite('locations/main/drafts/current',
+      { bakery: 'main', awaitingSent: { SUP_LEGACY: waiting } },
+      ['bakery', 'awaitingSent.SUP_LEGACY'], asAccount(BOB)));
+  await expectDenied('signed out, asking «did it go?»',
+    () => pathWrite('locations/main/drafts/current',
+      { bakery: 'main', awaitingSent: { SUP_LEGACY: waiting } },
+      ['bakery', 'awaitingSent.SUP_LEGACY'], noAuth()));
+  await expectDenied('a question stamped for another venue',
+    () => pathWrite('locations/main/drafts/current',
+      { bakery: 'trattoria-x', awaitingSent: { SUP_LEGACY: waiting } },
+      ['bakery', 'awaitingSent.SUP_LEGACY'], asAccount(SAM)));
 
   await expectDenied('an unknown key on the draft',
     () => mergeWrite('locations/main/drafts/current', { evil: 'x', bakery: 'main' }));
@@ -1536,6 +1595,13 @@ async function configAndLogs() {
     () => mergeWrite(`${A}/config/labels`, { bakery: 'main', configRev: 1 }, asAccount(SAM)));
   await expectAllowed('…while the same employee still saves the calculator itself',
     () => mergeWrite(`${A}/config/calculator`, { bakery: 'main', configRev: 1 }, asAccount(SAM)));
+  // ⚠️ Any OTHER name used to pass the calculator branch, and delete is refused, so an
+  // employee could leave config/<anything> of up to 1 MB that nobody could remove
+  // (security audit, 2 Nov 2026).
+  await expectDenied('an employee cannot create a config document of any other name',
+    () => mergeWrite(`${A}/config/junk`, { bakery: 'main', configRev: 1 }, asAccount(SAM)));
+  await expectDenied('…nor can the owner',
+    () => mergeWrite(`${A}/config/junk`, { bakery: 'main', configRev: 1 }));
 
   await expectAllowed('labels: the profile the settings screen saves', () =>
     mergeWrite(`${A}/config/labels`, {
@@ -2765,6 +2831,18 @@ async function clientOrders() {
       bakery: 'main', clientId: 'c-three', clientName: 'CLIENT C',
       createdAt: 'now', linkToken: 'a'.repeat(43),
     }));
+  // ⚠️ NEVER A PERSON'S OWN ACCOUNT (security audit, 2 Nov 2026): a manager who named
+  // their own uid kept a client's menu and orders after being removed from the business.
+  await expectDenied('a manager CANNOT turn their own account into a client\'s', () =>
+    wholeWrite(`${L}/client-accounts/${MAYA.uid}`,
+      { bakery: 'main', clientId: 'c-three', clientName: 'CLIENT C', createdAt: 'now' },
+      asAccount(MAYA)));
+  await expectDenied('…nor the owner hand a client\'s grant to any member\'s account', () =>
+    wholeWrite(`${L}/client-accounts/${SAM.uid}`,
+      { bakery: 'main', clientId: 'c-three', clientName: 'CLIENT C', createdAt: 'now' }));
+  await expectDenied('…nor to the account of a member of another business', () =>
+    wholeWrite(`${L}/client-accounts/${BOB.uid}`,
+      { bakery: 'main', clientId: 'c-three', clientName: 'CLIENT C', createdAt: 'now' }));
   await expectDenied('a link token cannot become a payload of its own', () =>
     wholeWrite(`${L}/client-accounts/${NOBODY.uid}`, {
       bakery: 'main', clientId: 'c-three', clientName: 'CLIENT C',

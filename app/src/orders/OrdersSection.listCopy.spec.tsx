@@ -508,23 +508,6 @@ describe('the doors that open anything else, shut on the copy', () => {
 });
 
 describe('a half-landed list', () => {
-  it('an «Order today» chip goes through the hold like a row: suppliers and records landed, ingredients held', async () => {
-    const days = { orderDays: [WEEKDAY(0)] };
-    const alpine = supplier('s-alp', { name: 'Alpine Mills', ...days });
-    plant([alpine, COPY_SUPPLIERS[1]]);
-    const source = fakeOrdersSource({ suppliers: [alpine, BOTH_SUPPLIERS[1] as never], ingredients: COPY_ITEMS });
-    const view = await onCopy(source, {}, ['watchIngredients']);
-    await screen.findByText('Order today', undefined, LOAD);
-    // Two buttons carry the name: the chip (first, over the list) and the supplier's row.
-    await view.user.click(screen.getAllByRole('button', { name: 'Alpine Mills' })[0] as HTMLElement);
-    expect(view.router.state.location.pathname).toBe('/orders');
-    expect(waitText()).toBeInTheDocument();
-    expect(document.querySelector('[data-waiting="true"]')).not.toBeNull();
-    await view.live.release();
-    expect(await screen.findByRole('spinbutton', { name: 'Flour quantity to order' }, LOAD)).toBeInTheDocument();
-    expect(view.router.state.location.pathname).toBe('/orders/supplier/s-alp');
-  });
-
   it('suppliers and ingredients landed, draft held: the rows are the LIVE ones, Send is still hidden, a tap waits for the draft', async () => {
     plant();
     const source = fakeOrdersSource({ suppliers: LIVE_SUPPLIERS, ingredients: LIVE_ITEMS });
@@ -575,7 +558,7 @@ describe('what the copy must not feed', () => {
   const GB = { session: { location: { country: 'GB' } } } as Options;
   const bell = () => screen.getByRole('button', { name: /^Notices/ });
 
-  it('raises no notice and draws no «Order today» chip while the list is the copy', async () => {
+  it('raises no notice and lights no «To order today» while the list is the copy', async () => {
     window.localStorage.setItem('uk-bank-holidays', JSON.stringify([inDays(1)]));
     window.localStorage.setItem('uk-bank-holidays-fetched', TODAY);
     const days = { orderDays: [WEEKDAY(0)], deliveryDays: [WEEKDAY(1)] };
@@ -583,12 +566,10 @@ describe('what the copy must not feed', () => {
     const source = fakeOrdersSource({ suppliers: [supplier('s-alp', { name: 'Alpine Mills', ...days })], ingredients: COPY_ITEMS });
     const { live } = await onCopy(source, GB);
     expect(bell()).toHaveAccessibleName('Notices');
-    expect(screen.queryByText('Order today')).not.toBeInTheDocument();
-    // Only the supplier's own row carries the name.
-    expect(screen.getAllByRole('button', { name: /^Alpine Mills/ })).toHaveLength(1);
-    // The same data, live: the notice and the chip are real, so their absence above was the copy's.
+    expect(screen.queryByText('To order today')).not.toBeInTheDocument();
+    // The same data, live: the notice and the tag are real, so their absence above was the copy's.
     await live.release();
-    expect(await screen.findByText('Order today', undefined, LOAD)).toBeInTheDocument();
+    expect(await screen.findByText('To order today', undefined, LOAD)).toBeInTheDocument();
     await waitFor(() => { expect(bell()).toHaveAccessibleName(/^Notices: \d/); }, LOAD);
   });
 });

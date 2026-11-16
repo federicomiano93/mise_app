@@ -3,11 +3,11 @@
 // (tests/orders-archive.test.mjs «only changed rows», tests/draft-override.test.mjs) and the traps draft.js records in its
 // comments: `pending` over every snapshot, `known` not moved by a failed write, a value retyped while its write is in the air.
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createDraftSync, SAVE_DELAY_MS } from './draftSync';
 import type { DraftDays, DraftEntries, DraftEntry, DraftPayload } from './draftSync';
 
-function harness({ refuse = false } = {}) {
+function harness({ refuse = false, onStateChange }: { refuse?: boolean; onStateChange?: () => void } = {}) {
   const saves: DraftPayload[] = [];
   const results: boolean[] = [];
   let timer: (() => void) | null = null;
@@ -24,6 +24,7 @@ function harness({ refuse = false } = {}) {
     setTimer: (run, ms) => { timer = run; delay = ms; return 1; },
     clearTimer: () => { timer = null; },
     onResult: ok => { results.push(ok); },
+    onStateChange,
   });
   const tick = async () => {
     const run = timer;
@@ -435,7 +436,7 @@ describe('draftSync — flush and unsaved', () => {
 
   it('a missing document is an empty order that does not exist yet', () => {
     const h = harness();
-    expect(h.sync.receive(null)).toEqual({ entries: {}, days: {}, skipped: {}, updatedAt: '', exists: false });
+    expect(h.sync.receive(null)).toEqual({ entries: {}, days: {}, skipped: {}, awaitingSent: {}, updatedAt: '', exists: false });
     // The closes travel with the view (only string days: a stray value is no close).
     expect(h.sync.receive({ entries: {}, skipped: { a: '2026-11-06', b: 7 } }).skipped).toEqual({ a: '2026-11-06' });
     expect(h.sync.receive({ entries: {}, updatedAt: 'x' }).exists).toBe(true);
@@ -814,5 +815,103 @@ describe('draftSync — a stock count typed while a clear is in the air (PR #410
     h.sync.change({ ...view.entries, c13: { qty: 0, stock: 4 } }, view.days);
     await h.tick();
     expect(h.saves.at(-1)?.entries).toEqual({ c13: { stock: 4 } });
+  });
+});
+
+// The iPad order of 14 Nov 2026: the save line («Saved ✓» / «Not sent yet») asks the sync whether anything typed here is still
+// on this device. Ported from tests/draft-save-state.test.mjs (the sync half; the line itself is ordersStore.saveState.spec.ts).
+describe('draftSync — telling the save line', () => {
+  const later = () => new Promise(resolve => setTimeout(resolve, 0));
+
+  it('is told when the autosave is armed, when the write leaves and when it lands — and hasUnsaved says what changed', async () => {
+    const seen: boolean[] = [];
+    const h: ReturnType<typeof harness> = harness({ onStateChange: () => { seen.push(h.sync.hasUnsaved()); } });
+    h.sync.receive({ entries: {}, days: {} });
+    seen.length = 0;
+    h.holdSaves();
+    h.sync.change({ flour: { qty: 3, stock: 0 } }, {});
+    expect(seen).toEqual([true]); // armed: waiting for the pause
+    await h.tick();
+    expect(h.saves).toHaveLength(1);
+    expect(seen.at(-1)).toBe(true); // in the air: still not saved
+    h.pendingSaves[0]?.resolve();
+    await later();
+    expect(seen.at(-1)).toBe(false); // answered
+  });
+
+  it('a snapshot showing this phone\u2019s own write in the air never makes it saved', async () => {
+    const h = harness();
+    h.sync.receive({ entries: {}, days: {} });
+    h.holdSaves();
+    h.sync.change({ flour: { qty: 3, stock: 0 } }, {});
+    await h.tick();
+    h.sync.receive({ entries: { flour: { qty: 3, stock: 0 } }, days: {} });
+    expect(h.sync.hasUnsaved()).toBe(true);
+    h.pendingSaves[0]?.resolve();
+    await later();
+    expect(h.sync.hasUnsaved()).toBe(false);
+  });
+
+  it('a refused write stays unsaved (told), and a snapshot taking it back does not change that', async () => {
+    let told = 0;
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const h = harness({ refuse: true, onStateChange: () => { told += 1; } });
+    h.sync.receive({ entries: {}, days: {} });
+    h.sync.change({ flour: { qty: 3, stock: 0 } }, {});
+    await h.tick();
+    errors.mockRestore();
+    expect(h.results).toEqual([false]);
+    expect(h.sync.hasUnsaved()).toBe(true);
+    const before = told;
+    h.sync.receive({ entries: {}, days: {} });
+    expect(told).toBeGreaterThan(before);
+    expect(h.sync.hasUnsaved()).toBe(true);
+  });
+
+  it('is told after a snapshot and after a forget', () => {
+    let told = 0;
+    const h = harness({ onStateChange: () => { told += 1; } });
+    h.sync.receive({ entries: { flour: { qty: 3, stock: 0 } }, days: {} });
+    expect(told).toBe(1);
+    h.sync.forget(['flour'], []);
+    expect(told).toBe(2);
+  });
+
+  it('a listener that throws never breaks the save', async () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const h = harness({ onStateChange: () => { throw new Error('boom'); } });
+    h.sync.receive({ entries: {}, days: {} });
+    h.sync.change({ flour: { qty: 3, stock: 0 } }, {});
+    await h.tick();
+    errors.mockRestore();
+    expect(h.saves).toHaveLength(1);
+    expect(h.results).toEqual([true]); // reported as saved, not as a failure
+  });
+
+  it('has no note waiting without a journal', () => {
+    expect(harness().sync.noteWaiting()).toBe(false);
+  });
+
+  it('sendWaiting sends at once, one write, and the pause then sends nothing more', async () => {
+    const h = harness();
+    h.sync.receive({ entries: {}, days: {} });
+    h.sync.change({ flour: { qty: 3, stock: 0 } }, {});
+    expect(h.saves).toHaveLength(0);
+    h.sync.sendWaiting();
+    await later();
+    expect(h.saves).toHaveLength(1);
+    await h.tick();
+    expect(h.saves).toHaveLength(1);
+  });
+
+  it('sendWaiting with nothing waiting writes nothing', async () => {
+    const h = harness();
+    h.sync.receive({ entries: {}, days: {} });
+    h.sync.sendWaiting();
+    h.sync.change({ flour: { qty: 3, stock: 0 } }, {});
+    h.sync.sendWaiting();
+    h.sync.sendWaiting();
+    await later();
+    expect(h.saves).toHaveLength(1);
   });
 });

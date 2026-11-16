@@ -12,7 +12,7 @@ import { startTelemetry } from '../telemetry/startTelemetry';
 import { fakeStore } from '../testing/fakeSession';
 import { renderApp } from '../testing/renderApp';
 
-// The shell's own frame (the top bar, the rail, the tab bar) is not guarded by the section
+// The shell's own frame (the top bar — on the Home only since 16 Nov 2026 —, the rail, the tab bar) is not guarded by the section
 // boundary: when a part of it fails to draw, the ROUTER's boundary catches it. That boundary
 // writes a line of its own to console.error unless the router is given an onError, so one failing
 // part would be reported twice. These specs pin that it is reported once.
@@ -56,7 +56,7 @@ afterEach(() => {
 
 describe('a part of the shell\'s own frame that fails to draw', () => {
   it('shows the whole-app error screen and sends ONE report', async () => {
-    renderApp('/orders');
+    renderApp('/home');
 
     expect(screen.getByRole('heading', { level: 1, name: 'Mise stopped working.' })).toBeInTheDocument();
     await settle();
@@ -70,7 +70,7 @@ describe('a part of the shell\'s own frame that fails to draw', () => {
   // The control: the same failure with a router that has no onError. If React Router ever stops
   // logging by itself this fails, and the handler (errors/routeErrors.ts) is no longer needed.
   it('would be reported twice by a router with no onError', async () => {
-    const router = createMemoryRouter(routes, { initialEntries: ['/orders'] });
+    const router = createMemoryRouter(routes, { initialEntries: ['/home'] });
     render(
       <I18nProvider initialLanguage="en" initialMessages={en}>
         <SessionProvider store={fakeStore()}>

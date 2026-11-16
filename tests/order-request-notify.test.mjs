@@ -73,7 +73,7 @@ test('every reason for sending nothing is written down', () => {
 
 test('the tap lands on Orders, and the words follow the venue’s language', () => {
   assert.match(src, /targetPage\('orderRequest'\)/);
-  assert.match(src, /orderRequestNotification\(request, venue\.lang, venue\.name\)/);
+  assert.match(src, /orderRequestNotification\(\{ \.\.\.request, fromName \}, venue\.lang, venue\.name\)/);
 });
 
 // ⚠️ THE NOTIFICATION HAS TO NAME THE VENUE, and a manager running two places is the

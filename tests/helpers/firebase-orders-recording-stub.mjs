@@ -8,7 +8,7 @@
 // resolve/reject, as the server's answer would arrive. `answerFromServer(doc)` plays the server's
 // first word on the document to whoever is waiting for it (tests/draft-journal.test.mjs).
 
-export const calls = { saveDoc: [], clearFields: [], patchDoc: [], transactDoc: [] };
+export const calls = { saveDoc: [], clearFields: [], patchDoc: [], transactDoc: [], saveFields: [], clearFieldsIf: [], saveFieldsIf: [] };
 export const COLLECTIONS = { drafts: 'drafts', history: 'orders-history' };
 export const held = [];
 
@@ -26,6 +26,7 @@ export function reset() {
   history.records = [];
   history.fail = false;
   history.reads = 0;
+  server.draft = null;
 }
 
 export function holdSaves() { holding = true; }
@@ -54,6 +55,10 @@ export async function clearFields(name, id, paths, patch = {}) {
 }
 export async function transactDoc(name, id, updater) { calls.transactDoc.push({ name, id, updater }); return null; }
 export function watchDoc(name, id, onChange) { watcher = onChange; return () => { watcher = null; }; }
+// Firestore's «this device still has unconfirmed writes» flag (draft.js queuedOnDevice).
+let pendingWatcher = null;
+export function watchPendingWrites(name, id, onPending) { pendingWatcher = onPending; return () => { pendingWatcher = null; }; }
+export function emitPendingWrites(flag) { pendingWatcher?.(flag); }
 export function watchServerAnswer(name, id, onAnswer) { serverWaiter = onAnswer; return () => { serverWaiter = null; }; }
 export const currentBakery = () => 'venue-a';
 // The orders the server holds, as draft.js asks for them before a line comes back. `history.fail`
@@ -68,3 +73,38 @@ export async function getRecentHistoryFromServer() {
 export async function getDocOnce() { return null; }
 export async function replaceDoc() {}
 export async function removeDoc() {}
+
+// The «did it go?» question (js/orders/awaiting-sent.js). `server.draft` is drafts/current as the
+// server holds it, for the claim transaction: clearFieldsIf reads it, asks `decide`, and deletes
+// the paths only when told to — two claims racing for one key behave as Firestore's would, one
+// after the other, because each runs to the end before the next reads.
+export const server = { draft: null };
+export async function saveFields(name, id, data, fieldPaths) {
+  calls.saveFields.push({ name, id, data, fieldPaths: [...fieldPaths] });
+}
+// The mirror: write the named paths only when `decide(data)` allows, against the same server copy.
+export async function saveFieldsIf(name, id, data, fieldPaths, decide) {
+  calls.saveFieldsIf.push({ name, id, data, fieldPaths: [...fieldPaths] });
+  if (!decide(server.draft)) return false;
+  server.draft = server.draft || {};
+  fieldPaths.forEach(path => {
+    const parts = path.split('.');
+    let from = data;
+    let at = server.draft;
+    for (const part of parts.slice(0, -1)) { from = from?.[part]; at = at[part] = at[part] || {}; }
+    at[parts[parts.length - 1]] = structuredClone(from?.[parts[parts.length - 1]]);
+  });
+  return true;
+}
+export async function clearFieldsIf(name, id, paths, decide) {
+  calls.clearFieldsIf.push({ name, id, paths: [...paths] });
+  const data = server.draft;
+  if (!data || !decide(data)) return false;
+  paths.forEach(path => {
+    const parts = path.split('.');
+    let at = data;
+    for (const part of parts.slice(0, -1)) at = at?.[part];
+    if (at) delete at[parts[parts.length - 1]];
+  });
+  return true;
+}

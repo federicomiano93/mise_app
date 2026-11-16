@@ -7,6 +7,8 @@
 //
 // sentCheckDialog({ title, yesLabel, sendNowLabel, cancelLabel })
 //   -> Promise<'yes' | 'sendNow' | null>   null = Cancel / Escape / backdrop tap.
+// An empty cancelLabel leaves Cancel out: «Ordine a X inviato alle 10:42: è partito?» (orders-main
+// maybeAskHere) is answered «Sì» / «No», and Escape or the backdrop leaves it to the banner.
 
 let isOpen = false;
 let seq = 0;
@@ -28,7 +30,7 @@ export function sentCheckDialog({ title, yesLabel, sendNowLabel, cancelLabel }) 
   const yes = btn('app-dialog-btn-solid', yesLabel);
   // An empty label leaves the button out: no road to send by is open for this person.
   const sendNow = sendNowLabel ? btn('app-dialog-btn-ghost', sendNowLabel) : null;
-  const cancel = btn('app-dialog-btn-ghost', cancelLabel);
+  const cancel = cancelLabel ? btn('app-dialog-btn-ghost', cancelLabel) : null;
   const actions = make('div', 'app-dialog-actions sent-check-actions');
   actions.append(...[yes, sendNow, cancel].filter(Boolean));
   box.append(heading, actions);
@@ -48,7 +50,7 @@ export function sentCheckDialog({ title, yesLabel, sendNowLabel, cancelLabel }) 
     const onKey = e => {
       if (e.key === 'Escape') { e.preventDefault(); done(null); }
       else if (e.key === 'Tab') {
-        // Trapped: Tab cycles through the three buttons and never leaves the dialog.
+        // Trapped: Tab cycles through the buttons and never leaves the dialog.
         e.preventDefault();
         const at = order.indexOf(document.activeElement);
         const step = e.shiftKey ? -1 : 1;
@@ -57,7 +59,7 @@ export function sentCheckDialog({ title, yesLabel, sendNowLabel, cancelLabel }) 
     };
     yes.addEventListener('click', () => done('yes'));
     if (sendNow) sendNow.addEventListener('click', () => done('sendNow'));
-    cancel.addEventListener('click', () => done(null));
+    if (cancel) cancel.addEventListener('click', () => done(null));
     backdrop.addEventListener('click', e => { if (e.target === backdrop) done(null); });
     document.addEventListener('keydown', onKey, true);
     document.body.appendChild(backdrop);

@@ -13,7 +13,10 @@
 // answered by the database (calculator/CalculatorContext.tsx, BusyWhileUnsent), and its Settings editors hold it while dirty
 // (calculator/SettingsEditor.tsx), and so does the market order form while quantities were changed by hand
 // (calculator/OrderForm.tsx). Orders holds it while typing has not reached Firestore, while a day line is saved, and while a close
-// as not ordered or a reopen is answered (orders/ordersStore.ts). The holiday holds it while a picked day is not set yet
+// as not ordered or a reopen is answered (orders/ordersStore.ts), and while a «did it go?» question stands only on this device
+// (kept in memory after a refused write, until it is answered or the section stops: ordersStore.ts, syncLocalBusy). A send holds it
+// from the press until it has settled — the chooser, every editor of the batch, and the hand-over to the caller who writes the
+// question (orders/useSendOrder.tsx), and each send editor holds it while it is open (orders/SendEditorDialog.tsx). The holiday holds it while a picked day is not set yet
 // (settings/AwayRow.tsx) and while a holiday change has not been answered by the server (shell/away/awayStore.ts). Added
 // with the service worker (step 5): a client's ordering link while it is made or turned off (calculator/OrderingLink.tsx),
 // a WhatsApp line typed and not added yet (calculator/WhatsappPicker.tsx) and what was typed on a HACCP label until it is

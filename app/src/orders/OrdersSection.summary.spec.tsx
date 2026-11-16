@@ -79,7 +79,7 @@ describe('the order summary', () => {
 
     // The same lines as the message the supplier would receive.
     const lens = buildOrdersLens({ suppliers: SUPPLIERS, suppliersLoaded: true, ingredients: ITEMS, entries: ENTRIES as never, supplierOrder: [], noSupplierName: 'No supplier' });
-    const message = draftSendRows(lens, { entries: ENTRIES as never, days: {}, skipped: {}, updatedAt: '', exists: true }).find(row => row.id === 's-alp');
+    const message = draftSendRows(lens, { entries: ENTRIES as never, days: {}, skipped: {}, awaitingSent: {}, updatedAt: '', exists: true }).find(row => row.id === 's-alp');
     const labels = summaryLines(message?.items ?? []).map(line => line.label);
     expect(labels).toHaveLength(3);
     const rows = lineTexts();
@@ -300,7 +300,8 @@ describe('on the split', () => {
     split();
     const view = await onSupplier();
     const here = within(await screen.findByRole('group', { name: 'Order total' })).getByText('£8.24').textContent;
-    await view.user.click(door());
+    // On the split the summary's door is the row's (the supplier's head has none since 16 Nov 2026).
+    await view.user.click(screen.getByRole('button', { name: 'Order summary: Alpine Mills' }));
     await screen.findByText('Order summary · 3 items');
     const there = within(await screen.findByRole('group', { name: 'Order total' })).getByText('£8.24').textContent;
     expect(there).toBe(here);

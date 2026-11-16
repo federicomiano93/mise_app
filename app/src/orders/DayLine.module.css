@@ -47,3 +47,29 @@
   color: var(--ink-2);
   font-size: var(--fs-sm);
 }
+
+/* The slim form, in the open supplier's bar: everything on one line where it fits, no line or padding of its own, the select a grey
+   field with no border, 40px tall in a 48px row (the bar keeps the target). */
+.slim {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: var(--s3);
+  padding: 0;
+  border-bottom: 0;
+}
+
+.slim .label {
+  font-weight: 500;
+}
+
+.slim .select {
+  flex: none;
+  width: auto;
+  min-width: 7rem;
+  min-height: 44px;
+  padding: 0 var(--s3);
+  border: 0;
+  background: var(--sunken);
+  font-size: 15px;
+}

@@ -1,7 +1,12 @@
-// Tests for what the send chooser OFFERS, the two links it builds and how a batch of order pictures is delivered (P15), run
-// against BOTH implementations: the TypeScript port in shared/ and js/orders/send-chooser.js, which the live app uses today.
+// Tests for what the send chooser OFFERS, the two links it builds and how a batch of order pictures is delivered (P15). The
+// offers and the links are run against BOTH implementations: the TypeScript port in shared/ and js/orders/send-chooser.js, which the live app uses today.
 // Ported from tests/send-chooser.test.mjs (all 10 tests) and the pure tests of tests/order-image.test.mjs that call the
 // chooser (12: the text road, the photo batch, settleOnce, afterShare).
+//
+// ⚠️ SINCE v1.145.0 THE DELIVERY HALF IS MISE 2'S OWN. The current app replaced its photo-or-text chooser with the send
+// editor (a392e0c4, 3f1beff3), and js/orders/send-chooser.js stopped exporting sendTexts, runPhotoBatch, settleOnce and
+// afterShare. Mise 2's port of the send editor is PR #557. So the delivery tests (second describe) run on the PORT only;
+// what still exists in both files (offerFor, sendOffers, digitsOf, mailto) is still run on both.
 //
 // send-chooser.ts is a PARTIAL port (it leaves out chooseAndSend, the screen), so parity.spec.ts does not pair it: the last
 // describe compares what IS ported with the js/ file itself. The words are handed to the port as `t`; the original reads
@@ -110,7 +115,13 @@ describe.each([
     expect(m.mailto('  ', 's', 'b').startsWith('mailto:?subject=')).toBe(true);
   });
 
-  // ── delivering ──────────────────────────────────────────────────────────────
+});
+
+// ── delivering ──────────────────────────────────────────────────────────────
+// The port only: the current app no longer has these (see the note at the top).
+describe('shared/ (TypeScript) — delivering, Mise 2\'s own since v1.145.0', () => {
+  setLanguage('en');
+  const m = ported;
 
   const JOBS = [
     { ids: ['a'], name: 'Alfa', text: 'ta', url: 'url-a' },
@@ -212,7 +223,11 @@ describe.each([
 describe('what is ported, compared with the original', () => {
   const port = ported as unknown as Record<string, unknown>;
   const original = legacyJs as unknown as Record<string, unknown>;
-  const shared = ['offerFor', 'sendOffers', 'sendTexts', 'settleOnce', 'afterShare', 'runPhotoBatch', 'digitsOf', 'mailto'];
+  // In both files, and still compared one against the other.
+  const shared = ['offerFor', 'sendOffers', 'digitsOf', 'mailto'];
+  // Mise 2's own: the current app replaced its chooser with the send editor in v1.145.0 (a392e0c4, 3f1beff3) and no
+  // longer exports these; Mise 2's port of that editor is PR #557. Their behaviour is tested above, on the port only.
+  const MISE2_OWN = ['sendTexts', 'settleOnce', 'afterShare', 'runPhotoBatch'];
   const LEFT_OUT = ['chooseAndSend'];
 
   test('the original still exports everything this port leaves out', () => {
@@ -221,7 +236,14 @@ describe('what is ported, compared with the original', () => {
 
   test('the port and the original together export exactly the ported names and the left-out ones', () => {
     expect(Object.keys(original).sort()).toStrictEqual([...shared, ...LEFT_OUT].sort());
-    expect(Object.keys(port).sort()).toStrictEqual([...shared].sort());
+    expect(Object.keys(port).sort()).toStrictEqual([...shared, ...MISE2_OWN].sort());
+  });
+
+  test('the delivery functions are Mise 2\'s own: the current app no longer exports them', () => {
+    for (const name of MISE2_OWN) {
+      expect(name in original, name).toBe(false);
+      expect(typeof port[name], name).toBe('function');
+    }
   });
 
   test('every function has the same name and the same number of required parameters', () => {

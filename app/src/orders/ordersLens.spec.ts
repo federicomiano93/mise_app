@@ -3,7 +3,7 @@
 // decision F6 — switched-off lines LAST instead of left out.
 
 import { describe, expect, it } from 'vitest';
-import { buildOrdersLens, orderingCount, supplierListGroups } from './ordersLens';
+import { buildOrdersLens, orderingCount, supplierGroups } from './ordersLens';
 import type { LensInput } from './ordersLens';
 import type { StoredDoc } from './ordersSource';
 
@@ -42,16 +42,48 @@ describe('ordersLens — the suppliers', () => {
     expect(lens.suppliers.map(s => s.id)).not.toContain('no-supplier');
   });
 
-  it('search and the «Ordering» filter cut the list; Favourites come first under their heading', () => {
+  it('counts the suppliers with something typed', () => {
+    expect(orderingCount(lensOf({ entries: { milk: { qty: 2, stock: 0 } } }))).toBe(1);
+  });
+});
+
+// The three groups of the redesign (16 Nov 2026, item 4).
+describe('ordersLens — the supplier groups', () => {
+  const none = new Set<string>();
+  const ids = (groups: ReturnType<typeof supplierGroups>) => groups.map(group => [group.key, group.suppliers.map(s => s.id)]);
+
+  it('puts «To order» first (due today, or with quantities), then Favourites, then the others — each supplier once', () => {
+    const lens = buildOrdersLens({
+      suppliers: [mill, dairy, { id: 'fish', name: 'Fish' }, { id: 'eggs', name: 'Eggs' }],
+      suppliersLoaded: true,
+      ingredients: [{ id: 'milk', name: 'Milk', supplierId: 'dairy' }],
+      entries: { milk: { qty: 2, stock: 0 } },
+      supplierOrder: [],
+      noSupplierName: 'No supplier',
+    });
+    // Dairy has quantities AND is a favourite: «To order» wins. Fish is due today. Mill is a favourite. Eggs is neither.
+    const groups = supplierGroups(lens, { query: '', favourites: ['mill', 'dairy'], due: new Set(['fish']), closedToday: none });
+    expect(ids(groups)).toEqual([['due', ['dairy', 'fish']], ['favourites', ['mill']], ['others', ['eggs']]]);
+    expect(groups.every(group => group.heading)).toBe(true);
+  });
+
+  it('takes a supplier closed today as «not needed» out of «To order», even with quantities typed', () => {
     const lens = lensOf({ entries: { milk: { qty: 2, stock: 0 } } });
-    expect(orderingCount(lens)).toBe(1);
-    expect(supplierListGroups(lens, { query: '', orderingOnly: true, favourites: [] })
-      .flatMap(g => g.suppliers.map(s => s.id))).toEqual(['dairy']);
-    expect(supplierListGroups(lens, { query: 'mìll', orderingOnly: false, favourites: [] })
-      .flatMap(g => g.suppliers.map(s => s.id))).toEqual(['mill']);
-    const groups = supplierListGroups(lens, { query: '', orderingOnly: false, favourites: ['mill'] });
-    expect(groups[0]?.headingKey).toBeTruthy();
-    expect(groups[0]?.suppliers.map(s => s.id)).toEqual(['mill']);
+    const groups = supplierGroups(lens, { query: '', favourites: [], due: new Set(['mill']), closedToday: new Set(['dairy', 'mill']) });
+    expect(groups.map(group => group.key)).toEqual(['others']);
+  });
+
+  it('leaves out an empty group, and draws no heading when only one group is left', () => {
+    const groups = supplierGroups(lensOf(), { query: '', favourites: [], due: none, closedToday: none });
+    expect(ids(groups)).toEqual([['others', ['dairy', 'mill', 'no-supplier']]]);
+    expect(groups[0]?.heading).toBe(false);
+    expect(supplierGroups(lensOf(), { query: '', favourites: ['mill'], due: none, closedToday: none }).map(group => group.key))
+      .toEqual(['favourites', 'others']);
+  });
+
+  it('searches before it groups, ignoring accents and capitals', () => {
+    const groups = supplierGroups(lensOf(), { query: 'mìll', favourites: [], due: none, closedToday: none });
+    expect(ids(groups)).toEqual([['others', ['mill']]]);
   });
 });
 

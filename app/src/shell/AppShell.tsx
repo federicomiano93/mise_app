@@ -11,7 +11,6 @@ import { AwayProvider } from './away/AwayContext';
 import { announceScreen } from '../telemetry/usage';
 import { AwayReminder } from './AwayReminder';
 import { AwayRefusalAlert } from './away/AwayRefusalAlert';
-import { OfflineBanner } from './OfflineBanner';
 import { MORE, moreIsCurrent, screenNameFor, sectionById, titleKeyFor } from './sections';
 import type { Section } from './sections';
 import { useOnline } from './useOnline';
@@ -24,7 +23,7 @@ import styles from './AppShell.module.css';
 const sectionOf = (pathname: string): string => pathname.split('/')[1] ?? '';
 
 // The frame around every screen: a rail on a tablet, a tab bar on a phone, a top bar on a
-// tablet, and the section itself in the middle.
+// tablet's Home, and the section itself in the middle.
 //
 // ⚠️ BOTH NAVIGATIONS ARE ALWAYS IN THE DOM; CSS MEDIA QUERIES DECIDE WHICH ONE SHOWS. No
 // script measures the width: a tablet turned from landscape to portrait, or a window resized,
@@ -46,6 +45,10 @@ function ShellFrame() {
   const contentRef = useRef<HTMLElement>(null);
   const { area, isOwned } = useScrollAreaState(contentRef);
   const lastPathname = useRef<string | null>(null);
+  // ⚠️ THE TOP BAR (venue, date, connection) IS THE HOME'S ONLY (Federico, 16 Nov 2026: «too many elements» on the lab tablet):
+  // every other screen gives its 60px to its own content, and says the connection only when it is lost, with the strip under
+  // its title (Page). The venue switch lives in the bar, so it stays reachable from the Home.
+  const topBar = sectionOf(pathname) === 'home';
 
   // One scroll area serves every section, so without this a long Orders list scrolled to the
   // bottom would open Recipes halfway down.
@@ -73,13 +76,12 @@ function ShellFrame() {
     // Lets React Aria components that take an `href` navigate through the router instead of
     // reloading the page.
     <AriaRouterProvider navigate={to => navigate(to)} useHref={useHref}>
-      <div className={styles.shell}>
+      <div className={styles.shell} data-topbar={topBar ? 'on' : 'off'}>
         <SkipLink target={contentRef} />
         <Rail />
         <div className={styles.main}>
-          <TopBar />
+          {topBar ? <TopBar /> : null}
           <main id="main" ref={contentRef} tabIndex={-1} className={styles.content}>
-            {/* The phone's «no connection» notice; the tablet's top bar says it with a dot. */}
             {/* ⚠️ The holiday reminder and refusal live HERE, not straight under the shell: each boundary is a <div>, and
                 a <div> under the shell's grid takes a cell — the rail and the screen sat low and jumped when the holiday
                 data landed (drive of 9 Nov 2026). Both only open dialogs, drawn over the page from <body>, so here they are
@@ -92,7 +94,6 @@ function ShellFrame() {
             <PartBoundary>
               <AwayRefusalAlert />
             </PartBoundary>
-            <OfflineBanner />
             {/* Keyed on the section, so moving to another one clears a failure. A section that
                 fails never got to print its own title, so the shell names it from the address:
                 the fallback then has an h1 and the tab title of the screen it replaces. */}

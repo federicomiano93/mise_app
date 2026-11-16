@@ -101,7 +101,33 @@ describe('the Export button on the recipe screen', () => {
     expect(model.rows.map(row => [row.name, row.value, row.unit, row.factor])).toEqual([
       ['Flour', 1000, 'g', 1], ['Water', 700, 'g', 1], ['Salt', 20, 'g', 1],
     ]);
-    expect(within(screen.getByRole('dialog')).getByRole('link', { name: 'Download' })).toHaveAttribute('download', 'Focaccia_di_prova_1720g.xlsx');
+    // The recipe's own title, as written (16 Nov 2026): no underscores, no batch in it.
+    expect(within(screen.getByRole('dialog')).getByRole('link', { name: 'Download' })).toHaveAttribute('download', 'Focaccia di prova.xlsx');
+  });
+
+  it('names a scaled batch\'s PDF after the recipe\'s title too, and hands the PDF the Total word', async () => {
+    window.localStorage.setItem('catalogue-scaled', JSON.stringify({ f: { target: 4000, ts: Date.now() - 60_000 } }));
+    const { user } = await open();
+    await user.click(main().getByRole('button', { name: 'Export' }));
+    await user.click(within(await screen.findByRole('dialog', { name: 'Export as' })).getByRole('button', { name: /^PDF/ }));
+    await screen.findByRole('dialog', { name: 'File ready' });
+    expect(builders.buildPdfBlob.mock.calls[0]?.[1]).toBe('Total');
+    const model = builders.buildPdfBlob.mock.calls[0]?.[0] as Model;
+    // The rows the table shows at 4000 g, and their sum.
+    // 2325.6 → 2330, 1627.9 → 1630, 46.5 → 47: 4007 g, and the 7 g no row can take within 1% go on the flour.
+    expect(model.rows.map(row => row.value)).toEqual([2323, 1630, 47]);
+    expect(model.totalG).toBe(4000);
+    expect(within(screen.getByRole('dialog')).getByRole('link', { name: 'Download' })).toHaveAttribute('download', 'Focaccia di prova.pdf');
+  });
+
+  it('keeps accents and apostrophes in the file name, and turns what a file system refuses into «-»', async () => {
+    const odd = recipe('o', { name: 'Crème dell’orto: «prova»/2' });
+    const { user } = renderRecipes('/recipes/o', { source: sourceWith([odd]) });
+    await screen.findByRole('heading', { level: 3, name: 'Ingredients' }, LOAD);
+    await user.click(main().getByRole('button', { name: 'Export' }));
+    await user.click(within(await screen.findByRole('dialog', { name: 'Export as' })).getByRole('button', { name: /^PDF/ }));
+    await screen.findByRole('dialog', { name: 'File ready' });
+    expect(within(screen.getByRole('dialog')).getByRole('link', { name: 'Download' })).toHaveAttribute('download', 'Crème dell’orto- «prova»-2.pdf');
   });
 
   it('⚠️ exports kg and l with the screen’s own number: «0,727 kg» in Italian, once a batch is applied', async () => {
@@ -117,6 +143,8 @@ describe('the Export button on the recipe screen', () => {
     await user.click(within(await screen.findByRole('dialog', { name: 'Esporta come' })).getByRole('button', { name: /^PDF/ }));
     await screen.findByRole('dialog', { name: 'File pronto' });
     const model = builders.buildPdfBlob.mock.calls[0]?.[0] as Model;
+    expect(builders.buildPdfBlob.mock.calls[0]?.[1]).toBe('Totale');
+    // 0.727 kg + 2.273 l: the rows shown, added up.
     expect(model.totalG).toBe(3000);
     expect(model.rows.map(row => [row.unit, row.decimals, row.text, row.factor])).toEqual([
       ['kg', 3, '0,727', 1000], ['l', 3, '2,273', 1000], ['pz', 0, '4', 0], ['q.b.', 0, null, 0],

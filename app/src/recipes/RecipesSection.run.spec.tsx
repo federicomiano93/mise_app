@@ -1,5 +1,6 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, screen, waitFor, within } from '@testing-library/react';
+import { scaleCatalogue } from '@mise/shared/catalogue-model';
 import { isBusy } from '../session/busy';
 import { LOAD, recipe, renderRecipes, sourceWith } from '../testing/renderRecipes';
 import { isRinging, stopAlarm } from './guidedAlarm';
@@ -162,6 +163,50 @@ describe('how a mix starts', () => {
     // The batch doubles the recipe: 600 g → 1200 g.
     const lines = inRun().getAllByRole('listitem').map(item => item.textContent);
     expect(lines).toEqual(['Flour1200g', 'Water760g']);
+  });
+
+  it('⚠️ started from «Calculate from this ingredient», every step shows the amounts the recipe screen shows', async () => {
+    // Invented, 999 g, every row in a step and no timers. From the salt at 25 g (×2.083…) the chosen row is exact and the others sit on
+    // their clean steps with NO correction of the total — numbers a run worked out from the total would not show.
+    const PANE = recipe('fr', {
+      name: 'Pane di prova',
+      ingredients: [
+        { label: 'Farina di prova', grams: 600, unit: 'g', rid: 'pf' },
+        { label: 'Acqua di prova', grams: 380, unit: 'g', rid: 'pa' },
+        { label: 'Sale di prova', grams: 12, unit: 'g', rid: 'ps' },
+        { label: 'Lievito di prova', grams: 7, unit: 'g', rid: 'pl' },
+      ],
+      steps: [
+        { text: 'Impasta farina e acqua', rows: ['pf', 'pa'], seconds: 0, speed: '1' },
+        { text: 'Aggiungi sale e lievito', rows: ['ps', 'pl'], seconds: 0, speed: '1' },
+      ],
+    });
+    const { user } = renderRecipes('/recipes/fr', { source: sourceWith([PANE]) });
+    await screen.findByRole('heading', { level: 3, name: 'Ingredients' }, LOAD);
+    const main = within(screen.getByRole('main'));
+    const table = main.getByRole('table', { name: 'Ingredients' });
+    await user.click(within(table).getByRole('button', { name: 'Sale di prova' }));
+    await user.click(within(screen.getByRole('menu')).getByRole('menuitem', { name: 'Calculate from this ingredient' }));
+    const ask = within(screen.getByRole('dialog'));
+    await user.type(ask.getByRole('spinbutton'), '25');
+    await user.click(ask.getByRole('button', { name: 'Calculate' }));
+    await main.findByText('Calculated from Sale di prova: 25 g');
+
+    // What the recipe screen shows, row by row (the Total row left out).
+    const shown = within(table).getAllByRole('row').slice(0, -1).map(row => Array.from(row.children).map(cell => cell.textContent).join(''));
+    expect(shown).toEqual(['Farina di prova1250g', 'Acqua di prova790g', 'Sale di prova25g', 'Lievito di prova15g']);
+    // The same batch worked out from its total would read otherwise: the run must not fall back on it.
+    const batches = JSON.parse(window.localStorage.getItem('catalogue-scaled') ?? '{}') as Record<string, { target: number }>;
+    expect(scaleCatalogue(PANE, batches['fr']!.target)).not.toEqual([1250, 790, 25, 15]);
+
+    await user.click(within(card()).getByRole('button', { name: 'Guided mixing' }));
+    await screen.findByRole('region', { name: 'Pane di prova' });
+    const inThisRun = () => within(screen.getByRole('region', { name: 'Pane di prova' }));
+    const lines = () => inThisRun().getAllByRole('listitem').map(item => item.textContent);
+    expect(lines()).toEqual(shown.slice(0, 2));
+    await user.click(inThisRun().getByRole('button', { name: 'Done' }));
+    await waitFor(() => { expect(inThisRun().getByText('Step 2 of 2')).toBeInTheDocument(); });
+    expect(lines()).toEqual(shown.slice(2));
   });
 
   it('with no batch applied the snapshot holds 0 and the amounts are the recipe’s own', async () => {

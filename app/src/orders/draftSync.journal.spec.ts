@@ -45,7 +45,7 @@ function device() {
   // One open of the page: the store's copy of the draft, rebuilt from what the sync returns.
   function openPage(doc: Doc | null = server()) {
     let timer: (() => void) | null = null;
-    const page = { entries: {} as Record<string, DraftEntry>, days: {} as Record<string, string>, cameBack: 0 };
+    const page = { entries: {} as Record<string, DraftEntry>, days: {} as Record<string, string>, cameBack: 0, told: 0 };
     const draw = (view: DraftView) => {
       page.entries = structuredClone({ ...view.entries }) as Record<string, DraftEntry>;
       page.days = { ...view.days };
@@ -60,6 +60,7 @@ function device() {
       setTimer: run => { timer = run; return 1; },
       clearTimer: () => { timer = null; },
       onResult: () => undefined,
+      onStateChange: () => { page.told += 1; },
       journal: {
         venue: VENUE,
         storage: () => storage,
@@ -79,6 +80,7 @@ function device() {
       get entries() { return page.entries; },
       get days() { return page.days; },
       get cameBack() { return page.cameBack; },
+      get told() { return page.told; },
       // A snapshot of drafts/current; `fromServer` when the SERVER sent it.
       snapshot(next: Doc | null, fromServer = false) { draw(sync.receive(structuredClone(next), fromServer)); },
       type(id: string, patch: DraftEntry, stamp?: string) {
@@ -791,3 +793,57 @@ describe('draft journal — a closed section no longer owns the note', () => {
   });
 });
 
+
+// The iPad order of 14 Nov 2026: a page iOS froze and threw away leaves its last quantity in this device's note only. The save
+// line (ordersStore saveState) reads hasUnsaved() and noteWaiting(): «saved» while the note still has to come back would be the
+// very lie of that evening, on the very device that typed it. Ported from tests/draft-save-state.test.mjs.
+describe('draftSync.journal — what the save line reads while the last page\u2019s note waits', () => {
+  it('a reopened page whose last quantity is only in the note is not saved until it came back and was sent', async () => {
+    const d = device();
+    d.openPage().type('flour', { qty: 3 }); // no pause: the page is gone before anything left it
+
+    let release: () => void = () => undefined;
+    d.history.gate = new Promise<void>(resolve => { release = resolve; });
+    const second = d.openPage();
+    expect(second.sync.noteWaiting()).toBe(true);
+    expect(second.sync.hasUnsaved()).toBe(false);
+    expect(second.told).toBeGreaterThan(0);
+
+    await second.answer(server());
+    expect(second.sync.noteWaiting()).toBe(true); // the server answered, the orders are still being read
+    release();
+    await settle();
+    await settle();
+    expect(second.entries.flour?.qty).toBe(3);
+    expect(second.sync.noteWaiting()).toBe(false);
+    expect(second.sync.hasUnsaved()).toBe(true); // back, and waiting for the pause
+
+    await second.pause();
+    expect(d.saves.at(-1)?.entries?.flour?.qty).toBe(3);
+    expect(second.sync.hasUnsaved()).toBe(false);
+  });
+
+  it('a note the server already holds settles to saved without a write', async () => {
+    const d = device();
+    d.openPage().type('flour', { qty: 3 });
+    const second = d.openPage(server({ flour: { qty: 3, stock: 0 } }));
+    expect(second.sync.noteWaiting()).toBe(true);
+    const before = second.told;
+    await second.answer(server({ flour: { qty: 3, stock: 0 } }));
+    expect(second.sync.noteWaiting()).toBe(false);
+    expect(second.sync.hasUnsaved()).toBe(false);
+    expect(second.told).toBeGreaterThan(before);
+    expect(d.saves).toHaveLength(0);
+  });
+
+  it('closing the section drops the note from memory and says so', async () => {
+    const d = device();
+    d.openPage().type('flour', { qty: 3 });
+    const second = d.openPage();
+    expect(second.sync.noteWaiting()).toBe(true);
+    const before = second.told;
+    second.sync.stopJournal();
+    expect(second.sync.noteWaiting()).toBe(false);
+    expect(second.told).toBeGreaterThan(before);
+  });
+});

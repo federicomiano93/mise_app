@@ -15,8 +15,8 @@
 // including whatever someone else is typing right now — is left alone.
 
 import {
-  saveDoc, patchDoc, watchDoc, watchServerAnswer, getRecentHistoryFromServer, clearFields, transactDoc,
-  replaceDoc, removeDoc, getDocOnce, currentBakery, COLLECTIONS,
+  saveDoc, patchDoc, watchDoc, watchPendingWrites, watchServerAnswer, getRecentHistoryFromServer, clearFields, transactDoc,
+  replaceDoc, removeDoc, getDocOnce, currentBakery, COLLECTIONS, saveFields, clearFieldsIf, saveFieldsIf,
 } from './firebase-orders.js';
 import {
   readJournal, writeJournal, dropNotedLine, orderedSince, historyLookBackDay, DRAFT_JOURNAL_MAX_AGE_MS,
@@ -37,6 +37,14 @@ let saveTimer = null;
 let waiting = false;       // a change is waiting for the debounce, so it can be flushed
 let leaveWaiters = [];     // sendBeforeLeaving's checks, run whenever a write is answered
 let reportSaveResult = null;   // (ok: boolean) => void — injected by orders-main.js
+// Who is told whether everything typed here has reached the server (onDraftSaveState), the last
+// thing they were told, and whether the first snapshot of the draft has arrived yet.
+const saveStateWatchers = new Set();
+let lastSaveState = '';
+let draftSeen = false;
+// Firestore's own word: this device still holds draft writes the server has not confirmed. Covers what
+// `flights` cannot see — a write a PREVIOUS page started and Firestore kept queued (watchPendingWrites).
+let queuedOnDevice = false;
 
 // The draft as this device last agreed on it with the server: what a snapshot
 // reported, plus what we have since sent and had accepted. What this phone claims
@@ -314,6 +322,7 @@ async function settleRestored() {
   if (expired || isEmpty(stillOurs(restored, known).entries)) {
     restored = null;
     saveJournal();
+    announceSaveState();
     return false;
   }
   let ordered = null;
@@ -351,6 +360,7 @@ async function settleRestored() {
     Object.entries(days).forEach(([id, day]) => { if (!(id in pending.days)) pending.days[id] = day; });
   }
   saveJournal();
+  announceSaveState();
   return anyLine;
 }
 
@@ -403,6 +413,7 @@ function armSave() {
   saveTimer = setTimeout(() => {
     if (waiting) autosave();
   }, SAVE_DELAY_MS);
+  announceSaveState();
 }
 
 // Autosave the draft a short moment after the last change.
@@ -455,7 +466,10 @@ function sendPending() {
 
   // Nothing this device changed — so nothing to say. Staying quiet here also stops
   // an incoming snapshot from bouncing straight back as a write.
-  if (isEmpty(sent.entries) && isEmpty(sent.days)) return Promise.resolve();
+  if (isEmpty(sent.entries) && isEmpty(sent.days)) {
+    announceSaveState();
+    return Promise.resolve();
+  }
 
   const payload = { updatedAt: new Date().toISOString() };
   if (!isEmpty(sent.entries)) payload.entries = sent.entries;
@@ -465,6 +479,7 @@ function sendPending() {
   // A leaver waiting for the server (sendBeforeLeaving) asks again once this write's answer has
   // been fully handled, so after the baseline and the claims below, never before.
   const land = () => { flights.splice(flights.indexOf(sent), 1); queueMicrotask(wakeLeavers); };
+  announceSaveState();
 
   // setDoc(merge) with a PARTIAL map: Firestore merges key by key, so the rows and
   // fields not mentioned here keep whatever anyone else has put there. It also still
@@ -504,6 +519,7 @@ function sendPending() {
       if (!dayInAir(id) && pending.days[id] === day) delete pending.days[id];
     });
     saveJournal();
+    announceSaveState();
     return result;
   }, err => {
     land();
@@ -535,6 +551,7 @@ function sendPending() {
     known = { entries, days };
     refused.push(sent);
     saveJournal();
+    announceSaveState();
     throw err;
   });
 }
@@ -592,6 +609,53 @@ export function sendBeforeLeaving(ms = 8000) {
   });
 }
 
+// ── Sent at once, and saying so (the order typed on the iPad, 14 Nov 2026) ─────────────────────────
+//
+// ⚠️ A QUANTITY CAN SIT IN THE 800 ms PAUSE WHEN THE PAGE STOPS. The owner typed an order on an iPad and
+// placed it from his phone a moment later: one product never reached the supplier. iOS freezes a hidden
+// page, and `flushDraftWhenHidden` is not always given the time to send, so the last change stayed on
+// the iPad, and neither screen said so. Two answers, both agreed with the owner:
+//   • leaving a quantity or stock box (and closing a supplier's screen, switching the list) sends what is
+//     waiting AT ONCE: at most one write per box left, never one per keystroke — the pause stays for typing;
+//   • every screen where an order is typed says whether everything typed HERE has reached the server.
+// Through autosave, so a refusal shows the same save error as every other one.
+export function sendWaitingDraft() {
+  if (!waiting) return Promise.resolve();
+  return autosave();
+}
+
+// «Saved» only when nothing typed here is waiting for the pause, in the air, or still claimed (a refused
+// write hands its fields back to `pending`, so it stays «not sent»). A snapshot can never make it «saved»
+// while a write is in the air: it may be Firestore showing this phone's own write before the server
+// answers. `ready` stays false until the first snapshot of the draft has arrived.
+// ⚠️ AND NOTHING THE LAST PAGE LEFT IS STILL WAITING TO COME BACK (`restored`): a page iOS froze and then
+// discarded leaves its last quantity in this device's note only, and it is sent once settleRestored has
+// the server's word — a second or two, every 30 s on a weak line. «Saved» meanwhile would be the very
+// lie of 14 Nov, on the very device that typed it.
+const noteWaiting = () => Boolean(restored) && (!isEmpty(restored.entries) || !isEmpty(restored.days));
+function currentSaveState() {
+  return { ready: draftSeen, saved: settled() && !unsent() && !noteWaiting() && !queuedOnDevice };
+}
+
+function announceSaveState() {
+  const state = currentSaveState();
+  const key = `${state.ready}/${state.saved}`;
+  if (key === lastSaveState) return;
+  lastSaveState = key;
+  // ⚠️ A watcher's mistake must never reach the save: this runs inside the write's own answer.
+  saveStateWatchers.forEach(watcher => {
+    try { watcher({ ...state }); } catch (err) { console.error('The save state could not be shown:', err); }
+  });
+}
+
+// Tell `cb` the save state now and on every change ({ ready, saved }). Returns a way to stop.
+export function onDraftSaveState(cb) {
+  saveStateWatchers.add(cb);
+  // Guarded like every later call: Orders subscribes in the middle of starting up.
+  try { cb(currentSaveState()); } catch (err) { console.error('The save state could not be shown:', err); }
+  return () => { saveStateWatchers.delete(cb); };
+}
+
 // ⚠️ THE PAGE GOING OUT OF SIGHT IS THE MOMENT TO SEND WHAT IS WAITING. Switching app or locking the
 // screen hides the page while it is still alive, with time for the write to reach the browser's own
 // database and for the snapshot that clears the note. NOT when the page is going away for good
@@ -607,7 +671,7 @@ export function flushDraftWhenHidden(doc = globalThis.document, win = globalThis
   });
 }
 
-// Real-time subscription. onChange receives { entries, days, skipped, updatedAt, exists }.
+// Real-time subscription. onChange receives { entries, days, skipped, awaitingSent, updatedAt, exists }.
 // onError is passed straight through: losing this stream means the order stops
 // syncing between phones, which nothing on screen would otherwise reveal.
 export function watchDraft(onChange, onError) {
@@ -616,6 +680,8 @@ export function watchDraft(onChange, onError) {
   // The suppliers closed as «non ordinato» (`skipped`), as the server last said. Kept here so a
   // repaint from the restored note (which carries only rows and days) never blanks them.
   let skipped = {};
+  // The «did it go?» questions (`awaitingSent`, awaiting-sent.js), kept for the same reason.
+  let awaitingSent = {};
   const show = (doc, cameBack = false) => {
     // …but anything typed here and not yet written goes back ON TOP, field by
     // field, or the snapshot would erase it mid-keystroke. See `pending`.
@@ -628,6 +694,7 @@ export function watchDraft(onChange, onError) {
       entries,
       days: { ...(doc?.days || {}), ...pending.days },
       skipped,
+      awaitingSent,
       updatedAt,
       exists,
       cameBack,
@@ -641,6 +708,7 @@ export function watchDraft(onChange, onError) {
     if (!note) return;
     journalAt = note.at;
     restored = note;
+    announceSaveState();
     const settle = () => {
       settleRestored().then(cameBack => {
         if (cameBack === null) setTimeout(settle, ORDERS_RETRY_MS);
@@ -652,6 +720,13 @@ export function watchDraft(onChange, onError) {
     // An error simply leaves the note for the next open.
     watchServerAnswer(COLLECTIONS.drafts, DRAFT_ID, settle);
   };
+  // ⚠️ A WRITE THE LAST PAGE STARTED CAN STILL BE QUEUED ON THIS DEVICE: the note drops a line as soon as
+  // a snapshot shows it, but the server may not have it yet (iOS froze the page right after the write
+  // began). Until Firestore says nothing is pending, this device is not «saved».
+  watchPendingWrites(COLLECTIONS.drafts, DRAFT_ID, pending => {
+    queuedOnDevice = Boolean(pending);
+    announceSaveState();
+  });
   return watchDoc(COLLECTIONS.drafts, DRAFT_ID, doc => {
     // The server's word on the draft becomes the baseline the next autosave
     // measures itself against, so a row someone else changed is not "changed
@@ -659,10 +734,13 @@ export function watchDraft(onChange, onError) {
     known = { entries: detach(doc?.entries), days: { ...(doc?.days || {}) } };
     releaseConfirmed();
     skipped = { ...(doc?.skipped || {}) };
+    awaitingSent = { ...(doc?.awaitingSent || {}) };
     updatedAt = doc?.updatedAt || '';
     exists = Boolean(doc);
     saveJournal();
     show(doc);
+    draftSeen = true;
+    announceSaveState();
   }, onError);
 }
 
@@ -768,6 +846,7 @@ function forgetKnown(paths) {
     }
   });
   saveJournal();
+  announceSaveState();
 }
 
 // ⚠️ WHEN A CLEAR STARTS, NOT WHEN IT LANDS: on a weak connection the server's first answer can come
@@ -781,6 +860,7 @@ function forgetRestoredPaths(paths) {
     if (root === 'days' && id) delete restored.days[id];
   });
   saveJournal();
+  announceSaveState();
 }
 
 // Take ONE ingredient's row out of the shared draft — called when the ingredient is deleted.
@@ -892,6 +972,60 @@ export function setSupplierSkipped(supplierId, day) {
 // only offers «Riapri» over a key it has seen, so the document is there.
 export function clearSupplierSkipped(supplierId) {
   return clearFields(COLLECTIONS.drafts, DRAFT_ID, [`skipped.${supplierId}`]);
+}
+
+// ── «Ordine a X inviato alle 10:42: è partito?» (owner, 14 Nov 2026) ─────────────────
+// `awaitingSent: { supplierId: { at, date, quantities, units } }` — what the send editor handed
+// to WhatsApp, waiting for somebody, on ANY device, to say whether it really went. The rules of
+// the question are awaiting-sent.js; these are its three writes. Like `skipped`, none of them
+// goes through the autosave: the claims machinery above never sees this key.
+
+// Ask. ⚠️ THE SUPPLIER'S VALUE IS WRITTEN WHOLE (saveFields → mergeFields), never merged: a
+// second send to the same supplier must not keep a line of the first one's quantities. Not
+// awaited by the screen for the same reason as setSupplierSkipped: Firestore shows it in this
+// phone's own snapshot at once, and sends it when it can.
+export function setAwaitingSent(supplierId, value) {
+  return saveFields(COLLECTIONS.drafts, DRAFT_ID,
+    { awaitingSent: { [supplierId]: value } }, [`awaitingSent.${supplierId}`]);
+}
+
+// «No» (or a question nobody can answer any more): only that supplier's key goes.
+export function clearAwaitingSent(supplierId) {
+  return clearFields(COLLECTIONS.drafts, DRAFT_ID, [`awaitingSent.${supplierId}`]);
+}
+
+// «Sì»: take the question before recording, in ONE transaction, so two devices answering at
+// the same moment record once — the one whose transaction removed the key. `decide` is
+// awaiting-sent.js claimDecision. Resolves true only for the winner.
+export function claimAwaitingSent(supplierId, at, decide) {
+  return clearFieldsIf(COLLECTIONS.drafts, DRAFT_ID, [`awaitingSent.${supplierId}`],
+    data => decide(data, supplierId, at));
+}
+
+// «Sì» failed to record: put the question back — but ONLY if no question stands for that supplier
+// now. Another device may have sent the same supplier again meanwhile; its newer question must
+// not be overwritten by this older one. `decide` is awaiting-sent.js restoreDecision. Resolves
+// true when the question was put back.
+export function restoreAwaitingSentIfAbsent(supplierId, value, decide) {
+  return saveFieldsIf(COLLECTIONS.drafts, DRAFT_ID, { awaitingSent: { [supplierId]: value } },
+    [`awaitingSent.${supplierId}`], data => decide(data, supplierId));
+}
+
+// After «Sì» was recorded: remove the lines that went (awaiting-sent.js linesToClear chooses
+// them) and, when nothing of this supplier is left, its day stamp. The same write as
+// clearSupplier, for a chosen set of lines: whatever was typed since the send stays.
+export function clearSentLines(supplierId, ids, { clearDay = false } = {}) {
+  const paths = (ids || []).map(id => `entries.${id}`);
+  if (clearDay) paths.push(`days.${supplierId}`);
+  if (!paths.length) return Promise.resolve();
+  forgetRestoredPaths(paths);
+
+  return clearFields(COLLECTIONS.drafts, DRAFT_ID, paths, {
+    updatedAt: new Date().toISOString(),
+  }).then(result => {
+    forgetKnown(paths);
+    return result;
+  });
 }
 
 // Rewrite a history record whole (the History editor). Not a merge: the operator

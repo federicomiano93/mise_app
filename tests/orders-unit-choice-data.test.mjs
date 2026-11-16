@@ -257,8 +257,10 @@ test('⚠️ the chooser runs the check once the road is known, only for supplie
   const chooser = readFileSync(new URL('../js/orders/send-chooser.js', import.meta.url), 'utf8');
   const take = chooser.slice(chooser.indexOf('function take('));
   assert.match(take, /beforeSend && routeSendsToSupplier\(offer\.route\)/);
-  assert.ok(take.indexOf('beforeSend(rows)') < take.indexOf('window.open('), 'asked before any window opens');
-  assert.doesNotMatch(take.slice(0, take.indexOf('window.open(')), /await /, 'no await before the window opens');
+  // Since 14 Nov 2026 the window opens from the send editor's own «Invia» tap (send-editor.js,
+  // pinned in tests/send-editor.test.mjs): the check must still come first, with nothing awaited.
+  assert.ok(take.indexOf('beforeSend(rows)') < take.indexOf('viaEditor('), 'asked before the editor opens');
+  assert.doesNotMatch(take.slice(0, take.indexOf('viaEditor(')), /await /, 'no await before the editor opens');
   const preview = readFileSync(new URL('../js/orders/preview.js', import.meta.url), 'utf8');
   assert.match(preview, /beforeSend: callbacks\.beforeSend/);
   assert.doesNotMatch(preview, /await callbacks\.beforeSend/);

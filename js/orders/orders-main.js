@@ -9,7 +9,7 @@
 // on, so an order left unmarked overnight is filed under the day it was written,
 // not under today.
 
-import { t, joinList, onLanguageChange } from '../i18n.js';
+import { t, joinList, onLanguageChange, localeTag } from '../i18n.js';
 import { supplierLabel } from '../supplier-label.js';
 // ⚠️ createDoc / removeDoc / saveIngredientWithPrice / getPriceHistory LEFT WITH THE
 // RECORDS: this page writes only the order itself (draft, history), and js/orders/registry-main.js
@@ -41,10 +41,16 @@ import {
   scheduleDraftSave, saveDraftNow, flushDraftSave, sendBeforeLeaving, flushDraftWhenHidden, watchDraft, archiveSupplier, clearSupplier,
   clearQuantities, saveHistoryRecord, deleteHistoryRecord, setDraftSaveReporter,
   confirmDelivery, resolveMissing, dropDeletedIngredientFromDraft, freezeUnitInDraft,
-  setSupplierSkipped, clearSupplierSkipped,
+  setSupplierSkipped, clearSupplierSkipped, sendWaitingDraft, onDraftSaveState,
+  setAwaitingSent, clearAwaitingSent, claimAwaitingSent, clearSentLines, restoreAwaitingSentIfAbsent,
 } from './draft.js';
+import {
+  awaitingEntry, awaitingList, isAwaiting, claimDecision, linesToClear, supplierKeepsLines, answerAwaiting,
+  draftQuantities, shouldAskBeforeRecording, restoreDecision, putQuestionBack,
+} from './awaiting-sent.js';
+import { saveStateView, paintSaveState } from './save-state-view.js';
 import { buildSendScreen } from './preview.js';
-import { buildSupplierPicker } from './supplier-picker.js';
+import { buildSupplierPicker, ignoreWhilePending } from './supplier-picker.js';
 import { renderHistory as renderHistoryView } from './history.js';
 import {
   renderDeliveries, renderReorderButton, repaintReorderButton, renderOwedBanner,
@@ -74,7 +80,7 @@ import {
   nextDeliveryAfter,
 } from './order-day.js';
 import {
-  buildOrderMessage, whatsappUrl, itemsFromQuantities, indexById, fallbackSupplierName,
+  buildOrderMessage, whatsappUrl, itemsFromQuantities, indexById, fallbackSupplierName, orderedItems,
 } from './order-text.js';
 import { liveHistoryStart, mergeHistory, createOlderLoader } from './history-window.js';
 import {
@@ -84,7 +90,7 @@ import {
 import { storedUnitFor, entryUnit, isDefaultUnit } from '../order-unit.js';
 import { todayOrders, dueTodayIds, pendingSuppliers, closeOffer } from './reminders.js';
 import { kioskSectionsFromData } from './kiosk-lines.js';
-import { renderTodayOrders, renderPending } from './reminder-view.js';
+import { renderTodayOrders, renderPending, renderAwaiting, refocusAwaiting } from './reminder-view.js';
 import { resolveSuppliers, orderSuppliers, NO_SUPPLIER_ID } from './no-supplier.js';
 import { overrideSignature } from './line-supplier.js';
 import { memoLast } from './memo.js';
@@ -138,6 +144,7 @@ const state = {
   draftUpdatedAt: '',           // fallback day for a draft written before `days` existed
   skipped: {},                  // { supplierId: 'YYYY-MM-DD' } — closed as «non ordinato» that day (reminders.js skippedOn)
   pending: [],                  // orders typed on an earlier day and never placed
+  awaiting: {},                 // { supplierId: { at, date, quantities, units } } — sent, «did it go?» (awaiting-sent.js)
   openSupplier: null,           // the supplier whose own screen is open, or null
   viewingSupplier: null,        // the supplier whose read-only product list is open
   summarySupplier: null,        // the supplier whose read-only order summary is open
@@ -177,8 +184,21 @@ let itemsView = null;           // the open read-only product list, or null
 let summaryView = null;         // the open read-only order summary, or null (tablet)
 let requestListView = null;     // the list of sent order lists, or null
 let openRequestId = null;       // the sent list being worked through, or null
+let rosterByUid = null;         // uid → roster row, for the senders' names (ensureRosterNames)
+let rosterAsked = false;
 let requestView = null;         // that list's own screen, or null
 const placing = new Set();      // suppliers whose order is being written right now
+// «Did it go?» (awaiting-sent.js). The questions THIS device sent, asked as a dialog when the page
+// comes back: supplierId → { at, seen } (`seen` once the draft has shown the key, so its later
+// absence means somebody answered). The questions it could not share (the write was refused) stay
+// here only, in localAwaiting, and are answered without a claim. answeringAwaiting is the busy
+// guard: one answer per supplier at a time on this device.
+const askHere = new Map();
+const localAwaiting = new Map();
+const answeringAwaiting = new Set();
+const askingBeforeRecording = new Set();   // «Sì» is waiting on «It may already be recorded»
+let askHereWanted = false;      // the page is back after a send: ask the questions above
+let askingHere = false;         // a «did it go?» dialog is open
 
 // Replace state.entries contents WITHOUT changing the reference (row closures keep working).
 function setEntries(next) {
@@ -823,6 +843,8 @@ function openSupplier(supplierId) {
 }
 
 function closeSupplier() {
+  // A quantity typed a moment ago goes now, not after the pause (draft.js sendWaitingDraft).
+  sendWaitingDraft();
   // ⚠️ A summary opened OVER this screen goes with it, whatever closed the screen (Back, order
   // placed, quantities cleared, supplier deactivated): left behind it would sit over the list
   // with a flag that says «over a supplier screen» when none exists. Closed first, while the
@@ -836,6 +858,7 @@ function closeSupplier() {
   openedFromRecipe = null;
   detailView?.overlay.remove();
   detailView = null;
+  paintDraftSaveState();        // the page's own line speaks again
   if (id) globalThis.window?.dispatchEvent(new CustomEvent('mise:screen', { detail: '' }));
   // closeSummary() just focused the bar's button, which went with the screen: hand focus to the
   // list row instead, or a keyboard user is dropped on the page body (leaveSupplier does the same).
@@ -1057,6 +1080,8 @@ function renderOpenSupplier() {
     // hidden «Suppliers & ingredients» from the staff, a door to the same card from Orders
     // would quietly undo the switch. Asked on every repaint, so it follows the switch live.
     onAddIngredient: mayAddIngredient() ? () => openAddIngredient(supplier.id) : null,
+    // «Invia» in the header: the send editor for this supplier's rows only.
+    onSend: sendOneSupplierOnce,
     dayInfo: () => dayInfoFor(supplier),
   };
 
@@ -1098,6 +1123,7 @@ function renderOpenSupplier() {
   // Into the screen that now covers everything, on its Back — as the summary sheet does.
   // Only on a NEW screen: a repaint (above) must never pull focus out of a box mid-typing.
   built.overlay.querySelector('.orders-icon-btn')?.focus({ preventScroll: true });
+  paintDraftSaveState();
   paintMoney();
 }
 
@@ -1427,6 +1453,8 @@ function setView(view) {
   // show everything, so leaving for them drops it rather than hiding it somewhere
   // invisible and surprising the operator with it on the way back.
   if (view === 'suppliers') state.filterIds = null;
+  // The focused box is about to be removed, which may not count as leaving it: send what waits now.
+  sendWaitingDraft();
   dropListViews();              // force a remount; both queries are kept in state
   syncViewButtons();
   render();
@@ -1869,10 +1897,11 @@ function openSendScreen() {
     onBack: () => { overlay.remove(); globalThis.window?.dispatchEvent(new CustomEvent('mise:screen', { detail: '' })); },
     // Asked by the chooser once the road is known, and only for roads that reach the supplier.
     beforeSend: rows => refuseOnUnitConflict(rows.map(r => ({ supplierId: r.id, date: dayForSupplier(r.id) }))),
-    onSent: supplierIds => {
+    // Handed over: every device now asks «did it go?» about exactly what went (awaiting-sent.js).
+    onSent: (supplierIds, { handOff, rows = [] } = {}) => {
       overlay.remove();
       globalThis.window?.dispatchEvent(new CustomEvent('mise:screen', { detail: '' }));
-      offerToRecordSent(supplierIds);
+      waitForAnswer(rows.map(r => ({ supplierId: r.id, quantities: r.quantities, units: r.units })), { handOff });
     },
     // The same ticked suppliers, sent inside the app instead of to a chat.
     onSendToManager: supplierIds => {
@@ -1883,6 +1912,250 @@ function openSendScreen() {
   }, messageFormatOption());
   document.body.appendChild(overlay);
   globalThis.window?.dispatchEvent(new CustomEvent('mise:screen', { detail: 'send' }));
+}
+
+// ── «Invia» on a supplier's own screen (owner, 14 Nov 2026) ───────────────────
+// The header's send, for this ONE supplier: no picker (there is nothing to pick), the road
+// chooser unchanged, then the editor, then «did it go?» on every device. The rows are the send
+// screen's own (orderedItems over the same lens), and so are the quantities that wait for the
+// answer (draftQuantities, read at the same moment as the message).
+function sendOneSupplier(supplierId) {
+  const supplier = findOrderSupplier(supplierId);
+  if (!supplier) return false;
+  const lens = ingredientsBySupplier()[supplierId] || [];
+  const items = orderedItems(lens, state.entries);
+  if (!items.length) return false;
+  const row = { id: supplierId, name: supplierLabel(supplier), items, ...draftQuantities(lens, state.entries) };
+  return chooseAndSend({
+    rows: [row],
+    settings: ordersConfig.sendSettings,
+    canManage: canManageHere(),
+    suppliers: [supplier],
+    locationName: currentSession().name,
+    language: outputLanguage(currentSession().location),
+    grouped: GROUPED_BY_DEFAULT,
+    // Same unit-clash check as the send screen.
+    beforeSend: rows => refuseOnUnitConflict(rows.map(r => ({ supplierId: r.id, date: dayForSupplier(r.id) }))),
+    onSendToManager: ids => sendListToManagers(ids),
+    onSent: (ids, { handOff } = {}) => {
+      if (ids.includes(supplierId)) waitForAnswer([{ supplierId, quantities: row.quantities, units: row.units }], { handOff });
+    },
+  });
+}
+
+// ⚠️ ONE SEND AT A TIME, like every other send door: a second tap (or Enter) on «Invia» while the
+// road chooser or the editor is still up must not open a second one on top of the first (two
+// editors would answer for the same rows and ask «did it go?» twice). Shut on the copy of the
+// list too (whenLive): its rows are not the draft's yet.
+const sendOneSupplierOnce = whenLive(ignoreWhilePending(sendOneSupplier));
+
+// ── «Ordine a X inviato alle 10:42: è partito?» (awaiting-sent.js) ────────────
+// Handed to the share sheet or a chat is not «gone»: the question is written into the shared
+// draft, so EVERY device shows it (the banner) and whoever answers first records it — or not.
+// sent: [{ supplierId, quantities, units, date? }] — exactly what went; handOff: 'share' when the
+// share sheet answered (the person is back on this page already), 'text' when a window opened
+// (the page is about to leave: the dialog waits for it to come back).
+function waitForAnswer(sent, { handOff = 'text' } = {}) {
+  const at = new Date().toISOString();
+  sent.forEach(({ supplierId, quantities, units, date, draft }) => {
+    const entry = awaitingEntry({ at, date: date || dayForSupplier(supplierId), quantities, units, draft });
+    if (!entry) return;
+    askHere.set(supplierId, { at: entry.at, seen: false });
+    localAwaiting.delete(supplierId);
+    setAwaitingSent(supplierId, entry).catch(err => {
+      // Refused (rules not yet deployed, a revoked session): the other devices will never see it,
+      // so the question stays HERE — an order handed over must never be left with nobody asking.
+      console.error('Sharing the «did it go?» question failed:', err);
+      localAwaiting.set(supplierId, entry);
+      askHere.set(supplierId, { at: entry.at, seen: true });
+      const supplier = findOrderSupplier(supplierId);
+      setStatus(t('orders.awaiting.notShared', { supplier: supplier ? supplierLabel(supplier) : '' }), 'warn', 10000);
+      scheduleRender('reminders');
+      maybeAskHere();
+    });
+  });
+  if (handOff === 'share' && globalThis.document?.visibilityState === 'visible') askHereWanted = true;
+  scheduleRender('reminders');
+  maybeAskHere();
+}
+
+// A question the recording could not put back (offline: transactions are never queued) stays on
+// THIS device, exactly like one that could not be shared, and goes back to the shared draft when
+// the network returns — unless a newer send already stands there, which then keeps its own.
+const questionsToRetry = new Map();
+function putQuestionHere(supplierId, entry) {
+  return putQuestionBack(supplierId, entry, {
+    write: (id, e) => restoreAwaitingSentIfAbsent(id, e, restoreDecision),
+    keepHere: (id, e, err) => {
+      console.error('Putting the question back failed:', err);
+      localAwaiting.set(id, e);
+      askHere.set(id, { at: e.at, seen: true });
+      questionsToRetry.set(id, e);
+      if (questionsToRetry.size === 1) window.addEventListener('online', retryQuestions);
+      const supplier = findOrderSupplier(id);
+      setStatus(t('orders.awaiting.notShared', { supplier: supplier ? supplierLabel(supplier) : '' }), 'warn', 10000);
+      scheduleRender('reminders');
+    },
+  });
+}
+
+async function retryQuestions() {
+  for (const [id, e] of [...questionsToRetry]) {
+    // Answered here meanwhile (the local copy went): nothing to put back.
+    if (localAwaiting.get(id) !== e) { questionsToRetry.delete(id); continue; }
+    try {
+      await restoreAwaitingSentIfAbsent(id, e, restoreDecision);
+    } catch { continue; }   // still no network: the next `online` tries again
+    questionsToRetry.delete(id);
+    // Shared now (or a newer send stands there): the shared question is the one to show.
+    localAwaiting.delete(id);
+    scheduleRender('reminders');
+  }
+  if (!questionsToRetry.size) window.removeEventListener('online', retryQuestions);
+}
+
+// The questions as the screen shows them: the draft's, plus any this device could not share.
+function currentAwaiting() {
+  const all = { ...(state.awaiting || {}) };
+  localAwaiting.forEach((entry, id) => { if (!isAwaiting(all[id])) all[id] = entry; });
+  return all;
+}
+
+// «Ordine a Bruno inviato alle 10:42: è partito?» — with the day too when it was not today.
+function awaitingQuestion(supplier, entry) {
+  const when = new Date(entry.at);
+  const valid = !Number.isNaN(when.getTime());
+  const time = valid ? new Intl.DateTimeFormat(localeTag(), { hour: '2-digit', minute: '2-digit' }).format(when) : '';
+  const day = valid ? localDayOf(entry.at) : '';
+  return day && day !== todayISO()
+    ? t('orders.awaiting.questionDay', { supplier: supplierLabel(supplier), when: dayWhen(day), time })
+    : t('orders.awaiting.question', { supplier: supplierLabel(supplier), time });
+}
+
+// A draft snapshot arrived: a question this device sent is «seen» once the draft holds it, and
+// forgotten once the draft no longer does (somebody answered) or holds a newer send.
+function noteAwaitingSnapshot() {
+  const all = currentAwaiting();
+  askHere.forEach((mine, id) => {
+    const live = all[id];
+    if (isAwaiting(live) && live.at === mine.at) { mine.seen = true; return; }
+    if (mine.seen || (isAwaiting(live) && live.at !== mine.at)) askHere.delete(id);
+  });
+  maybeAskHere();
+}
+
+// On the device that sent it, once the page is back: the same question as a dialog, one supplier
+// after the other. Escape leaves it to the banner.
+async function maybeAskHere() {
+  if (!askHereWanted || askingHere || globalThis.document?.visibilityState !== 'visible') return;
+  // Never over another dialog (a send editor still going through its suppliers, a confirmation):
+  // two stacked dialogs share one Escape. The next snapshot or the page coming back asks again,
+  // and the banner asks meanwhile.
+  if (globalThis.document?.querySelector('.app-dialog-backdrop')) return;
+  const all = currentAwaiting();
+  const next = [...askHere].find(([id, mine]) => mine.seen && isAwaiting(all[id]) && all[id].at === mine.at);
+  if (!next) { if (![...askHere.values()].some(m => !m.seen)) askHereWanted = false; return; }
+  const [supplierId] = next;
+  askHere.delete(supplierId);
+  const supplier = findOrderSupplier(supplierId);
+  if (!supplier) { maybeAskHere(); return; }
+  askingHere = true;
+  try {
+    const answer = await sentCheckDialog({
+      title: awaitingQuestion(supplier, all[supplierId]),
+      yesLabel: t('orders.awaiting.yes'),
+      sendNowLabel: t('orders.awaiting.no'),
+      cancelLabel: '',
+    });
+    if (answer === 'yes') await answerAwaitingSent(supplierId, 'yes', all[supplierId].at);
+    else if (answer === 'sendNow') await answerAwaitingSent(supplierId, 'no', all[supplierId].at);
+  } finally {
+    askingHere = false;
+  }
+  maybeAskHere();
+}
+
+// «Sì» / «No», from the banner or the dialog, on any device. `at` is the send the question was
+// ABOUT: if another device has sent this supplier again since, this answer is not about that
+// newer send, and nothing is recorded or removed.
+async function answerAwaitingSent(supplierId, answer, at) {
+  const local = localAwaiting.get(supplierId) || null;
+  const entry = local || state.awaiting?.[supplierId];
+  if (!isAwaiting(entry) || (at && entry.at !== at)) {
+    setStatus(t('orders.awaiting.elsewhere'), 'ok', 4000);
+    scheduleRender('reminders');
+    return;
+  }
+  const supplier = findOrderSupplier(supplierId);
+  // A transaction and an archive both need the network (placeOrder says the same).
+  if (answer === 'yes' && !navigator.onLine) {
+    setStatus(t('orders.youReOfflineReconnect'), 'error', 6000);
+    return;
+  }
+  // ⚠️ «Sì» WHEN HISTORY ALREADY HOLDS THIS ORDER (that supplier, that day, every stored line at
+  // least as large): another device (one still on an older version records «Ordine fatto» without
+  // knowing of this question) has probably recorded it, and recording again doubles it in History.
+  // Ask first; with no such record, record as always. «Non registrare»
+  // goes the very same road as «No» (the key goes on every device). A dialog already open (or
+  // this one, asked a second time by a second tap) would answer false at once and drop the
+  // question unasked, so nothing is decided then.
+  let notRecorded = false;
+  const filed = allHistory().find(h => h && h.id === historyDocId(entry.date || dayForSupplier(supplierId), supplierId));
+  if (answer === 'yes' && shouldAskBeforeRecording(entry, filed)) {
+    if (askingBeforeRecording.has(supplierId) || globalThis.document?.querySelector('.app-dialog-backdrop')) return;
+    askingBeforeRecording.add(supplierId);
+    // The dialog gives focus back to the button that opened it, which the banner may have rebuilt
+    // meanwhile (detached: focus would fall to <body>): put it on the live one afterwards.
+    const tapped = globalThis.document?.activeElement?.dataset;
+    const tappedAnswer = tapped?.awaitingSupplier === supplierId ? tapped.awaitingAnswer : null;
+    let record;
+    try {
+      record = await confirmDialog({
+        title: t('orders.awaiting.maybeRecorded.title'),
+        message: t('orders.awaiting.maybeRecorded.body', { supplier: supplier ? supplierLabel(supplier) : '' }),
+        okLabel: t('orders.awaiting.maybeRecorded.yes'),
+        cancelLabel: t('orders.awaiting.maybeRecorded.no'),
+      });
+    } finally {
+      askingBeforeRecording.delete(supplierId);
+      if (tappedAnswer) refocusAwaiting(document.getElementById('orders-awaiting'), { supplier: supplierId, answer: tappedAnswer });
+    }
+    // Answered on another device while the dialog was open.
+    if (!local && state.awaiting?.[supplierId]?.at !== entry.at) {
+      setStatus(t('orders.awaiting.elsewhere'), 'ok', 4000);
+      scheduleRender('reminders');
+      return;
+    }
+    if (!record) { answer = 'no'; notRecorded = true; }
+  }
+  askHere.delete(supplierId);
+  const answering = answerAwaiting(answer, supplierId, entry, {
+    busy: answeringAwaiting,
+    claim: (id, at) => claimAwaitingSent(id, at, claimDecision),
+    // ⚠️ THE STORED QUANTITIES, on the day they were for, without a second «did you send it?»:
+    // this IS that answer. Only the lines that went are cleared (placeOrder sentOnly).
+    record: (id, e) => placeOrder(id, {
+      confirm: false, alreadySent: true, sentOnly: true,
+      date: e.date || undefined, quantities: e.quantities, units: e.units, sentDraft: e.draft || null,
+    }),
+    // Not awaited: a write Firestore queues offline must not hold the answer open.
+    // ⚠️ Only if no question stands for this supplier now: a newer send by another device meanwhile
+    // keeps its own question (restoreAwaitingSentIfAbsent, in a transaction).
+    // Offline the transaction rejects: the question then stays on THIS device (putQuestionBack) and
+    // is retried when the network returns.
+    restore: (id, e) => { putQuestionHere(id, e); },
+    drop: id => { clearAwaitingSent(id).catch(err => console.error('Removing the question failed:', err)); },
+  }, { local: Boolean(local) });
+  // The banner's two buttons go quiet while this answer is under way (the busy guard is set).
+  scheduleRender('reminders');
+  const result = await answering;
+  if (local && (result === 'recorded' || result === 'dropped')) localAwaiting.delete(supplierId);
+  const name = supplier ? supplierLabel(supplier) : '';
+  if (result === 'dropped') setStatus(notRecorded ? t('orders.awaiting.notRecorded') : t('orders.awaiting.kept', { supplier: name }), 'ok', 5000);
+  else if (result === 'elsewhere') setStatus(t('orders.awaiting.elsewhere'), 'ok', 4000);
+  else if (result === 'claimFailed') setStatus(t('orders.couldNotSaveThe'), 'error');
+  // 'recorded' and 'failed': placeOrder has already said so.
+  scheduleRender('reminders');
 }
 
 // ── Sending the list to whoever runs the place ────────────────────────────────
@@ -1989,6 +2262,25 @@ function openRequestList() {
   globalThis.window?.dispatchEvent(new CustomEvent('mise:screen', { detail: 'requests' }));
 }
 
+// The roster, read once per page, so a received list is shown under the name the
+// server wrote for its sender rather than the one the sender typed (shownSender in
+// order-request-model.js). Until it arrives — or if it never does — the typed name
+// stands in, and the screens are redrawn the moment it lands.
+function ensureRosterNames() {
+  if (rosterAsked) return;
+  rosterAsked = true;
+  getRosterOnce().then((people) => {
+    rosterByUid = new Map((people || []).map(p => [p.uid, p]));
+    if (requestListView) renderRequestList();
+    if (requestView) renderOpenRequest();
+  }).catch((err) => {
+    // Asked again at the next redraw: a read that failed on weak signal must not leave
+    // the typed names standing for the rest of the session.
+    rosterAsked = false;
+    console.warn('Could not read the roster for the senders’ names:', err);
+  });
+}
+
 // ⚠️⚠️ IT REPLACES IN PLACE, IT DOES NOT REMOVE AND RE-APPEND — and that one word
 // is the difference between working and unusable. Both screens are .req-overlay
 // at the same z-index, so DOM ORDER decides which is in front. Re-appending the
@@ -1999,10 +2291,12 @@ function openRequestList() {
 // Found by driving the app: three checks went red reporting an empty screen, and
 // the screen was not empty at all — it was the wrong one, in front.
 function renderRequestList() {
+  ensureRosterNames();
   const next = buildRequestListScreen(state.requests, {
     onBack: closeRequestList,
     onOpen: id => { openRequestId = id; renderOpenRequest(); },
     onRepaint: renderRequestList,
+    roster: rosterByUid,
   });
   if (requestListView) requestListView.replaceWith(next);
   else document.body.appendChild(next);
@@ -2063,7 +2357,9 @@ function renderOpenRequest() {
     return;
   }
 
+  ensureRosterNames();
   const next = buildRequestScreen(request, {
+    roster: rosterByUid,
     ingredientsById: lensById(),
     entries: state.entries,
     // ⚠️ WHAT WAS ACTUALLY BOUGHT, beside what was asked for. The person who sent
@@ -2160,20 +2456,9 @@ function renderListsButton() {
 // the same grammar and a feature may not import from another feature's folder.
 const listNames = joinList;
 
-// Sending is the moment the order actually leaves, so it is the moment to ask —
-// forgetting to tap "Order placed" afterwards is exactly what left orders
-// unrecorded. Only the suppliers that were actually ticked and sent are offered.
-function offerToRecordSent(supplierIds) {
-  return recordSuppliers(supplierIds, {
-    title: t('orders.orderSent'),
-    okLabel: t('orders.markAsPlaced'),
-  });
-}
-
-// Record several suppliers' orders behind ONE confirmation screen. Shared by the
-// prompt that follows a send and by the "Order placed" screen, so both show the
-// same rows, both allow the same corrections, and both add to an existing same-day
-// record the same way.
+// Record several suppliers' orders behind ONE confirmation screen — the "Order placed"
+// screen. (The prompt that used to follow a send is «did it go?» now, on every device:
+// waitForAnswer.)
 async function recordSuppliers(supplierIds, { title, okLabel }) {
   const ingredients = orderIngredients();
   const suppliers = supplierIds
@@ -2263,9 +2548,11 @@ async function recordSuppliers(supplierIds, { title, okLabel }) {
 
 // «Did you send the order to X?» for these suppliers, with what the review screen
 // CONFIRMED (`confirmed` = { quantities, units } keyed by supplier id). Resolves to
-// { ids, notReached }: `ids` are the suppliers to record — all of them on «Yes, sent»; on
-// «Send it now» the ones the chosen road reached; none when it was cancelled — and
-// `notReached` the names of those «Send it now» did not reach (their rows stay).
+// { ids, notReached }: `ids` are the suppliers to record NOW — all of them on «Yes, sent»; none
+// when it was cancelled, and none on «Send it now» either: what the road handed over is not
+// recorded here but WAITS for «did it go?» on every device, with the confirmed numbers
+// (waitForAnswer, awaiting-sent.js) — and `notReached` the names of those «Send it now» did not
+// reach (their rows stay, and nobody is asked about them).
 //
 // ⚠️ THE MESSAGE IS THE ONE THE NORMAL SEND SCREEN WOULD BUILD FOR THE SAME NUMBERS. The
 // review screen allows corrections and writes nothing back to the draft, so the rows are
@@ -2295,7 +2582,15 @@ async function askSentCheck(suppliers, confirmed) {
   const rows = confirmedRows(suppliers.map(s => ({ id: s.id, name: supplierLabel(s) })),
     ingredientsBySupplier(), confirmed);
 
+  // ⚠️ WHAT THE DRAFT SAYS, TAKEN BEFORE THE EDITOR OPENS. The editor and the share sheet stay open
+  // for as long as somebody likes; a line another device adds meanwhile is NOT in what went, and
+  // reading the draft afterwards would let «Sì» clear it without ever recording it.
+  const lensBefore = ingredientsBySupplier();
+  const draftBefore = {};
+  ids.forEach(id => { draftBefore[id] = draftQuantities(lensBefore[id] || [], state.entries); });
+
   let sent = [];
+  let handOff = 'text';
   await chooseAndSend({
     rows,
     settings: sendSettings,
@@ -2307,11 +2602,17 @@ async function askSentCheck(suppliers, confirmed) {
     supplierRoadsOnly: true,
     // Same unit-clash check as the send screen.
     beforeSend: sendRows => refuseOnUnitConflict(sendRows.map(r => ({ supplierId: r.id, date: dayForSupplier(r.id) }))),
-    onSent: sentIds => { sent = sentIds; },
+    onSent: (sentIds, info = {}) => { sent = sentIds; handOff = info.handOff || 'text'; },
   });
-  const toRecord = suppliersToRecord(ids, sent);
-  const notReached = suppliers.filter(s => !toRecord.includes(s.id)).map(s => supplierLabel(s));
-  return { ids: toRecord, notReached };
+  const handed = suppliersToRecord(ids, sent);
+  // `draft`: what the draft said for each one BEFORE the editor opened (draftBefore) — the review
+  // screen may have corrected it, and «Sì» must clear those lines too (awaiting-sent.js awaitingEntry).
+  waitForAnswer(handed.map(id => ({
+    supplierId: id, quantities: confirmed.quantities[id], units: confirmed.units[id],
+    draft: draftBefore[id],
+  })), { handOff });
+  const notReached = suppliers.filter(s => !handed.includes(s.id)).map(s => supplierLabel(s));
+  return { ids: [], notReached };
 }
 
 // The line that says which suppliers «Send it now» did not reach — appended to whatever the
@@ -2531,6 +2832,24 @@ function unitConflictText(day, list, conflicts) {
 // Drop a supplier's rows from the in-memory draft immediately, so the screen
 // clears without waiting for the write to come back. What the autosave sends is
 // draft.js's claims, not this map: clearSupplier is what releases those.
+// A supplier's order was just recorded without going through «did it go?»: its waiting question,
+// if any, is answered — removed here and on every device.
+function forgetAwaitingAfterRecording(supplierId) {
+  askHere.delete(supplierId);
+  localAwaiting.delete(supplierId);
+  if (!isAwaiting(state.awaiting?.[supplierId])) return;
+  delete state.awaiting[supplierId];
+  clearAwaitingSent(supplierId).catch(err => console.error('Removing the answered question failed:', err));
+}
+
+// The lens for recording what WENT (placeOrder sentOnly): every line that was sent is filed
+// under this supplier, even one another phone has since moved elsewhere «this time» — it went
+// to this one.
+function withSentLines(supplierId, quantities) {
+  const sent = new Set(Object.keys(quantities || {}));
+  return orderIngredients().map(ing => (sent.has(ing.id) && ing.supplierId !== supplierId ? { ...ing, supplierId } : ing));
+}
+
 function forgetSupplierLocally(supplierId) {
   ingredientsOf(supplierId, orderIngredients(), { activeOnly: false })
     .forEach(ing => { delete state.entries[ing.id]; });
@@ -2547,17 +2866,21 @@ function forgetSupplierLocally(supplierId) {
 // under the wrong day, which is precisely the mistake this whole feature exists to prevent.
 // `alreadySent` is the unfinished-order banner («Placed yesterday»): that order went
 // out, so «did you send it?» is not asked there (sent-check.js shouldAskSent).
-async function placeOrder(supplierId, { confirm = true, date: pinnedDate, quantities = null, units = null, alreadySent = false } = {}) {
+// `sentOnly` is «Sì» to «did it go?» (answerAwaitingSent): `quantities`/`units` are what WENT,
+// stored when it was handed over, and they are recorded whatever the draft says now — a line
+// cleared or moved to another supplier since still went to THIS one. Afterwards only the lines
+// still reading what went are cleared (awaiting-sent.js linesToClear): typing done since stays.
+async function placeOrder(supplierId, { confirm = true, date: pinnedDate, quantities = null, units = null, alreadySent = false, sentOnly = false, sentDraft = null } = {}) {
   const supplier = findOrderSupplier(supplierId);
   if (!supplier) return false;
-  const ingredients = orderIngredients();
+  const ingredients = sentOnly ? withSentLines(supplierId, quantities) : orderIngredients();
 
   // An order takes a second to write. Without this, a second tap in that second
   // passes every check, archives the same rows again, and mergeArchives — which
   // ADDS by design — doubles the quantities.
   if (placing.has(supplierId)) return false;
 
-  if (!supplierHasItems(supplierId, ingredients, state.entries)) {
+  if (sentOnly ? !Object.keys(quantities || {}).length : !supplierHasItems(supplierId, ingredients, state.entries)) {
     setStatus(t('orders.nothingToRecordFor'), 'warn', 4000);
     return false;
   }
@@ -2642,19 +2965,43 @@ async function placeOrder(supplierId, { confirm = true, date: pinnedDate, quanti
   // rows during the archive above is dropped with them: clearSupplier releases every
   // claim on those lines when it lands.
   const heldLines = heldLinesOf([supplierId]);
-  forgetSupplierLocally(supplierId);
-  globalThis.window?.dispatchEvent(new CustomEvent('mise:action', { detail: 'order-sent' }));
-  // Recorded, so there is nothing left on that supplier's screen — back to the list
-  // (P20: a successful save returns you to where you came from).
-  if (state.openSupplier === supplierId) closeSupplier();
-  syncInputsFromState();            // also re-derives every button's enabled state
-  renderReminders();
+  // «Sì» to «did it go?»: only the lines that went and still read what the draft said when they
+  // went; the day stamp only when nothing of this supplier is left (awaiting-sent.js).
+  let sentLines = [];
+  let clearDay = true;
+  // ⚠️ NOTHING BELOW MAY THROW OUT OF placeOrder: the order is recorded, and «did it go?» reads a
+  // rejection as «not recorded» and asks again — a second «Sì» would record it twice.
+  try {
+    if (sentOnly) {
+      sentLines = linesToClear(state.entries, id => lensById()[id] || null, { quantities, units, draft: sentDraft });
+      clearDay = !supplierKeepsLines(ingredientsOf(supplierId, orderIngredients(), { activeOnly: false }),
+        state.entries, sentLines);
+      sentLines.forEach(id => { delete state.entries[id]; });
+      if (clearDay) delete state.days[supplierId];
+    } else {
+      forgetSupplierLocally(supplierId);
+      // ⚠️⚠️ RECORDED ANOTHER WAY («Ordine fatto», «Sì, inviato», «Placed yesterday»): a «did it
+      // go?» still waiting for this supplier is answered by this very recording. Left in place,
+      // a later «Sì» on any device would record the same order a second time (mergeArchives adds).
+      forgetAwaitingAfterRecording(supplierId);
+    }
+    globalThis.window?.dispatchEvent(new CustomEvent('mise:action', { detail: 'order-sent' }));
+    // Recorded, so there is nothing left on that supplier's screen — back to the list
+    // (P20: a successful save returns you to where you came from). Not while lines typed after
+    // the send are still there: that screen is the next order.
+    if (state.openSupplier === supplierId && clearDay) closeSupplier();
+    syncInputsFromState();            // also re-derives every button's enabled state
+    renderReminders();
+  } catch (err) {
+    console.error('Tidying up after recording the order failed:', err);
+  }
 
   try {
     // ⚠️ THE LENS AS IT IS NOW, not the list taken before the confirmation screen opened: a line
     // another phone moved to a different supplier meanwhile is that supplier's, and clearing by
     // the old list would wipe its entry.
-    await clearSupplier(supplierId, orderIngredients());
+    if (sentOnly) await clearSentLines(supplierId, sentLines, { clearDay });
+    else await clearSupplier(supplierId, orderIngredients());
     // ⚠️ The clear released the claims on those lines, typing made AFTER the rows were
     // forgotten above included: claim again from the screen, which holds only that.
     scheduleDraftSave(state.entries, state.days);
@@ -2924,6 +3271,16 @@ function renderReminders() {
   cardsView?.markDue(dueTodayNow());
   remindersDay = todayISO();
 
+  // «Ordine a X inviato alle 10:42: è partito?» — on every device, until somebody answers.
+  // The suppliers Orders can record for — the «No supplier» group included, a switched-off one not
+  // (findOrderSupplier's list): a banner whose «Sì» could never record is not drawn.
+  renderAwaiting(document.getElementById('orders-awaiting'), awaitingList(currentAwaiting(), orderSupplierList()), {
+    question: awaitingQuestion,
+    onYes: (supplierId, at) => answerAwaitingSent(supplierId, 'yes', at),
+    onNo: (supplierId, at) => answerAwaitingSent(supplierId, 'no', at),
+    busy: supplierId => answeringAwaiting.has(supplierId),
+  });
+
   renderPending(document.getElementById('orders-pending'), state.pending, {
     onPlaced: recordPending,
     onToday: keepAsToday,
@@ -3177,6 +3534,7 @@ function setupTabs() {
 const DRAFT_SAVE_ERROR_KEY = 'orders.couldNotSaveThe2';
 
 let statusTimer = null;
+let lastDraftSaveState = { ready: false, saved: true };   // draft.js's last word; painted by paintDraftSaveState
 
 // ⚠️ SAY IT WHERE THE PERSON IS LOOKING. History is a fixed overlay over this page and
 // the past-order editor sits over History, so a message written to the page's own line
@@ -3251,6 +3609,18 @@ function listLost(lost) {
   };
 }
 
+// Paint the save-status line in sight (draft.js onDraftSaveState). ⚠️ ONE VOICE: while a supplier's
+// screen covers the page, only ITS line changes — the page's line underneath is left alone (closeSupplier
+// repaints it), or a screen reader would hear every change twice. Leaving it unpainted is surer than
+// aria-live="off" on a role="status", which some readers still announce.
+function paintDraftSaveState() {
+  const view = saveStateView(lastDraftSaveState, navigator.onLine !== false);
+  const lines = detailView
+    ? detailView.overlay.querySelectorAll('.draft-save-state')
+    : [document.getElementById('draft-save-state')];
+  lines.forEach(node => paintSaveState(node, view, t));
+}
+
 // Hide the status line, but ONLY if it still shows `text`. Same guard as the
 // auto-hide above and for the same reason: whoever set a newer message — an error,
 // or "order saved to history ✓" — must never have it wiped by a stale clear.
@@ -3285,6 +3655,12 @@ async function init() {
   setupCatalogueBack();
   trackStickyHead(document.querySelector('.order-box-head'));
   document.getElementById('orders-wa-btn')?.addEventListener('click', whenLive(openSendScreen));
+  // Back from WhatsApp (or the mail app) after a send: «did it go?» at once, on THIS device.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible' || !askHere.size) return;
+    askHereWanted = true;
+    maybeAskHere();
+  });
 
   // ⚠️ WATCHTABLET FIRST, THEN THE PANEL: the panel's first count must see
   // whatever watchTablet already moved into it, including on a page that
@@ -3311,6 +3687,22 @@ async function init() {
     else setStatus(t(DRAFT_SAVE_ERROR_KEY), 'error');
   });
   flushDraftWhenHidden();
+
+  // ⚠️ LEAVING A QUANTITY OR STOCK BOX SENDS WHAT IS WAITING AT ONCE (the iPad order of 14 Nov 2026,
+  // draft.js sendWaitingDraft). One listener for the cards, the flat list and a supplier's screen:
+  // at most one write per box left, none per keystroke — the pause stays for typing.
+  document.addEventListener('focusout', event => {
+    if (event.target?.matches?.('.ing-qty, .ing-stock')) sendWaitingDraft();
+  });
+  // The save-status line on the page and on a supplier's screen: whether everything typed HERE has
+  // reached the server. Offline counts as «not sent yet» (save-state-view.js).
+  onDraftSaveState(saveState => {
+    lastDraftSaveState = saveState;
+    paintDraftSaveState();
+  });
+  onLanguageChange(() => paintDraftSaveState());
+  window.addEventListener('online', () => paintDraftSaveState());
+  window.addEventListener('offline', () => paintDraftSaveState());
 
   document.getElementById('place-all-btn')?.addEventListener('click', whenLive(openPlaceAllScreen));
   document.getElementById('clear-all-btn')?.addEventListener('click', whenLive(openClearScreen));
@@ -3389,6 +3781,7 @@ async function init() {
     setEntries(draft.entries);
     state.days = draft.days || {};
     state.skipped = draft.skipped || {};
+    state.awaiting = draft.awaitingSent || {};
     state.draftUpdatedAt = draft.updatedAt;
     state.loaded.draft = true;
     // ⚠️ A line a page left behind has just come back, maybe with last night's day stamp, and the
@@ -3398,6 +3791,7 @@ async function init() {
     if (overrideSignature(state.entries) !== overridesBefore
       || noteHeld(state.ingredients, state.entries, heldNotInUse) !== heldBefore) scheduleRender('list');
     scheduleRender('sync', 'reminders');
+    noteAwaitingSnapshot();
     checkPendingOnce();
     // ⚠️ AND THE OPEN SUMMARY SHEET, for the same reason as the open list just
     // below: it shows quantities from this very draft, and a change made on

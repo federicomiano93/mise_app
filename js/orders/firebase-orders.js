@@ -317,6 +317,50 @@ export async function transactDoc(name, id, updater) {
   });
 }
 
+// Write the named FIELD PATHS of a document, each one replaced WHOLE, creating the document if
+// it is missing; every other field is left alone. Unlike saveDoc (merge: true), a map written
+// here is not merged into the stored one: 'awaitingSent.abc' = { quantities: { flour: 2 } } over
+// a stored { quantities: { flour: 1, salt: 3 } } leaves no salt behind. `fieldPaths` are dotted
+// paths into `data` (which is written nested, as setDoc expects).
+export async function saveFields(name, id, data, fieldPaths) {
+  await authReady;
+  return setDoc(doc(db, pathFor(name), id), withBakery(data),
+    { mergeFields: ['bakery', ...fieldPaths] });
+}
+
+// Read a document and, in the same transaction, delete the named field paths — only when
+// `decide(data)` (the stored fields, or null for a missing document) says so. Resolves true when
+// they were deleted, false when `decide` refused. Two devices racing for the same fields: one
+// wins, the other's transaction re-reads and sees them gone. ⚠️ A transaction needs the network.
+export async function clearFieldsIf(name, id, paths, decide) {
+  await authReady;
+  const ref = doc(db, pathFor(name), id);
+  return runTransaction(db, async tx => {
+    const snap = await tx.get(ref);
+    if (!snap.exists() || !decide(snap.data())) return false;
+    const update = { bakery: currentBakery() };
+    paths.forEach(path => { update[path] = deleteField(); });
+    tx.update(ref, update);
+    return true;
+  });
+}
+
+// The mirror of clearFieldsIf: read a document and, in the same transaction, write the named
+// field paths (each replaced WHOLE, like saveFields) — only when `decide(data)` (the stored
+// fields, or null for a missing document) says so. Resolves true when written, false when
+// `decide` refused. Stamped with the bakery like every other write, so the rules' stampedFor
+// passes. ⚠️ A transaction needs the network: offline it rejects, it is not queued.
+export async function saveFieldsIf(name, id, data, fieldPaths, decide) {
+  await authReady;
+  const ref = doc(db, pathFor(name), id);
+  return runTransaction(db, async tx => {
+    const snap = await tx.get(ref);
+    if (!decide(snap.exists() ? snap.data() : null)) return false;
+    tx.set(ref, withBakery(data), { mergeFields: ['bakery', ...fieldPaths] });
+    return true;
+  });
+}
+
 // Create a document with an auto-generated id. Returns the new id.
 export async function createDoc(name, data) {
   await authReady;
@@ -488,6 +532,21 @@ export async function watchDoc(name, id, onChange, onError) {
       console.error(`watchDoc(${name}/${id}) failed:`, err);
       onError?.(err);
     },
+  );
+}
+
+// Call back with whether THIS DEVICE still holds writes to the document that the server has not
+// confirmed — Firestore's own queue, which outlives the page that started them (iOS throws a frozen
+// page away; the write waits in the browser's database until the app is opened again). ⚠️
+// includeMetadataChanges, because the server's confirmation changes no data, only this flag. On a
+// document already being watched Firestore shares the one listen, so this costs no extra read.
+export async function watchPendingWrites(name, id, onPending) {
+  await authReady;
+  return onSnapshot(
+    doc(db, pathFor(name), id),
+    { includeMetadataChanges: true },
+    snap => onPending(snap.metadata.hasPendingWrites),
+    err => console.error(`watchPendingWrites(${name}/${id}) failed:`, err),
   );
 }
 

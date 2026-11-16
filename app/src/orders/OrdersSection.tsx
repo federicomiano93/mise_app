@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import type { ReactNode, RefObject } from 'react';
 import { Navigate, useLocation, useNavigate, useNavigationType } from 'react-router';
 import { todayISO } from '@mise/shared/day';
 import { mayEditRecords } from '@mise/shared/records';
@@ -11,10 +12,13 @@ import { useSession } from '../session/SessionContext';
 import { SPLIT_QUERY } from '../ui/split';
 import { useMediaQuery } from '../ui/useMediaQuery';
 import { StatusMessageProvider, useStatusMessage } from '../ui/StatusMessage';
+import { AskHereDialog } from './AskHereDialog';
 import { CardDoorsProvider } from './CardDoors';
 import type { CardDoor } from './CardDoors';
-import { NoticesBell } from './NoticesBell';
-import { NoticesProvider } from './NoticesContext';
+import { DebtBanner, DeliveryDoors } from './DeliveryDoors';
+import { NoticesPanel } from './NoticesPanel';
+import { NoticesProvider, useNotices } from './NoticesContext';
+import { OrdersBand } from './OrdersBand';
 import { OrdersProvider, useOrders, useOrdersStore } from './OrdersContext';
 import { IngredientsList } from './IngredientsList';
 import { OrdersList } from './OrdersList';
@@ -41,17 +45,19 @@ import { carriedTrip, carryTrip, forgetTrip } from './cardTrip';
 import type { TripPlace } from './cardTrip';
 import {
   ADD_DOOR, CLEAR_OPENER, HandBackProvider, SEARCH_BOX, SUPPLIER_DOOR, SUPPLIER_TITLE, cardDoor, HISTORY_DOOR, INCOMING_DOOR, ITEMS_DOOR, LISTS_DOOR, PLACE_ALL_OPENER, PLACE_DOOR, REORDER_DOOR, SEND_OPENER, SUMMARY_DOOR,
-  SETTINGS_OPENER, SUPPLIER_ORDER_DOOR, SWAP_OPENER, arrivalOpener, correctOpener, itemsOpener, listOpener, pendingFallback, pendingOpener, sendDayOpener, summaryOpener, supplierOpener, todayOpener,
+  SETTINGS_OPENER, SUPPLIER_ORDER_DOOR, SWAP_OPENER, arrivalOpener, correctOpener, itemsOpener, listOpener, pendingFallback, pendingOpener, sendDayOpener, summaryOpener, supplierOpener,
   useHandBackState,
 } from './handBack';
-import { FROM_CHIP, FROM_LIST, cameFromList, columnOf, columnPart, replacedState } from './ordersNav';
+import { FROM_LIST, cameFromList, columnOf, columnPart, replacedState } from './ordersNav';
 import {
   CLEAR_PATH, HISTORY_PATH, INCOMING_PATH, INGREDIENTS_PATH, LISTS_PATH, ORDERS_PATH, PLACE_ALL_PATH, REORDER_PATH, SEND_PATH, SETTINGS_PATH, SUPPLIER_ORDER_PATH, historyDayPath, historyEditPath,
   incomingMissingPath, parseOrdersPath, requestPath, supplierConfirmPath, supplierItemsPath, supplierPath, supplierSummaryPath,
 } from './ordersPath';
 import type { OrdersView } from './ordersPath';
+import { awaitingSupplierName } from './awaitingWords';
 import { buildOrdersLens } from './ordersLens';
 import { useListCopy } from './useListCopy';
+import { useDeliveryView } from './useDeliveryView';
 import styles from './OrdersSection.module.css';
 
 // «Orders»: the supplier list and, beside it from 1000px, the chosen supplier's order. Loaded only when somebody opens it
@@ -146,6 +152,10 @@ function OrdersLayout({ view }: { view: ShownView }) {
     if (message.kind === 'day-not-saved') say(t('ord.day.notSaved'), LONG_MS);
     // «Close as not ordered» or «Reopen» refused: Firestore has already put the supplier back on screen as it is stored.
     if (message.kind === 'close-not-saved') say(t('ord.summary.saveFailed'), LONG_MS);
+    // «Did it go?» could not be shared with the other devices: it is asked HERE, and the person is told why.
+    if (message.kind === 'awaiting-not-shared') {
+      say(t('ord.awaiting.notShared', { supplier: awaitingSupplierName(store.getSnapshot().suppliers, message.supplierId, t) }), 10000);
+    }
   }), [store, say, t]);
 
   // ⚠️ THE LENS IS THE ONE PLACE THAT DECIDES AN INGREDIENT'S SUPPLIER (ordersLens.ts): the list, a supplier's screen and
@@ -264,12 +274,18 @@ function OrdersLayout({ view }: { view: ShownView }) {
   const openClear = () => { open(CLEAR_OPENER, CLEAR_PATH); };
   const openSend = () => { open(SEND_OPENER, SEND_PATH); };
   // ⚠️ THE SWAP IS A MOVE AT THE LIST'S LEVEL, NOT A STEP DOWN: it REPLACES the entry, so Back never walks through the views, and the
-  // new view starts at the top (the scroll effect below). The focus goes to the swap button of the view that arrives. The button is drawn
-  // ONLY at list level (OrdersHead `swapOpen`): with a screen open beside the list the person closes it with Back first, so there is no
-  // step back to arm, no duplicate entry to avoid and nothing left pending when a «discard changes?» question is answered Cancel.
+  // new view starts at the top (the scroll effect below, told by `swapped`). The focus goes to the tab of the view that arrives.
+  // ⚠️ SINCE 16 NOV 2026 THE TABS ARE ALWAYS ON SCREEN (the split shows them beside an open supplier too): from a screen open beside the
+  // list a tab REPLACES that screen's entry with the other view, so the screen closes (nothing is lost: the draft is saved) and Back
+  // still steps up to whatever was behind it. Which view is in the column comes from where the person is, not from the address.
+  // (A screen that holds the move with its «discard changes?» question and is answered Cancel leaves the tab's hand-back armed: the
+  // next Back to the list then focuses the tab — a known leftover, harmless.)
   const swap = () => {
+    // The box that had the focus is about to be removed, which may not count as leaving it: what waits goes now.
+    store.sendWaitingDraft();
     handBack.expect(SWAP_OPENER);
-    void navigate(view.kind === 'ingredients' ? ORDERS_PATH : INGREDIENTS_PATH, { replace: true, state: KEEP_FOCUS });
+    swapped.current = true;
+    void navigate(flatColumn ? ORDERS_PATH : INGREDIENTS_PATH, { replace: true, state: KEEP_FOCUS });
   };
   // «Placed yesterday» on a pending banner: the supplier's confirm screen, recording under the banner's day without asking whether it
   // was sent (it was: that is what the button says). The list is right behind the screen, so Back and a recorded order both go to it.
@@ -320,10 +336,8 @@ function OrdersLayout({ view }: { view: ShownView }) {
   const openLists = whenLive(() => { open(LISTS_DOOR, LISTS_PATH); });
   const openItemsWhenLive = (id: string) => { whenLive(() => { openItems(id); })(); };
   const openSummaryWhenLive = (id: string) => { whenLive(() => { openSummary(id); })(); };
-  // A closed supplier's chip in «Order today»: its summary (where «Reopen» is), on a phone too; Back hands the focus to the chip.
-  const openClosedSummary = (id: string) => { whenLive(() => { open(todayOpener(id), supplierSummaryPath(id), FROM_CHIP); })(); };
 
-  // ⚠️ THE HOLD: a supplier tapped on the copy (a row, an «Order today» chip, the notices panel) waits for the live data and then
+  // ⚠️ THE HOLD: a supplier tapped on the copy (a row, the notices panel) waits for the live data and then
   // opens by itself. The path is where the tap happened: if the person moves anywhere else the tap is dropped, and the last supplier
   // tapped wins (a shut door only says the wait and the All/Ordering filter only filters: both leave the hold alone, as in the current
   // app). It is also dropped when a stream fails (nothing will ever make the wait end well), when the notices panel opens and when
@@ -386,10 +400,14 @@ function OrdersLayout({ view }: { view: ShownView }) {
   //  - On a phone, Back to the list restores the place written down when a screen opened; any other move starts at the top.
   //  - The first render does nothing: the shell reset the area when the section was entered.
   const shown = useRef<string | null>(null);
+  // A tab was pressed (swap): the view that arrives starts at the top, also when it replaced a screen open beside the list.
+  const swapped = useRef(false);
   const shownKind = useRef(view.kind);
   useLayoutEffect(() => {
     const before = shown.current;
     const kindBefore = shownKind.current;
+    const wasSwap = swapped.current;
+    swapped.current = false;
     shown.current = pathname;
     shownKind.current = view.kind;
     const area = scrollArea();
@@ -398,7 +416,7 @@ function OrdersLayout({ view }: { view: ShownView }) {
     if (split) {
       listTop.current = null;
       // The swap between the two views is a new list, not Back to one: it starts at the top.
-      if (atList && kindBefore !== view.kind && (kindBefore === 'list' || kindBefore === 'ingredients')) area.scrollTop = 0;
+      if (atList && kindBefore !== view.kind && (wasSwap || kindBefore === 'list' || kindBefore === 'ingredients')) area.scrollTop = 0;
     } else if (atList && listTop.current !== null) {
       area.scrollTop = listTop.current;
       listTop.current = null;
@@ -478,6 +496,34 @@ function OrdersLayout({ view }: { view: ShownView }) {
     return <Navigate to={ORDERS_PATH} replace state={navigationType === 'POP' ? KEEP_FOCUS : state} />;
   }
 
+  // The far-right send icon of the band: once the lists are live and hold a supplier, and never while a supplier is open (its own send
+  // is the one to use then).
+  const showSend = ready && lens.suppliers.length > 0 && view.kind !== 'supplier';
+  const listColumn = flatColumn ? (
+    <IngredientsList lens={lens} ready={ready} split={split} saveSilent={view.kind === 'supplier'} onSwap={swap} onSend={openSend} onOpenSupplier={openOrHold} onOpenPending={openPending} initial={trip.current === null ? undefined : { query: trip.current.query, only: trip.current.only }} />
+  ) : (
+    <OrdersList
+      lens={lens}
+      earlyLens={earlyLens}
+      ready={ready}
+      split={split}
+      openId={'id' in view && view.kind !== 'request' ? view.id : null}
+      heldId={held?.id ?? null}
+      onLookingElsewhere={dropHold}
+      onOpenSupplier={openOrHold}
+      onOpenItems={openItemsWhenLive}
+      onOpenSummary={openSummaryWhenLive}
+      onPlaceAll={openPlaceAll}
+      onClearAll={openClear}
+      onSwap={swap}
+      onSend={openSend}
+      onIncoming={openIncoming}
+      onReorder={openReorder}
+      onOpenPending={openPending}
+      saveSilent={view.kind === 'supplier'}
+    />
+  );
+
   return (
     <HandBackProvider value={handBack}>
       <CardDoorsProvider value={cardDoors}>
@@ -485,58 +531,113 @@ function OrdersLayout({ view }: { view: ShownView }) {
       <NoticesProvider lens={lens} ready={ready} onPanelOpen={dropHold}>
       <Page
         title={t('section.orders')}
-        // The bell, only where the panel it opens can be seen: the list on a phone, every screen on the split. In a part of its own:
-        // a failure in the bell must not take the page down.
-        action={view.kind === 'list' || split ? <PartBoundary><NoticesBell /></PartBoundary> : undefined}
+        // The title band (the redesign of 16 Nov 2026, item 3): white, sticky on the split, the tools after the title.
+        band={<OrdersBand onSettings={openSettings} onHistory={openHistory} onLists={openLists} onSend={openSend} showSend={showSend} />}
       >
         <StatusLine />
-        <div className={styles.layout} data-view={view.kind === 'list' ? 'list' : view.kind === 'ingredients' ? 'ingredients' : 'detail'}>
-          <div className={styles.list}>
-            <PartBoundary>
-              {flatColumn ? (
-                <IngredientsList lens={lens} ready={ready} swapOpen={atList} onSwap={swap} onSend={openSend} onSettings={openSettings} onHistory={openHistory} onOpenSupplier={openOrHold} onOpenPending={openPending} initial={trip.current === null ? undefined : { query: trip.current.query, only: trip.current.only }} />
-              ) : (
-              <OrdersList
-                lens={lens}
-                earlyLens={earlyLens}
-                ready={ready}
-                openId={'id' in view && view.kind !== 'request' ? view.id : null}
-                heldId={held?.id ?? null}
-                onLookingElsewhere={dropHold}
-                onOpenSupplier={openOrHold}
-                onOpenItems={openItemsWhenLive}
-                onOpenSummary={openSummaryWhenLive}
-                onOpenClosed={openClosedSummary}
-                onPlaceAll={openPlaceAll}
-                onClearAll={openClear}
-                swapOpen={atList}
-                onSwap={swap}
-                onSend={openSend}
-                onSettings={openSettings}
-                onHistory={openHistory}
-                onIncoming={openIncoming}
-                onReorder={openReorder}
-                onLists={openLists}
-                onOpenPending={openPending}
-              />
-              )}
-            </PartBoundary>
-          </div>
-          <div ref={detail} className={styles.detail}>
-            <PartBoundary resetKey={pathname}>
-              <Detail view={view} lens={lens} ready={ready} onOpenSupplierOrder={openSupplierOrder} onOpenEdit={openEdit} onOpenDay={openDay} onOpenMissing={openMissing} onOpenRequest={openRequest} />
-            </PartBoundary>
-          </div>
-        </div>
+        <OrdersGrid
+          view={view}
+          split={split}
+          detailRef={detail}
+          list={<PartBoundary>{listColumn}</PartBoundary>}
+          // «Choose a supplier» under the doors: the supplier list with nothing open beside it, once it is live and has suppliers.
+          hint={view.kind === 'list' && ready && lens.suppliers.length > 0}
+          onIncoming={openIncoming}
+          onReorder={openReorder}
+          onOpenSupplier={openOrHold}
+          onOpenPending={openPending}
+          onSend={openSend}
+        >
+          <PartBoundary resetKey={pathname}>
+            <Detail view={view} lens={lens} ready={ready} onOpenSupplierOrder={openSupplierOrder} onOpenEdit={openEdit} onOpenDay={openDay} onOpenMissing={openMissing} onOpenRequest={openRequest} />
+          </PartBoundary>
+        </OrdersGrid>
       </Page>
+      {/* The sender's own question, at the level of the whole section: it survives moving from one Orders screen to another. */}
+      <PartBoundary>
+        <AskHereDialog lens={lens} />
+      </PartBoundary>
       </NoticesProvider>
       </CardDoorsProvider>
     </HandBackProvider>
   );
 }
 
-// The right-hand side of the split — and, on a phone, the whole screen when a supplier is open. With nothing chosen it says
-// what to do.
+// The 2×2 grid of the split (the redesign of 16 Nov 2026, item 4), split by a 1px vertical and a 1px horizontal line across the page:
+//  - top left (inside the list column): the tabs and the search box;
+//  - top right: «Incoming» / «To re-order», always there, and under them «Choose a supplier» — or the debt banner when it is owed;
+//  - bottom left: the list column's rows;
+//  - bottom right: the open screen, or the bell's notices (item 6), which take its place while they are open and give it back, as it
+//    was, when they close (the screen stays mounted, hidden).
+// On a phone it is one column: the list (the doors and the notices are inside it), or the open screen.
+function OrdersGrid({ view, split, detailRef, list, hint, onIncoming, onReorder, onOpenSupplier, onOpenPending, onSend, children }: {
+  view: ShownView;
+  split: boolean;
+  detailRef: RefObject<HTMLDivElement | null>;
+  list: ReactNode;
+  hint: boolean;
+  onIncoming: () => void;
+  onReorder: () => void;
+  onOpenSupplier: (id: string) => void;
+  onOpenPending: (id: string, day: string) => void;
+  onSend: () => void;
+  children: ReactNode;
+}) {
+  const { t } = useT();
+  const { open: noticesOpen, setOpen: setNoticesOpen } = useNotices();
+  const { key } = useLocation();
+  // ⚠️ THE NOTICES GIVE THE PANE BACK AT EVERY MOVE: a supplier opened from them (or from a row) must be seen, not hidden behind them.
+  // By the history entry, not the address: tapping the row of the supplier already open behind them replaces the entry with the SAME
+  // address, and must bring that supplier back too (review of 16 Nov 2026).
+  const firstKey = useRef(key);
+  useEffect(() => {
+    if (key === firstKey.current) return;
+    firstKey.current = key;
+    if (split) setNoticesOpen(false);
+  }, [key]);
+  const notices = split && noticesOpen;
+  const owesDebt = useDebtOwed();
+  return (
+    <div
+      className={styles.layout}
+      data-view={view.kind === 'list' ? 'list' : view.kind === 'ingredients' ? 'ingredients' : 'detail'}
+      data-pane={notices ? 'notices' : view.kind === 'supplier' ? 'supplier' : undefined}
+    >
+      <div className={styles.list}>{list}</div>
+      {split ? (
+        <div className={styles.top}>
+          <div className={styles.topRow}>
+            <PartBoundary>
+              <DeliveryDoors onIncoming={onIncoming} onReorder={onReorder} />
+            </PartBoundary>
+          </div>
+          <div className={styles.topRow}>
+            {owesDebt ? <DebtBanner onIncoming={onIncoming} /> : hint ? <p className={styles.hint}>{t('ord.pane.title')}</p> : null}
+          </div>
+        </div>
+      ) : null}
+      <div ref={detailRef} className={styles.detail}>
+        {notices ? (
+          <PartBoundary>
+            <NoticesPanel onOpenSupplier={onOpenSupplier} onOpenPending={onOpenPending} onSend={onSend} />
+          </PartBoundary>
+        ) : null}
+        <div className={styles.screen} hidden={notices}>
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Whether the debt banner is drawn (the same three conditions as DebtBanner's own), so «Choose a supplier» gives it its line.
+function useDebtOwed(): boolean {
+  const { configLoaded } = useOrders();
+  const { on, owed } = useDeliveryView();
+  return configLoaded && on && owed.length > 0;
+}
+
+// The right-hand side of the split — and, on a phone, the whole screen when a supplier is open. With nothing chosen it is empty.
 //
 // (No `key` on the screens: the section keeps one from one supplier to the next on the split, so the focus stays on the row
 // that was pressed.)
@@ -554,17 +655,8 @@ function Detail({ view, lens, ready, onOpenSupplierOrder, onOpenEdit, onOpenDay,
   const { configLoaded } = useOrders();
   // The flat view takes the whole width: there is no pane beside it.
   if (view.kind === 'ingredients') return null;
-  if (view.kind === 'list') {
-    // ⚠️ NOT BESIDE «NO SUPPLIERS YET»: a prompt to tap a row, next to a list that says there are none, would send somebody
-    // looking for what is not there.
-    if (!ready || lens.suppliers.length === 0) return null;
-    return (
-      <div className={styles.prompt}>
-        <p className={styles.promptTitle}>{t('ord.pane.title')}</p>
-        <p>{t('ord.pane.text')}</p>
-      </div>
-    );
-  }
+  // Nothing open: the pane is empty (since 16 Nov 2026 «Choose a supplier» is a line in the top-right cell, OrdersGrid).
+  if (view.kind === 'list') return null;
   // ⚠️ THE LISTS STAY MOUNTED UNDER ONE LIST (hidden, not drawn), like History under its editor: Back finds the old lists that were
   // asked for as they were left. The lists need only their own stream; one list also reads the lens (names, units), so it waits.
   if (view.kind === 'lists' || view.kind === 'request') {
