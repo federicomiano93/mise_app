@@ -164,46 +164,40 @@ describe('search', () => {
   });
 });
 
-describe('the Ordering filter', () => {
-  it('is hidden while nothing is being ordered', async () => {
-    await loaded();
-    expect(screen.queryByRole('radiogroup')).not.toBeInTheDocument();
-  });
+// The redesign of 16 Nov 2026 (docs/mockups/orders-tablet-2026-11.md, item 4): the All / Ordering filter is gone; «To order» is a
+// group of the list instead.
+describe('the groups of the list', () => {
+  const headings = () => main().queryAllByRole('heading', { level: 2 }).map(heading => heading.textContent);
 
-  it('appears as a radio group with the counts once something is typed, and narrows the list', async () => {
+  it('draws no filter any more', async () => {
     const draft = { entries: { 'i-milk': { qty: 2 } }, days: { 's-zed': todayISO() } };
-    const { user } = await loaded('/orders', seeded({ draft }));
-    const group = screen.getByRole('radiogroup', { name: 'Which suppliers to show' });
-    const all = within(group).getByRole('radio', { name: 'All (4)' });
-    const ordering = within(group).getByRole('radio', { name: 'Ordering (1)' });
-    expect(all).toHaveAttribute('aria-checked', 'true');
-    expect(ordering).toHaveAttribute('aria-checked', 'false');
-    await user.click(ordering);
-    expect(ordering).toHaveAttribute('aria-checked', 'true');
-    expect(all).toHaveAttribute('aria-checked', 'false');
-    expect(rowNames()).toHaveLength(1);
-    expect(rowNames()[0]).toMatch(/^Zed/);
+    await loaded('/orders', seeded({ draft }));
+    expect(screen.queryByRole('radiogroup')).not.toBeInTheDocument();
+    expect(screen.queryByRole('radio')).not.toBeInTheDocument();
   });
 
-  it('stays on screen while it is on, even when nothing is ordered any more, so it can be left', async () => {
+  it('puts a supplier with quantities typed first, under «To order», with «N items» under its name', async () => {
+    const draft = { entries: { 'i-milk': { qty: 2 } }, days: { 's-zed': todayISO() } };
+    await loaded('/orders', seeded({ draft, ordersConfig: { favouriteSuppliers: ['s-alp'] } }));
+    await waitFor(() => { expect(headings()).toEqual(['To order', 'Favourites', 'Other suppliers']); });
+    expect(rowNames()[0]).toMatch(/^Zed.*1 item$/);
+    expect(rowNames()[1]).toMatch(/^Alpine Mills/);
+  });
+
+  it('leaves the group the moment the quantities go', async () => {
     const draft = { entries: { 'i-milk': { qty: 2 } }, days: { 's-zed': todayISO() } };
     const source = seeded({ draft });
-    const { user } = await loaded('/orders', source);
-    await user.click(screen.getByRole('radio', { name: 'Ordering (1)' }));
+    await loaded('/orders', source);
+    await waitFor(() => { expect(headings()).toEqual(['To order', 'Other suppliers']); });
     act(() => { source.remoteMerge({ entries: { 'i-milk': { qty: 0 } } }); });
-    await waitFor(() => { expect(screen.getByRole('radio', { name: 'Ordering (0)' })).toBeInTheDocument(); });
-    expect(screen.getByText('Nothing is being ordered yet.')).toBeInTheDocument();
-    await user.click(screen.getByRole('radio', { name: 'All (4)' }));
+    await waitFor(() => { expect(headings()).toEqual([]); });
     expect(rowNames()).toHaveLength(4);
   });
 
-  it('moves between its two choices with the arrow keys', async () => {
+  it('says «To order» in Italian', async () => {
     const draft = { entries: { 'i-milk': { qty: 2 } }, days: { 's-zed': todayISO() } };
-    const { user } = await loaded('/orders', seeded({ draft }));
-    screen.getByRole('radio', { name: 'All (4)' }).focus();
-    await user.keyboard('{ArrowRight}');
-    expect(screen.getByRole('radio', { name: 'Ordering (1)' })).toHaveAttribute('aria-checked', 'true');
-    expect(screen.getByRole('radio', { name: 'Ordering (1)' })).toHaveFocus();
+    await loaded('/orders', seeded({ draft }), { lang: 'it' });
+    await waitFor(() => { expect(headings()).toEqual(['Da ordinare', 'Altri fornitori']); });
   });
 });
 
@@ -330,22 +324,23 @@ describe('the tablet’s split', () => {
     await screen.findByRole('heading', { level: 2, name: 'Alpine Mills' });
     await user.click(screen.getByRole('button', { name: /^Zed/ }));
     expect(await screen.findByRole('heading', { level: 2, name: 'Zed' })).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Back' }));
+    // On the split the supplier's Back is its X (16 Nov 2026).
+    await user.click(screen.getByRole('button', { name: 'Close Zed' }));
     await waitFor(() => { expect(router.state.location.pathname).toBe('/orders'); });
     await waitFor(() => { expect(screen.getByRole('button', { name: /^Zed/ })).toHaveFocus(); });
   });
 
-  it('Back from a supplier picked beside «What they sell» reaches the list, not the supplier before it', async () => {
+  it('X on a supplier picked beside «What they sell» reaches the list, not the supplier before it', async () => {
     split();
     const { user, router } = await loaded();
     await user.click(screen.getByRole('button', { name: /^Alpine Mills/ }));
     await screen.findByRole('heading', { level: 2, name: 'Alpine Mills' });
-    await user.click(screen.getByRole('button', { name: /What they sell/ }));
+    await user.click(screen.getByRole('button', { name: 'Ingredients from Alpine Mills' }));
     await waitFor(() => { expect(router.state.location.pathname).toBe('/orders/supplier/s-alp/items'); });
     await user.click(screen.getByRole('button', { name: /^Zed/ }));
     expect(await screen.findByRole('heading', { level: 2, name: 'Zed' })).toBeInTheDocument();
     expect(router.state.location.pathname).toBe('/orders/supplier/s-zed');
-    await user.click(screen.getByRole('button', { name: 'Back' }));
+    await user.click(screen.getByRole('button', { name: 'Close Zed' }));
     await waitFor(() => { expect(router.state.location.pathname).toBe('/orders'); });
     await waitFor(() => { expect(screen.getByRole('button', { name: /^Zed/ })).toHaveFocus(); });
   });

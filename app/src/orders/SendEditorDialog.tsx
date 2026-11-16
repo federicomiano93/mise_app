@@ -1,8 +1,7 @@
-import { useEffect, useId, useRef, useState } from 'react';
-import type { ReactNode } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Share } from 'lucide-react';
 import { afterShare, settleOnce } from '@mise/shared/send-chooser';
-import { editorTitle, picturePrep, previewLines } from '@mise/shared/send-editor';
+import { editorTitle, picturePrep } from '@mise/shared/send-editor';
 import type { EditorAnswer, EditorJob, PicturePrep, PictureState } from '@mise/shared/send-editor';
 import { useT } from '../i18n/useT';
 import { markBusy } from '../session/busy';
@@ -21,14 +20,17 @@ type Props = {
   photo: boolean;
   // The venue's output language: the picture is what the SUPPLIER reads.
   language: unknown;
+  // The one supplier a message with no name of its own goes to (the WhatsApp chat road, one supplier): the title says it, as for the
+  // named roads. Only the title: the job stays unnamed, so the batch says nothing more about it.
+  soleName?: string;
   answer: (answer: EditorAnswer) => void;
 };
 
 const IDLE: PictureState = { ready: false, busy: false, failed: false };
 const DRAWING: PictureState = { ready: false, busy: true, failed: false };
 
-// What the supplier will get, as the person is about to send it: the message exactly as buildOrderMessage wrote it, shown as
-// WhatsApp shows it, in a box that can be corrected, and ONE «Send».
+// What the supplier will get, as the person is about to send it: the supplier's name on top («ROSSI», «ROSSI (1 of 3)»), the message
+// exactly as buildOrderMessage wrote it in a box that can be corrected, Cancel and ONE «Send».
 //
 // ⚠️⚠️ WHY IT EXISTS (the order of 14 Nov 2026 that reached a supplier with a product missing, because nobody ever SAW what the
 // supplier would receive). AN EDIT CHANGES ONLY THE MESSAGE: History keeps the quantities that were confirmed.
@@ -42,7 +44,7 @@ const DRAWING: PictureState = { ready: false, busy: true, failed: false };
 // when the share resolves. A sheet sent to the background may never resolve, so coming back to the page puts «Send» back.
 // ⚠️ LEAVING WITH EDITED TEXT ASKS FIRST (P20: confirm before discarding edits); while that question is up a second Cancel does
 // nothing and Escape belongs to it. The parent's `answer` settles once.
-export function SendEditorDialog({ job, i, n, photo, language, answer }: Props) {
+export function SendEditorDialog({ job, i, n, photo, language, answer, soleName }: Props) {
   const { t } = useT();
   const [confirm, confirmDialog] = useConfirm();
   const [text, setText] = useState(job.text);
@@ -54,7 +56,6 @@ export function SendEditorDialog({ job, i, n, photo, language, answer }: Props) 
   const sendButton = useRef<HTMLButtonElement>(null);
   const body = useRef<HTMLDivElement>(null);
   const wasSharing = useRef(false);
-  const ids = { area: useId(), hint: useId(), preview: useId() };
 
   const done = useRef<((value: EditorAnswer) => boolean) | null>(null);
   done.current ??= settleOnce(answer);
@@ -174,15 +175,12 @@ export function SendEditorDialog({ job, i, n, photo, language, answer }: Props) 
   const words = sendTranslate(t);
   const empty = text.trim() === '';
   const disabled = sharing || empty || drawing;
-  const lines = job.plain === true
-    ? text.split('\n').map(line => (line === '' ? [] : [{ text: line, bold: false }]))
-    : previewLines(text);
 
   return (
     <>
     <Dialog
       isOpen
-      title={editorTitle({ ...(job.name === undefined ? {} : { name: job.name }), i, n }, words)}
+      title={editorTitle({ ...(job.name !== undefined ? { name: job.name } : soleName !== undefined && soleName !== '' ? { name: soleName } : {}), i, n }, words)}
       onClose={() => { void leave('cancelled'); }}
       actions={
         <>
@@ -203,23 +201,15 @@ export function SendEditorDialog({ job, i, n, photo, language, answer }: Props) 
       }
     >
       <div ref={body} className={styles.body}>
-        <p id={ids.preview} className={styles.label}>{t('ord.sendEditor.preview')}</p>
-        <div role="group" aria-labelledby={ids.preview} tabIndex={0} className={styles.preview}>
-          {lines.map((runs, index): ReactNode => (
-            <div key={index} className={styles.line}>
-              {runs.length === 0 ? <br /> : runs.map((run, at) => (run.bold ? <strong key={at}>{run.text}</strong> : run.text))}
-            </div>
-          ))}
-        </div>
-        <label htmlFor={ids.area} className={styles.label}>{t('ord.sendEditor.edit')}</label>
-        <p id={ids.hint} className={styles.hint}>{t('ord.sendEditor.hint')}</p>
+        {/* ⚠️ ONLY THE BOX (16 Nov 2026: the preview «What they will receive», its label and the line about History are gone — in the
+            lab there is no time to read). The box IS what the supplier receives. It has no visible label: its name, for assistive
+            technology, says whom the message is for. */}
         <textarea
           ref={area}
-          id={ids.area}
           className={styles.text}
-          rows={6}
+          rows={7}
           spellCheck={false}
-          aria-describedby={ids.hint}
+          aria-label={(job.name ?? soleName ?? '') === '' ? t('ord.sendEditor.boxNameGrouped') : t('ord.sendEditor.boxName', { name: job.name ?? soleName ?? '' })}
           value={text}
           onChange={event => { change(event.target.value); }}
         />

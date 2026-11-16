@@ -1,76 +1,69 @@
-/* The head of «Orders», over the supplier list and over the flat view: the search box, the send arrow and the tools. Nothing in the
-   chain from the scroll area (the shell's main) down to it clips (no `overflow` above), or it would stop sticking. */
+/* The top-left of «Orders»: the tabs, then the search box. Nothing in the chain from the scroll area (the shell's main) down to the
+   search box clips (no `overflow` above), or it would stop sticking.
 
+   ⚠️ TWO ROWS OF FIXED HEIGHT: the tabs (var(--hit)) and the search box (var(--hit)) with var(--s3) above and var(--s4) under it, then
+   a 1px line. The cell on the right of the split (OrdersSection.module.css, .top) is built of the very same rows, so the two lines
+   meet across the page. */
+
+.tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s2);
+  height: var(--hit);
+}
+
+/* A tab: 48px, the look of the design's segmented choice; the current one in the accent tint. */
+.tab {
+  min-width: 0;
+  min-height: var(--hit);
+  padding: 0 var(--s2);
+  overflow: hidden;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: 500 var(--fs-md)/1.2 var(--font);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.tab[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent-tint);
+  color: var(--accent-ink);
+}
+
+.tab[aria-disabled="true"] {
+  cursor: default;
+}
+
+.tab:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* The sticky part: the search box (and, on the flat view, its filter). It sticks under the title band: --band-h is 0 on a phone,
+   where the band scrolls away, and the band's height on the split, where it sticks. */
 .head {
   position: sticky;
-  top: 0;
+  top: var(--band-h);
   z-index: 2;
   display: flex;
   flex-direction: column;
   gap: var(--s3);
-  padding-block: var(--s2);
+  padding: var(--s3) 0 var(--s4);
   background: var(--bg);
-}
-
-/* First row: the search box grows, the gear (icon-only, a square 48px target that does not shrink) after it. 6rem keeps the field inside at
-   least 44px wide after the icon and the padding. */
-.top {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--s2);
-}
-
-.top .gear {
-  flex: none;
-  width: var(--hit);
-  padding: 0;
-}
-
-/* The row of words ABOVE the sticky part, not sticky itself: «Send», the swap and «History» share a line where they fit and wrap where
-   they do not, each growing to fill its line. Compact (the padding of two classes beats the button's own): 48px tall and never under 44px wide,
-   so at 296px (a 264px column) at least two share a line. */
-.actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s2);
-}
-
-.actions .send,
-.actions .swap,
-.actions .history {
-  min-width: 44px;
-  padding-inline: var(--s3);
-}
-
-.send,
-.swap,
-.history {
-  flex: 1 1 auto;
-}
-
-/* The places kept while «Send» and the swap wait (or the swap's, with a screen open beside the list), about as wide AND as tall as the
-   buttons (a line holding only placeholders is not 0px tall), so the row wraps and measures the same before and after. */
-.sendPlace {
-  flex: 1 1 auto;
-  width: 6.5rem;
-  min-height: var(--hit);
-}
-
-.swapPlace {
-  flex: 1 1 auto;
-  width: 8.5rem;
-  min-height: var(--hit);
 }
 
 /* The icon and the box on one line: an SVG in a flex container is centred on the box, not left on the text baseline. */
 .search {
   display: flex;
-  flex: 1 1 6rem;
   min-width: 0;
   align-items: center;
   gap: var(--s2);
-  min-height: var(--hit);
+  height: var(--hit);
   padding: 0 var(--s3);
   border: 1px solid var(--line-2);
   border-radius: var(--r-md);
@@ -91,7 +84,7 @@
 .input {
   flex: 1;
   min-width: 0;
-  min-height: var(--hit);
+  min-height: 44px;
   padding: 0;
   border: 0;
   outline: 0;
@@ -102,4 +95,20 @@
 
 .input::placeholder {
   color: var(--ink-3);
+}
+
+/* The split: the head is the top-left of the 2×2 grid. Its line reaches the column's edges (the list column's paddings, var(--s6) and
+   var(--s5) in OrdersSection.module.css, are bled back), and the tabs and the box keep to the column's width even when the flat view
+   spans the page. */
+@media (min-width: 1000px) {
+  .head {
+    margin-inline: calc(-1 * var(--s6)) calc(-1 * var(--s5));
+    padding-inline: var(--s6) var(--s5);
+    border-bottom: 1px solid var(--line);
+  }
+
+  .tabs,
+  .search {
+    max-width: calc(var(--orders-list-w) - var(--s5) - var(--s6));
+  }
 }

@@ -85,7 +85,7 @@ describe('«Send to the supplier» on an order list', () => {
     const source = seeded(list({ done: { 'i-rye': true } }));
     const view = await atOne(source);
     await view.user.click(await one().findByRole('button', { name: 'Send to the suppliers' }));
-    const editor = within(await screen.findByRole('dialog', { name: 'Check the order' }, LOAD));
+    const editor = within((await screen.findByRole('textbox', undefined, LOAD)).closest('[role="dialog"]') as HTMLElement);
     await waitFor(() => { expect(editor.getByRole('button', { name: 'Send' })).toBeEnabled(); }, LOAD);
     act(() => { editor.getByRole('button', { name: 'Send' }).click(); });
     expect(open).toHaveBeenCalledTimes(1);
@@ -133,7 +133,7 @@ describe('«Send to the supplier» on an order list', () => {
     const view = renderOrders('/orders/lists/r-1', { source, session: { ...STAFF.session, ...session } });
     await screen.findByRole('region', { name: 'Order list' }, LOAD);
     await view.user.click(await one().findByRole('button', { name: 'Send to the supplier' }));
-    const editor = within(await screen.findByRole('dialog', { name: 'Check the order' }, LOAD));
+    const editor = within((await screen.findByRole('textbox', undefined, LOAD)).closest('[role="dialog"]') as HTMLElement);
     await waitFor(() => { expect(editor.getByRole('button', { name: 'Send' })).toBeEnabled(); }, LOAD);
     act(() => { editor.getByRole('button', { name: 'Send' }).click(); });
     expect(open).toHaveBeenCalledTimes(1);
