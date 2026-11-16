@@ -2168,7 +2168,8 @@ pieces and «to taste» do not stop it; a kg, l or ml row does). It replaces the
 3. Then whole 5 g / 10 g steps on the stepped rows, the same way, while the gap holds a whole step.
 4. A few grams left: on the largest row (by its exact amount), which then loses its round number (1597 g). ⚠️ Measured on an invented
    ten-row recipe (2990 g, three rows on the 10 g step, the small ones on 1 g): at every 100 g from 1 kg to 20 kg, about 7 batches in 10
-   end with the largest row off its round number by 1 to 9 g — not rare. The rule is built exactly as approved; the owner decides.
+   end with the largest row off its round number by 1 to 9 g — not rare. ✅ Accepted by the owner (16 Nov 2026: «la farina non
+   tonda è ok»): the typed total wins, the rule stays as built.
 
 **The Total is the rows shown, added up** (`app/src/recipes/recipeAmounts.ts`): each weighable row converted to grams (0.714 l is
 714 g), pieces, spoons and «to taste» left out, in whole grams — never the batch typed or a figure worked out again. The export
