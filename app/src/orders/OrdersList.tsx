@@ -43,7 +43,8 @@ type Props = {
   onOpenSupplier: (id: string) => void;
   onOpenItems: (id: string) => void;
   // The clipboard button of a row (the split only): the order summary beside the list — while the supplier has quantities, and for a
-  // supplier closed today as «not needed», whose summary holds «Reopen» (its door used to be the «Order today» chip, now gone).
+  // supplier closed today as «not needed», whose summary holds «Reopen», and a supplier due today with nothing typed (the only door to
+  // «Close as not ordered»; the «Order today» chip that used to be it is gone).
   onOpenSummary: (id: string) => void;
   // The two buttons under the list: the picker of the suppliers to record together, and the one to clear.
   onPlaceAll: () => void;
@@ -201,7 +202,7 @@ export function OrdersList({ lens, earlyLens, ready, split, openId, heldId, onLo
                     onOpenSupplier={onOpenSupplier}
                     onOpenItems={onOpenItems}
                     onOpenSummary={split ? onOpenSummary : undefined}
-                    summaryOffered={filled > 0 || closed}
+                    summaryOffered={filled > 0 || closed || due.has(supplier.id)}
                     onRowFocus={(id, node) => { focusedRow.current = { id, node }; }}
                   />
                 );
@@ -239,7 +240,7 @@ type RowProps = {
   onOpenItems: (id: string) => void;
   // Undefined on a phone: neither the summary button nor its spacer is drawn there.
   onOpenSummary: ((id: string) => void) | undefined;
-  // The summary button is drawn (quantities typed, or closed today: «Reopen» is in the summary); otherwise its spacer.
+  // The summary button is drawn (quantities typed, closed today: «Reopen» is in the summary, or due today: «Close as not ordered»); otherwise its spacer.
   summaryOffered: boolean;
   // The row's open button took the focus: kept by the list, which hands the focus back if the row moves to another group.
   onRowFocus: (id: string, node: HTMLElement) => void;
@@ -248,7 +249,7 @@ type RowProps = {
 // ⚠️ SIBLING BUTTONS, NOT ONE WITH SOMETHING CLICKABLE INSIDE IT: a button in a button is invalid, and a tap on the inner one ran
 // the outer one's handler too. The row is a plain container holding siblings: the wide one opens the order, a narrow one opens the
 // read-only list of what the supplier sells, and on the split a third opens the order summary beside the list (while the supplier
-// has quantities or was closed today; an invisible spacer of the same width keeps the rows aligned).
+// has quantities, was closed today or is due today; an invisible spacer of the same width keeps the rows aligned).
 function SupplierRow({ supplier, meta, count, tag, due, isOpen, isWaiting, onOpenSupplier, onOpenItems, onOpenSummary, summaryOffered, onRowFocus }: RowProps) {
   const { t } = useT();
   const handBack = useHandBack();

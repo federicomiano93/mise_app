@@ -265,8 +265,8 @@ describe('close as not ordered: the second port\'s extras', () => {
     split();
     const view = renderOrders('/orders', { source: seeded({ draft: { entries: {}, days: {}, skipped: { 's-alp': TODAY } } }) });
     const door = await screen.findByRole('button', { name: 'Order summary: Alpine Mills' }, LOAD);
-    // Bee Farm, still to order with nothing typed, has no summary button.
-    expect(screen.queryByRole('button', { name: 'Order summary: Bee Farm' })).not.toBeInTheDocument();
+    // Cat Foods is not due today and has nothing typed: no summary button. (Bee Farm, due today, now has one: see the next describe.)
+    expect(screen.queryByRole('button', { name: 'Order summary: Cat Foods' })).not.toBeInTheDocument();
     await view.user.click(door);
     await waitFor(() => { expect(path(view)).toBe('/orders/supplier/s-alp/summary'); });
     expect(await pane().findByRole('button', { name: 'Reopen' }, LOAD)).toBeInTheDocument();
@@ -284,10 +284,25 @@ describe('close as not ordered: the second port\'s extras', () => {
     await pane().findByRole('button', { name: 'Close as not ordered' });
     await view.user.click(pane().getByRole('button', { name: 'Back' }));
     await waitFor(() => { expect(path(view)).toBe('/orders'); });
-    await waitFor(() => { expect(document.activeElement).toHaveAccessibleName(expect.stringMatching(/^Alpine Mills/) as string); });
-    const focused = document.activeElement as HTMLElement;
-    expect(focused.closest('li')?.querySelector('button')).toBe(focused);
-    expect(screen.queryByRole('button', { name: 'Order summary: Alpine Mills' })).not.toBeInTheDocument();
+    await waitFor(() => { expect(screen.getByRole('button', { name: 'Order summary: Alpine Mills' })).toHaveFocus(); });
+    expect(screen.queryByRole('button', { name: 'Order summary: Cat Foods' })).not.toBeInTheDocument();
+  });
+
+  it('a supplier due today with nothing typed has its summary door; closing it there takes it out of «To order», the door stays with «Reopen»', async () => {
+    split();
+    const view = renderOrders('/orders', { source: seeded() });
+    const door = await screen.findByRole('button', { name: 'Order summary: Bee Farm' }, LOAD);
+    expect(group('To order').some(name => name.startsWith('Bee Farm'))).toBe(true);
+    // Not due, nothing typed: no door.
+    expect(screen.queryByRole('button', { name: 'Order summary: Cat Foods' })).not.toBeInTheDocument();
+    await view.user.click(door);
+    await view.user.click(await pane('Bee Farm').findByRole('button', { name: 'Close as not ordered' }, LOAD));
+    await view.user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Close' }));
+    await waitFor(() => { expect(path(view)).toBe('/orders'); });
+    await waitFor(() => { expect(group('To order').some(name => name.startsWith('Bee Farm'))).toBe(false); });
+    const again = await screen.findByRole('button', { name: 'Order summary: Bee Farm' });
+    await view.user.click(again);
+    expect(await pane('Bee Farm').findByRole('button', { name: 'Reopen' }, LOAD)).toBeInTheDocument();
   });
 
   it('⚠️ a draft stream that dies after its first answer: its closes are read as none, the list errs on the side of the reminder', async () => {
