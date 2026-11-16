@@ -82,4 +82,14 @@ describe('Dialog', () => {
     await userEvent.setup().pointer({ keys: '[MouseLeft]', target: document.body });
     expect(onClose).not.toHaveBeenCalled();
   });
+
+  // Orders' «Order sent?» (16 Nov 2026): it must be answered — neither Escape nor a press outside closes it, even when dismissable.
+  it('is closed by neither Escape nor a press outside when it is forced', async () => {
+    const { onClose } = draw({ forced: true, dismissable: true });
+    const user = userEvent.setup();
+    await user.keyboard('{Escape}');
+    await user.pointer({ keys: '[MouseLeft]', target: document.body });
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
 });

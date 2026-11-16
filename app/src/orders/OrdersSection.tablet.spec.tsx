@@ -196,3 +196,85 @@ describe('the notices in the pane (item 6)', () => {
     expect(pane()).not.toBeInTheDocument();
   });
 });
+
+describe('the open supplier (item 5)', () => {
+  const ITEMS5 = [
+    ingredient('i-flour', { name: 'Flour', weight: '25kg', supplierId: 's-alp', unit: 'sack' }),
+    ingredient('i-box', { name: 'Cake box', supplierId: 's-alp', unit: 'carton', packUnit: 'bag' }),
+  ];
+  const source5 = (draft = { entries: { 'i-flour': { qty: 2 } }, days: {} }) =>
+    fakeOrdersSource({ suppliers: SUPPLIERS, ingredients: ITEMS5, draft });
+  const card = () => within(screen.getByRole('region', { name: 'Alpine Mills' }));
+  const head = () => within(screen.getByRole('heading', { level: 2, name: 'Alpine Mills' }).closest('header') as HTMLElement);
+
+  it('on the split: [X] NAME › … [send], and nothing else in its head', async () => {
+    split();
+    renderOrders('/orders/supplier/s-alp', { source: source5() });
+    await screen.findAllByRole('spinbutton', undefined, LOAD);
+    expect(head().getAllByRole('button').map(button => button.getAttribute('aria-label'))).toEqual([
+      'Close Alpine Mills', 'Card of Alpine Mills in Ingredients & suppliers', 'Send the order to Alpine Mills',
+    ]);
+    expect(card().queryByRole('button', { name: 'What they sell' })).not.toBeInTheDocument();
+    expect(card().queryByRole('button', { name: /^Summary/ })).not.toBeInTheDocument();
+    expect(card().queryByRole('button', { name: /^Add an ingredient/ })).not.toBeInTheDocument();
+  });
+
+  it('X closes it: back to no supplier chosen, the quantities kept', async () => {
+    split();
+    const view = await loaded();
+    await view.user.click(screen.getAllByRole('button', { name: /^Alpine Mills/ })[0] as HTMLElement);
+    await screen.findByRole('spinbutton', { name: 'Flour quantity to order' }, LOAD);
+    await view.user.type(screen.getByRole('spinbutton', { name: 'Flour quantity to order' }), '3');
+    await view.user.click(head().getByRole('button', { name: 'Close Alpine Mills' }));
+    await waitFor(() => { expect(path(view)).toBe('/orders'); });
+    expect(await screen.findByText('Pick a supplier')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /^Alpine Mills.*1 item/ })).toHaveLength(1);
+  });
+
+  it('on a phone: a Back arrow, and «Summary (N)» kept in the head (the rows have no summary button there)', async () => {
+    renderOrders('/orders/supplier/s-alp', { source: source5() });
+    await screen.findAllByRole('spinbutton', undefined, LOAD);
+    expect(head().getAllByRole('button').map(button => button.getAttribute('aria-label') ?? button.textContent)).toEqual([
+      'Back', 'Card of Alpine Mills in Ingredients & suppliers', 'Summary (1)', 'Send the order to Alpine Mills',
+    ]);
+  });
+
+  it('says its head in Italian', async () => {
+    split();
+    renderOrders('/orders/supplier/s-alp', { source: source5(), lang: 'it' });
+    await screen.findAllByRole('spinbutton', undefined, LOAD);
+    expect(head().getByRole('button', { name: 'Chiudi Alpine Mills' })).toBeInTheDocument();
+    expect(card().getByRole('combobox', { name: 'Ordine per' })).toBeInTheDocument();
+    for (const name of ['Articolo', 'Unità', 'Ordine', 'Giacenza']) expect(card().getByText(name)).toBeInTheDocument();
+  });
+
+  it('has one slim bar, «Order for» and «Saved», then the column names Item · Unit · Order · Stock', async () => {
+    renderOrders('/orders/supplier/s-alp', { source: source5() });
+    await screen.findAllByRole('spinbutton', undefined, LOAD);
+    const day = card().getByRole('combobox', { name: 'Order for' });
+    const bar = day.closest('[class*="bar"]') as HTMLElement;
+    // «Saved ✓» is the bar's own live line, beside the day.
+    expect(within(bar).getAllByRole('status').some(line => line.tagName === 'P')).toBe(true);
+    const names = ['Item', 'Unit', 'Order', 'Stock'].map(name => card().getByText(name));
+    expect(names[0]?.parentElement).toBe(names[3]?.parentElement);
+    expect(bar.compareDocumentPosition(names[0] as HTMLElement) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('draws each item as name · unit · [−] qty [+] · stock, with no ×', async () => {
+    renderOrders('/orders/supplier/s-alp', { source: source5() });
+    await screen.findAllByRole('spinbutton', undefined, LOAD);
+    const line = card().getByText('Flour').closest('li') as HTMLElement;
+    const controls = [...line.querySelectorAll('button, input, select')].map(node => node.getAttribute('aria-label'));
+    expect(controls).toEqual([
+      'Edit Flour 25kg', 'One fewer Flour 25kg', 'Flour 25kg quantity to order', 'One more Flour 25kg', 'Flour 25kg stock on hand',
+    ]);
+    // The weight is inside the name's own button: one target for both lines.
+    expect(within(line).getByRole('button', { name: 'Edit Flour 25kg' })).toHaveTextContent('Flour25kg');
+    // The unit is a caption, or a menu when the card offers a choice.
+    expect(within(line).getByText('sack')).toBeInTheDocument();
+    expect(card().getByRole('combobox', { name: 'Unit to order for Cake box' })).toBeInTheDocument();
+    expect(card().queryByRole('button', { name: /^Clear the quantity/ })).not.toBeInTheDocument();
+    // A quantity marks the row; the stylesheet tints only its block (orderLineCss.spec.ts).
+    expect(line).toHaveAttribute('data-filled', 'true');
+  });
+});

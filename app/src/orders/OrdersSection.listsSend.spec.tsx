@@ -64,11 +64,11 @@ describe('the road to whoever runs the place', () => {
     const view = await atList(seeded({ ordersConfig: DEFAULT_ROADS }));
     await toSend(view, 'Alpine Mills');
     await view.user.click(sendButton());
-    const chooser = within(await screen.findByRole('dialog', { name: 'How should this order go?' }, LOAD));
+    const chooser = within(await screen.findByRole('dialog', { name: 'Send to' }, LOAD));
     const roads = chooser.getAllByRole('button').map(button => button.textContent ?? '');
-    expect(roads[0]).toContain('To whoever runs the place, in the app');
-    expect(roads[1]).toContain('WhatsApp — I choose the chat');
-    expect(chooser.getByRole('button', { name: /^To whoever runs the place, in the app/ }).querySelector('svg')).not.toBeNull();
+    expect(roads[0]).toContain('Whoever runs the place');
+    expect(roads[1]).toContain('WhatsApp');
+    expect(chooser.getByRole('button', { name: /^Whoever runs the place/ }).querySelector('svg')).not.toBeNull();
   });
 
   it('is not offered when the venue closed it for employees', async () => {
@@ -77,8 +77,8 @@ describe('the road to whoever runs the place', () => {
     await toSend(view, 'Alpine Mills');
     await view.user.click(sendButton());
     // One road left: taken in the press, no chooser — straight to the editor of the message.
-    const editor = within(await screen.findByRole('dialog', { name: 'Check the order' }, LOAD));
-    expect(screen.queryByRole('dialog', { name: 'How should this order go?' })).not.toBeInTheDocument();
+    const editor = within((await screen.findByRole('textbox', undefined, LOAD)).closest('[role="dialog"]') as HTMLElement);
+    expect(screen.queryByRole('dialog', { name: 'Send to' })).not.toBeInTheDocument();
     await view.user.click(editor.getByRole('button', { name: 'Send' }));
     await waitFor(() => { expect(open).toHaveBeenCalledTimes(1); });
   });
@@ -93,8 +93,8 @@ describe('the road to whoever runs the place', () => {
     await view.user.click(await history.findByRole('button', { name: /^Alpine Mills/ }));
     await view.user.click(history.getByRole('button', { name: 'Send again' }));
     // Straight to the editor of the message: no chooser.
-    const editor = within(await screen.findByRole('dialog', { name: 'Check the order' }, LOAD));
-    expect(screen.queryByRole('dialog', { name: 'How should this order go?' })).not.toBeInTheDocument();
+    const editor = within((await screen.findByRole('textbox', undefined, LOAD)).closest('[role="dialog"]') as HTMLElement);
+    expect(screen.queryByRole('dialog', { name: 'Send to' })).not.toBeInTheDocument();
     await view.user.click(editor.getByRole('button', { name: 'Send' }));
     expect(open).toHaveBeenCalledTimes(1);
   });

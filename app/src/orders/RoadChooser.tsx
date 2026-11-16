@@ -9,11 +9,13 @@ import { Dialog } from '../ui/Dialog';
 import type { StoredDoc } from './ordersSource';
 import styles from './RoadChooser.module.css';
 
+// ONE word (or two) per road, no line of explanation under it (16 Nov 2026: in the lab there is no time to read). The settings keep the
+// long names (ord.send.route.*), where there is time.
 const ROUTE_NAME: Record<Route, MessageKey> = {
-  manager: 'ord.send.route.manager',
-  whatsapp: 'ord.send.route.whatsapp',
-  whatsappSupplier: 'ord.send.route.whatsappSupplier',
-  email: 'ord.send.route.email',
+  manager: 'ord.send.to.manager',
+  whatsapp: 'ord.send.to.whatsapp',
+  whatsappSupplier: 'ord.send.to.whatsappSupplier',
+  email: 'ord.send.to.email',
 };
 
 // The two WhatsApp roads share the green-bubble idea; the one straight to the supplier carries a «more» mark so they can be
@@ -33,15 +35,17 @@ type Props = {
   onCancel: () => void;
 };
 
-// «How should this order go?» — one big button per road, with what it costs said under it (the one-chat-at-a-time note, who
-// has no contact saved, that email only opens the mail app). On the shared Dialog, so it has a role, closes on Escape, traps the
-// focus and gives it back (finding F-4: the current app's chooser had none of those).
+// «Send to» — one big button per road, its name only: WhatsApp (the person picks the chat), Supplier (WhatsApp straight to the
+// supplier), and where the venue has them on, Email and Whoever runs the place (the redesign of 16 Nov 2026). The notes that used to
+// sit under the names (one chat at a time, who has no contact saved, that email only opens the mail app) are gone with them: a
+// supplier with no contact is still said by the send itself. On the shared Dialog, so it has a role, closes on Escape, traps the focus
+// and gives it back (finding F-4: the current app's chooser had none of those).
 export function RoadChooser({ offers, onPick, onCancel }: Props) {
   const { t } = useT();
   return (
     <Dialog
       isOpen
-      title={t('ord.send.howTitle')}
+      title={t('ord.send.toTitle')}
       dismissable
       onClose={onCancel}
       actions={<Button onPress={onCancel}>{t('common.cancel')}</Button>}
@@ -58,11 +62,7 @@ export function RoadChooser({ offers, onPick, onCancel }: Props) {
             onPress={() => { onPick(offer); }}
           >
             {ROUTE_ICON[offer.route]}
-            <span className={styles.text}>
-              <span className={styles.name}>{t(name)}</span>
-              {offer.note !== '' ? <span className={styles.note}>{offer.note}</span> : null}
-              {offer.route === 'email' ? <span className={styles.note}>{t('ord.send.emailOpensApp')}</span> : null}
-            </span>
+            <span className={styles.name}>{t(name)}</span>
           </Button>
           );
         })}

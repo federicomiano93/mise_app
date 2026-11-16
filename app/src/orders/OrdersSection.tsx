@@ -594,7 +594,7 @@ function OrdersGrid({ view, split, detailRef, list, hint, onIncoming, onReorder,
     <div
       className={styles.layout}
       data-view={view.kind === 'list' ? 'list' : view.kind === 'ingredients' ? 'ingredients' : 'detail'}
-      data-pane={notices ? 'notices' : undefined}
+      data-pane={notices ? 'notices' : view.kind === 'supplier' ? 'supplier' : undefined}
     >
       <div className={styles.list}>{list}</div>
       {split ? (

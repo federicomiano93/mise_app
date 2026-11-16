@@ -76,18 +76,19 @@ async function toConfirm(view: Awaited<ReturnType<typeof atSupplier>>, name = 'A
 describe('the day line', () => {
   it('shows «Today» and «Next order» for a supplier with order days, with the expected delivery', async () => {
     await atSupplier('s-zed', seeded());
-    const select = screen.getByRole('combobox', { name: 'Order:' });
+    const select = screen.getByRole('combobox', { name: 'Order for' });
     expect(within(select).getAllByRole('option').map(option => option.textContent)).toEqual(['Today', `Next order (${short(inDays(1))})`]);
     // With nothing stamped, the rows would be for the NEXT order: that is what the line shows.
     expect(select).toHaveValue('next');
     // Today is not an order day, so the rows are for the NEXT order — the delivery is counted from the order day in effect.
-    expect(screen.getByText(`Expected delivery: ${long(inDays(3))}`)).toBeInTheDocument();
+    // The open supplier's slim bar says the day short (16 Nov 2026).
+    expect(screen.getByText(`Delivery ${short(inDays(3))}`)).toBeInTheDocument();
   });
 
   it('writes the chosen day, announces it and keeps the focus on the select', async () => {
     const source = seeded();
     const { user } = await atSupplier('s-zed', source);
-    const select = screen.getByRole('combobox', { name: 'Order:' });
+    const select = screen.getByRole('combobox', { name: 'Order for' });
     await user.selectOptions(select, 'today');
     await waitFor(() => { expect((source.draft?.days as Record<string, string>)['s-zed']).toBe(TODAY); });
     expect(await screen.findByText('Order for today')).toBeInTheDocument();
@@ -102,13 +103,13 @@ describe('the day line', () => {
   it('offers a week to a supplier with NO order days — «Today», «Tomorrow», then each weekday — always', async () => {
     const source = seeded();
     const { user } = await atSupplier('s-alp', source);
-    const select = screen.getByRole('combobox', { name: 'Order:' });
+    const select = screen.getByRole('combobox', { name: 'Order for' });
     const options = within(select).getAllByRole('option').map(option => option.textContent);
     expect(options).toHaveLength(7);
     expect(options.slice(0, 2)).toEqual(['Today', 'Tomorrow']);
     expect(options[2]).toBe(long(inDays(2)));
-    // No delivery days: no «Expected delivery».
-    expect(screen.queryByText(/^Expected delivery/)).not.toBeInTheDocument();
+    // No delivery days: no «Delivery …».
+    expect(screen.queryByText(/^Delivery /)).not.toBeInTheDocument();
 
     await user.selectOptions(select, inDays(1));
     await waitFor(() => { expect((source.draft?.days as Record<string, string>)['s-alp']).toBe(inDays(1)); });
@@ -119,13 +120,13 @@ describe('the day line', () => {
   it('gives the pseudo-supplier «No supplier» the week too', async () => {
     const source = fakeOrdersSource({ suppliers: SUPPLIERS, ingredients: [ingredient('i-stray', { name: 'Stray', supplierId: 'gone' })] });
     await atSupplier('no-supplier', source);
-    expect(within(screen.getByRole('combobox', { name: 'Order:' })).getAllByRole('option')).toHaveLength(7);
+    expect(within(screen.getByRole('combobox', { name: 'Order for' })).getAllByRole('option')).toHaveLength(7);
   });
 
   it('shows the stored day of a past order that still has rows, and choosing it writes nothing', async () => {
     const source = seeded({ entries: { 'i-flour': { qty: 2 } }, days: { 's-alp': inDays(-2) } });
     const { user } = await atSupplier('s-alp', source);
-    const select = screen.getByRole('combobox', { name: 'Order:' });
+    const select = screen.getByRole('combobox', { name: 'Order for' });
     expect(select).toHaveValue(inDays(-2));
     expect(within(select).getAllByRole('option')[0]).toHaveTextContent(`From ${short(inDays(-2))}`);
     await user.selectOptions(select, inDays(-2));
@@ -136,7 +137,7 @@ describe('the day line', () => {
     const source = seeded();
     const { user } = await atSupplier('s-alp', source);
     source.refuseWrites = true;
-    const select = screen.getByRole('combobox', { name: 'Order:' });
+    const select = screen.getByRole('combobox', { name: 'Order for' });
     await user.selectOptions(select, inDays(2));
     expect(await screen.findByText('Could not update the order’s day — check your network and try again.')).toBeInTheDocument();
     await waitFor(() => { expect(select).toHaveValue(TODAY); });
@@ -144,10 +145,10 @@ describe('the day line', () => {
 
   it('says its words in Italian', async () => {
     await atSupplier('s-zed', seeded(), { lang: 'it' });
-    const select = screen.getByRole('combobox', { name: 'Ordine:' });
+    const select = screen.getByRole('combobox', { name: 'Ordine per' });
     expect(within(select).getAllByRole('option')[0]).toHaveTextContent('Oggi');
     expect(within(select).getAllByRole('option')[1]?.textContent).toMatch(/^Prossimo ordine \(/);
-    expect(screen.getByText(/^Consegna prevista: /)).toBeInTheDocument();
+    expect(screen.getByText(/^Consegna /)).toBeInTheDocument();
   });
 });
 

@@ -58,6 +58,11 @@ export function probeFile(): File {
 type ShareNavigator = Pick<Navigator, 'share' | 'canShare'> | null | undefined;
 
 // Whether the person is asked «photo or text?» at all: only where the browser says it can share a PNG.
+// ⚠️ THE ORDER PHOTO IS OFF (Federico, 16 Nov 2026: «no order photo for now»): every road sends the WhatsApp text, and the editor never
+// draws a picture. The drawing and sharing code below stays as it is; turning this back to true brings the photo back on the two
+// WhatsApp roads where the browser can share a PNG (sendFlow.ts).
+export const ORDER_PHOTO_ON: boolean = false;
+
 export function canSharePhotos(nav: ShareNavigator = typeof navigator === 'undefined' ? null : navigator,
   makeProbe: () => File = probeFile): boolean {
   try {

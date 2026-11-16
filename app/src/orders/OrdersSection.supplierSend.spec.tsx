@@ -5,8 +5,8 @@ import { fakeOrdersSource } from '../testing/fakeOrdersSource';
 import type { FakeOrdersSource } from '../testing/fakeOrdersSource';
 import { LOAD, ingredient, renderOrders, supplier } from '../testing/renderOrders';
 
-// «Orders», port of v1.145.0: «Send» on a supplier's own screen — an icon in the bar, left of «+», that sends THAT supplier's lines
-// through the same roads and the same editor as the send screen.
+// «Orders», port of v1.145.0: «Send» on a supplier's own screen — an icon at the end of its head (16 Nov 2026), that sends THAT
+// supplier's lines through the same roads and the same editor as the send screen.
 
 beforeAll(async () => { await import('./OrdersSection'); }, 60_000);
 
@@ -44,15 +44,14 @@ const openSpy = () => vi.spyOn(window, 'open').mockImplementation(() => ({ opene
 const textOf = (url: string) => decodeURIComponent(url.slice(url.indexOf('?text=') + '?text='.length));
 
 describe('«Send» in a supplier’s bar', () => {
-  it('is an icon button named for the supplier, BEFORE «+» in the bar', async () => {
+  it('is an icon button named for the supplier, the last control of the head', async () => {
     await opened(seeded({ draft: DRAFT }));
     const send = sendIcon();
-    const add = screen.getByRole('button', { name: 'Add an ingredient to Alpine Mills' });
     expect(send.querySelector('svg')).toHaveAttribute('aria-hidden', 'true');
     expect(send.textContent).toBe('');
-    // ⚠️ Left of «+» in the page order too (the tab order and the reading order follow the DOM).
-    expect(send.compareDocumentPosition(add) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(send.parentElement).toBe(add.parentElement);
+    const head = send.closest('header') as HTMLElement;
+    const buttons = within(head).getAllByRole('button');
+    expect(buttons[buttons.length - 1]).toBe(send);
   });
 
   it('is off while nothing is typed for the supplier, and on after the first quantity', async () => {
@@ -71,10 +70,10 @@ describe('«Send» in a supplier’s bar', () => {
     const open = openSpy();
     const { user } = await opened(seeded({ draft: DRAFT }), STAFF);
     await user.click(sendIcon());
-    const editor = within(await screen.findByRole('dialog', { name: 'Check the order' }, LOAD));
-    const preview = editor.getByRole('group', { name: 'What they will receive' });
-    expect(preview).toHaveTextContent('Flour 00');
-    expect(preview).not.toHaveTextContent('Whole milk');
+    const editor = within(await screen.findByRole('dialog', { name: 'Alpine Mills' }, LOAD));
+    const box = editor.getByRole('textbox') as HTMLTextAreaElement;
+    expect(box.value).toContain('Flour 00');
+    expect(box.value).not.toContain('Whole milk');
     expect(open).not.toHaveBeenCalled();
     act(() => { editor.getByRole('button', { name: 'Send' }).click(); });
     expect(open).toHaveBeenCalledTimes(1);
@@ -88,15 +87,15 @@ describe('«Send» in a supplier’s bar', () => {
     const { user } = await opened(seeded({ draft: DRAFT, ordersConfig: null }));
     const send = sendIcon();
     await user.click(send);
-    const chooser = await screen.findByRole('dialog', { name: 'How should this order go?' }, LOAD);
+    const chooser = await screen.findByRole('dialog', { name: 'Send to' }, LOAD);
     // A second press while the chooser is up opens nothing more.
     act(() => { send.click(); });
-    expect(screen.getAllByRole('dialog', { name: 'How should this order go?' })).toHaveLength(1);
-    await user.click(within(chooser).getByRole('button', { name: /^WhatsApp — I choose the chat/ }));
-    const editor = within(await screen.findByRole('dialog', { name: 'Check the order' }, LOAD));
+    expect(screen.getAllByRole('dialog', { name: 'Send to' })).toHaveLength(1);
+    await user.click(within(chooser).getByRole('button', { name: /^WhatsApp/ }));
+    const editor = within(await screen.findByRole('dialog', { name: 'Alpine Mills' }, LOAD));
     act(() => { send.click(); });
-    expect(screen.queryByRole('dialog', { name: 'How should this order go?' })).not.toBeInTheDocument();
-    expect(screen.getAllByRole('dialog', { name: 'Check the order' })).toHaveLength(1);
+    expect(screen.queryByRole('dialog', { name: 'Send to' })).not.toBeInTheDocument();
+    expect(screen.getAllByRole('dialog', { name: 'Alpine Mills' })).toHaveLength(1);
     act(() => { editor.getByRole('button', { name: 'Send' }).click(); });
     expect(open).toHaveBeenCalledTimes(1);
   });
@@ -105,11 +104,11 @@ describe('«Send» in a supplier’s bar', () => {
     const open = openSpy();
     const { user } = await opened(seeded({ draft: DRAFT }), STAFF);
     await user.click(sendIcon());
-    await user.click(within(await screen.findByRole('dialog', { name: 'Check the order' }, LOAD)).getByRole('button', { name: 'Cancel' }));
-    await waitFor(() => { expect(screen.queryByRole('dialog', { name: 'Check the order' })).not.toBeInTheDocument(); });
+    await user.click(within(await screen.findByRole('dialog', { name: 'Alpine Mills' }, LOAD)).getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => { expect(screen.queryByRole('dialog', { name: 'Alpine Mills' })).not.toBeInTheDocument(); });
     expect(open).not.toHaveBeenCalled();
-    await user.click(sendIcon());
-    expect(await screen.findByRole('dialog', { name: 'Check the order' }, LOAD)).toBeInTheDocument();
+    await user.click(await waitFor(() => sendIcon(), LOAD));
+    expect(await screen.findByRole('dialog', { name: 'Alpine Mills' }, LOAD)).toBeInTheDocument();
   });
 
   it('a window that throws is told as «Nothing was opened», and the button is free again', async () => {
@@ -117,7 +116,7 @@ describe('«Send» in a supplier’s bar', () => {
     const { user } = await opened(seeded({ draft: DRAFT }), STAFF);
     vi.spyOn(window, 'open').mockImplementation(() => { throw new Error('boom'); });
     await user.click(sendIcon());
-    const editor = within(await screen.findByRole('dialog', { name: 'Check the order' }, LOAD));
+    const editor = within(await screen.findByRole('dialog', { name: 'Alpine Mills' }, LOAD));
     await user.click(editor.getByRole('button', { name: 'Send' }));
     expect(await screen.findByText(/^Nothing was opened/)).toBeInTheDocument();
     expect(error).toHaveBeenCalled();
@@ -131,15 +130,34 @@ describe('«Send» in a supplier’s bar', () => {
     expect(await screen.findByText(/^List sent/, undefined, LOAD)).toBeInTheDocument();
   });
 
+  it('opens «Invia a» in Italian, one word per road', async () => {
+    const { user } = await opened(seeded({ draft: DRAFT, ordersConfig: null }), { lang: 'it' });
+    await user.click(screen.getByRole('button', { name: 'Invia l’ordine a Alpine Mills' }));
+    const chooser = await screen.findByRole('dialog', { name: 'Invia a' }, LOAD);
+    // The venue's default roads: the in-app list and WhatsApp (the full set is pinned in English in OrdersSection.send.spec.tsx).
+    expect(within(chooser).getAllByRole('button').map(button => button.textContent)).toEqual(['Chi gestisce il locale', 'WhatsApp', 'Annulla']);
+  });
+
   it('is named in Italian', async () => {
     await opened(seeded({ draft: DRAFT }), { lang: 'it' });
     expect(screen.getByRole('button', { name: 'Invia l’ordine a Alpine Mills' })).toBeEnabled();
   });
 
-  it('keeps «+», «What they sell» and the summary in the bar beside it (the row wraps, none is dropped)', async () => {
-    await opened(seeded({ draft: DRAFT }));
-    for (const name of ['Add an ingredient to Alpine Mills', 'What they sell', 'Summary (1)', 'Send the order to Alpine Mills']) {
-      expect(screen.getByRole('button', { name })).toBeInTheDocument();
-    }
+  // The order photo is off (16 Nov 2026, ORDER_PHOTO_ON in orderImage.ts): even where the browser could share a picture, the editor
+  // offers the text and its «Send» opens the chat with it; no share sheet is asked for.
+  it('⚠️ sends the text, never the photo, even where the browser can share one', async () => {
+    const share = vi.fn(() => Promise.resolve());
+    Object.defineProperty(navigator, 'share', { value: share, configurable: true });
+    Object.defineProperty(navigator, 'canShare', { value: () => true, configurable: true });
+    const open = openSpy();
+    const { user } = await opened(seeded({ draft: DRAFT }), STAFF);
+    await user.click(sendIcon());
+    const editor = within(await screen.findByRole('dialog', { name: 'Alpine Mills' }, LOAD));
+    expect(editor.getByRole('button', { name: 'Send' })).toBeEnabled();
+    act(() => { editor.getByRole('button', { name: 'Send' }).click(); });
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(share).not.toHaveBeenCalled();
+    Reflect.deleteProperty(navigator, 'share');
+    Reflect.deleteProperty(navigator, 'canShare');
   });
 });

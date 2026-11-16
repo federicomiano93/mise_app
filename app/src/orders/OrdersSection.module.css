@@ -107,7 +107,16 @@
     padding: var(--s4) var(--s6) var(--s8);
   }
 
-  /* The bell's notices in the pane, with the same room. */
+  /* The open supplier fills the pane edge to edge, ONE colour (item 5): its card is the pane, and the pane below its last row too. */
+  .layout[data-pane="supplier"] .screen {
+    padding: 0;
+  }
+
+  .layout[data-pane="supplier"] .detail {
+    background: var(--surface);
+  }
+
+  /* The bell's notices in the pane, with the same room as the other screens. */
   .layout[data-pane="notices"] .detail > :first-child {
     padding: var(--s4) var(--s6) var(--s8);
   }
