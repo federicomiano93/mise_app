@@ -10,6 +10,7 @@ import { NoticesPanel } from './NoticesPanel';
 import { OrderLine } from './OrderLine';
 import { OrdersFilter } from './OrdersFilter';
 import { OrdersHead } from './OrdersHead';
+import { SaveStateLine } from './SaveStateLine';
 import { useOrders, useOrdersStore } from './OrdersContext';
 import { flatView, isShownLine, notInUseLines, orderedIds } from './flatView';
 import type { FlatLine } from './flatView';
@@ -20,14 +21,13 @@ type Props = {
   // The LIVE lens: this view has no copy of the lists to draw from, so before `ready` it only says it is loading.
   lens: OrdersLens;
   ready: boolean;
-  // Drawn only at list level: with a screen open beside the list the swap's place is kept, empty.
-  swapOpen: boolean;
   // A supplier's screen is open beside the list: its save line speaks, the head's keeps its room (SaveStateLine).
   saveSilent: boolean;
   onSwap: () => void;
+  // «Send the list again» in the notices: the send screen.
   onSend: () => void;
-  onSettings: () => void;
-  onHistory: () => void;
+  // The tablet's split: the notices open in the right-hand pane (OrdersSection), not here.
+  split: boolean;
   // The bell's panel (it shows only when the bell opens it) acts from here exactly as from the supplier list.
   onOpenSupplier: (id: string) => void;
   onOpenPending: (id: string, day: string) => void;
@@ -41,7 +41,7 @@ type Props = {
 //
 // ⚠️ ITS SEARCH TEXT AND ITS FILTER ARE ITS OWN, not the supplier list's, and NOT REMEMBERED: leaving the view (or the section)
 // ends them. The box is a controlled input in a component that stays mounted (OrdersHead), so a snapshot never remounts it.
-export function IngredientsList({ lens, ready, swapOpen, saveSilent, onSwap, onSend, onSettings, onHistory, onOpenSupplier, onOpenPending, initial }: Props) {
+export function IngredientsList({ lens, ready, saveSilent, onSwap, onSend, split, onOpenSupplier, onOpenPending, initial }: Props) {
   const { t } = useT();
   const store = useOrdersStore();
   const snapshot = useOrders();
@@ -65,6 +65,7 @@ export function IngredientsList({ lens, ready, swapOpen, saveSilent, onSwap, onS
   const group = useFoldedOpen(off.some(hasQty));
 
   // The head's and the column names' heights: the column names stick right under the head, the letters right under the column names.
+  // The head itself sticks under the title band (--band-h: its height on the split, where it sticks; 0 on a phone).
   const headHeight = useHeight();
   const columnsHeight = useHeight();
 
@@ -127,12 +128,7 @@ export function IngredientsList({ lens, ready, swapOpen, saveSilent, onSwap, onS
         onQuery={setQuery}
         ready={ready}
         hasSuppliers={lens.suppliers.length > 0}
-        swapOpen={swapOpen}
         onSwap={onSwap}
-        onSend={onSend}
-        onSettings={onSettings}
-        onHistory={onHistory}
-        saveSilent={saveSilent}
         headRef={headHeight.ref}
       >
         {showFilter ? (
@@ -146,15 +142,20 @@ export function IngredientsList({ lens, ready, swapOpen, saveSilent, onSwap, onS
         ) : null}
       </OrdersHead>
 
-      {/* «Did it go?»: always on the page, above everything the bell holds (decision P2 of the v1.145.0 port). */}
+      {/* A phone: the bell is in the title band whatever the list column holds, so its panel must be here too. On the split it opens in
+          the right-hand pane (OrdersSection). */}
+      {split ? null : (
+        <PartBoundary>
+          <NoticesPanel onOpenSupplier={onOpenSupplier} onOpenPending={onOpenPending} onSend={onSend} />
+        </PartBoundary>
+      )}
+
+      {/* In the column, above the rows: whether what was typed has reached the server. Silent while a supplier is open beside. */}
+      <SaveStateLine silent={saveSilent} />
+
+      {/* «Did it go?» on every device, as a line that blocks nothing (AskHereDialog asks on the device that sent it). */}
       <PartBoundary>
         <AwaitingBanners lens={lens} />
-      </PartBoundary>
-
-      {/* The bell is in the page's bar on the split whatever the list column holds, so its panel must be here too. Only the always-on blocks
-          (today's orders, the debt doors, the order lists) stay on the supplier view (F-4). */}
-      <PartBoundary>
-        <NoticesPanel onOpenSupplier={onOpenSupplier} onOpenPending={onOpenPending} onSend={onSend} />
       </PartBoundary>
 
       {!ready ? (
@@ -169,7 +170,7 @@ export function IngredientsList({ lens, ready, swapOpen, saveSilent, onSwap, onS
           ) : (
             <div className={styles.sheet}>
               {view.rows.length === 0 ? null : (
-                <div ref={columnsHeight.ref} className={styles.columns} data-stock={showStock} style={{ top: headHeight.px }}>
+                <div ref={columnsHeight.ref} className={styles.columns} data-stock={showStock} style={{ top: `calc(var(--band-h) + ${headHeight.px}px)` }}>
                   <span />
                   <span className={styles.columnName}>{t('ord.field.order')}</span>
                   {showStock ? <span className={styles.columnName}>{t('ord.field.stock')}</span> : null}
@@ -177,7 +178,7 @@ export function IngredientsList({ lens, ready, swapOpen, saveSilent, onSwap, onS
               )}
               {runs.map(run => (
                 <div key={run.key} className={styles.run}>
-                  <h2 className={styles.letter} style={{ top: headHeight.px + columnsHeight.px }}>{run.letter}</h2>
+                  <h2 className={styles.letter} style={{ top: `calc(var(--band-h) + ${headHeight.px + columnsHeight.px}px)` }}>{run.letter}</h2>
                   <ul className={styles.rows}>{run.lines.map(lineOf)}</ul>
                 </div>
               ))}

@@ -55,3 +55,23 @@
   justify-content: flex-end;
   gap: var(--s3);
 }
+
+/* A small question (Orders' «Order sent?»): narrower, its words centred, its buttons sharing the width. */
+.small {
+  max-width: 360px;
+  text-align: center;
+}
+
+.small .actions {
+  flex-wrap: nowrap;
+}
+
+.small .actions > * {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.small .message {
+  color: var(--ink);
+  font-size: var(--fs-lg);
+}

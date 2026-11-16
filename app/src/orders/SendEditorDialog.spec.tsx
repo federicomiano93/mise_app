@@ -17,7 +17,8 @@ vi.mock('./orderImage', async importOriginal => ({
 }));
 
 // The editor of one message (SendEditorDialog.tsx), a port of the dialog of js/orders/send-editor.js (tests/send-editor.test.mjs on
-// main): the preview, the picture drawn ahead of the tap, the press that shares with no await, the discard question.
+// main): the picture drawn ahead of the tap, the press that shares with no await, the discard question. Since 16 Nov 2026 it shows
+// only the supplier's name and the box (no preview, no label, no hint line).
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -33,23 +34,22 @@ function jobOf(over: Partial<Omit<EditorJob, 'open'>> = {}) {
   return { ids: ['mill'], name: 'Mill', text: TEXT, ...over, open };
 }
 
-type Options = { job?: EditorJob; i?: number; n?: number; photo?: boolean; lang?: 'en' | 'it' };
+type Options = { job?: EditorJob; i?: number; n?: number; photo?: boolean; lang?: 'en' | 'it'; soleName?: string };
 
-function draw({ job = jobOf(), i = 0, n = 1, photo = false, lang = 'en' }: Options = {}) {
+function draw({ job = jobOf(), i = 0, n = 1, photo = false, lang = 'en', soleName }: Options = {}) {
   const answer = vi.fn<(answer: EditorAnswer) => void>();
   const user = userEvent.setup();
   render(
     <I18nProvider initialLanguage={lang} initialMessages={lang === 'it' ? italian : en}>
-      <SendEditorDialog job={job} i={i} n={n} photo={photo} language="en" answer={answer} />
+      <SendEditorDialog job={job} i={i} n={n} photo={photo} language="en" answer={answer} {...(soleName === undefined ? {} : { soleName })} />
     </I18nProvider>,
   );
   return { answer, user, job };
 }
 
 const dialog = () => screen.findByRole('dialog');
-const box = () => screen.getByRole('textbox', { name: 'Change the message' }) as HTMLTextAreaElement;
+const box = () => screen.getByRole('textbox', { name: 'Message to Mill' }) as HTMLTextAreaElement;
 const sendButton = () => screen.getByRole('button', { name: 'Send' });
-const preview = () => screen.getByRole('group', { name: 'What they will receive' });
 
 function allowShare(result: () => Promise<void> = () => Promise.resolve()) {
   const share = vi.fn(result);
@@ -63,12 +63,12 @@ const pictureReady = () => waitFor(() => { expect(sendButton()).toBeEnabled(); }
 describe('what the editor shows', () => {
   it('names itself by the supplier, with «1 of 2» when several go one after the other, or «Check the order» for the one chat', async () => {
     draw({ job: jobOf({ name: 'Mill' }) });
-    expect(await screen.findByRole('dialog', { name: 'Order for Mill' })).toBeInTheDocument();
+    expect(await screen.findByRole('dialog', { name: 'Mill' })).toBeInTheDocument();
   });
 
   it('says «(2 of 3)» in a batch, and offers Skip instead of Cancel', async () => {
     draw({ job: jobOf(), i: 1, n: 3 });
-    const box = within(await screen.findByRole('dialog', { name: 'Order for Mill (2 of 3)' }));
+    const box = within(await screen.findByRole('dialog', { name: 'Mill (2 of 3)' }));
     expect(box.getByRole('button', { name: 'Skip' })).toBeInTheDocument();
     expect(box.queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument();
   });
@@ -80,56 +80,44 @@ describe('what the editor shows', () => {
     expect(view.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
   });
 
-  it('shows the text as WhatsApp does: *bold* in bold, built from nodes, the asterisks gone', async () => {
+  it('shows only the name and the box: no preview, no label over the box, no line under it', async () => {
     draw();
-    await dialog();
-    const strong = within(preview()).getByText('Mill');
-    expect(strong.tagName).toBe('STRONG');
-    expect(preview()).not.toHaveTextContent('*');
-    expect(within(preview()).getByText('- Flour 00: 2').tagName).toBe('DIV');
+    const view = within(await dialog());
+    expect(view.queryByRole('group')).not.toBeInTheDocument();
+    expect(view.queryByText('What they will receive')).not.toBeInTheDocument();
+    expect(view.queryByText('Change the message')).not.toBeInTheDocument();
+    expect(view.queryByText(/History keeps the quantities/)).not.toBeInTheDocument();
+    expect(view.getAllByRole('textbox')).toHaveLength(1);
   });
 
-  it('⚠️ shows an email as it will arrive: plain lines, the asterisks as they are', async () => {
-    draw({ job: jobOf({ plain: true }) });
-    await dialog();
-    expect(within(preview()).getByText('*Mill*')).toBeInTheDocument();
-    expect(preview().querySelector('strong')).toBeNull();
-  });
-
-  it('never draws typed text as markup', async () => {
-    const { user } = draw();
-    await dialog();
-    await user.clear(box());
-    await user.click(box());
-    await user.paste('<b>hi</b>');
-    expect(within(preview()).getByText('<b>hi</b>')).toBeInTheDocument();
-    expect(preview().querySelector('b')).toBeNull();
-  });
-
-  it('the box holds the text, is labelled, described by its hint, and has six rows and no spell check', async () => {
+  it('the box holds the text as it will be sent, asterisks and all, with an invisible name that says whom it is for', async () => {
     draw();
     await dialog();
     expect(box()).toHaveValue(TEXT);
-    expect(box()).toHaveAccessibleDescription('Changes go only into the message: History keeps the quantities of the order.');
-    expect(box()).toHaveAttribute('rows', '6');
+    expect(box()).toHaveAttribute('aria-label', 'Message to Mill');
+    expect(document.querySelector('label')).toBeNull();
+    expect(box()).toHaveAttribute('rows', '7');
     expect(box()).toHaveAttribute('spellcheck', 'false');
   });
 
-  it('editing the box changes the preview', async () => {
-    const { user } = draw();
+  it('names the one chat by its one supplier when it goes to one (the title only)', async () => {
+    const { name: _name, ...rest } = jobOf();
+    draw({ job: rest as EditorJob, soleName: 'Mill' });
+    expect(await screen.findByRole('dialog', { name: 'Mill' })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Message to Mill' })).toBeInTheDocument();
+  });
+
+  it('names the box of the one grouped chat «Message»', async () => {
+    const { name: _name, ...rest } = jobOf();
+    draw({ job: rest as EditorJob });
     await dialog();
-    await user.clear(box());
-    await user.click(box());
-    await user.paste('*Dairy*');
-    expect(within(preview()).getByText('Dairy').tagName).toBe('STRONG');
-    expect(within(preview()).queryByText('Mill')).not.toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Message' })).toHaveValue(TEXT);
   });
 
   it('says its words in Italian', async () => {
     draw({ lang: 'it' });
-    expect(await screen.findByRole('dialog', { name: 'Ordine per Mill' })).toBeInTheDocument();
-    expect(screen.getByRole('group', { name: 'Cosa riceverà' })).toBeInTheDocument();
-    expect(screen.getByRole('textbox', { name: 'Modifica il messaggio' })).toBeInTheDocument();
+    expect(await screen.findByRole('dialog', { name: 'Mill' })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Messaggio a Mill' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Invia' })).toBeInTheDocument();
   });
 
@@ -418,11 +406,5 @@ describe('holding the reload', () => {
     expect(isBusy()).toBe(true);
     cleanup();
     expect(isBusy()).toBe(false);
-  });
-
-  it('the scrolling preview can be reached by keyboard (it is a named group)', async () => {
-    draw();
-    await dialog();
-    expect(preview()).toHaveAttribute('tabindex', '0');
   });
 });

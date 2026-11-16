@@ -243,12 +243,12 @@ describe('AppShell: top bar', () => {
   });
 
   it('shows today\'s date', () => {
-    renderApp('/orders');
+    renderApp('/home');
     expect(screen.getByText('Saturday 10 October')).toBeInTheDocument();
   });
 
   it('shows when the device is online and when it is not', () => {
-    renderApp('/orders');
+    renderApp('/home');
     expect(screen.getByText('Online')).toBeInTheDocument();
 
     onLine.mockReturnValue(false);
@@ -263,7 +263,7 @@ describe('AppShell: top bar', () => {
   });
 
   it('announces a change of connection politely', () => {
-    renderApp('/orders');
+    renderApp('/home');
     expect(screen.getByText('Online').closest('[role="status"]')).not.toBeNull();
   });
 });
@@ -276,7 +276,7 @@ describe('AppShell: the date rolls over at midnight', () => {
   it('shows the next day a minute after midnight, with the tablet left open', () => {
     vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
     vi.setSystemTime(new Date(2026, 9, 10, 23, 59, 30));
-    renderApp('/orders');
+    renderApp('/home');
     expect(screen.getByText('Saturday 10 October')).toBeInTheDocument();
 
     act(() => { vi.advanceTimersByTime(60_000); });
@@ -288,7 +288,7 @@ describe('AppShell: the date rolls over at midnight', () => {
   it('refreshes at once when the tablet is woken', () => {
     vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
     vi.setSystemTime(new Date(2026, 9, 10, 23, 59, 30));
-    renderApp('/orders');
+    renderApp('/home');
 
     vi.setSystemTime(new Date(2026, 9, 11, 7, 0, 0));
     act(() => { document.dispatchEvent(new Event('visibilitychange')); });

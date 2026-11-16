@@ -46,7 +46,7 @@
 /* ⚠️ index.html says viewport-fit=cover, so the page reaches under the notch: an iPhone held in
    landscape (or a tablet with a camera cut-out) would cover the left of the rail. The shell
    gives the rail's column the inset on top of its width (see the 700px query) and the rail
-   pads its items by the same amount, so the items keep their 76px and clear the notch. */
+   pads its items by the same amount, so the items keep their 88px and clear the notch. */
 .rail {
   display: none;
   flex-direction: column;
@@ -84,7 +84,9 @@
   flex: 1;
 }
 
-/* Icon above label, centred. Hover is qualified so it outranks base.css's link hover colour. */
+/* Icon above label, centred. Hover is qualified so it outranks base.css's link hover colour.
+   ⚠️ MORE VISIBLE SINCE 16 NOV 2026 (Federico, on the lab tablet): 27px icons with a 2px stroke and 13.5px labels, weight 500, in
+   the near-white ink instead of the grey (the rail's ground unchanged). No side padding: «Impostazioni» needs the whole 88px. */
 .railItem {
   display: flex;
   flex-direction: column;
@@ -92,12 +94,12 @@
   justify-content: center;
   gap: 4px;
   min-height: 64px;
-  padding: var(--s2) 2px;
+  padding: var(--s2) 0;
   border-radius: var(--r-md);
-  color: var(--rail-ink);
-  font-size: 11.5px;
+  color: var(--rail-ink-strong);
+  font-size: 13.5px;
   font-weight: 500;
-  letter-spacing: 0.01em;
+  letter-spacing: 0;
   line-height: 1.15;
   text-align: center;
   text-decoration: none;
@@ -105,35 +107,42 @@
 
 /* ⚠️ A SHORT WINDOW GETS SHORTER ITEMS, NOT A SCROLLING RAIL. The lab tablet in landscape shows 648px under Chrome's
    bars, and the rail at 64px an item needed 700: the account at its foot was cut and the rail grew a scrollbar
-   (driven 13 Oct 2026). Since «Labels» joined the rail after Recipes (13 Nov 2026) an owner sees TEN items, so there are
-   three steps: up to 835px of height 56px an item (the rail needs 756), up to 755px 48px with tighter padding (it needs
-   676), and up to 675px the same 48px items without the brand letter at the top, which is only decoration (it needs 616 —
-   the lab tablet's 648 fits). 48px is the touch target of every other control, so the items never go below it.
-   railHeight.spec.ts adds it up. */
+   (driven 13 Oct 2026). An owner sees TEN items. With the bigger icon and label (16 Nov 2026) an item's content is
+   27 + gap + 15.5 + padding, so each step shrinks the padding with the height: up to 835px of height 56px an item (the
+   rail needs 756), up to 755px 52px without the brand letter at the top, which is only decoration (it needs 656), and
+   up to 675px 51px (it needs 646 — the lab tablet's 648 fits, Settings and the account included). The items never go
+   below the 48px touch target. railHeight.spec.ts adds it up. */
 @media (max-height: 835px) {
   .railItem {
     min-height: 56px;
+    padding: 4px 0;
+    gap: 3px;
   }
 }
 
 @media (max-height: 755px) {
   .railItem {
-    min-height: 48px;
-    padding: 3px 2px;
+    min-height: 52px;
+    padding: 3px 0;
     gap: 2px;
   }
-}
 
-@media (max-height: 675px) {
   .mark {
     display: none;
   }
 }
 
+@media (max-height: 675px) {
+  .railItem {
+    min-height: 51px;
+  }
+}
+
 /* Qualified by .railItem so it outranks base.css's `svg.lucide` size of 20px. */
 .railItem .railIcon {
-  width: 22px;
-  height: 22px;
+  width: 27px;
+  height: 27px;
+  stroke-width: 2;
 }
 
 @media (hover: hover) {
@@ -372,8 +381,14 @@
     display: flex;
   }
 
-  .main {
+  /* The top bar is drawn on the Home only (AppShell.tsx): elsewhere the scroll area is the whole column, and the split panes that
+     subtract the bar's height from the window (`--topbar-h`) subtract nothing. */
+  .shell[data-topbar="on"] .main {
     grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .shell[data-topbar="off"] {
+    --topbar-h: 0px;
   }
 
   .topbar {

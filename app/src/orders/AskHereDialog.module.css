@@ -1,0 +1,6 @@
+/* «Order sent?»: two big answers sharing the dialog's width (the dialog's `small` form lays them out). */
+
+.answer {
+  min-height: var(--hit-lg);
+  font-size: var(--fs-lg);
+}

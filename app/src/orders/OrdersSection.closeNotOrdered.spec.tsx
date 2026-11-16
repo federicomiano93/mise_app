@@ -1,6 +1,7 @@
 // «Close as not ordered» and «Order placed…» on the order summary (the current app's PR #470, his tablet notes of 2–3 Nov 2026;
 // tests/orders-close-not-ordered.test.mjs). drafts/current.skipped = { supplierId: 'YYYY-MM-DD' }: the day it was closed, and
-// only that day. These pin what the summary offers, what a close writes and what it does to «Order today».
+// only that day. These pin what the summary offers, what a close writes and what it does to the list's «To order» group (the
+// «Order today» strip and its chips are gone since the redesign of 16 Nov 2026: «Reopen» is reached from the supplier's row).
 
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { act, screen, waitFor, within } from '@testing-library/react';
@@ -39,6 +40,12 @@ function seeded(extra: Partial<Parameters<typeof fakeOrdersSource>[0]> = {}): Fa
 type View = ReturnType<typeof renderOrders>;
 const path = (view: View) => view.router.state.location.pathname;
 const pane = (name = 'Alpine Mills') => within(screen.getByRole('region', { name }));
+// The list's groups: the names of the suppliers under a group's heading.
+const group = (heading: string) => {
+  const title = screen.getByRole('heading', { level: 2, name: heading });
+  return within(title.parentElement as HTMLElement).getAllByRole('listitem').map(item => item.querySelector('button')?.textContent ?? '');
+};
+const groupHeadings = () => screen.queryAllByRole('heading', { level: 2 }).map(heading => heading.textContent);
 
 // The summary opened from the list (its row's summary door is the list's), so the list is the entry behind it.
 async function summaryFromList(source: FakeOrdersSource, id = 's-alp', name = 'Alpine Mills') {
@@ -59,7 +66,7 @@ describe('the order summary: today\'s order', () => {
   it('with nothing written and the order day today, offers «Close as not ordered» with its hint, and no «Order placed…»', async () => {
     await summaryAt(seeded());
     expect(await pane().findByRole('button', { name: 'Close as not ordered' }, LOAD)).toBeInTheDocument();
-    expect(pane().getByText('Nothing needed today? Close it and it leaves “Order today”.')).toBeInTheDocument();
+    expect(pane().getByText('Nothing needed today? Close it and it leaves “To order”.')).toBeInTheDocument();
     expect(pane().queryByRole('button', { name: 'Order placed…' })).not.toBeInTheDocument();
   });
 
@@ -68,7 +75,7 @@ describe('the order summary: today\'s order', () => {
     const view = await summaryAt(source);
     await view.user.click(await pane().findByRole('button', { name: 'Close as not ordered' }, LOAD));
     const ask = await screen.findByRole('alertdialog', { name: 'Close Alpine Mills as not ordered?' });
-    expect(ask).toHaveAccessibleDescription('Nothing is ordered from them today. They leave “Order today” on every device, and you can reopen them from this summary.');
+    expect(ask).toHaveAccessibleDescription('Nothing is ordered from them today. They leave “To order” on every device, and you can reopen them from this summary.');
     await view.user.click(within(ask).getByRole('button', { name: 'Cancel' }));
     expect(source.skippedWrites).toEqual([]);
     expect(path(view)).toBe('/orders/supplier/s-alp/summary');
@@ -86,11 +93,9 @@ describe('the order summary: today\'s order', () => {
     expect(source.draft?.updatedAt).toBeUndefined();
     await waitFor(() => { expect(path(view)).toBe('/orders'); });
     expect(await screen.findByText('Alpine Mills closed as not ordered.')).toBeInTheDocument();
-    // The strip: Alpine is done for today (its chip opens the summary), Bee Farm is still to order.
-    const chip = await screen.findByRole('button', { name: 'Alpine Mills not ordered' }, LOAD);
-    expect(screen.getByText('Order today')).toBeInTheDocument();
-    await view.user.click(chip);
-    await waitFor(() => { expect(path(view)).toBe('/orders/supplier/s-alp/summary'); });
+    // The groups: Alpine is done for today and left «To order»; Bee Farm is still in it.
+    await waitFor(() => { expect(group('To order')).toEqual([expect.stringMatching(/^Bee Farm/)]); }, LOAD);
+    expect(group('Other suppliers').some(name => name.startsWith('Alpine Mills'))).toBe(true);
   });
 
   it('a closed supplier shows the state and «Reopen»; Reopen takes only its key away and offers the close again', async () => {
@@ -191,43 +196,30 @@ describe('the order summary: today\'s order', () => {
     await view.user.click(await pane().findByRole('button', { name: 'Close as not ordered' }, LOAD));
     await view.user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Close' }));
     expect(await screen.findByText('Not saved — try again in a moment.', undefined, LOAD)).toBeInTheDocument();
-    await waitFor(() => { expect(screen.queryByRole('button', { name: 'Alpine Mills not ordered' })).not.toBeInTheDocument(); });
+    await waitFor(() => { expect(group('To order').some(name => name.startsWith('Alpine Mills'))).toBe(true); }, LOAD);
   });
 });
 
-describe('«Order today» with a supplier closed as not ordered', () => {
-  // ⚠️ The current app's a710dcb: «all placed» would be false, and the closed chip is the way to «Reopen».
-  it('every supplier of the day placed or closed, but not all placed: the chips stay, never «all placed»', async () => {
+describe('the «To order» group with a supplier closed as not ordered', () => {
+  it('a supplier closed today leaves «To order»; one placed today leaves it too', async () => {
     renderOrders('/orders', {
       source: seeded({
         draft: { entries: {}, days: {}, skipped: { 's-alp': TODAY } },
         records: { [`${TODAY}_s-bee`]: record(TODAY, 's-bee') },
       }),
     });
-    expect(await screen.findByRole('button', { name: 'Alpine Mills not ordered' }, LOAD)).toBeInTheDocument();
-    expect(screen.getByText('Order today')).toBeInTheDocument();
-    expect(screen.queryByText('Today’s orders are all placed')).not.toBeInTheDocument();
-  });
-
-  it('every supplier of the day really placed: «all placed»', async () => {
-    renderOrders('/orders', {
-      source: seeded({
-        records: { [`${TODAY}_s-alp`]: record(TODAY, 's-alp'), [`${TODAY}_s-bee`]: record(TODAY, 's-bee') },
-      }),
-    });
-    expect(await screen.findByText('Today’s orders are all placed', undefined, LOAD)).toBeInTheDocument();
+    await screen.findAllByRole('listitem', undefined, LOAD);
+    await waitFor(() => { expect(groupHeadings()).not.toContain('To order'); });
   });
 
   it('⚠️ last week\'s close never hides this week\'s order', async () => {
     renderOrders('/orders', { source: seeded({ draft: { entries: {}, days: {}, skipped: { 's-alp': LAST_WEEK } } }) });
-    await screen.findByText('Order today', undefined, LOAD);
-    expect(screen.queryByRole('button', { name: 'Alpine Mills not ordered' })).not.toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: /^Alpine Mills/ }).length).toBeGreaterThanOrEqual(2);
+    await waitFor(() => { expect(group('To order')[0]).toMatch(/^Alpine Mills/); }, LOAD);
   });
 
   it('in Italian', async () => {
     renderOrders('/orders', { source: seeded({ draft: { entries: {}, days: {}, skipped: { 's-alp': TODAY } } }), lang: 'it' });
-    expect(await screen.findByRole('button', { name: 'Alpine Mills non ordinato' }, LOAD)).toBeInTheDocument();
+    await waitFor(() => { expect(group('Da ordinare')).toEqual([expect.stringMatching(/^Bee Farm/)]); }, LOAD);
   });
 });
 
@@ -246,15 +238,15 @@ describe('close as not ordered: the second port\'s extras', () => {
   }
   const pause = () => act(() => new Promise<void>(resolve => { setTimeout(resolve, 100); }));
 
-  it('⚠️ «Order today» waits for the draft: a supplier closed this morning never flashes as «to order»', async () => {
+  it('⚠️ «To order» waits for the draft: a supplier closed this morning never flashes in it', async () => {
     const source = seeded({ draft: { entries: {}, days: {}, skipped: { 's-alp': TODAY } } });
     const gate = draftLate(source);
     renderOrders('/orders', { source });
     await waitFor(() => { expect(source.historyFrom).not.toBeNull(); }, LOAD);
     await pause();
-    expect(screen.queryByText('Order today')).not.toBeInTheDocument();
+    expect(groupHeadings()).not.toContain('To order');
     act(() => { gate.letIn(); });
-    expect(await screen.findByRole('button', { name: 'Alpine Mills not ordered' }, LOAD)).toBeInTheDocument();
+    await waitFor(() => { expect(group('To order')).toEqual([expect.stringMatching(/^Bee Farm/)]); }, LOAD);
   });
 
   it('⚠️ the summary offers no close and no «Reopen» over a draft stream dead from the start', async () => {
@@ -267,51 +259,55 @@ describe('close as not ordered: the second port\'s extras', () => {
     expect(screen.queryByRole('button', { name: 'Reopen' })).not.toBeInTheDocument();
   });
 
-  it('Back from a summary opened by a closed chip hands the focus back to that chip (phone)', async () => {
-    const view = renderOrders('/orders', { source: seeded({ draft: { entries: {}, days: {}, skipped: { 's-alp': TODAY } } }) });
-    await view.user.click(await screen.findByRole('button', { name: 'Alpine Mills not ordered' }, LOAD));
-    await waitFor(() => { expect(path(view)).toBe('/orders/supplier/s-alp/summary'); });
-    await view.user.click(within(await screen.findByRole('region', { name: 'Alpine Mills' }, LOAD)).getByRole('button', { name: 'Back' }));
-    await waitFor(() => { expect(path(view)).toBe('/orders'); });
-    await waitFor(() => { expect(screen.getByRole('button', { name: 'Alpine Mills not ordered' })).toHaveFocus(); });
-  });
-
-  it('Back from a summary opened by a closed chip hands the focus back to that chip (split)', async () => {
+  // «Reopen»'s door used to be the strip's chip: on the split it is the row's summary button, drawn for a supplier closed today even
+  // with nothing typed; on a phone the supplier's own «Summary» (SupplierOrderScreen) — the row has no summary button there.
+  it('on the split the closed supplier\'s row offers its summary, with «Reopen»; Back hands the focus to that button', async () => {
     split();
     const view = renderOrders('/orders', { source: seeded({ draft: { entries: {}, days: {}, skipped: { 's-alp': TODAY } } }) });
-    await view.user.click(await screen.findByRole('button', { name: 'Alpine Mills not ordered' }, LOAD));
+    const door = await screen.findByRole('button', { name: 'Order summary: Alpine Mills' }, LOAD);
+    // Cat Foods is not due today and has nothing typed: no summary button. (Bee Farm, due today, now has one: see the next describe.)
+    expect(screen.queryByRole('button', { name: 'Order summary: Cat Foods' })).not.toBeInTheDocument();
+    await view.user.click(door);
     await waitFor(() => { expect(path(view)).toBe('/orders/supplier/s-alp/summary'); });
-    await view.user.click(within(await screen.findByRole('region', { name: 'Alpine Mills' }, LOAD)).getByRole('button', { name: 'Back' }));
+    expect(await pane().findByRole('button', { name: 'Reopen' }, LOAD)).toBeInTheDocument();
+    await view.user.click(pane().getByRole('button', { name: 'Back' }));
     await waitFor(() => { expect(path(view)).toBe('/orders'); });
-    await waitFor(() => { expect(screen.getByRole('button', { name: 'Alpine Mills not ordered' })).toHaveFocus(); });
+    await waitFor(() => { expect(screen.getByRole('button', { name: 'Order summary: Alpine Mills' })).toHaveFocus(); });
   });
 
-  it('reopened from that summary, its chip is gone: Back hands the focus to the supplier\'s row', async () => {
+  it('reopened from that summary, it is due again so its button stays: Back hands the focus to that button', async () => {
+    split();
     const source = seeded({ draft: { entries: {}, days: {}, skipped: { 's-alp': TODAY } } });
     const view = renderOrders('/orders', { source });
-    await view.user.click(await screen.findByRole('button', { name: 'Alpine Mills not ordered' }, LOAD));
+    await view.user.click(await screen.findByRole('button', { name: 'Order summary: Alpine Mills' }, LOAD));
     await view.user.click(await pane().findByRole('button', { name: 'Reopen' }, LOAD));
     await pane().findByRole('button', { name: 'Close as not ordered' });
     await view.user.click(pane().getByRole('button', { name: 'Back' }));
     await waitFor(() => { expect(path(view)).toBe('/orders'); });
-    // The row's own button (the first of its line), never the strip (where Alpine Mills is a «to order» chip again), never the page.
-    await waitFor(() => { expect(document.activeElement).toHaveAccessibleName(expect.stringMatching(/^Alpine Mills/) as string); });
-    const focused = document.activeElement as HTMLElement;
-    expect(focused.closest('li')?.querySelector('button')).toBe(focused);
-    expect(screen.getByText('Order today').parentElement?.contains(focused)).toBe(false);
-    expect(screen.queryByRole('button', { name: 'Alpine Mills not ordered' })).not.toBeInTheDocument();
+    await waitFor(() => { expect(screen.getByRole('button', { name: 'Order summary: Alpine Mills' })).toHaveFocus(); });
+    expect(screen.queryByRole('button', { name: 'Order summary: Cat Foods' })).not.toBeInTheDocument();
   });
 
-  it('the phone\'s back gesture from a summary opened by a closed chip hands the focus back to that chip too', async () => {
-    const view = renderOrders('/orders', { source: seeded({ draft: { entries: {}, days: {}, skipped: { 's-alp': TODAY } } }) });
-    await view.user.click(await screen.findByRole('button', { name: 'Alpine Mills not ordered' }, LOAD));
-    await pane().findByRole('button', { name: 'Reopen' }, LOAD);
-    await act(async () => { await view.router.navigate(-1); });
+  it('a supplier due today with nothing typed has its summary door; closing it there takes it out of «To order», the door stays with «Reopen»', async () => {
+    split();
+    const view = renderOrders('/orders', { source: seeded() });
+    const door = await screen.findByRole('button', { name: 'Order summary: Bee Farm' }, LOAD);
+    expect(group('To order').some(name => name.startsWith('Bee Farm'))).toBe(true);
+    // Not due, nothing typed: no door.
+    expect(screen.queryByRole('button', { name: 'Order summary: Cat Foods' })).not.toBeInTheDocument();
+    await view.user.click(door);
+    await view.user.click(await pane('Bee Farm').findByRole('button', { name: 'Close as not ordered' }, LOAD));
+    await view.user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Close' }));
     await waitFor(() => { expect(path(view)).toBe('/orders'); });
-    await waitFor(() => { expect(screen.getByRole('button', { name: 'Alpine Mills not ordered' })).toHaveFocus(); });
+    await waitFor(() => { expect(group('To order').some(name => name.startsWith('Bee Farm'))).toBe(false); });
+    // The row moved group (a new node): the focus still lands on its summary button, not on the page.
+    await waitFor(() => { expect(screen.getByRole('button', { name: 'Order summary: Bee Farm' })).toHaveFocus(); });
+    const again = await screen.findByRole('button', { name: 'Order summary: Bee Farm' });
+    await view.user.click(again);
+    expect(await pane('Bee Farm').findByRole('button', { name: 'Reopen' }, LOAD)).toBeInTheDocument();
   });
 
-  it('⚠️ a draft stream that dies after its first answer: its closes are read as none, the strip errs on the side of the reminder', async () => {
+  it('⚠️ a draft stream that dies after its first answer: its closes are read as none, the list errs on the side of the reminder', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const source = seeded({ draft: { entries: {}, days: {}, skipped: { 's-alp': TODAY } } });
     const watch = source.watchDraft.bind(source);
@@ -321,9 +317,8 @@ describe('close as not ordered: the second port\'s extras', () => {
       return watch(onChange, onError);
     };
     renderOrders('/orders', { source });
-    expect(await screen.findByRole('button', { name: 'Alpine Mills not ordered' }, LOAD)).toBeInTheDocument();
+    await waitFor(() => { expect(group('To order')).toEqual([expect.stringMatching(/^Bee Farm/)]); }, LOAD);
     act(() => { kill(); });
-    await waitFor(() => { expect(screen.queryByRole('button', { name: 'Alpine Mills not ordered' })).not.toBeInTheDocument(); });
-    expect(screen.getByText('Order today')).toBeInTheDocument();
+    await waitFor(() => { expect(group('To order')[0]).toMatch(/^Alpine Mills/); });
   });
 });

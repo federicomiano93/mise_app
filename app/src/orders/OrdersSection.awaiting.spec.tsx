@@ -7,8 +7,11 @@ import { LOAD, ingredient, renderOrders, supplier } from '../testing/renderOrder
 import { localeOf } from '../i18n/i18n';
 
 // There is no canvas in jsdom: the order picture is a stand-in file.
+// ⚠️ The order photo is switched ON here (off in the app since 16 Nov 2026, ORDER_PHOTO_ON): the share sheet is the road that asks at
+// once, and its code is kept to be turned back on. The window road, which is what the app takes today, is driven below too.
 vi.mock('./orderImage', async importOriginal => ({
   ...await importOriginal<typeof import('./orderImage')>(),
+  ORDER_PHOTO_ON: true,
   renderOrderImage: vi.fn((text: string) => Promise.resolve(new File([text], 'order.png', { type: 'image/png' }))),
 }));
 
@@ -239,7 +242,7 @@ describe('the sender’s own dialog', () => {
   }
   const sendIcon = () => screen.getByRole('button', { name: 'Send the order to Alpine Mills' });
   async function pressEditorSend(view: Awaited<ReturnType<typeof toSupplier>>) {
-    const editor = within(await screen.findByRole('dialog', { name: 'Check the order' }, LOAD));
+    const editor = within(await screen.findByRole('dialog', { name: 'Alpine Mills' }, LOAD));
     await waitFor(() => { expect(editor.getByRole('button', { name: 'Send' })).toBeEnabled(); }, LOAD);
     await view.user.click(editor.getByRole('button', { name: 'Send' }));
   }
@@ -251,17 +254,20 @@ describe('the sender’s own dialog', () => {
     Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => state });
     document.dispatchEvent(new Event('visibilitychange'));
   };
-  const askedDialog = () => screen.findByRole('alertdialog', { name: /^Order to Alpine Mills sent at .+: did it go\?$/ }, LOAD);
+  // Since 16 Nov 2026: a small dialog named by the supplier, «Order sent?», big «No» / «Yes».
+  const askedDialog = () => screen.findByRole('alertdialog', { name: 'Alpine Mills' }, LOAD);
 
-  it('after the share sheet answered, asks at once: «Yes» / «No», and NO cancel', async () => {
+  it('after the share sheet answered, asks at once: the supplier, «Order sent?», «No» / «Yes» with the focus on «No», and NO cancel', async () => {
     allowShare();
     const source = seeded({ draft: DRAFT });
     const view = await toSupplier(source);
     await view.user.click(sendIcon());
     await pressEditorSend(view);
-    const dialog = within(await askedDialog());
-    expect(dialog.getByRole('button', { name: 'Yes' })).toBeInTheDocument();
-    expect(dialog.getByRole('button', { name: 'No' })).toBeInTheDocument();
+    const asked = await askedDialog();
+    const dialog = within(asked);
+    expect(asked).toHaveAccessibleDescription('Order sent?');
+    expect(dialog.getAllByRole('button').map(button => button.textContent)).toEqual(['No', 'Yes']);
+    await waitFor(() => { expect(dialog.getByRole('button', { name: 'No' })).toHaveFocus(); });
     expect(dialog.queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument();
     // The order was written whole, with what was typed when «Send» was pressed.
     expect(asking(source)['s-alp']).toMatchObject({ quantities: { 'i-flour': 2, 'i-rye': 3 }, date: TODAY });
@@ -319,7 +325,7 @@ describe('the sender’s own dialog', () => {
     });
     await new Promise(resolve => { setTimeout(resolve, 50); });
     expect(screen.queryByText('Already answered on another device.')).not.toBeInTheDocument();
-    expect(screen.getByRole('alertdialog', { name: /did it go\?$/ })).toBeInTheDocument();
+    expect(screen.getByRole('alertdialog', { name: 'Alpine Mills' })).toBeInTheDocument();
   });
 
   it('is never opened over another dialog; it asks when the way is clear', async () => {
@@ -335,22 +341,55 @@ describe('the sender’s own dialog', () => {
     // The editor is a dialog too: wait for it to be on screen and send; the question must not stack on the other dialog.
     await pressEditorSend(view);
     await waitFor(() => { expect(Object.keys(asking(source))).toEqual(['s-alp']); });
-    expect(screen.queryByRole('alertdialog', { name: /did it go\?/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('alertdialog', { name: 'Alpine Mills' })).not.toBeInTheDocument();
     other.remove();
     expect(await askedDialog()).toBeInTheDocument();
   });
 
-  it('is left to the banner by Escape: the question stays on the page', async () => {
+  // ⚠️ IT MUST BE ANSWERED (16 Nov 2026): Escape and a tap outside leave it where it is; the question stays shared, the line behind it too.
+  it('is NOT closed by Escape or by a tap outside: only «No» or «Yes» answer it', async () => {
     allowShare();
     const source = seeded({ draft: DRAFT });
     const view = await toSupplier(source);
     await view.user.click(sendIcon());
     await pressEditorSend(view);
-    await askedDialog();
+    const asked = await askedDialog();
+    await waitFor(() => { expect(asked.contains(document.activeElement)).toBe(true); });
     await view.user.keyboard('{Escape}');
-    await waitFor(() => { expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument(); });
+    await new Promise(resolve => { setTimeout(resolve, 50); });
+    expect(screen.getByRole('alertdialog', { name: 'Alpine Mills' })).toBeInTheDocument();
+    await view.user.click(document.body);
+    expect(screen.getByRole('alertdialog', { name: 'Alpine Mills' })).toBeInTheDocument();
     expect(Object.keys(asking(source))).toEqual(['s-alp']);
-    expect(screen.getAllByText(/^Order to Alpine Mills sent at/).length).toBeGreaterThan(0);
+    await view.user.click(within(asked).getByRole('button', { name: 'No' }));
+    await waitFor(() => { expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument(); });
+  });
+
+  it('asks in Italian: «Ordine inviato?», «No» / «Sì»', async () => {
+    allowShare();
+    const source = seeded({ draft: DRAFT });
+    const view = renderOrders('/orders/supplier/s-alp', { source, ...STAFF, lang: 'it' });
+    await screen.findAllByRole('spinbutton', undefined, LOAD);
+    await view.user.click(screen.getByRole('button', { name: 'Invia l’ordine a Alpine Mills' }));
+    const editor = within(await screen.findByRole('dialog', { name: 'Alpine Mills' }, LOAD));
+    await waitFor(() => { expect(editor.getByRole('button', { name: 'Invia' })).toBeEnabled(); }, LOAD);
+    await view.user.click(editor.getByRole('button', { name: 'Invia' }));
+    const asked = await screen.findByRole('alertdialog', { name: 'Alpine Mills' }, LOAD);
+    expect(asked).toHaveAccessibleDescription('Ordine inviato?');
+    expect(within(asked).getAllByRole('button').map(button => button.textContent)).toEqual(['No', 'Sì']);
+  });
+
+  it('asks on any Orders screen: sent from the supplier, asked over History', async () => {
+    vi.spyOn(window, 'open').mockImplementation(() => ({ opener: null }) as unknown as Window);
+    const source = seeded({ draft: DRAFT });
+    const view = await toSupplier(source);
+    await view.user.click(sendIcon());
+    await pressEditorSend(view);
+    await waitFor(() => { expect(Object.keys(asking(source))).toEqual(['s-alp']); });
+    await act(async () => { await view.router.navigate('/orders/history'); });
+    act(() => { visibility('hidden'); });
+    act(() => { visibility('visible'); });
+    expect(await askedDialog()).toBeInTheDocument();
   });
 });
 
@@ -361,7 +400,7 @@ describe('«Send» on a supplier’s own screen', () => {
     const view = renderOrders('/orders/supplier/s-alp', { source, ...STAFF });
     await screen.findAllByRole('spinbutton', undefined, LOAD);
     await view.user.click(screen.getByRole('button', { name: 'Send the order to Alpine Mills' }));
-    const editor = within(await screen.findByRole('dialog', { name: 'Check the order' }, LOAD));
+    const editor = within(await screen.findByRole('dialog', { name: 'Alpine Mills' }, LOAD));
     await waitFor(() => { expect(editor.getByRole('button', { name: 'Send' })).toBeEnabled(); }, LOAD);
     await view.user.click(editor.getByRole('button', { name: 'Send' }));
     await waitFor(() => { expect(Object.keys(asking(source))).toEqual(['s-alp']); });

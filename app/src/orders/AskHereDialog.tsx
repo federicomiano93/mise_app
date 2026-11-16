@@ -4,18 +4,25 @@ import { Button } from '../ui/Button';
 import { Dialog } from '../ui/Dialog';
 import { useStatusMessage } from '../ui/StatusMessage';
 import { useOrders, useOrdersStore } from './OrdersContext';
-import { awaitingSentence, awaitingSupplierName } from './awaitingWords';
+import { awaitingSupplierName } from './awaitingWords';
 import type { OrdersLens } from './ordersLens';
 import { useAnswerAwaiting } from './useAnswerAwaiting';
+import styles from './AskHereDialog.module.css';
 
 // How often a question that had to wait (another dialog was open) looks again whether the way is clear.
 const RECHECK_MS = 1000;
 
-// «Order to Bruno sent at 10:42: did it go?» as a dialog, on the device that SENT it, once the page is back (the share sheet answered
-// while it was visible, or the window the text opened has come back). One question at a time, «Yes» / «No», and no Cancel: Escape
-// leaves it to the banner, which asks the same thing for as long as it takes (a tap outside does nothing: the dialog is not dismissable).
+// «ROSSI — Order sent?» as a small centred dialog, on the device that SENT it, once the page is back (the share sheet answered while it
+// was visible, or the window the text opened has come back). One supplier at a time, big «No» / «Yes» (the redesign of 16 Nov 2026,
+// replacing the «did it go?» banner on this device).
 //
-// Mounted at the level of the whole section, so it survives moving from one Orders screen to another.
+// ⚠️ IT MUST BE ANSWERED: no Cancel, and neither a tap outside nor Escape closes it (`forced`); the focus starts on its first button.
+// On every other device the same question stays a line that blocks nothing (AwaitingBanners). The recording is unchanged: «Yes»
+// records it in History, «No» keeps the quantities.
+//
+// Mounted at the level of the whole section, so it survives moving from one Orders screen to another — and so it is asked on any
+// Orders screen. (Outside Orders the section's store, and with it this device's own list of questions, is not running: the question
+// then stays the line on every device.)
 //
 // ⚠️ NEVER OVER ANOTHER DIALOG (an editor still going through its suppliers, a confirmation): two stacked dialogs share one Escape. The
 // question waits, and is asked again at the next snapshot or when the page comes back; the banner asks meanwhile.
@@ -25,7 +32,7 @@ const RECHECK_MS = 1000;
 // ⚠️ «ELSEWHERE» ONLY WHEN THAT QUESTION IS GONE (same supplier, same `at`) from the questions on the page — never because the store
 // stopped asking: it stops while the page is hidden, and a question that still stands has not been answered by anybody.
 export function AskHereDialog({ lens }: { lens: OrdersLens }) {
-  const { t, locale } = useT();
+  const { t } = useT();
   const store = useOrdersStore();
   const { awaiting, suppliers } = useOrders();
   const { questions } = awaiting;
@@ -67,15 +74,19 @@ export function AskHereDialog({ lens }: { lens: OrdersLens }) {
     <Dialog
       isOpen
       role="alertdialog"
-      title={awaitingSentence(t, locale, awaitingSupplierName(suppliers, open.supplierId, t), open.at)}
+      forced
+      small
+      title={awaitingSupplierName(suppliers, open.supplierId, t)}
+      message={t('ord.awaiting.sent')}
+      // Never called while `forced` (no Escape, no backdrop, no Cancel): kept so the question is handed to the line if it ever is.
       onClose={() => {
         store.leaveAskToBanner(open.supplierId);
         setOpen(null);
       }}
       actions={
         <>
-          <Button key="no" onPress={() => { reply('no'); }}>{t('ord.awaiting.no')}</Button>
-          <Button key="yes" variant="primary" autoFocus onPress={() => { reply('yes'); }}>{t('ord.awaiting.yes')}</Button>
+          <Button key="no" className={styles.answer} autoFocus onPress={() => { reply('no'); }}>{t('ord.awaiting.no')}</Button>
+          <Button key="yes" variant="primary" className={styles.answer} onPress={() => { reply('yes'); }}>{t('ord.awaiting.yes')}</Button>
         </>
       }
     />

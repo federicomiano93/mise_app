@@ -1,5 +1,5 @@
-/* A supplier's order: the bar and the column names stuck together at the top, then the rows. The card does not clip (no
-   `overflow`), so what sticks inside it is never cut. */
+/* A supplier's order: the head and the column names stuck at the top, then the rows. The card does not clip (no `overflow`), so what
+   sticks inside it is never cut. On the split it fills the pane edge to edge, one colour, no border (below). */
 
 .screen {
   min-width: 0;
@@ -19,52 +19,177 @@
   border-radius: var(--r-lg) var(--r-lg) 0 0;
 }
 
-/* «+», «What they sell» and «Summary (N)» in the bar. They do not all fit beside the title on a 296px phone: the row wraps (the
-   bar gives it at most its own width, FormBar.module.css .action), right-aligned, every target still the full hit height. */
-.barActions {
+/* The head (16 Nov 2026): `[X] NAME ›` … `[send]` (a phone: `[←] NAME ›` … «Summary (N)» `[send]`). The icons are grey 48px squares with
+   no border; the name stays on ONE line, cut with an ellipsis. */
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+  padding: var(--s3) var(--s3) var(--s2);
+}
+
+.icon,
+.summary {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s2);
+  min-width: var(--hit);
+  height: var(--hit);
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-md);
+  background: var(--sunken);
+  color: var(--ink);
+  font: 500 var(--fs-sm)/1.2 var(--font);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.summary {
+  padding: 0 var(--s3);
+  white-space: nowrap;
+}
+
+.icon > svg {
+  width: 20px;
+  height: 20px;
+}
+
+.summary > svg {
+  width: 18px;
+  height: 18px;
+}
+
+.icon[data-disabled] {
+  color: var(--ink-3);
+  cursor: default;
+}
+
+.icon:focus-visible,
+.summary:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.title {
+  flex: 1 1 8rem;
+  min-width: 0;
+  font-size: var(--fs-xl);
+  font-weight: 700;
+}
+
+.title:focus:not(:focus-visible) {
+  outline: none;
+}
+
+.name {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The name as the door to the supplier's card: the name, then ›; as tall as a finger. */
+.door {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: var(--s2);
-}
-
-.barActions .add,
-.barActions .send {
-  flex: none;
-  width: var(--hit);
+  gap: var(--s1);
+  max-width: 100%;
+  min-height: var(--hit);
   padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
 
-/* The same columns as a row (OrderLine.module.css; ordersCss.spec.ts compares them). */
+.door > svg {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  color: var(--ink-2);
+}
+
+.door:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--r-md);
+}
+
+/* The slim bar: «Order for [Today ▾]» … «Saved ✓», then the ONE line of the card. The day takes the room, «Saved ✓» keeps to the right. */
+.bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--s2) var(--s3);
+  min-height: calc(var(--hit) + var(--s3));
+  margin-bottom: var(--s1);
+  padding: var(--s1) var(--s3) var(--s3);
+  border-bottom: 1px solid var(--line);
+}
+
+.bar > :first-child {
+  flex: 1 1 auto;
+}
+
+/* The column names: Item · Unit · Order · Stock, the same columns as a compact row (OrderLine.module.css .compact; orderLineCss.spec.ts
+   compares them), with no line under them. On a phone, where a row is name · unit over `[−] qty [+]` · stock, only «Order» and «Stock»
+   stand over the second level («Item» and «Unit» name what is plainly there). */
 .columns {
   position: sticky;
   top: 0;
   z-index: 2;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 104px 64px;
+  grid-template-columns: minmax(0, 1fr) 88px;
   gap: var(--s2);
-  padding: var(--s2);
-  border-bottom: 1px solid var(--line);
+  padding: var(--s1) var(--s3);
   background: var(--surface);
 }
 
 .columns[data-stock="false"] {
-  grid-template-columns: minmax(0, 1fr) 104px;
+  grid-template-columns: minmax(0, 1fr);
 }
 
-@media (min-width: 480px) {
+.columnItem,
+.columnUnit {
+  display: none;
+}
+
+.columnItem {
+  color: var(--ink-3);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+@media (min-width: 1000px) {
   .columns {
-    grid-template-columns: minmax(0, 1fr) 104px 88px;
-    gap: var(--s3);
-    padding: var(--s2) var(--s3);
+    grid-template-columns: minmax(0, 1fr) 96px 148px 64px;
+    gap: 10px;
+    padding: var(--s1) var(--s4);
+  }
+
+  .columns[data-stock="false"] {
+    grid-template-columns: minmax(0, 1fr) 96px 148px;
+  }
+
+  .columnItem,
+  .columnUnit {
+    display: block;
   }
 }
 
 .columnName {
-  color: var(--ink-2);
-  font-size: var(--fs-sm);
-  font-weight: 650;
+  color: var(--ink-3);
+  font-size: 13px;
+  font-weight: 500;
   text-align: center;
 }
 
@@ -91,4 +216,25 @@
   gap: var(--s2);
   padding: var(--s4) var(--s3);
   border-top: 1px solid var(--line);
+}
+
+/* The split: the card is the whole bottom-right pane (OrdersSection.module.css gives it no padding there), white, no border or corners. */
+@media (min-width: 1000px) {
+  .screen {
+    min-height: 100%;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .sticky {
+    border-radius: 0;
+  }
+
+  .head {
+    padding: var(--s3) var(--s4) var(--s2);
+  }
+
+  .bar {
+    padding-inline: var(--s4);
+  }
 }

@@ -140,7 +140,8 @@ describe('the suppliers to order today in the Orders list', () => {
     act(() => { source.remoteMerge({ entries: { 'i-flour': { qty: 3 } }, days: { 's-alp': TODAY } }); });
     await act(async () => { await new Promise(resolve => setTimeout(resolve, 30)); });
     expect(rowOf('Bee Farm')).toBe(bee);
-    expect(rowNames().slice(0, 2)).toEqual(['Bee Farm To order today', 'Cat Dairy To order today']);
+    // Alpine Mills now has a quantity, so it joins «To order» (the groups of 16 Nov 2026), in the list's usual order.
+    expect(rowNames().slice(0, 3)).toEqual(['Alpine Mills 1 item', 'Bee Farm To order today', 'Cat Dairy To order today']);
   });
 
   // ⚠️ The FOCUSED row is the one pushed DOWN: [Alpine, Bee, Cat] with nobody due, Alpine focused; Bee becomes due and goes first, so

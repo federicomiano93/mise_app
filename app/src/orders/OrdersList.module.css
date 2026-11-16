@@ -129,7 +129,7 @@
 .name {
   min-width: 0;
   overflow-wrap: anywhere;
-  font-size: var(--fs-lg);
+  font-size: var(--fs-md);
   font-weight: 600;
 }
 
@@ -155,10 +155,17 @@
   font-weight: 600;
 }
 
+.facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s1) var(--s2);
+  margin-top: 2px;
+}
+
 .dueTag {
   display: block;
   width: fit-content;
-  margin-top: 2px;
   padding: 2px var(--s2);
   border: 1px solid var(--warn);
   border-radius: var(--r-sm);
@@ -170,10 +177,10 @@
 }
 
 .count {
-  flex: none;
   color: var(--accent-ink);
   font-size: var(--fs-sm);
-  font-weight: 650;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 .chevron {
@@ -188,7 +195,7 @@
   flex: none;
   align-items: center;
   justify-content: center;
-  width: var(--hit-lg);
+  width: var(--hit);
   border: 0;
   border-left: 1px solid var(--line);
   background: none;
@@ -205,7 +212,7 @@
 /* Where the summary button would be, for a supplier with nothing typed: the rows keep their columns. */
 .spacer {
   flex: none;
-  width: var(--hit-lg);
+  width: var(--hit);
 }
 
 /* «Order placed…» and «Clear quantities…» under the suppliers. */
