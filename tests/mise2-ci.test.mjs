@@ -37,7 +37,8 @@ test('the mise2 job installs from the lockfiles with no install scripts, then ch
       assert.match(mise2, new RegExp(`run: ${step}\\n\\s+working-directory: ${dir}\\n`), `${step} in ${dir}`);
     }
     // The vulnerability gate: scripts/audit-vite-trees.mjs (why not plain npm audit: that file).
-    assert.match(mise2, new RegExp(`- name: Vulnerability check of ${dir}/ \\(P11\\)\\n\\s+run: node scripts/audit-vite-trees\\.mjs ${dir}\\n`), `audit of ${dir}`);
+    // The WHOLE step, so an `if:` or a `continue-on-error:` cannot quietly turn it off: the next line starts another step.
+    assert.match(mise2, new RegExp(`- name: Vulnerability check of ${dir}/ \\(P11\\)\\n {8}run: node scripts/audit-vite-trees\\.mjs ${dir}\\n(?: {6}- |\\n|$)`), `audit of ${dir}`);
   }
   // A plain audit could not accept the advisory with no fix, so it would turn every push red.
   assert.doesNotMatch(mise2, /run: npm audit/);

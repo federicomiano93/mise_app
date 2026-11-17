@@ -18,8 +18,9 @@ Delegate to the `test-runner` agent; its table has the commands and the flaky li
 - From `shared/`: types, specs. From `app/`: types, specs, `npm run build`. From the root: `npm test`
   (`tests/mise2-ci.test.mjs`, `tests/mise2-isolation.test.mjs`, `tests/auth-start.test.mjs` pin the
   two apps side by side, and the root suite does NOT run the specs).
-- A package added or upgraded (only if the plan says so): `npm audit --audit-level=high` in that
-  package, as CI does.
+- A package added or upgraded (only if the plan says so): `node scripts/audit-vite-trees.mjs app`
+  (or `shared`) from the repo root, as CI does — NOT plain `npm audit --audit-level=high`, which
+  fails on the accepted picomatch advisory (no fix exists; the script names it with its reason).
 - Red = STOP. Fix it, or report that the plan was wrong; never weaken a spec.
 
 ## Gate 2 — Firestore rules checks (when the rules or a saved shape changed)
