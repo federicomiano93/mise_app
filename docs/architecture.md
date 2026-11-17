@@ -667,7 +667,9 @@ lightningcss lowers oklch, nesting and media ranges; it does not lower everythin
   rail, because it ignores the media query that shows it.
 - `shared/`: `npm run typecheck`, `npm test`.
 - CI job `mise2` (a required check on `main` since 10 Oct 2026): installs both packages with
-  `npm ci --ignore-scripts`, then typecheck, specs, build and `npm audit --audit-level=high`. It may
+  `npm ci --ignore-scripts`, then typecheck, specs, build and the vulnerability gate
+  `node scripts/audit-vite-trees.mjs shared|app` (plain `npm audit` until 17 Nov 2026, when an
+  unfixable picomatch advisory needed accepting by name). It may
   only read the repository and holds no credential. `deploy-functions` still waits only on `test`
   and `rules`.
 - Driving it: build with `--base=/mise2/` (from Git Bash: `MSYS_NO_PATHCONV=1`, or the path is
