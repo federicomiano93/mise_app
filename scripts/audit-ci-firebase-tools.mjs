@@ -12,7 +12,7 @@
 //   GHSA-4x49-vf9v-38px, GHSA-pxx3-g568-hxr4) are HIGH, CWE-506 «embedded malicious code», and
 //   this tree carries both packages, at later versions.
 // So: ANY advisory marked CWE-506 fails, whatever its severity; any HIGH or CRITICAL fails unless
-// it is the one named below. A new high therefore turns CI red until somebody looks at it.
+// it is one named below. A new high therefore turns CI red until somebody looks at it.
 //
 // ⚠️ AND THE ACCEPTED ADVISORY MUST BE SEEN, EVERY RUN. An audit that checked nothing
 // (offline mode, dev packages omitted — firebase-tools is a devDependency — or an empty answer
@@ -36,6 +36,10 @@ export const ALLOWED = new Map([
     'to v3/v5/v6. The tree\'s gaxios calls only v4() with no buffer, so CI never reaches it; Google\'s libraries ' +
     'decide when it goes. Named here as the finding that proves the audit looked (measured on firebase-tools ' +
     '15.34.2: no high or critical in the tree).' }],
+  ['GHSA-fc5q-39xc-vjpf', { upTo: 'high', why: 'picomatch <= 4.0.7: ReDoS when a glob PATTERN repeats a single-branch ' +
+    'extglob. Only the patterns are dangerous, and every pattern here is written in the tools\' own code or ours (file ' +
+    'globs, never text from a person or the network), so CI never builds one. No patched version exists (advisory ' +
+    'raised to cover every version on 17 Nov 2026). Remove this entry when the lockfile moves to the fixed picomatch.' }],
 ]);
 
 const MALICIOUS = 'CWE-506';
@@ -43,8 +47,9 @@ const BLOCKING = new Set(['high', 'critical']);
 const SEVERITIES = ['info', 'low', 'moderate', 'high', 'critical'];
 const ghsaOf = (url) => (String(url ?? '').match(/GHSA-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}/) || [])[0];
 
-// Pure, so the tests can feed it reports: { ok, problems: [..], accepted: [..] }.
-export function judge(report) {
+// Pure, so the tests can feed it reports: { ok, problems: [..], accepted: [..] }. `allowed` is this
+// tree's list; scripts/audit-vite-trees.mjs passes its own for shared/ and app/.
+export function judge(report, allowed = ALLOWED) {
   // An npm or registry failure must never read as «nothing found».
   if (!report || typeof report !== 'object' || report.error || report.auditReportVersion !== 2 ||
       !report.vulnerabilities || typeof report.vulnerabilities !== 'object' ||
@@ -59,39 +64,41 @@ export function judge(report) {
       const id = ghsaOf(via.url) ?? String(via.source ?? via.url ?? 'unknown advisory');
       const label = `${id} ${via.severity} ${name}: ${via.title}`;
       if ((via.cwe ?? []).includes(MALICIOUS)) problems.add(`MALICIOUS CODE — ${label}`);
-      else if (ALLOWED.has(id)) {
+      else if (allowed.has(id)) {
         accepted.add(id);
-        const { upTo } = ALLOWED.get(id);
+        const { upTo } = allowed.get(id);
         if (SEVERITIES.indexOf(via.severity) > SEVERITIES.indexOf(upTo)) problems.add(`${label} — accepted only up to ${upTo}: look at it again`);
       } else if (BLOCKING.has(via.severity)) problems.add(label);
     }
   }
-  for (const id of ALLOWED.keys()) {
+  for (const id of allowed.keys()) {
     if (!accepted.has(id)) problems.add(`${id} was not reported: the audit checked nothing, or this ALLOWED entry is stale — remove it`);
   }
   return { ok: problems.size === 0, problems: [...problems], accepted: [...accepted] };
 }
 
-export function runNpmAudit() {
-  const dir = fileURLToPath(new URL('../ci/firebase-tools/', import.meta.url));
+export function runNpmAudit(tree = 'ci/firebase-tools') {
+  const dir = fileURLToPath(new URL(`../${tree}/`, import.meta.url));
   // `npm audit` exits 1 whenever it finds anything, so its exit code says nothing here: the
   // verdict is judge()'s. One fixed command string through a shell: npm is a .cmd on Windows.
   return spawnSync('npm audit --json --include=dev --offline=false',
     { cwd: dir, encoding: 'utf8', shell: true, maxBuffer: 64 * 1024 * 1024 });
 }
 
-// Returns the exit code, so the tests can drive it with a fake npm.
-export function main(run = runNpmAudit, out = console.log, err = console.error) {
+// Returns the exit code, so the tests can drive it with a fake npm. The last argument lets
+// scripts/audit-vite-trees.mjs reuse it for another tree with that tree's own list.
+export function main(run = runNpmAudit, out = console.log, err = console.error,
+  { tree = 'ci/firebase-tools', allowed = ALLOWED, listedIn = 'scripts/audit-ci-firebase-tools.mjs ALLOWED' } = {}) {
   const result = run();
   let report;
   try { report = JSON.parse(result.stdout); } catch { report = null; }
-  const { ok, problems, accepted } = judge(report);
-  for (const id of accepted) out(`accepted (scripts/audit-ci-firebase-tools.mjs ALLOWED): ${id}`);
+  const { ok, problems, accepted } = judge(report, allowed);
+  for (const id of accepted) out(`accepted (${listedIn}): ${id}`);
   if (ok) {
-    out('ci/firebase-tools: no malicious-code advisory, no high or critical beyond the accepted ones.');
+    out(`${tree}: no malicious-code advisory, no high or critical beyond the accepted ones.`);
     return 0;
   }
-  for (const p of problems) err(`::error::ci/firebase-tools: ${p}`);
+  for (const p of problems) err(`::error::${tree}: ${p}`);
   // Say WHY when npm itself failed: its error comes back as JSON, not as a crash.
   const cause = report?.error?.summary ?? report?.message;
   if (cause) err(`npm: ${cause}`);
