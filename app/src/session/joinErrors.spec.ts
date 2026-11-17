@@ -51,6 +51,23 @@ describe('joinRefusal', () => {
     expect(joinRefusal(new TypeError('Failed to fetch dynamically imported module'))).toEqual({ key: 'join.offline' });
   });
 
+  // ⚠️ No signal reaches the app as `internal`: the SDK maps a fetch that never left the phone (HTTP status 0) to it.
+  test('a phone that knows it is offline, whatever code the SDK gave: the connection', () => {
+    vi.stubGlobal('navigator', { onLine: false });
+    expect(joinRefusal(fnError('internal', 'internal'))).toEqual({ key: 'join.offline' });
+    expect(joinRefusal(fnError('unknown', 'unknown'))).toEqual({ key: 'join.offline' });
+  });
+
+  // A refusal the SERVER sent proves the phone was online when it came: it is said as the server meant it, even if the
+  // phone has lost its signal since.
+  test('a refusal the server sent is not turned into «offline»', () => {
+    vi.stubGlobal('navigator', { onLine: false });
+    expect(joinRefusal(fnError('permission-denied', redeemFailureText('expired')))).toEqual({ key: 'join.badCode' });
+    expect(joinRefusal(fnError('resource-exhausted', redeemFailureText('rate-limited', 5 * 60_000)))).toEqual({ key: 'join.tooManyMinutes', n: 5 });
+    expect(joinRefusal(fnError('failed-precondition', redeemFailureText('already-member'), { reason: 'already-member' })))
+      .toEqual({ key: 'join.alreadyMember' });
+  });
+
   test('anything else: could not check', () => {
     for (const error of [fnError('internal', 'INTERNAL'), fnError('unauthenticated', 'Sign in first.'), new Error('x'), null, 'x', 42]) {
       expect(joinRefusal(error), String(error)).toEqual({ key: 'join.failed' });
