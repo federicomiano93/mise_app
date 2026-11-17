@@ -33,10 +33,14 @@ test('the mise2 job installs from the lockfiles with no install scripts, then ch
   const installs = [...mise2.matchAll(/npm (ci|install)[^\n]*\n\s+working-directory: (\w+)/g)].map(m => `${m[0].split('\n')[0].trim()} @ ${m[2]}`);
   assert.deepEqual(installs, ['npm ci --ignore-scripts @ shared', 'npm ci --ignore-scripts @ app']);
   for (const dir of ['shared', 'app']) {
-    for (const step of ['npm run typecheck', 'npm test', 'npm audit --audit-level=high']) {
+    for (const step of ['npm run typecheck', 'npm test']) {
       assert.match(mise2, new RegExp(`run: ${step}\\n\\s+working-directory: ${dir}\\n`), `${step} in ${dir}`);
     }
+    // The vulnerability gate: scripts/audit-vite-trees.mjs (why not plain npm audit: that file).
+    assert.match(mise2, new RegExp(`- name: Vulnerability check of ${dir}/ \\(P11\\)\\n\\s+run: node scripts/audit-vite-trees\\.mjs ${dir}\\n`), `audit of ${dir}`);
   }
+  // A plain audit could not accept the advisory with no fix, so it would turn every push red.
+  assert.doesNotMatch(mise2, /run: npm audit/);
   assert.match(mise2, /run: npm run build\n\s+working-directory: app\n/);
 });
 
