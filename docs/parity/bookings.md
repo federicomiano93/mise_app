@@ -155,3 +155,51 @@ venue's country's words («3 packs (250 g)» in the UK), never «3 pz».
 `bookings/bookingModel.spec.ts` and `BookingsSection.spec.tsx`, the `priceList` scenario of the rules suite, `tests/rules-read-budget.test.mjs`.
 
 **Not driven yet**: the emulator at 1024 / 360 / 296 in Italian and English, the tablet, a printed customer slip with amounts.
+
+## Step 3 as built (18 Nov 2026) — the slips straight to the receipt printer, from the tablet
+
+Branch `feature/mise2-bookings-3`, stacked on step 2. The owner's answers (18 Nov 2026): the Epson FP-81 II RT is on the shop's
+network; both slips print on it; asked whether the software could live on the tablet, he chose «the tablet direct first» — no
+computer in between, and the computer of the management software (always on) only if the tablet cannot do it.
+
+**How**: the tablet sends the slip to the printer itself, over the network, as a NON-FISCAL document of Epson's own XML protocol for
+its fiscal printers (`<printerNonFiscal>`: `beginNonFiscal`, one `printNormal` per line, `endNonFiscal`), posted to
+`https://<address>/cgi-bin/fpmate.cgi`. Nothing fiscal is ever sent (no receipt, no total registered, no report): a spec says so.
+Text only, 42 columns, bold through the printer's font 2. `bookings/receiptPrinter.ts` (the document, the sending, the outcome),
+`bookings/slipText.ts` (the two slips as lines — the same content as the browser's slips; ⚠️ the lab slip has no name, phone,
+address or price), `bookings/printWords.ts` (the outcome in words).
+
+**Why HTTPS and a certificate**: the app is a secure page, and a secure page may not call an `http://` address. The printer answers
+on `https://` with its own certificate, which each device has to accept ONCE (open the printer's address, Advanced → Proceed).
+The app's security policy (`csp-plugin.ts`) lets the page reach the printer: its `connect-src` gains `https://<address>` of the
+address saved on THIS device, read by the bootstrap at load, and only when it is a private network address (10.x, 172.16–31.x,
+192.168.x, optional port; `bookings/printerHost.ts`). So the page loads again after the address is saved.
+
+**«Stampante scontrini» / «Receipt printer»** (`bookings/PrinterScreen.tsx`, `/bookings/printer`, usage name `bookings-printer`):
+a button at the foot of the bookings list. Back · title · Save. A sentence, the printer's address (placeholder 192.168.1.50, hint;
+anything else refused on Save, marked and said), «Plain letters only (no accents, no €)» for a printer that prints them wrong.
+Save asks «Save the printer?» and loads the app again. Leaving with the address changed asks («Discard changes?»), with
+`markBusy()`. With an address saved: «First print on this device» — the certificate hint, «Open the printer (192.168.1.50)» (new
+tab) and «Print a test page», whose outcome is said under it. A setting of the device (`localStorage`: `bookings-printer-host`,
+`bookings-printer-plain`), not of the venue: every device that prints sets it for itself.
+
+**Printing from a booking**: with a printer set on the device, «Lab slip» and «Customer slip» send to it: «Sending to the printer…»,
+then «Printed ✓». When it does not print, «Not printed» says why (not reachable or certificate not accepted, no answer in 15 s, the
+printer said no — with Epson's code when it gave one) and offers «Print through the browser», the dialog of step 1. With no printer
+set, the browser's dialog as before.
+
+**Step 0 — the test on the real printer (the owner, on the tablet)**: Prenotazioni → «Stampante scontrini» → the printer's address
+(the same as the till's; on the printer's own setup slip, or in the router) → Salva → «Apri la stampante» and accept the
+certificate → back, «Stampa una prova». Check on paper: accents and €, the bold line, the row of 42 digits whole. Wrong letters:
+tick «Solo lettere semplici». A digit row cut or wrapped: the width is not 42 (tell me the count). «Non raggiungibile» with the
+certificate accepted: this printer does not answer a page on `https://`, or the browser blocks it — then the route is the computer of
+the management software (`print-agent/`), to be built only then.
+
+**Tests**: `bookings/receiptPrinter.spec.ts`, `bookings/slipText.spec.ts`, `bookings/PrinterScreen.spec.tsx` (the screen and the
+direct print from a booking, with a fake printer), the printer case of `src/csp.spec.ts`.
+
+**Not verified (no printer here)**: that the FP-81 II RT answers this XML on `https://` from a browser (its web service and its
+cross-origin answer), the font numbers for normal and bold, 42 columns at its default font, how it prints UTF-8 accents and €, and
+whether a newer Chrome asks a permission for the local network the first time. Every device keeps its own printer: signing out or a
+browser that clears its data forgets it.
+

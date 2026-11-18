@@ -24,8 +24,15 @@
 //                         csp.spec.ts finds EVERY such text in the installed react-aria and requires exactly these hashes,
 //                         so an upgrade that changes or adds one turns red.
 //   frame-src 'self', base-uri 'self', form-action 'self' — as the current app.
+//
+// ⚠️ THE RECEIPT PRINTER (bookings step 3, 18 Nov 2026): the booking slips go straight from the device to the Epson on the
+// shop's network (https://<its address>/cgi-bin/fpmate.cgi). connect-src names that ONE address, read by the bootstrap from
+// this device's own setting (src/bookings/printerHost.ts) — and only when it matches the strict pattern of a private network
+// address, so nothing else can ever be written into the policy. No setting: the policy is exactly POLICY. A changed address
+// takes effect at the next page load (the printer screen reloads the page when it saves one).
 
 import type { Plugin } from 'vite';
+import { PRINTER_HOST_KEY, PRINTER_HOST_PATTERN } from './src/bookings/printerHost.ts';
 
 export const FUNCTIONS_HOST = 'https://us-central1-bakery-app-ebf90.cloudfunctions.net';
 // The SHA-256 of each <style> React Aria injects (`style.textContent` in react-aria/dist/private): usePress's, then
@@ -57,7 +64,9 @@ export function bootstrapScript(): string {
     '(function () {',
     "  var local = ['localhost', '127.0.0.1', '::1', '[::1]'].indexOf(location.hostname) !== -1;",
     `  var emu = local ? ' ${EMULATORS}' : '';`,
-    `  document.write('<meta http-equiv="Content-Security-Policy" content="' + ${JSON.stringify(`${head} https://www.gov.uk`)} + emu + ${JSON.stringify(tail ?? '')} + '">');`,
+    "  var printer = '';",
+    `  try { var h = typeof localStorage === 'undefined' ? null : localStorage.getItem(${JSON.stringify(PRINTER_HOST_KEY)}); if (h && new RegExp(${JSON.stringify(PRINTER_HOST_PATTERN)}).test(h)) printer = ' https://' + h; } catch (e) { printer = ''; }`,
+    `  document.write('<meta http-equiv="Content-Security-Policy" content="' + ${JSON.stringify(`${head} https://www.gov.uk`)} + printer + emu + ${JSON.stringify(tail ?? '')} + '">');`,
     '})();',
   ].join('\n');
 }

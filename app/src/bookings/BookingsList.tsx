@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef } from 'react';
-import { Plus } from 'lucide-react';
+import { Plus, Printer } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router';
 import { useT } from '../i18n/useT';
 import type { MessageKey } from '../i18n/en';
@@ -10,7 +10,7 @@ import { linesSummary, spellDate } from './bookingWords';
 import type { UnitWords } from './bookingWords';
 import { useBookings } from './BookingsContext';
 import { FROM_LIST, RESTORE_REFUSED, savedIdOf } from './bookingsNav';
-import { bookingPath, editBookingPath, newBookingPath } from './bookingsPath';
+import { bookingPath, editBookingPath, newBookingPath, printerPath } from './bookingsPath';
 import styles from './BookingsList.module.css';
 
 export const STATUS_WORD: Readonly<Record<BookingStatus, MessageKey>> = {
@@ -155,6 +155,11 @@ export function BookingsList({ choice, onChoice, today, selectedId }: Props) {
           ))}
         </>
       )}
+      {/* This device's receipt printer (bookings step 3): at the foot, out of the way of the day's work. */}
+      <Button variant="secondary" className={styles.printer} onPress={() => { void navigate(printerPath(), { state: FROM_LIST }); }}>
+        <Printer aria-hidden="true" />
+        <span>{t('bookings.printer.door')}</span>
+      </Button>
     </section>
   );
 }

@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Pencil, Printer, Trash2 } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router';
 import { formatMoney } from '@mise/shared/price-model';
@@ -21,6 +21,9 @@ import { STATUS_WORD } from './BookingsList';
 import { FROM_BOOKING, cameFromList } from './bookingsNav';
 import { BOOKINGS_PATH, editBookingPath } from './bookingsPath';
 import { printSlip } from './slipHost';
+import { readPrinterSetting, sendToPrinter } from './receiptPrinter';
+import { printOutcomeText } from './printWords';
+import { customerSlipLines, labSlipLines } from './slipText';
 import styles from './BookingDetail.module.css';
 
 // One booking (18 Nov 2026): its status (a tap saves it), when, who, what, the money, the two slips and the bin.
@@ -112,7 +115,12 @@ function Shown({ booking, onBack }: { booking: Booking; onBack: () => void }) {
   }
 
   // ⚠️ READ WHILE PRINTING, never at module load: the slip's unit word and its numbers follow the venue's country.
-  function print(kind: 'lab' | 'customer') {
+  // ⚠️ STRAIGHT TO THE RECEIPT PRINTER when this device has one (bookings step 3, the owner's choice: from the tablet, no computer
+  // in between): «Sending to the printer…», then «Printed ✓» — or, when it did not print, the reason and an offer to print through
+  // the browser's dialog instead. With no printer set, the browser's dialog as before.
+  const [sending, setSending] = useState<'lab' | 'customer' | null>(null);
+  async function print(kind: 'lab' | 'customer') {
+    if (sending !== null) return;
     const words: SlipWords = {
       number,
       mode: modeWord,
@@ -125,9 +133,34 @@ function Shown({ booking, onBack }: { booking: Booking; onBack: () => void }) {
     };
     const paperLocale = slipLocale(location, locale);
     const paperUnit = slipUnitWords(location);
-    printSlip(kind === 'lab'
-      ? <LabSlip booking={booking} words={words} locale={paperLocale} unitWord={paperUnit} />
-      : <CustomerSlip booking={booking} words={words} locale={paperLocale} unitWord={paperUnit} venueName={venueName ?? ''} money={money} />);
+    const throughBrowser = () => {
+      printSlip(kind === 'lab'
+        ? <LabSlip booking={booking} words={words} locale={paperLocale} unitWord={paperUnit} />
+        : <CustomerSlip booking={booking} words={words} locale={paperLocale} unitWord={paperUnit} venueName={venueName ?? ''} money={money} />);
+    };
+    const printer = readPrinterSetting();
+    if (printer === null) {
+      throughBrowser();
+      return;
+    }
+    const common = { booking, words, locale: paperLocale, units: paperUnit };
+    const lines = kind === 'lab' ? labSlipLines(common) : customerSlipLines({ ...common, venueName: venueName ?? '', money });
+    setSending(kind);
+    say(t('bookings.print.sending'));
+    const outcome = await sendToPrinter(printer, lines);
+    setSending(null);
+    if (outcome.ok) {
+      say(t('bookings.print.done'));
+      return;
+    }
+    say('');
+    const fallback = await confirm({
+      title: t('bookings.print.failedTitle'),
+      message: printOutcomeText(t, outcome),
+      okLabel: t('bookings.print.browser'),
+      cancelLabel: t('common.cancel'),
+    });
+    if (fallback) throughBrowser();
   }
 
   return (
@@ -217,11 +250,11 @@ function Shown({ booking, onBack }: { booking: Booking; onBack: () => void }) {
         </dl>
 
         <div className={styles.prints} role="group" aria-label={t('bookings.detail.print')}>
-          <Button variant="secondary" className={styles.print} onPress={() => { print('lab'); }}>
+          <Button variant="secondary" className={styles.print} isPending={sending === 'lab'} onPress={() => { void print('lab'); }}>
             <Printer aria-hidden="true" />
             <span>{t('bookings.print.lab')}</span>
           </Button>
-          <Button variant="secondary" className={styles.print} onPress={() => { print('customer'); }}>
+          <Button variant="secondary" className={styles.print} isPending={sending === 'customer'} onPress={() => { void print('customer'); }}>
             <Printer aria-hidden="true" />
             <span>{t('bookings.print.customer')}</span>
           </Button>

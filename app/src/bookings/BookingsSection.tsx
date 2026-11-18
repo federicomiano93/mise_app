@@ -10,6 +10,7 @@ import { SPLIT_QUERY } from '../ui/split';
 import { useMediaQuery } from '../ui/useMediaQuery';
 import { BookingDetail } from './BookingDetail';
 import { BookingEditor } from './BookingEditor';
+import { PrinterScreen } from './PrinterScreen';
 import { BookingsList } from './BookingsList';
 import { choiceForDate } from './bookingModel';
 import type { ListChoice } from './bookingModel';
@@ -127,5 +128,7 @@ function Detail({ view }: { view: Exclude<BookingsView, { kind: 'unknown' }> }) 
       return <BookingEditor key="new" id={null} />;
     case 'edit':
       return <BookingEditor key={view.id} id={view.id} />;
+    case 'printer':
+      return <PrinterScreen />;
   }
 }
