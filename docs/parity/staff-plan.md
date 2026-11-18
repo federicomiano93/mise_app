@@ -483,3 +483,33 @@ Branch `feature/mise2-staff-5-kiosk`, one PR into `main`. No server, rules, Fire
 **Left as built (from the review)**: a screen reader can still swipe to a control under the cover, and a mouse wheel wakes it and scrolls the page, as in the current app; a second reload in the very first seconds after the night step's reload (before the kiosk starts) would come back lit; a tablet that is in use, touched once after half a minute of nothing, can take an update within 2 seconds of that touch (the touch keeps the screen on; nothing typed is lost); whether Chrome freezes the 2-second retry when Android switches the screen off at the night step, so that the update waits for the morning tap, needs the tablet.
 
 **Not done here**: the real lab tablet (SM-T550, Chrome 101) — the Wake Lock holding the screen on through a whole rest, Android's screen timeout and screen pinning, the screen switching off in night and the page coming back dark after the night step's reload, a real update arriving while it rests. Those are Federico's, on the tablet.
+
+## Staff slice 6 as built (18 Nov 2026)
+
+Branch `feature/mise2-staff-6-kiosk-home`, stacked on slice 5 (`feature/mise2-staff-5-kiosk`), one PR. No server, rules or current-app change; nothing written to Firestore. With slices 5 and 6 the kiosk is back, and items 41-43 of `docs/mise2-port-owed.md` are ticked.
+
+**What a person sees**
+
+- **The rest screen gains its Orders lines** (D9, exactly as today): in the centre, large, **«To order today»** («Da ordinare oggi») and **«Arriving today»** («In arrivo oggi»), each with up to four supplier names (the short name when there is one) and «+N» for the rest; a section with nothing in it is not drawn. Names are up to 48 px on the tablet and about 25 px on a 296 px phone.
+- **Only for somebody the venue shows Orders to** (the current app's `restOrdersAllowed`: the venue has Orders and the card is shown to this person — the rail's own question, `visibleSectionIds`). Anybody else gets the rest screen without the lines, and nothing is read for them.
+- **The same rules as Orders**: a supplier already ordered today, or closed today as not ordered, is not «to order»; «arriving» honours the venue's goods-arrived switch (decision F4: off, no «arriving» line at all), through `orders/kioskFeed.ts`.
+- **The Home gains a band above «Da fare»** (D8), only while kiosk mode is on, for every role: **«Rest»** («Riposo», moon icon) and **«Exit»** («Esci», power icon, in the quiet red of a leaving action). Neither changes the setting.
+  - **Rest** covers the screen at once. The tap (or the key's repeat) that pressed it cannot wake it: the waking tap is armed only after 0.4 s. After waking, the focus goes back to «Rest».
+  - **Exit** asks the browser to close the page. A tablet that refuses (an installed app on many tablets) is told, after half a second: «This tablet doesn’t let the app close itself. To close it, open the recent-apps view and swipe Mise away.»
+  - Each counts a usage action by name only (`kiosk-rest`, `kiosk-exit`), as the current app does.
+
+**Reads, as built** (P14, the current app's `js/kiosk-orders.js`)
+
+- **While Orders is open**, its store answers from its own live data (`kiosk/liveOrdersLines.ts`, registered by `OrdersContext`): nothing is read.
+- **Anywhere else**, one-time reads while the tablet RESTS (`kiosk/kioskOrdersSource.ts`, in the data services): config/orders, the suppliers, orders-history from the start of the current work week, drafts/current — paths and queries the app already reads, no new index. Again every 15 minutes while it stays at rest; never in the night, never while active, never while the page is hidden; an answer younger than 15 minutes is reused. What was read last is still drawn in the night.
+- **A failed read keeps the previous answer**; the console gets the error's code only, never a name. A failed read of config/orders means the default week (Sunday) and the switch on; a failed read of the draft means the closes are not known (the line errs towards the reminder, as today).
+
+**Choices made (not fixed by the plan)**
+
+- **The band is two side-by-side buttons above the holiday band**, not the current app's round moon in the header and red bar at the foot: D8 put both above «Da fare», and Mise 2's Home has no header of its own.
+- **A failed read of config/orders falls back to the default week**, not to the current app's local mirror `orders-config` (Mise 2 does not keep that mirror).
+- **«safe center» is not used**: the current app centres the lines with `justify-content: safe center`, which is Chrome 115 — the lab tablet's Chrome 101 drops it, and they sat at the top. Mise 2 centres them with auto margins, which never clip the first title either. `safe` / `unsafe` alignment is now on the Chrome 101 guard's list (`shared/src/chrome101-tokens.ts`).
+
+**New texts (EN / IT)**: none new: `kiosk.rest.toOrderTitle`, `kiosk.rest.arrivingTitle`, `kiosk.home.rest`, `kiosk.home.exit`, `kiosk.home.cannotClose`, `kiosk.home.aria` are the current app's, key for key.
+
+**Not done here**: the real lab tablet (Federico): Rest from the band and the waking tap on the real touch screen, Exit on the installed app (whether Android lets it close), the lines read on a real venue's data while resting.

@@ -333,8 +333,14 @@ What was built and every difference: `docs/parity/calculator.md`, «Calculator p
 ## H. Smaller / verify
 
 41. **Staff invite role-first** (#475) — belongs to the deferred staff screens (below).
+    **DONE 18 Nov 2026** (`docs/parity/staff-plan.md`, staff slices 3 and 4): «Who can get in» for the full owner — the role-first
+    invite (link or six digits, no role chosen at the start) and the people list (change role, rename, remove).
 42. **Join-form fixes** (`9e0a2dac`, `1a3567b9`, `ff7046a8`) — deferred with join codes.
+    **DONE 13 Nov 2026** (staff slices 1 and 2): the form stays on screen until the server answers, names the account it joins, asks
+    the email twice; the role list cannot pick Owner by itself (slice 3, D2).
 43. **Kiosk keeps screen on** (#406) — deferred with kiosk.
+    **DONE 18 Nov 2026** (staff slices 5 and 6): «This device», the rest screen with its Orders lines, the screen kept on with no
+    reload under the cover, and Rest / Exit on the Home. Still owed: the run on the lab tablet (Federico).
 44. **Tablet fits visible height on Chrome 101** (`5a3b3afb`) — Mise 2 has its own `feature/mise2-tablet-chrome101` (merged into the stack); not re-checked.
 45. **`app-version` real release reported** (`bb9e5532`) — Mise 2 telemetry versions are `m2-…`: no port.
 46. **Tooling only (no port)**: #480 session-start hook, #441/#340/#423 firebase-tools/node 24/CI, #379, #403, #451.
@@ -361,8 +367,6 @@ What each one means for the people using Mise 2 until it is ported:
   (Items 21, 22, 24, 25 and 28 are done: weighing units, the «Cost per 1 kg» block, the list search and the phone preview, the
   read-first card with four figures and «Details», and two decimals on the screens Mise 2 has.)
 - 23. Food cost recipe link with several products (a check).
-- 41-43. Staff / join codes / roles screens (people, invitations incl. #475 role-first invite, the join form) and the
-  kiosk (#406 keep-screen-on, the kiosk lines already in shared). Until built: new people cannot join; existing accounts work.
 
 Deferred too, with no item number:
 - Reminder notifications: order reminders stop arriving with the switch, also for The Italian Club (warn them first: a
