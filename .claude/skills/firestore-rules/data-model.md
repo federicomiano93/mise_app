@@ -283,3 +283,28 @@ A row is `{ name, qty, note? }`: `note` («9x3») is free text up to 40 characte
 rebuilds rows as `{ name, qty }` (the app before this note, Mise 2 until it is ported) deletes every note on that day.
 `pastry-logs/{YYYY-MM-DD}_{Weekday}` — nothing deletes it; the read is bounded
 (`orderBy('date','desc') + limit(120)`).
+
+**Retention (the owner's decision of 18 Nov 2026, UK/EU GDPR).** One scheduled Cloud Function, `retention`
+(`functions/retention.js`, every night at 03:30 Europe/London), deletes old records under `locations/{lid}/…`. Every
+decision is in the pure `functions/retention-model.js` (`KINDS`, the cutoffs, the strict date checks); a new kind (step 3:
+the Auth accounts of people who left) is one more `KINDS` entry and one more switch.
+
+| kind | collection | key field (type) | deleted when |
+|---|---|---|---|
+| `clientOrders` | `client-orders` | `date` 'YYYY-MM-DD' | before today − 2 years (London calendar day) |
+| `orderRequests` | `order-requests` | `date` 'YYYY-MM-DD' | before today − 13 months (London calendar day) |
+| `pushTimers` | `push-timers` | `fireAt` number ms | before now − 7 days, active or cancelled |
+| `printJobs` | `print-jobs` | `createdAt` ISO + `status` | `done`/`failed` AND before now − 30 days; `queued`/`claimed` never |
+| `fcmTokens` | `fcm-tokens` | `updatedAt` number ms | before now − 60 days (Mise 2 refreshes it weekly: `app/src/orders/pushTokenRefresh.ts`) |
+| `devices` | `devices` | `lastSeen` Timestamp | older than 90 days |
+| `errors` | `errors` | `createdAt` Timestamp | older than 30 days |
+| `usage` | `usage` | `updatedAt` Timestamp | older than 400 days |
+
+⚠️ **Every kind ships OFF** (`ENABLED` in the model, all `false`): the function runs, queries and logs `{ kind, wouldDelete,
+skipped, … }` per kind and deletes nothing — **report-only** — until a later one-line PR switches a kind on (its pin in
+`tests/retention-model.test.mjs` changes with it). The last three take over the owner's manual prunes with the same periods;
+`scripts/read-devices.mjs`, `read-errors.mjs --prune` and `read-usage.mjs` still work (they also delete an unreadable date,
+the function never does). One range filter per venue (`field < cutoff`, single-field index, no composite or collection-group
+index); a missing, mistyped, malformed or pre-2020 date is never deleted; at most 500 deletions per kind per night; deletes
+carry a last-update precondition; logs hold counts and venue ids only. Tests: `tests/retention-model.test.mjs` (root) and
+`tests/rules/retention-check.mjs` (`npm run test:retention:emulated`, in the `rules` CI job).
