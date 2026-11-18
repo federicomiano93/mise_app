@@ -513,3 +513,10 @@ Branch `feature/mise2-staff-6-kiosk-home`, stacked on slice 5 (`feature/mise2-st
 **New texts (EN / IT)**: none new: `kiosk.rest.toOrderTitle`, `kiosk.rest.arrivingTitle`, `kiosk.home.rest`, `kiosk.home.exit`, `kiosk.home.cannotClose`, `kiosk.home.aria` are the current app's, key for key.
 
 **Not done here**: the real lab tablet (Federico): Rest from the band and the waking tap on the real touch screen, Exit on the installed app (whether Android lets it close), the lines read on a real venue's data while resting.
+
+### Staff slice 6 — where it stopped (18 Nov 2026, end of session)
+
+- **Pushed**, on `feature/mise2-staff-6-kiosk-home` (stacked on slice 5's `feature/mise2-staff-5-kiosk`, which is PR #575 into `main`, green and unmerged). **No PR opened yet** for slice 6.
+- **Passed**: types in both packages; the kiosk, Home band, Settings and Orders specs touched by the slice; the Chrome 101 guards; axe in Chromium on the band and the cover with its lines (EN/IT, 1024/360/296: 0 violations, no sideways scroll, no target under 44 px).
+- **Not finished**: the full app suite (stopped before it reported), the build, the root `npm test`, and the fresh `code-reviewer` pass on the slice-6 diff (stopped before it reported).
+- **Next session**: run those four; fix what the review finds; open the slice 6 PR into `feature/mise2-staff-5-kiosk` (retarget to `main` once #575 is merged); wait for `test`, `rules`, `mise2`.
