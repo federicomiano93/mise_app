@@ -16,7 +16,7 @@ import type { SlipWords } from './BookingSlips';
 import { qtyText, slipLocale, slipUnitWord, spellDate } from './bookingWords';
 import { useBookings, useBookingsStore } from './BookingsContext';
 import { STATUS_WORD } from './BookingsList';
-import { cameFromList } from './bookingsNav';
+import { FROM_BOOKING, cameFromList } from './bookingsNav';
 import { BOOKINGS_PATH, editBookingPath } from './bookingsPath';
 import { printSlip } from './slipHost';
 import styles from './BookingDetail.module.css';
@@ -134,7 +134,7 @@ function Shown({ booking, onBack }: { booking: Booking; onBack: () => void }) {
         titleId={`${ids}-title`}
         titleRef={title}
         action={(
-          <Button variant="primary" className={styles.edit} onPress={() => { void navigate(editBookingPath(booking.id)); }}>
+          <Button variant="primary" className={styles.edit} onPress={() => { void navigate(editBookingPath(booking.id), { state: FROM_BOOKING }); }}>
             <Pencil aria-hidden="true" />
             <span>{t('ui.edit')}</span>
           </Button>

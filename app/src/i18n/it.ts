@@ -2958,7 +2958,6 @@ export const it: Messages = {
   'bookings.status.cancelled': 'Annullata',
   'bookings.status.label': 'Stato',
   'bookings.number': 'N. {n}',
-  'bookings.row.label': '{time}, {name}, {mode}, {status}',
   'bookings.moreLines': { one: "+{n} altro", other: "+{n} altri" },
   'bookings.unit.pcs': 'pz',
   'bookings.unit.kg': 'kg',
@@ -3043,5 +3042,4 @@ export const it: Messages = {
   'bookings.slip.toPay': 'Da pagare',
   'bookings.slip.privacy': 'I tuoi dati (nome, telefono, indirizzo) servono solo per questo ordine e vengono cancellati 30 giorni dopo il ritiro. Puoi chiederne la cancellazione in qualsiasi momento.',
   'home.bookingsToday.title': 'Prenotazioni di oggi',
-  'home.bookingsToday.all': 'Tutte le prenotazioni',
 };

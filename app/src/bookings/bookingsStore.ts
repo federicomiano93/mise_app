@@ -113,8 +113,8 @@ export function createBookingsStore(source: BookingsSource, timers: Timers = bro
         retryDelay = RETRY_FIRST_MS;
         set({ status: 'ready', items });
       },
-      err => {
-        console.error('The bookings stream failed:', err);
+      // Logged once, by the source: a second console.error here would send every failure to the error report twice.
+      () => {
         set({ status: 'error' });
         stopWatching?.();
         stopWatching = null;

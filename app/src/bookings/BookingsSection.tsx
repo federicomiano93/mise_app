@@ -1,10 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Navigate, useLocation, useParams } from 'react-router';
 import { PartBoundary } from '../errors/PartBoundary';
 import { useT } from '../i18n/useT';
 import { KEEP_FOCUS, Page } from '../shell/Page';
+import { useOwnScrollArea } from '../shell/scrollArea';
 import { useTodayKey } from '../shell/useTodayKey';
 import { StatusMessageProvider, useStatusMessage } from '../ui/StatusMessage';
+import { SPLIT_QUERY } from '../ui/split';
+import { useMediaQuery } from '../ui/useMediaQuery';
 import { BookingDetail } from './BookingDetail';
 import { BookingEditor } from './BookingEditor';
 import { BookingsList } from './BookingsList';
@@ -61,6 +64,35 @@ function BookingsScreen() {
     if (saved !== null) setChoice(choiceForDate(saved, today));
   }, [saved, today]);
 
+  // ⚠️ BOOKINGS OWN THE SCROLL for the moves inside the section (architecture rule 9, shell/scrollArea.tsx): the list and a booking
+  // are separate addresses, and the shell's reset to the top at every address would throw the list back to its top at every booking
+  // opened on the split, and bring Back on a phone to the top of the list.
+  //  - On the split the list keeps its place; the right-hand side scrolls on its own and starts at its own top.
+  //  - On a phone the list's place is noted while the list is on screen, and Back to the list restores it; every other move is a
+  //    new screen and starts at the top.
+  const split = useMediaQuery(SPLIT_QUERY);
+  const scrollArea = useOwnScrollArea();
+  const listTop = useRef(0);
+  const kind = view.kind;
+  useEffect(() => {
+    const area = scrollArea();
+    if (area === null || kind !== 'list') return undefined;
+    const note = () => { listTop.current = area.scrollTop; };
+    area.addEventListener('scroll', note, { passive: true });
+    return () => { area.removeEventListener('scroll', note); };
+  }, [scrollArea, kind]);
+  const shown = useRef<{ pathname: string; kind: string } | null>(null);
+  const detail = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const before = shown.current;
+    shown.current = { pathname, kind };
+    if (detail.current) detail.current.scrollTop = 0;
+    const area = scrollArea();
+    // The first render (the shell reset the area as the section opened) and StrictMode's second run are not moves.
+    if (before === null || before.pathname === pathname || area === null || split) return;
+    area.scrollTop = kind === 'list' && before.kind !== 'list' ? listTop.current : 0;
+  }, [pathname]);
+
   if (view.kind === 'unknown') return <Navigate to={BOOKINGS_PATH} replace state={KEEP_FOCUS} />;
   const selectedId = view.kind === 'booking' || view.kind === 'edit' ? view.id : null;
 
@@ -72,7 +104,7 @@ function BookingsScreen() {
             <BookingsList choice={choice} onChoice={setChoice} today={today} selectedId={selectedId} />
           </PartBoundary>
         </div>
-        <div className={styles.detail}>
+        <div ref={detail} className={styles.detail}>
           <PartBoundary resetKey={pathname}>
             <Detail view={view} />
           </PartBoundary>

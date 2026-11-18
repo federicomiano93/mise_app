@@ -79,6 +79,12 @@ export function fakeBookingsSource(seed: readonly Booking[] = [], recipes: Recip
       queueMicrotask(() => { if (watchers.has(watcher)) onChange([...items.values()].filter(b => b.date >= from), false); });
       return () => { watchers.delete(watcher); };
     }),
+    watchDay: vi.fn((date: string, onChange, onError) => {
+      const watcher: Watcher = { from: date, onChange: (list, fromCache) => { onChange(list.filter(b => b.date === date), fromCache); }, onError };
+      watchers.add(watcher);
+      queueMicrotask(() => { if (watchers.has(watcher)) onChange([...items.values()].filter(b => b.date === date), false); });
+      return () => { watchers.delete(watcher); };
+    }),
     watchRecipes: vi.fn(onChange => {
       recipeWatchers.add(onChange);
       queueMicrotask(() => { if (recipeWatchers.has(onChange)) onChange(source.recipes); });

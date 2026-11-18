@@ -28,6 +28,17 @@
     gap: var(--s6);
     align-items: start;
   }
+
+  /* ⚠️ THE BOOKING STICKS TO THE TOP OF THE SCROLL AREA AND SCROLLS ON ITS OWN (the Stocktake's trap, paid for): opened from far
+     down a long list, it would otherwise open out of sight, and its title taking the focus would scroll the list away. Never
+     taller than the scroll area, so the form bar sticks to ITS top. No overscroll containment (StocktakeSection.module.css says
+     why). */
+  .detail {
+    position: sticky;
+    top: var(--s4);
+    max-height: calc(var(--vh100) - var(--topbar-h) - 2 * var(--s4));
+    overflow-y: auto;
+  }
 }
 
 /* The right-hand pane before a booking is picked (the split only). */

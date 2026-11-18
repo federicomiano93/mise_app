@@ -68,7 +68,7 @@ export function BookingsList({ choice, onChoice, today, selectedId }: Props) {
   return (
     <section ref={rowsBox} className={styles.list} aria-labelledby={`${ids}-title`}>
       <h2 id={`${ids}-title`} className="visually-hidden">{t('section.bookings')}</h2>
-      <Button variant="primary" className={styles.add} onPress={() => { void navigate(newBookingPath()); }}>
+      <Button variant="primary" className={styles.add} onPress={() => { void navigate(newBookingPath(), { state: FROM_LIST }); }}>
         <Plus aria-hidden="true" />
         <span>{t('bookings.new')}</span>
       </Button>
@@ -108,19 +108,25 @@ export function BookingsList({ choice, onChoice, today, selectedId }: Props) {
         </div>
       ) : null}
 
-      {refused !== null ? (
-        <div className={styles.refused} role="alert">
-          <span>{t('bookings.refused.text')}</span>
-          <Button
-            variant="secondary"
-            onPress={() => { void navigate(refused.id === null ? newBookingPath() : editBookingPath(refused.id), { state: RESTORE_REFUSED }); }}
-          >
-            {t('bookings.refused.open')}
-          </Button>
-        </div>
-      ) : null}
+      {/* ⚠️ THE LIVE REGIONS ARE ON THE PAGE EMPTY, AND ONLY WHAT IS INSIDE THEM COMES AND GOES: a region inserted already filled
+          is not announced reliably (architecture, «Traps already paid for»). */}
+      <div role="alert">
+        {refused !== null ? (
+          <div className={styles.refused}>
+            <span>{t('bookings.refused.text')}</span>
+            <Button
+              variant="secondary"
+              onPress={() => { void navigate(refused.id === null ? newBookingPath() : editBookingPath(refused.id), { state: RESTORE_REFUSED }); }}
+            >
+              {t('bookings.refused.open')}
+            </Button>
+          </div>
+        ) : null}
+      </div>
 
-      {status === 'error' ? <p className={styles.broken} role="status">{t('bookings.streamError')}</p> : null}
+      <div role="status">
+        {status === 'error' ? <p className={styles.broken}>{t('bookings.streamError')}</p> : null}
+      </div>
 
       {status === 'loading' ? (
         <p className={styles.empty}>{t('bookings.loading')}</p>

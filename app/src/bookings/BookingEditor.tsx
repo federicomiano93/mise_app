@@ -21,7 +21,7 @@ import {
 import type { Booking, BookingMode, BookingStatus, BookingUnit, Draft, DraftField, DraftLine, DraftProblem, RecipeName } from './bookingModel';
 import { spellDate } from './bookingWords';
 import { useBookings, useBookingsStore } from './BookingsContext';
-import { afterSave, restoresRefused } from './bookingsNav';
+import { afterSave, cameFromBooking, cameFromList, restoresRefused } from './bookingsNav';
 import { BOOKINGS_PATH, bookingPath } from './bookingsPath';
 import type { RefusedSave } from './bookingsStore';
 import styles from './BookingEditor.module.css';
@@ -57,11 +57,12 @@ export function BookingEditor({ id }: { id: string | null }) {
   useEffect(() => {
     if (refused !== null && store.getSnapshot().refused === refused) store.takeRefused();
   }, [refused, store]);
-  const [start, setStart] = useState<{ booking: Booking | null } | null>(() => (id === null ? { booking: null } : null));
+  // A new booking waits for the bookings too (from this device's copy, offline): its short number is one more than the highest held.
+  const [start, setStart] = useState<{ booking: Booking | null } | null>(null);
 
   if (start === null && status !== 'loading') {
-    const booking = items.find(item => item.id === id) ?? null;
-    if (booking !== null || refused !== null) setStart({ booking });
+    const booking = id === null ? null : items.find(item => item.id === id) ?? null;
+    if (id === null || booking !== null || refused !== null) setStart({ booking });
   }
 
   if (start === null) {
@@ -71,9 +72,9 @@ export function BookingEditor({ id }: { id: string | null }) {
         <FormBar
           backLabel={t('ui.back')}
           onBack={() => { void navigate(BOOKINGS_PATH, { replace: true }); }}
-          title={t('bookings.edit')}
+          title={id === null ? t('bookings.form.newTitle') : t('bookings.edit')}
         />
-        <p className={styles.loading}>{gone ? t('bookings.notFound') : t('bookings.form.waiting')}</p>
+        <p className={styles.loading}>{gone ? t('bookings.notFound') : id === null ? t('bookings.loading') : t('bookings.form.waiting')}</p>
       </section>
     );
   }
@@ -92,10 +93,19 @@ function EditorForm({ id, booking, refused }: FormProps) {
   const [confirm, confirmDialog] = useConfirm();
   const ids = useId();
   const isNew = id === null;
+  // Arriving from the list or the booking, the page leaves the focus alone (their marks carry keepFocus): it goes to this form's
+  // title, so its name is what a screen reader hears. Opened by its address, the page does it.
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const { state: arrivedWith } = useLocation();
+  useEffect(() => {
+    if (cameFromBooking(arrivedWith) || cameFromList(arrivedWith)) titleRef.current?.focus();
+  }, []);
   const number = booking?.number ?? refused?.number ?? null;
   const decimal = money.layout.decimal;
 
-  const keyCounter = useRef(0);
+  // ⚠️ PAST EVERY KEY OF A RESTORED WORKING COPY: its rows carry the refused editor's keys, and a new row given one of them again
+  // would be typed into together with the old one.
+  const keyCounter = useRef(refused === null ? 0 : Math.max(0, ...refused.draft.lines.map(line => line.key)));
   const nextKey = useCallback(() => {
     keyCounter.current += 1;
     return keyCounter.current;
@@ -188,8 +198,11 @@ function EditorForm({ id, booking, refused }: FormProps) {
 
   // Back goes up one level: to the booking for an existing one, to the list for a new one. The router's blocker asks first
   // when something was typed.
+  // Opened from the booking (Edit) or from the list (New booking), Back is the browser's Back, so the history never holds the same
+  // screen twice; opened by its address it replaces itself with the level above.
   const back = () => {
-    void navigate(isNew ? BOOKINGS_PATH : bookingPath(id), { replace: true });
+    if (cameFromBooking(arrivedWith) || cameFromList(arrivedWith)) void navigate(-1);
+    else void navigate(isNew ? BOOKINGS_PATH : bookingPath(id), { replace: true });
   };
 
   // ── Saving ──
@@ -215,14 +228,21 @@ function EditorForm({ id, booking, refused }: FormProps) {
       });
       if (!ok || !mounted.current) return;
       const { items } = store.getSnapshot();
-      const statusNow: BookingStatus = booking?.status ?? refused?.status ?? 'todo';
+      // ⚠️ THE STATUS AS IT IS NOW, never as it was when the editor opened: the editor does not show it, and a status set on another
+      // device meanwhile (Cancelled, Collected) must not be quietly put back by a Save that only fixed a phone number.
+      const stored = id === null ? undefined : items.find(item => item.id === id);
+      const statusNow: BookingStatus = stored?.status ?? refused?.status ?? booking?.status ?? 'todo';
+      // ⚠️ A RESTORED SAVE OF A BOOKING DELETED ON ANOTHER DEVICE IS MADE AGAIN AS A NEW ONE: written to its old id it would be a
+      // create without `createdAt`, refused by the rules every time.
+      const saveId = id !== null && stored === undefined && refused !== null ? null : id;
       const data = toBookingData(draft, { status: statusNow, number: number ?? nextNumber(items), recipes });
-      const savedId = store.save(id, data, draft);
+      const savedId = store.save(saveId, data, draft);
       leaving.current = true;
       say(t('bookings.saved'));
       // Back to the list, on the booking's day, the focus on its row. Never awaited: the write is in Firestore's queue and reaches
       // the server when it can.
-      void navigate(BOOKINGS_PATH, { state: afterSave(data.date, savedId) });
+      // The editor's entry is REPLACED: the browser's Back must not open the editor again.
+      void navigate(BOOKINGS_PATH, { replace: true, state: afterSave(data.date, savedId) });
     } finally {
       asking.current = false;
     }
@@ -263,6 +283,7 @@ function EditorForm({ id, booking, refused }: FormProps) {
         onBack={back}
         title={title}
         titleId={`${ids}-title`}
+        titleRef={titleRef}
         sub={<span className={styles.dirty} data-dirty={dirty ? 'true' : undefined} aria-live="polite">{dirty ? t('bookings.form.unsaved') : ''}</span>}
         action={<Button variant="primary" className={styles.save} onPress={() => { void save(); }}>{t('ui.save')}</Button>}
       />

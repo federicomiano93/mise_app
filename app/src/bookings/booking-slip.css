@@ -100,6 +100,15 @@
   white-space: nowrap;
 }
 
+.bk-slip-name {
+  font-weight: 600;
+}
+
+.bk-slip-notes {
+  font-size: 10pt;
+  white-space: pre-wrap;
+}
+
 .bk-slip-linenote {
   grid-column: 2;
   font-size: 9pt;

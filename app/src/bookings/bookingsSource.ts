@@ -28,11 +28,15 @@ const RECIPES = 'recipes';
 // How many bookings the list reads at most: about two a day for a year would still fit, and the retention keeps
 // 30 days of past ones only.
 export const READ_LIMIT = 500;
+// One day's bookings at most (the Home's card).
+export const DAY_LIMIT = 200;
 
 export interface BookingsSource {
   // Every booking from `fromDate` on (YYYY-MM-DD), live. Returns the unsubscribe function at once. `fromCache` says the answer
   // came from this device's offline copy rather than the server.
   watch(fromDate: string, onChange: (items: Booking[], fromCache: boolean) => void, onError: (err: unknown) => void): () => void;
+  // The bookings of ONE day, live (the Home's «Prenotazioni di oggi»: today only, never the days after).
+  watchDay(date: string, onChange: (items: Booking[], fromCache: boolean) => void, onError: (err: unknown) => void): () => void;
   // The venue's recipe names, for the editor's suggestions (archived ones left out). Read only while an editor is open.
   watchRecipes(onChange: (recipes: RecipeName[]) => void, onError: (err: unknown) => void): () => void;
   // A new booking. The id is made here, synchronously, so the caller knows it at once.
@@ -66,7 +70,8 @@ export function createFirestoreBookingsSource(firestore: () => Promise<Firestore
     read: (docs: ReadonlyArray<{ id: string; data: () => Record<string, unknown> }>) => T,
     onChange: (value: T, fromCache: boolean) => void,
     onError: (err: unknown) => void,
-    what: string,
+    // Whether a failure is worth an error report: a broken bookings stream is; a recipe book the venue cannot read is expected.
+    report: boolean,
   ): () => void {
     let stopped = false;
     let unsubscribe: (() => void) | null = null;
@@ -77,7 +82,7 @@ export function createFirestoreBookingsSource(firestore: () => Promise<Firestore
         { includeMetadataChanges: true },
         snap => { onChange(read(snap.docs.map(d => ({ id: d.id, data: () => d.data() }))), snap.metadata.fromCache); },
         err => {
-          console.error(`watch(${what}) failed:`, err);
+          if (report) console.error('watch(bookings) failed:', err);
           onError(err);
         },
       );
@@ -101,7 +106,17 @@ export function createFirestoreBookingsSource(firestore: () => Promise<Firestore
         docs => docs.map(d => readBooking(d.id, d.data())).filter((b): b is Booking => b !== null),
         onChange,
         onError,
-        'bookings',
+        true,
+      );
+    },
+
+    watchDay(date, onChange, onError) {
+      return listen(
+        ({ fs, db }) => fs.query(fs.collection(db, path), fs.where('date', '==', date), fs.limit(DAY_LIMIT)),
+        docs => docs.map(d => readBooking(d.id, d.data())).filter((b): b is Booking => b !== null),
+        onChange,
+        onError,
+        true,
       );
     },
 
@@ -114,7 +129,7 @@ export function createFirestoreBookingsSource(firestore: () => Promise<Firestore
           .map(({ id, data }) => ({ id, name: String(data.name).trim() })),
         recipes => { onChange(recipes); },
         onError,
-        'recipes for bookings',
+        false,
       );
     },
 

@@ -3194,7 +3194,6 @@ export const en = {
   'bookings.status.cancelled': 'Cancelled',
   'bookings.status.label': 'Status',
   'bookings.number': 'No. {n}',
-  'bookings.row.label': '{time}, {name}, {mode}, {status}',
   'bookings.moreLines': { one: "+{n} more", other: "+{n} more" },
   'bookings.unit.pcs': 'pcs',
   'bookings.unit.kg': 'kg',
@@ -3264,7 +3263,7 @@ export const en = {
   'bookings.err.phone': 'Digits, spaces and + only.',
   'bookings.err.noLines': 'Add at least one product.',
   'bookings.err.qty': 'A number above zero (whole for pieces).',
-  'bookings.err.money': 'A number, like 12,50.',
+  'bookings.err.money': 'A number, like 12.50.',
   'bookings.err.pastDate': 'This day has already gone.',
   'bookings.err.notSaved': 'Couldn’t save the booking — check your connection.',
   'bookings.err.noAccess': 'The booking wasn’t saved: you can’t change bookings in this venue.',
@@ -3279,7 +3278,6 @@ export const en = {
   'bookings.slip.toPay': 'To pay',
   'bookings.slip.privacy': 'Your details (name, phone, address) are used only for this order and are deleted 30 days after pickup. You can ask for them to be deleted at any time.',
   'home.bookingsToday.title': 'Today’s bookings',
-  'home.bookingsToday.all': 'All bookings',
 } as const satisfies Record<string, Message>;
 
 export type MessageKey = keyof typeof en;

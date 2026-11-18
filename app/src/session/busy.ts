@@ -22,7 +22,8 @@
 // a WhatsApp line typed and not added yet (calculator/WhatsappPicker.tsx) and what was typed on a HACCP label until it is
 // printed (recipes/HaccpLabelBody.tsx). Food cost's lab mode holds it for as long as it is open (foodcost/lab/LabMode.tsx), with the
 // screen wake lock, like the Recipe book's mix in progress. «Who can get in» holds it while an invitation is being made and while
-// its code is on screen, shown once and never stored (settings/InviteCard.tsx).
+// its code is on screen, shown once and never stored (settings/InviteCard.tsx). A booking's editor holds it while it differs from the booking it opened
+// (or holds a refused save brought back), until it is saved or discarded (bookings/BookingEditor.tsx).
 // ⚠️ A HOLD MUST END: a screen left open with a hold that never lets go keeps that device off every update, and off the
 // way back after a revert. (Not the sign-in form for that reason: a browser's autofill or a half-typed address left on
 // a shared tablet would block it for days, for a box that takes seconds to retype.) Each new editor adds itself here.

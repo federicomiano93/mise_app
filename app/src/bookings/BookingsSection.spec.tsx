@@ -6,6 +6,7 @@ import { bookingFixture, fakeBookingsSource, permissionDenied } from '../testing
 import type { FakeBookingsSource } from '../testing/fakeBookingsSource';
 import { renderApp } from '../testing/renderApp';
 import { dayAfter } from './bookingModel';
+import type { Booking } from './bookingModel';
 import { SLIP_HOST_ID, SLIP_PRINTING_CLASS, closeSlipHost } from './slipHost';
 
 // «Bookings» (18 Nov 2026): the list by day, a booking, the editor (P20), the two slips, the bin. ⚠️ Fake customers only.
@@ -339,7 +340,42 @@ describe('the editor', () => {
     await waitFor(() => { expect(router.state.location.pathname).toBe('/bookings/new'); });
     expect(await screen.findByLabelText('Name')).toHaveValue('Gino Prova');
     expect(screen.getByLabelText('Product')).toHaveValue('Focaccia');
-    await waitFor(() => { expect(list().queryByRole('alert')).toBeNull(); });
+    // The region stays on the page (a live region inserted already filled is not announced), empty.
+    await waitFor(() => { expect(list().getByRole('alert')).toBeEmptyDOMElement(); });
+    // ⚠️ A new row after the restore is a row of its own (review, 18 Nov 2026: its key was shared with a restored row, and typing
+    // in it wrote into both).
+    await user.click(screen.getByRole('button', { name: 'Add a product' }));
+    await user.type(screen.getAllByLabelText('Product')[1] as HTMLElement, 'Grissini');
+    expect(screen.getAllByLabelText('Product').map(box => (box as HTMLInputElement).value)).toEqual(['Focaccia', 'Grissini']);
+  });
+
+  it('⚠️ a Save never puts back a status set on another device while the editor was open', async () => {
+    const { user, source } = show('/bookings/A1/edit');
+    await screen.findByRole('region', { name: 'Edit booking No. 3' }, LOAD);
+    await user.type(screen.getByLabelText('Phone'), '9');
+    // The counter tablet cancels it meanwhile.
+    act(() => { source.items.set('A1', { ...(source.items.get('A1') as Booking), status: 'cancelled' }); source.push(); });
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await user.click(within(await dialog('Save this booking?')).getByRole('button', { name: 'Save' }));
+    await waitFor(() => { expect(source.update).toHaveBeenCalledWith('A1', expect.objectContaining({ status: 'cancelled', phone: '+39 333 000 00009' })); });
+  });
+
+  it('⚠️ a refused save of a booking deleted on another device is made again as a new booking', async () => {
+    const source = fakeBookingsSource(seed());
+    const { user } = show('/bookings/A1/edit', source);
+    await screen.findByRole('region', { name: 'Edit booking No. 3' }, LOAD);
+    await user.type(screen.getByLabelText('Name'), ' Jr');
+    source.refuseWith = permissionDenied();
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await user.click(within(await dialog('Save this booking?')).getByRole('button', { name: 'Save' }));
+    const banner = await list().findByRole('button', { name: 'Open it to try again' });
+    act(() => { source.items.delete('A1'); source.push(); });
+    source.refuseWith = null;
+    await user.click(banner);
+    expect(await screen.findByLabelText('Name')).toHaveValue('Mario Prova Jr');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await user.click(within(await dialog('Save this booking?')).getByRole('button', { name: 'Save' }));
+    await waitFor(() => { expect(source.create).toHaveBeenCalledWith(expect.objectContaining({ customerName: 'Mario Prova Jr', number: 3 })); });
   });
 
   it('an existing booking\'s editor waits for the bookings before it copies one', async () => {

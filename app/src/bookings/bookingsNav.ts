@@ -32,3 +32,10 @@ export const RESTORE_REFUSED = { restoreRefusedBooking: true } as const;
 export function restoresRefused(state: unknown): boolean {
   return typeof state === 'object' && state !== null && 'restoreRefusedBooking' in state;
 }
+
+// The editor opened by a booking's Edit: its Back is the browser's Back, to that booking.
+export const FROM_BOOKING = { fromBooking: true, keepFocus: true } as const;
+
+export function cameFromBooking(state: unknown): boolean {
+  return typeof state === 'object' && state !== null && 'fromBooking' in state;
+}
