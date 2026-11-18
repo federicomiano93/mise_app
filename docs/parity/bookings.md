@@ -213,3 +213,44 @@ cross-origin answer), the font numbers for normal and bold, 42 columns at its de
 whether a newer Chrome asks a permission for the local network the first time. Every device keeps its own printer: signing out or a
 browser that clears its data forgets it.
 
+## Step 4 as built (18 Nov 2026) — the WhatsApp reminder
+
+Branch `feature/mise2-bookings-4`, stacked on step 3. The plan's last step, «a WhatsApp reminder button», built without a server:
+the app writes the message and WhatsApp on the device sends it, from the shop's own number, once the person at the counter has read
+it.
+
+**On the booking** (`bookings/BookingDetail.tsx`): under the customer's phone, «Promemoria WhatsApp» / «WhatsApp reminder», with
+the line «Opens WhatsApp with the message written: check it, then send it.» It is a link to `https://wa.me/<number>?text=…` in a
+new tab — WhatsApp (the app, or WhatsApp Web) opens on the customer's chat. Shown only while the order is still to come (to do,
+ready), and only for a phone WhatsApp can open.
+
+**The number** (`bookings/reminderText.ts`, `whatsappNumber`): digits only, with the country code. A number typed with «+» or
+«00» keeps its own; one typed without gets the VENUE's country code (Italy 39, every digit kept; the UK 44, its leading 0 dropped).
+Fewer than 8 or more than 15 digits, or a venue with no country: no button.
+
+**The message** (`reminderMessage`), in the interface's language like the slips, the date and the money in the venue's country's
+way:
+
+    Ciao Anna Finta,
+    ti ricordiamo la tua prenotazione N. 4 da Panificio Miano, con ritiro:
+    giovedì 24 dicembre alle 09:30
+
+    • 1,5 kg Focaccia
+    • 3 confezioni (250 g) Grissini
+
+    Da pagare: 32,50 €
+    A presto!
+
+A delivery says «con consegna:» and adds «Indirizzo: …». «Da pagare» is the total less the deposit, or the total when no deposit
+was taken; nothing when it is all paid or there is no total. The booking's notes and the line notes are NOT in it (they are for the
+lab); no price per line.
+
+**Privacy**: the phone and the name go to WhatsApp only when the person taps and sends, to the customer themselves, about this
+order (the use the slip's privacy line names). Nothing is stored about the reminder and nothing is logged.
+
+**Tests**: `bookings/reminderText.spec.ts`, the reminder cases of `bookings/BookingsSection.spec.tsx`.
+
+**Not verified**: WhatsApp opening on the counter tablet (it needs WhatsApp or WhatsApp Business installed, or it opens WhatsApp
+Web in the browser), a number from abroad typed without «+» (it gets the venue's code, wrongly), a landline (WhatsApp says the
+number is not on WhatsApp). Not recorded: whether a reminder was sent (it would need a new field in the booking and a rules change).
+

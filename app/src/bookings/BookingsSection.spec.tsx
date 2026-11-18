@@ -124,6 +124,45 @@ describe('a booking', () => {
     expect(within(card).getByRole('heading', { level: 2 })).toHaveFocus();
   });
 
+  it('the WhatsApp reminder opens the customer\'s chat with the message written, in a new tab (bookings step 4)', async () => {
+    show('/bookings/A2', undefined, { session: { location: { country: 'IT' }, name: 'Panificio Prova' } });
+    const card = await screen.findByRole('region', { name: 'Booking No. 4' }, LOAD);
+    const link = within(card).getByRole('link', { name: 'WhatsApp reminder' });
+    expect(link).toHaveAccessibleDescription('Opens WhatsApp with the message written: check it, then send it.');
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+    const url = new URL(link.getAttribute('href') as string);
+    expect(url.origin + url.pathname).toBe('https://wa.me/393330000000');
+    const text = (url.searchParams.get('text') ?? '').replace(/\u00a0/g, ' ');
+    expect(text).toMatch(/^Hello Anna Finta,\na reminder of your booking No\. 4 with Panificio Prova, to be delivered on:\n.+ at 09:00\nAddress: Via Finta 1, Roma\n/);
+    expect(text).toContain('• 1,5 kg Focaccia');
+    expect(text).toContain('To pay: 32,50 €');
+    expect(text).not.toContain('Ring twice');
+  });
+
+  it('no reminder for an order collected or cancelled, nor for a number WhatsApp cannot open', async () => {
+    const source = fakeBookingsSource([
+      bookingFixture({ id: 'X1', date: TODAY, number: 7, status: 'collected' }),
+      bookingFixture({ id: 'X2', date: TODAY, number: 8, phone: '123' }),
+    ]);
+    const { router } = show('/bookings/X1', source, { session: { location: { country: 'IT' } } });
+    const card = await screen.findByRole('region', { name: 'Booking No. 7' }, LOAD);
+    expect(within(card).queryByRole('link', { name: 'WhatsApp reminder' })).toBeNull();
+    await act(async () => { await router.navigate('/bookings/X2'); });
+    const other = await screen.findByRole('region', { name: 'Booking No. 8' });
+    expect(within(other).getByRole('link', { name: 'Call 123' })).toBeInTheDocument();
+    expect(within(other).queryByRole('link', { name: 'WhatsApp reminder' })).toBeNull();
+  });
+
+  it('in Italian: «Promemoria WhatsApp», and the message in Italian', async () => {
+    show('/bookings/A1', undefined, { lang: 'it', session: { location: { country: 'IT' }, name: 'Panificio Prova' } });
+    const card = await screen.findByRole('region', { name: /N\. 3/ }, LOAD);
+    const link = within(card).getByRole('link', { name: 'Promemoria WhatsApp' });
+    const text = new URL(link.getAttribute('href') as string).searchParams.get('text') ?? '';
+    expect(text).toMatch(/^Ciao Mario Prova,\nti ricordiamo la tua prenotazione N\. 3 da Panificio Prova, con ritiro:\n.+ alle 11:00\n/);
+    expect(text).toMatch(/A presto!$/);
+  });
+
   it('a tap on a status saves it; cancelling asks first', async () => {
     const { user, source } = show('/bookings/A1');
     const card = await screen.findByRole('region', { name: 'Booking No. 3' }, LOAD);

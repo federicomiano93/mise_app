@@ -220,6 +220,44 @@
   justify-content: center;
 }
 
+/* The WhatsApp reminder (bookings step 4): a link that looks like a secondary button, under the customer's phone. */
+.reminder {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: var(--s2);
+  min-height: var(--hit);
+  margin-top: var(--s2);
+  padding: 0 var(--s4);
+  border: 1.5px solid var(--line-2);
+  border-radius: var(--r-md);
+  color: var(--accent-ink);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.reminder > svg {
+  flex: none;
+  width: 20px;
+  height: 20px;
+}
+
+.reminder:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (hover: hover) {
+  .reminder:hover {
+    background: var(--sunken);
+  }
+}
+
+.reminderHint {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
 /* The bin: small and low-key, at the foot, never beside the main actions. */
 .foot {
   display: flex;

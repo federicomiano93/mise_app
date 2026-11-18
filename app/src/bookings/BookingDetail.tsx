@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { Pencil, Printer, Trash2 } from 'lucide-react';
+import { MessageCircle, Pencil, Printer, Trash2 } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router';
 import { formatMoney } from '@mise/shared/price-model';
 import { useT } from '../i18n/useT';
@@ -24,6 +24,8 @@ import { printSlip } from './slipHost';
 import { PRINT_TIMEOUT_MS, readPrinterSetting, sendToPrinter } from './receiptPrinter';
 import { printOutcomeText } from './printWords';
 import { customerSlipLines, labSlipLines } from './slipText';
+import { countryOf } from '@mise/shared/market';
+import { reminderMessage, reminderUrl, wantsReminder, whatsappNumber } from './reminderText';
 import styles from './BookingDetail.module.css';
 
 // One booking (18 Nov 2026): its status (a tap saves it), when, who, what, the money, the two slips and the bin.
@@ -83,6 +85,27 @@ function Shown({ booking, onBack }: { booking: Booking; onBack: () => void }) {
   };
   const modeWord = t(booking.mode === 'delivery' ? 'bookings.mode.delivery' : 'bookings.mode.pickup');
   const due = toPay(booking.total, booking.deposit);
+
+  // ⚠️ THE WHATSAPP REMINDER (bookings step 4): a link that opens WhatsApp on this device, on the customer's chat, with the
+  // message written; the person reads it and sends it. Only while the order is still to come, and only for a phone WhatsApp can
+  // open (the venue's country code is added to a number typed without one). Words in the interface's language, as the slips;
+  // the date and the money in the venue's country's way.
+  const reminder = wantsReminder(booking) ? reminderUrl(whatsappNumber(booking.phone, countryOf(location)), reminderMessage({
+    booking,
+    locale: slipLocale(location, locale),
+    units: slipUnitWords(location),
+    money,
+    words: {
+      hello: t('bookings.reminder.hello', { name: booking.customerName }),
+      intro: t(booking.mode === 'delivery' ? 'bookings.reminder.delivery' : 'bookings.reminder.pickup', {
+        number, venue: venueName !== null && venueName !== undefined && venueName !== '' ? venueName : t('bookings.reminder.us'),
+      }),
+      when: (date, time) => t('bookings.reminder.when', { date, time }),
+      address: address => t('bookings.reminder.address', { address }),
+      toPay: amount => t('bookings.reminder.toPay', { amount }),
+      bye: t('bookings.reminder.bye'),
+    },
+  })) : '';
 
   async function changeStatus(next: BookingStatus) {
     if (next === booking.status) return;
@@ -225,6 +248,21 @@ function Shown({ booking, onBack }: { booking: Booking; onBack: () => void }) {
                 {booking.phone}
               </a>
               {booking.mode === 'delivery' && booking.address !== '' ? <span>{booking.address}</span> : null}
+              {reminder !== '' ? (
+                <>
+                  <a
+                    className={styles.reminder}
+                    href={reminder}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-describedby={`${ids}-reminder-hint`}
+                  >
+                    <MessageCircle aria-hidden="true" />
+                    <span>{t('bookings.reminder.button')}</span>
+                  </a>
+                  <span id={`${ids}-reminder-hint`} className={styles.reminderHint}>{t('bookings.reminder.hint')}</span>
+                </>
+              ) : null}
             </dd>
           </div>
           <div className={styles.fact}>
