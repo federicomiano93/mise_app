@@ -228,3 +228,17 @@ test('the first day of 2020 is old enough to be deleted, the day before is not t
   assert.equal(decide(kind('usage'), { updatedAt: ts(FLOOR_MS) }, NOW), 'delete');
   assert.equal(decide(kind('usage'), { updatedAt: ts(FLOOR_MS - 1) }, NOW), 'skip');
 });
+
+// ── The function itself is deployed, on the owner's night ───────────────────
+
+test('index.js exports the retention function, scheduled at 03:30 London in us-central1', async () => {
+  // Read as text: the root suite installs no Firebase. A lost export would silently undeploy the
+  // clean-up, a moved schedule would run it in the middle of a shift.
+  const { readFileSync } = await import('node:fs');
+  const read = p => readFileSync(new URL(`../functions/${p}`, import.meta.url), 'utf8');
+  assert.match(read('index.js'), /^export \{ retention \} from '\.\/retention\.js';$/m);
+  const handler = read('retention.js');
+  assert.match(handler, /onSchedule\(\s*\{ schedule: '30 3 \* \* \*', timeZone: 'Europe\/London', region: 'us-central1'/);
+  // The scheduled handler runs with the shipped switch: no `enabled` handed in.
+  assert.match(handler, /async \(\) => \{\s*await runRetention\(\);\s*\}/);
+});

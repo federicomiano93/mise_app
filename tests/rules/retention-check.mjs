@@ -308,6 +308,8 @@ await wipe();
   const log = recordingLog();
   const results = byKind(await runRetention({ db: racingDb, now: NOW, enabled: ALL_ON, log }));
   check('the refreshed token is still there', await exists('locations/venue-a/fcm-tokens/tok-racing'));
+  check('…and the failed venue still reports what it read', results.fcmTokens.wouldDelete === 1 && results.fcmTokens.deleted === 0,
+    JSON.stringify(results.fcmTokens));
   check('…and the run reported the venue as failed for that kind only', results.fcmTokens.failedVenues.includes('venue-a')
     && KINDS.filter(k => k.kind !== 'fcmTokens').every(k => results[k.kind].failedVenues.length === 0));
 }
