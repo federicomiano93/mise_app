@@ -129,7 +129,11 @@ export function createFirestoreBookingsSource(firestore: () => Promise<Firestore
         unsubscribe = fs.onSnapshot(
           fs.doc(db, priceListPath, PRICE_LIST_DOC),
           snap => { onChange(readPriceList(snap.exists() ? snap.data({ serverTimestamps: 'estimate' }) : null)); },
-          err => { onError(err); },
+          err => {
+            // A warning, not an error report: a venue whose bookings are off refuses it, and the editor says so.
+            console.warn('watch(price list) failed:', err);
+            onError(err);
+          },
         );
       }).catch(err => {
         if (!stopped) onError(err);

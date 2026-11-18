@@ -352,12 +352,58 @@ describe('the editor', () => {
     const { user, source } = show('/bookings/A2/edit');
     await screen.findByRole('region', { name: 'Edit booking No. 4' }, LOAD);
     // Panettone was booked at £10.00; the list now says £25.00.
-    expect(screen.getByText('Price when booked · £10.00 each unit')).toBeInTheDocument();
+    expect(screen.getByText('Price when booked · £10.00 each')).toBeInTheDocument();
+    // ⚠️ Its unit is locked with it: changing it would quietly re-price the line (review, 18 Nov 2026).
+    const units = screen.getAllByLabelText('Unit');
+    expect(units[1]).toBeDisabled();
+    expect(units[1]).toHaveAccessibleDescription('Price when booked · £10.00 each');
+    // Grissini was saved with no price: it stays free, its unit free too.
+    expect(units[2]).not.toBeDisabled();
     await user.click(screen.getByRole('button', { name: 'Save' }));
     await user.click(within(await dialog('Save this booking?')).getByRole('button', { name: 'Save' }));
     await waitFor(() => { expect(source.update).toHaveBeenCalled(); });
     const lines = vi.mocked(source.update).mock.calls[0]?.[1].lines;
     expect(lines?.map(line => [line.name, line.unitPrice])).toEqual([['Focaccia', 12], ['Panettone', 10], ['Grissini', null]]);
+  });
+
+  it('⚠️ a quantity is checked in the unit it will be written in — the list\'s — even when the list came after it was typed', async () => {
+    const source = fakeBookingsSource(seed());
+    const { user } = show('/bookings/new', source);
+    await screen.findByRole('region', { name: 'New booking' }, LOAD);
+    await user.type(screen.getByLabelText('Name'), 'Gino Prova');
+    await user.type(screen.getByLabelText('Phone'), '333 111 2222');
+    await user.click(screen.getByRole('radio', { name: 'Pickup' }));
+    fireEvent.change(screen.getByLabelText('Day'), { target: { value: TOMORROW } });
+    fireEvent.change(screen.getByLabelText('Time'), { target: { value: '08:15' } });
+    await user.type(screen.getByLabelText('Product'), 'Panettone');
+    await user.selectOptions(screen.getByLabelText('Unit'), 'kg');
+    await user.type(screen.getByLabelText('Quantity'), '1.5');
+    // The list arrives now: Panettone is sold by the piece.
+    act(() => { source.priceList = PRICES(); });
+    expect(await screen.findByText('From the price list · £25.00 each')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    expect(screen.getByLabelText('Quantity')).toHaveFocus();
+    expect(screen.getByLabelText('Quantity')).toHaveAccessibleDescription('A number above zero (whole for pieces).');
+    expect(source.create).not.toHaveBeenCalled();
+  });
+
+  it('a total from the list past 100,000 is stopped at Save, on the total', async () => {
+    const { user, source } = await openNew();
+    await fill(user);
+    await user.clear(screen.getByLabelText('Quantity'));
+    await user.type(screen.getByLabelText('Quantity'), '9000');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    expect(screen.getByLabelText('Total (£, optional)')).toHaveFocus();
+    expect(screen.getByLabelText('Total (£, optional)')).toHaveAccessibleDescription(/The total is over 100,000: check the quantities\./);
+    expect(source.create).not.toHaveBeenCalled();
+  });
+
+  it('nothing is said about the price list while it is on its way', async () => {
+    const source = fakeBookingsSource(seed(), PRICES());
+    vi.mocked(source.watchPriceList).mockImplementation(() => () => undefined);
+    show('/bookings/new', source);
+    await screen.findByRole('region', { name: 'New booking' }, LOAD);
+    expect(screen.queryByText(/No price list published yet/)).toBeNull();
   });
 
   it('no price list published: free text only, and it says so', async () => {

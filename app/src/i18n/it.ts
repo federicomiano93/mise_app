@@ -3053,7 +3053,7 @@ export const it: Messages = {
   'fc.priceList.unpublished': 'Non ancora pubblicato',
   'fc.priceList.never': 'Mai pubblicato: il banco non ha ancora un listino.',
   'fc.priceList.publishedOn': { one: "Pubblicato il {date} alle {time} · {n} prodotto", other: "Pubblicato il {date} alle {time} · {n} prodotti" },
-  'fc.priceList.readFailed': 'Il listino pubblicato non si può leggere ora: quello che pubblichi lo sostituisce.',
+  'fc.priceList.readFailed': 'Il listino pubblicato non si può leggere ora. Riprova quando c’è connessione: pubblicare senza potrebbe sostituire il listino del banco.',
   'fc.priceList.gone': { one: "{n} prodotto del listino pubblicato non ha più un prezzo di vendita: alla prossima pubblicazione esce.", other: "{n} prodotti del listino pubblicato non hanno più un prezzo di vendita: alla prossima pubblicazione escono." },
   'fc.priceList.none': 'Nessun prodotto ha ancora un prezzo di vendita: dallo nella sua scheda, poi torna qui.',
   'fc.priceList.unpriced': { one: "{n} prodotto non ha prezzo di vendita o modo di vendita, quindi non è elencato.", other: "{n} prodotti non hanno prezzo di vendita o modo di vendita, quindi non sono elencati." },
@@ -3066,7 +3066,7 @@ export const it: Messages = {
   // Bookings priced from the price list (bookings step 2, 18 Nov 2026).
   'bookings.form.noPriceList': 'Nessun listino pubblicato: scrivi il prodotto, e il totale a mano.',
   'bookings.form.fromList': 'Dal listino · {price}',
-  'bookings.form.keptPrice': 'Prezzo alla prenotazione · {price} a unità',
+  'bookings.form.keptPrice': 'Prezzo alla prenotazione · {price}',
   'bookings.form.lineAmount': 'Fa {amount}',
   'bookings.form.totalFromList': 'Lascia vuoto per usare il totale del listino: {total}.',
   'bookings.form.totalTyped': 'Scritto a mano. Il totale del listino sarebbe {total}.',
@@ -3074,4 +3074,8 @@ export const it: Messages = {
   'bookings.price.perKg': '{price} al kg',
   'bookings.price.perPiece': '{price} al pezzo',
   'bookings.price.perPack': '{price} a confezione',
+  'bookings.err.tooHigh': 'Il totale supera 100.000: controlla le quantità.',
+  'bookings.form.priceListUnreadable': 'Il listino non si può leggere ora: scrivi il prodotto, e il totale a mano.',
+  'fc.priceList.waiting': 'In attesa del listino pubblicato dal server — serve la connessione.',
+  'fc.priceList.clash': 'Due prodotti spuntati si chiamano «{names}»: il banco ne potrebbe prenotare solo uno. Spuntane uno solo, o rinominalo nella sua scheda.',
 };

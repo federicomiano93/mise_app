@@ -3289,7 +3289,7 @@ export const en = {
   'fc.priceList.unpublished': 'Not published yet',
   'fc.priceList.never': 'Never published: the counter has no price list yet.',
   'fc.priceList.publishedOn': { one: "Published on {date} at {time} · {n} product", other: "Published on {date} at {time} · {n} products" },
-  'fc.priceList.readFailed': 'The published list can’t be read now: what you publish replaces it.',
+  'fc.priceList.readFailed': 'The published list can’t be read now. Try again when there is a connection: publishing without it could replace the counter’s list.',
   'fc.priceList.gone': { one: "{n} product on the published list no longer has a selling price: the next publish leaves it out.", other: "{n} products on the published list no longer have a selling price: the next publish leaves them out." },
   'fc.priceList.none': 'No product has a selling price yet: give one in its card, then come back.',
   'fc.priceList.unpriced': { one: "{n} product has no selling price or no way of selling it, so it is not listed.", other: "{n} products have no selling price or no way of selling them, so they are not listed." },
@@ -3302,7 +3302,7 @@ export const en = {
   // Bookings priced from the price list (bookings step 2, 18 Nov 2026).
   'bookings.form.noPriceList': 'No price list published yet: type the product, and the total by hand.',
   'bookings.form.fromList': 'From the price list · {price}',
-  'bookings.form.keptPrice': 'Price when booked · {price} each unit',
+  'bookings.form.keptPrice': 'Price when booked · {price}',
   'bookings.form.lineAmount': 'Comes to {amount}',
   'bookings.form.totalFromList': 'Leave empty to use the price list’s total: {total}.',
   'bookings.form.totalTyped': 'Typed by hand. The price list’s total would be {total}.',
@@ -3310,6 +3310,10 @@ export const en = {
   'bookings.price.perKg': '{price} per kg',
   'bookings.price.perPiece': '{price} each',
   'bookings.price.perPack': '{price} per pack',
+  'bookings.err.tooHigh': 'The total is over 100,000: check the quantities.',
+  'bookings.form.priceListUnreadable': 'The price list can’t be read now: type the product, and the total by hand.',
+  'fc.priceList.waiting': 'Waiting for the published list from the server — this needs a connection.',
+  'fc.priceList.clash': 'Two ticked products share the name «{names}»: the counter could book only one. Tick one of them, or rename it in its card.',
 } as const satisfies Record<string, Message>;
 
 export type MessageKey = keyof typeof en;

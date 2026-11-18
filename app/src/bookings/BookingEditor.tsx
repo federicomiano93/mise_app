@@ -34,6 +34,7 @@ const PROBLEM_TEXT: Readonly<Record<DraftProblem['reason'], MessageKey>> = {
   qty: 'bookings.err.qty',
   money: 'bookings.err.money',
   pastDate: 'bookings.err.pastDate',
+  tooHigh: 'bookings.err.tooHigh',
 };
 
 // The editor of a booking, new (id null) or existing (18 Nov 2026).
@@ -133,7 +134,7 @@ function EditorForm({ id, booking, refused }: FormProps) {
 
   // The published price list (bookings step 2), for the product suggestions and the prices: read only while the editor is open
   // (P14). Nothing published, or a refusal, leaves free text only, and says so.
-  const { list: priceList, unavailable } = usePriceList();
+  const { list: priceList, unavailable, loaded } = usePriceList();
   const items = priceList.items;
 
   const update = (patch: Partial<Draft>) => {
@@ -224,7 +225,7 @@ function EditorForm({ id, booking, refused }: FormProps) {
   const asking = useRef(false);
   async function save() {
     if (asking.current) return;
-    const found = firstProblem(draft, { today, isNew });
+    const found = firstProblem(draft, { today, isNew, items });
     if (found !== null) {
       setProblem(found);
       // Block, jump to the first problem and say it; the box is marked until it is put right.
@@ -280,7 +281,7 @@ function EditorForm({ id, booking, refused }: FormProps) {
   }
 
   // A box is marked only once Save has found it wrong, and only while it still is.
-  const live = problem === null ? null : firstProblem(draft, { today, isNew });
+  const live = problem === null ? null : firstProblem(draft, { today, isNew, items });
   const errorOn = (field: DraftField): string | null => {
     if (live === null || fieldId(live.field) !== fieldId(field)) return null;
     return t(PROBLEM_TEXT[live.reason]);
@@ -373,7 +374,9 @@ function EditorForm({ id, booking, refused }: FormProps) {
 
         <fieldset className={styles.group}>
           <legend className={styles.legend}>{t('bookings.form.items')}</legend>
-          {unavailable || items.length === 0 ? <p className={styles.hint}>{t('bookings.form.noPriceList')}</p> : null}
+          {/* Said only once the list has answered: nothing is said while it is on its way. */}
+          {unavailable ? <p className={styles.hint}>{t('bookings.form.priceListUnreadable')}</p>
+            : loaded && items.length === 0 ? <p className={styles.hint}>{t('bookings.form.noPriceList')}</p> : null}
           <datalist id={`${ids}-prices`}>
             {items.map(item => <option key={item.productId} value={item.name} label={priceWords(t, item, money)} />)}
           </datalist>
@@ -486,15 +489,17 @@ function fieldName(t: ReturnType<typeof useT>['t'], field: DraftField): string {
 }
 
 // The published price list, live while the editor is open. `unavailable`: refused or broken (free text still works).
-function usePriceList(): { readonly list: PriceList; readonly unavailable: boolean } {
+function usePriceList(): { readonly list: PriceList; readonly unavailable: boolean; readonly loaded: boolean } {
   const services = useDataServices();
   const { locationId } = useSession();
-  const [state, setState] = useState<{ list: PriceList; unavailable: boolean }>({ list: { items: [], publishedAtMs: null }, unavailable: false });
+  const [state, setState] = useState<{ list: PriceList; unavailable: boolean; loaded: boolean }>(
+    { list: { items: [], publishedAtMs: null }, unavailable: false, loaded: false },
+  );
   useEffect(() => {
     if (!locationId) return undefined;
     return services.bookings(locationId).watchPriceList(
-      list => { setState({ list, unavailable: false }); },
-      () => { setState({ list: { items: [], publishedAtMs: null }, unavailable: true }); },
+      list => { setState({ list, unavailable: false, loaded: true }); },
+      () => { setState({ list: { items: [], publishedAtMs: null }, unavailable: true, loaded: true }); },
     );
   }, [services, locationId]);
   return state;
@@ -608,13 +613,19 @@ function LineFields({ index, line, listId, price, amount, nameId, qtyId, nameErr
   const tag = price.kind === 'listed'
     ? t('bookings.form.fromList', { price: priceWords(t, price.item, money) })
     : price.kind === 'frozen'
-      ? t('bookings.form.keptPrice', { price: formatMoney(price.unitPrice, money) })
+      ? t('bookings.form.keptPrice', {
+        price: t(line.unit === 'kg' ? 'bookings.price.perKg' : 'bookings.price.perPiece', { price: formatMoney(price.unitPrice, money) }),
+      })
       : null;
+  // ⚠️ THE UNIT IS LOCKED WHILE THE LINE HAS A PRICE (review, 18 Nov 2026): a listed product's price is for a piece (a pack) or a
+  // kilo, and a saved line's price was agreed for its unit — changing it would quietly re-price the line. The tag says why.
+  const locked = price.kind === 'listed' || price.kind === 'frozen';
+  const tagId = `${nameId}-price`;
   return (
     <div className={styles.line} role="group" aria-label={t('bookings.form.item', { n })}>
       <div className={styles.lineHead}>
         <span className={styles.lineTitle}>{t('bookings.form.item', { n })}</span>
-        {tag !== null ? <span className={styles.fromBook}>{tag}</span> : null}
+        {tag !== null ? <span id={tagId} className={styles.fromBook}>{tag}</span> : null}
         {canRemove ? (
           <Button variant="bare" className={styles.removeLine} aria-label={t('bookings.form.removeItem', { n })} onPress={onRemove}>
             <X aria-hidden="true" />
@@ -649,7 +660,8 @@ function LineFields({ index, line, listId, price, amount, nameId, qtyId, nameErr
             id={`${qtyId}-unit`}
             className={styles.input}
             value={price.kind === 'listed' ? price.unit : line.unit}
-            disabled={price.kind === 'listed'}
+            disabled={locked}
+            aria-describedby={locked ? tagId : undefined}
             onChange={event => { onChange({ unit: event.currentTarget.value === 'kg' ? 'kg' : 'pcs' as BookingUnit }); }}
           >
             <option value="pcs">{t('bookings.form.unitPcs')}</option>

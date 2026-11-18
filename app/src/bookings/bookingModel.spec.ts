@@ -196,6 +196,17 @@ describe('toBookingData: what is written', () => {
     expect(toBookingData(draft, { status: 'todo', number: 1, items }).lines[0]).toMatchObject({ unitPrice: null, unit: 'kg' });
   });
 
+  it('checks a listed product\'s quantity in the list\'s unit', () => {
+    const line = { key: 1, name: 'Panettone', qty: '1,5', unit: 'kg' as const, note: '', kept: null };
+    expect(firstProblem({ ...good, lines: [line] }, { ...ctx, items })).toEqual({ field: { line: 0, part: 'qty' }, reason: 'qty' });
+    expect(firstProblem({ ...good, lines: [line] }, ctx)).toBeNull();
+  });
+
+  it('stops a total over the bound, typed or from the list', () => {
+    const line = { key: 1, name: 'Panettone', qty: '5000', unit: 'pcs' as const, note: '', kept: null };
+    expect(firstProblem({ ...good, total: '', lines: [line] }, { ...ctx, items })).toEqual({ field: 'total', reason: 'tooHigh' });
+  });
+
   it('a total typed at the counter (a discount) is shown in the box when the booking is opened again', () => {
     const stored = bookingFixture({ id: 'A', total: 18, lines: [{ recipeId: null, productId: 'pF', unitPrice: 10, name: 'Focaccia', qty: 2, unit: 'kg', note: '' }] });
     expect(draftFrom(stored, nextKey, ',').total).toBe('18');

@@ -28,7 +28,8 @@ export const LIMITS = Object.freeze({
   address: 200,
   notes: 500,
   lines: 50,
-  lineName: 120,
+  // A product name's own bound (Food cost's), so a listed product is never cut short of its name on the list.
+  lineName: 200,
   lineNote: 120,
   money: 100_000,
   qty: 100_000,
@@ -264,7 +265,7 @@ export type DraftField =
 export type DraftProblem = {
   readonly field: DraftField;
   // A message key ending of `bookings.err.*`.
-  readonly reason: 'required' | 'phone' | 'noLines' | 'qty' | 'money' | 'pastDate';
+  readonly reason: 'required' | 'phone' | 'noLines' | 'qty' | 'money' | 'pastDate' | 'tooHigh';
 };
 
 export function fieldId(field: DraftField): string {
@@ -273,7 +274,11 @@ export function fieldId(field: DraftField): string {
 
 // The first problem of the working copy, or null when it can be saved. `today` is the device's day; a NEW booking for a day
 // already gone is refused (an existing one keeps its day: it is being corrected, not made).
-export function firstProblem(draft: Draft, { today, isNew }: { today: string; isNew: boolean }): DraftProblem | null {
+// `items` is the published price list: a listed product's quantity is checked in the list's unit, the one it is written in.
+export function firstProblem(
+  draft: Draft,
+  { today, isNew, items = [] }: { today: string; isNew: boolean; items?: readonly PriceItem[] },
+): DraftProblem | null {
   if (draft.customerName.trim() === '') return { field: 'customerName', reason: 'required' };
   const phone = draft.phone.trim();
   if (phone === '') return { field: 'phone', reason: 'required' };
@@ -287,12 +292,18 @@ export function firstProblem(draft: Draft, { today, isNew }: { today: string; is
   if (used.length === 0) return { field: { line: 0, part: 'name' }, reason: 'noLines' };
   for (const { line, index } of used) {
     if (line.name.trim() === '') return { field: { line: index, part: 'name' }, reason: 'required' };
-    const qty = parseQty(line.qty, line.unit);
+    // ⚠️ IN THE UNIT IT WILL BE WRITTEN IN (review, 18 Nov 2026): a product on the price list is counted in the list's unit,
+    // whatever the row held when the list arrived, so a «1,5» checked in kilos could never be written as one piece.
+    const price = linePrice(line, items);
+    const qty = parseQty(line.qty, price.kind === 'listed' ? price.unit : line.unit);
     if (qty === null) return { field: { line: index, part: 'qty' }, reason: 'required' };
     if (qty === 'invalid') return { field: { line: index, part: 'qty' }, reason: 'qty' };
   }
   if (parseMoney(draft.deposit) === 'invalid') return { field: 'deposit', reason: 'money' };
   if (parseMoney(draft.total) === 'invalid') return { field: 'total', reason: 'money' };
+  // A total worked out from the list can pass the rules' bound (a typo of 2000 cakes): said here, not refused by the server later.
+  const total = effectiveTotal(draft, items);
+  if (total !== null && total > LIMITS.money) return { field: 'total', reason: 'tooHigh' };
   return null;
 }
 

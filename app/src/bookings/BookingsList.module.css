@@ -122,10 +122,9 @@
 }
 
 .dayTitle {
-  display: flex;
-  align-items: center;
-  min-height: var(--hit);
-  padding: 0 var(--s1);
+  /* A block, not a flex box: ::first-letter (below) applies to a block container only. */
+  display: block;
+  padding: var(--s3) var(--s1);
   font-size: var(--fs-md);
   font-weight: 650;
 }
