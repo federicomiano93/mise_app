@@ -23,10 +23,28 @@ export function shortDate(iso: string, locale: string): string {
   return new Intl.DateTimeFormat(locale, { day: '2-digit', month: '2-digit', year: 'numeric' }).format(date);
 }
 
-// A quantity with its unit: «2 pz», «1,5 kg». At most three decimals (grams). Never NaN.
-export function qtyText(qty: number, unit: BookingUnit, locale: string, unitWord: (unit: BookingUnit) => string): string {
-  const n = Number.isFinite(qty) ? qty : 0;
-  return `${new Intl.NumberFormat(locale, { maximumFractionDigits: 3 }).format(n)} ${unitWord(unit)}`;
+// The words a quantity is written with: the unit's short word («pz», «kg») and the word for packs, by how many («1 confezione»,
+// «3 confezioni»).
+export type UnitWords = {
+  readonly unit: (unit: BookingUnit) => string;
+  readonly packs: (n: number) => string;
+};
+
+const numberIn = (locale: string, n: number): string =>
+  new Intl.NumberFormat(locale, { maximumFractionDigits: 3 }).format(Number.isFinite(n) ? n : 0);
+
+// A line's quantity with its unit: «2 pz», «1,5 kg», and for a product sold by the pack «3 confezioni (250 g)» (the owner's choice,
+// 18 Nov 2026: the lab must know a pack is not a piece). At most three decimals (grams). Never NaN.
+export function lineQtyText(
+  line: { readonly qty: number; readonly unit: BookingUnit; readonly packSize: number | null; readonly packUnit: string | null },
+  locale: string,
+  words: UnitWords,
+): string {
+  if (line.packSize !== null && line.packUnit !== null) {
+    const size = `${numberIn(locale, line.packSize)} ${line.packUnit === 'pcs' ? words.unit('pcs') : line.packUnit}`;
+    return `${numberIn(locale, line.qty)} ${words.packs(line.qty)} (${size})`;
+  }
+  return `${numberIn(locale, line.qty)} ${words.unit(line.unit)}`;
 }
 
 // The list row's short summary: the first two lines, then «+3 more».
@@ -35,17 +53,20 @@ export const SUMMARY_LINES = 2;
 export function linesSummary(
   lines: readonly BookingLine[],
   locale: string,
-  unitWord: (unit: BookingUnit) => string,
+  words: UnitWords,
 ): { readonly text: string; readonly more: number } {
-  const shown = lines.slice(0, SUMMARY_LINES).map(line => `${qtyText(line.qty, line.unit, locale, unitWord)} ${line.name}`);
+  const shown = lines.slice(0, SUMMARY_LINES).map(line => `${lineQtyText(line, locale, words)} ${line.name}`);
   return { text: shown.join(', '), more: Math.max(0, lines.length - SUMMARY_LINES) };
 }
 
-// The unit on a printed slip, in the language of the venue's country: «pz» in Italy, «pcs» elsewhere; «kg» everywhere.
-// Read while drawing, never at module load (no venue is open then).
-export function slipUnitWord(location: unknown): (unit: BookingUnit) => string {
-  const lang = outputLanguage(location);
-  return unit => (unit === 'kg' ? 'kg' : lang === 'it' ? 'pz' : 'pcs');
+// The units on a printed slip, in the language of the venue's country: «pz» / «confezione(i)» in Italy, «pcs» / «pack(s)»
+// elsewhere; «kg» everywhere. Read while drawing, never at module load (no venue is open then).
+export function slipUnitWords(location: unknown): UnitWords {
+  const it = outputLanguage(location) === 'it';
+  return {
+    unit: unit => (unit === 'kg' ? 'kg' : it ? 'pz' : 'pcs'),
+    packs: n => (it ? (n === 1 ? 'confezione' : 'confezioni') : (n === 1 ? 'pack' : 'packs')),
+  };
 }
 
 // The locale the slip's numbers and dates are printed in: the venue's country's language, like its words.

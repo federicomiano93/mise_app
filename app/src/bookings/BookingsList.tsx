@@ -7,6 +7,7 @@ import { Button } from '../ui/Button';
 import { dayAfter, groupsFor, oldestKeptDay } from './bookingModel';
 import type { Booking, BookingStatus, ListChoice } from './bookingModel';
 import { linesSummary, spellDate } from './bookingWords';
+import type { UnitWords } from './bookingWords';
 import { useBookings } from './BookingsContext';
 import { FROM_LIST, RESTORE_REFUSED, savedIdOf } from './bookingsNav';
 import { bookingPath, editBookingPath, newBookingPath } from './bookingsPath';
@@ -44,7 +45,10 @@ export function BookingsList({ choice, onChoice, today, selectedId }: Props) {
   const ids = useId();
   const yesterday = dayAfter(today, -1);
   const oldest = oldestKeptDay(today);
-  const unitWord = (unit: 'pcs' | 'kg') => t(unit === 'kg' ? 'bookings.unit.kg' : 'bookings.unit.pcs');
+  const words: UnitWords = {
+    unit: unit => t(unit === 'kg' ? 'bookings.unit.kg' : 'bookings.unit.pcs'),
+    packs: n => t('bookings.unit.packs', { n }),
+  };
   const groups = groupsFor(items, choice, today);
 
   // After a save the focus goes to the saved booking's row, once, as soon as the list shows it (the editor it came from is gone).
@@ -142,7 +146,7 @@ export function BookingsList({ choice, onChoice, today, selectedId }: Props) {
                 <ul className={styles.rows}>
                   {group.bookings.map(booking => (
                     <li key={booking.id}>
-                      <Row booking={booking} current={booking.id === selectedId} locale={locale} unitWord={unitWord} />
+                      <Row booking={booking} current={booking.id === selectedId} locale={locale} words={words} />
                     </li>
                   ))}
                 </ul>
@@ -155,14 +159,14 @@ export function BookingsList({ choice, onChoice, today, selectedId }: Props) {
   );
 }
 
-function Row({ booking, current, locale, unitWord }: {
+function Row({ booking, current, locale, words }: {
   booking: Booking;
   current: boolean;
   locale: string;
-  unitWord: (unit: 'pcs' | 'kg') => string;
+  words: UnitWords;
 }) {
   const { t } = useT();
-  const summary = linesSummary(booking.lines, locale, unitWord);
+  const summary = linesSummary(booking.lines, locale, words);
   return (
     <Link
       to={bookingPath(booking.id)}

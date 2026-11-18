@@ -11,7 +11,7 @@
 import { typedDecimal } from '@mise/shared/currency';
 import { addDays, parseISODate, toISODate } from '@mise/shared/day';
 import { bookingUnitOf, itemNamed, lineAmount } from '@mise/shared/price-list';
-import type { PriceItem } from '@mise/shared/price-list';
+import type { PackUnit, PriceItem } from '@mise/shared/price-list';
 
 export type BookingMode = 'pickup' | 'delivery';
 export type BookingStatus = 'todo' | 'ready' | 'collected' | 'cancelled';
@@ -47,6 +47,10 @@ export type BookingLine = {
   // The price of ONE unit (a piece, a kilo, a pack) when the line was saved, VAT included — FROZEN: a later price list does
   // not change a booking already taken (the owner's choice, 18 Nov 2026). null for a line with no price (free text).
   readonly unitPrice: number | null;
+  // A product sold by the pack (bookings step 2, the owner's choice of 18 Nov 2026): what one pack holds, so the screens and both
+  // slips say «3 confezioni (250 g)», never «3 pz». null for anything else. The quantity is then a number of packs.
+  readonly packSize: number | null;
+  readonly packUnit: PackUnit | null;
   readonly name: string;
   readonly qty: number;
   readonly unit: BookingUnit;
@@ -79,6 +83,9 @@ export type StoredLine = {
   qty: number;
   unit: BookingUnit;
   note?: string;
+  // Only on a line of packs.
+  packSize?: number;
+  packUnit?: PackUnit;
 };
 
 export type BookingData = Omit<Booking, 'id' | 'lines'> & {
@@ -97,6 +104,12 @@ function moneyOrNull(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= LIMITS.money ? value : null;
 }
 
+function readPack(line: Record<string, unknown>): { packSize: number | null; packUnit: PackUnit | null } {
+  const size = typeof line.packSize === 'number' && Number.isFinite(line.packSize) && line.packSize > 0 ? line.packSize : null;
+  const unit = line.packUnit === 'g' || line.packUnit === 'kg' || line.packUnit === 'pcs' ? line.packUnit : null;
+  return size === null || unit === null ? { packSize: null, packUnit: null } : { packSize: size, packUnit: unit };
+}
+
 function readLine(raw: unknown): BookingLine | null {
   if (!raw || typeof raw !== 'object') return null;
   const line = raw as Record<string, unknown>;
@@ -107,6 +120,7 @@ function readLine(raw: unknown): BookingLine | null {
     recipeId: typeof line.recipeId === 'string' && line.recipeId !== '' ? line.recipeId : null,
     productId: typeof line.productId === 'string' && line.productId !== '' ? line.productId : null,
     unitPrice: moneyOrNull(line.unitPrice) || null,
+    ...readPack(line),
     name,
     qty,
     unit: line.unit === 'kg' ? 'kg' : 'pcs',
@@ -159,6 +173,8 @@ export type KeptLine = {
   readonly recipeId: string | null;
   readonly productId: string | null;
   readonly unitPrice: number | null;
+  readonly packSize: number | null;
+  readonly packUnit: PackUnit | null;
 };
 
 export type Draft = {
@@ -204,7 +220,10 @@ export function draftFrom(booking: Booking, nextKey: () => number, decimal: stri
     lines: booking.lines.length > 0
       ? booking.lines.map(line => ({
         key: nextKey(), name: line.name, qty: boxNumber(line.qty, decimal), unit: line.unit, note: line.note,
-        kept: { name: line.name, unit: line.unit, recipeId: line.recipeId, productId: line.productId, unitPrice: line.unitPrice },
+        kept: {
+          name: line.name, unit: line.unit, recipeId: line.recipeId, productId: line.productId, unitPrice: line.unitPrice,
+          packSize: line.packSize, packUnit: line.packUnit,
+        },
       }))
       : [blankLine(nextKey())],
     deposit: boxNumber(booking.deposit, decimal),
@@ -316,7 +335,7 @@ const fold = (text: string): string => text.trim().replace(/\s+/g, ' ').toLocale
 //   listed  — a name on the published price list: that price, and the list's unit (a piece and a pack in pieces, a kilo in kg);
 //   none    — free text, or a saved line that had no price and is left as it was: no price, so it adds nothing to the total.
 export type LinePrice =
-  | { readonly kind: 'frozen'; readonly productId: string | null; readonly unitPrice: number }
+  | { readonly kind: 'frozen'; readonly productId: string | null; readonly unitPrice: number; readonly packSize: number | null; readonly packUnit: PackUnit | null }
   | { readonly kind: 'listed'; readonly item: PriceItem; readonly unit: BookingUnit }
   | { readonly kind: 'none' };
 
@@ -325,10 +344,19 @@ export function linePrice(line: DraftLine, items: readonly PriceItem[]): LinePri
   // ⚠️ A SAVED LINE LEFT AS IT WAS KEEPS EXACTLY WHAT IT HAD — its price, or no price at all: a free-text line saved before its
   // name was put on the list must not be priced (nor its unit changed) by a Save that touched something else.
   if (kept !== null && fold(kept.name) === fold(line.name) && kept.unit === line.unit) {
-    return kept.unitPrice === null ? { kind: 'none' } : { kind: 'frozen', productId: kept.productId, unitPrice: kept.unitPrice };
+    return kept.unitPrice === null
+      ? { kind: 'none' }
+      : { kind: 'frozen', productId: kept.productId, unitPrice: kept.unitPrice, packSize: kept.packSize, packUnit: kept.packUnit };
   }
   const item = itemNamed(line.name, items);
   return item === null ? { kind: 'none' } : { kind: 'listed', item, unit: bookingUnitOf(item.per) };
+}
+
+// What one pack of a line holds, when the line is a line of packs.
+export function linePack(price: LinePrice): { readonly packSize: number; readonly packUnit: PackUnit } | null {
+  const size = price.kind === 'listed' ? price.item.packSize : price.kind === 'frozen' ? price.packSize : null;
+  const unit = price.kind === 'listed' ? price.item.packUnit : price.kind === 'frozen' ? price.packUnit : null;
+  return size === null || unit === null ? null : { packSize: size, packUnit: unit };
 }
 
 const unitPriceOf = (price: LinePrice): number | null =>
@@ -401,6 +429,12 @@ export function toBookingData(
         unit,
       };
       if (note !== '') out.note = note;
+      // A line of packs keeps what one pack holds, from the list now or from when it was saved.
+      const pack = linePack(price);
+      if (pack !== null) {
+        out.packSize = pack.packSize;
+        out.packUnit = pack.packUnit;
+      }
       return out;
     });
   const money = (text: string) => {

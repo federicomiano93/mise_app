@@ -31,7 +31,7 @@ export function bookingFixture(partial: Partial<Booking> & { id: string }): Book
     address: '',
     date: '2026-11-18',
     time: '10:00',
-    lines: [{ recipeId: null, productId: null, unitPrice: null, name: 'Panettone', qty: 2, unit: 'pcs', note: '' }],
+    lines: [{ recipeId: null, productId: null, unitPrice: null, packSize: null, packUnit: null, name: 'Panettone', qty: 2, unit: 'pcs', note: '' }],
     deposit: null,
     total: null,
     notes: '',
@@ -44,7 +44,7 @@ export function bookingFixture(partial: Partial<Booking> & { id: string }): Book
 const fromData = (id: string, data: BookingData): Booking => ({
   id,
   ...data,
-  lines: data.lines.map(line => ({ ...line, note: line.note ?? '' })),
+  lines: data.lines.map(({ packSize, packUnit, ...line }) => ({ ...line, note: line.note ?? '', packSize: packSize ?? null, packUnit: packUnit ?? null })),
 });
 
 // A price list for a spec, from stored-shape items.

@@ -21,9 +21,9 @@ const seed = () => [
   bookingFixture({ id: 'A1', date: TODAY, time: '11:00', customerName: 'Mario Prova', number: 3 }),
   bookingFixture({ id: 'A2', date: TODAY, time: '09:00', customerName: 'Anna Finta', mode: 'delivery', address: 'Via Finta 1, Roma', number: 4,
     lines: [
-      { recipeId: null, productId: 'pF', unitPrice: 12, name: 'Focaccia', qty: 1.5, unit: 'kg', note: 'sliced' },
-      { recipeId: null, productId: 'pP', unitPrice: 10, name: 'Panettone', qty: 2, unit: 'pcs', note: '' },
-      { recipeId: null, productId: null, unitPrice: null, name: 'Grissini', qty: 1, unit: 'kg', note: '' },
+      { recipeId: null, productId: 'pF', unitPrice: 12, packSize: null, packUnit: null, name: 'Focaccia', qty: 1.5, unit: 'kg', note: 'sliced' },
+      { recipeId: null, productId: 'pP', unitPrice: 10, packSize: null, packUnit: null, name: 'Panettone', qty: 2, unit: 'pcs', note: '' },
+      { recipeId: null, productId: null, unitPrice: null, packSize: null, packUnit: null, name: 'Grissini', qty: 1, unit: 'kg', note: '' },
     ],
     total: 42.5, deposit: 10, notes: 'Ring twice' }),
   bookingFixture({ id: 'B1', date: TOMORROW, customerName: 'Luca Tomorrow', number: 5 }),
@@ -180,6 +180,21 @@ describe('the two slips', () => {
     expect(host).not.toHaveTextContent('Anna Finta');
   });
 
+  it('⚠️ both slips and the booking say a pack as «3 confezioni (250 g)», never as pieces', async () => {
+    vi.spyOn(window, 'print').mockImplementation(() => undefined);
+    const source = fakeBookingsSource([bookingFixture({ id: 'G1', date: TODAY, number: 9, lines: [
+      { recipeId: null, productId: 'pG', unitPrice: 3.5, packSize: 250, packUnit: 'g', name: 'Grissini', qty: 3, unit: 'pcs', note: '' },
+    ] })]);
+    const { user } = show('/bookings/G1', source, { session: { location: { country: 'IT' }, name: 'Panificio Prova' } });
+    const card = await screen.findByRole('region', { name: 'Booking No. 9' }, LOAD);
+    expect(card).toHaveTextContent('3 packs (250 g)');
+    await user.click(within(card).getByRole('button', { name: 'Lab slip' }));
+    expect(document.getElementById(SLIP_HOST_ID)).toHaveTextContent('3 confezioni (250 g)');
+    await user.click(within(card).getByRole('button', { name: 'Customer slip' }));
+    expect(document.getElementById(SLIP_HOST_ID)).toHaveTextContent('3 confezioni (250 g)');
+    expect(document.getElementById(SLIP_HOST_ID)).not.toHaveTextContent('3 pz');
+  });
+
   it('the customer slip: the venue, the number, the name, the products, when, the money and the privacy line', async () => {
     vi.spyOn(window, 'print').mockImplementation(() => undefined);
     const { user } = show('/bookings/A2', undefined, { session: { location: { country: 'IT' }, name: 'Panificio Prova' } });
@@ -319,6 +334,15 @@ describe('the editor', () => {
     await user.type(screen.getByLabelText('Quantity'), '1.5');
     expect(screen.getByText('Comes to £18.00')).toBeInTheDocument();
     expect(screen.getByLabelText('Total (£, optional)')).toHaveAccessibleDescription('Leave empty to use the price list’s total: £18.00.');
+  });
+
+  it('a product sold by the pack is booked in packs, with what one pack holds', async () => {
+    const { user } = await openNew();
+    await user.type(screen.getByLabelText('Product'), 'Grissini');
+    expect(await screen.findByText('From the price list · £3.50 per pack')).toBeInTheDocument();
+    expect(screen.getByLabelText('Unit')).toHaveDisplayValue('packs (250 g)');
+    await user.type(screen.getByLabelText('Quantity'), '3');
+    expect(screen.getByText('Comes to £10.50')).toBeInTheDocument();
   });
 
   it('products: add and remove a row, a free text accepted with no price, said under the total', async () => {

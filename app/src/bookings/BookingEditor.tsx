@@ -16,7 +16,7 @@ import { useStatusMessage } from '../ui/StatusMessage';
 import { useConfirm } from '../ui/useConfirm';
 import {
   BOOKING_MODES, LIMITS, blankLine, draftFrom, emptyDraft, fieldId, firstProblem, nextNumber, parseMoney, sameDraft,
-  draftLineAmount, effectiveTotal, linePrice, listTotal, toBookingData, toPay,
+  draftLineAmount, effectiveTotal, linePack, linePrice, listTotal, toBookingData, toPay,
 } from './bookingModel';
 import type { Booking, BookingMode, BookingStatus, BookingUnit, Draft, DraftField, DraftLine, DraftProblem } from './bookingModel';
 import type { PriceItem, PriceList } from '@mise/shared/price-list';
@@ -607,7 +607,7 @@ type LineProps = {
 // One product: the name (the price list's names suggested, or free text), the quantity and its unit, an optional note; its price
 // and what the line comes to, when it has one.
 function LineFields({ index, line, listId, price, amount, nameId, qtyId, nameError, qtyError, canRemove, onChange, onRemove }: LineProps) {
-  const { t } = useT();
+  const { t, locale } = useT();
   const money = useMoney();
   const n = index + 1;
   const tag = price.kind === 'listed'
@@ -620,6 +620,9 @@ function LineFields({ index, line, listId, price, amount, nameId, qtyId, nameErr
   // ⚠️ THE UNIT IS LOCKED WHILE THE LINE HAS A PRICE (review, 18 Nov 2026): a listed product's price is for a piece (a pack) or a
   // kilo, and a saved line's price was agreed for its unit — changing it would quietly re-price the line. The tag says why.
   const locked = price.kind === 'listed' || price.kind === 'frozen';
+  const pack = linePack(price);
+  const packSizeText = (p: { packSize: number; packUnit: string }) =>
+    `${new Intl.NumberFormat(locale, { maximumFractionDigits: 3 }).format(p.packSize)} ${p.packUnit === 'pcs' ? t('bookings.unit.pcs') : p.packUnit}`;
   const tagId = `${nameId}-price`;
   return (
     <div className={styles.line} role="group" aria-label={t('bookings.form.item', { n })}>
@@ -655,17 +658,19 @@ function LineFields({ index, line, listId, price, amount, nameId, qtyId, nameErr
         />
         <div className={styles.field}>
           <label className={styles.label} htmlFor={`${qtyId}-unit`}>{t('bookings.form.unit')}</label>
-          {/* ⚠️ LOCKED for a product on the price list: its price is for a piece (or a pack) or for a kilo, never both. */}
+          {/* ⚠️ LOCKED for a product on the price list: its price is for a piece, a pack or a kilo, never another. A line of packs
+              says «confezioni (250 g)» (the owner's choice, 18 Nov 2026); its quantity is a number of packs. */}
           <select
             id={`${qtyId}-unit`}
             className={styles.input}
-            value={price.kind === 'listed' ? price.unit : line.unit}
+            value={pack !== null ? 'pack' : price.kind === 'listed' ? price.unit : line.unit}
             disabled={locked}
             aria-describedby={locked ? tagId : undefined}
             onChange={event => { onChange({ unit: event.currentTarget.value === 'kg' ? 'kg' : 'pcs' as BookingUnit }); }}
           >
             <option value="pcs">{t('bookings.form.unitPcs')}</option>
             <option value="kg">{t('bookings.form.unitKg')}</option>
+            {pack !== null ? <option value="pack">{t('bookings.form.unitPacks', { size: packSizeText(pack) })}</option> : null}
           </select>
         </div>
       </div>

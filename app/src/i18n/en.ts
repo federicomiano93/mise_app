@@ -3314,6 +3314,8 @@ export const en = {
   'bookings.form.priceListUnreadable': 'The price list can’t be read now: type the product, and the total by hand.',
   'fc.priceList.waiting': 'Waiting for the published list from the server — this needs a connection.',
   'fc.priceList.clash': 'Two ticked products share the name «{names}»: the counter could book only one. Tick one of them, or rename it in its card.',
+  'bookings.unit.packs': { one: "pack", other: "packs" },
+  'bookings.form.unitPacks': 'packs ({size})',
 } as const satisfies Record<string, Message>;
 
 export type MessageKey = keyof typeof en;

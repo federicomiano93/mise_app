@@ -2,8 +2,9 @@ import { formatMoney } from '@mise/shared/price-model';
 import type { Money } from '@mise/shared/currency';
 import { lineAmount } from '@mise/shared/price-list';
 import { toPay } from './bookingModel';
-import type { Booking, BookingUnit } from './bookingModel';
-import { qtyText, shortDate, spellDate } from './bookingWords';
+import type { Booking } from './bookingModel';
+import { lineQtyText, shortDate, spellDate } from './bookingWords';
+import type { UnitWords } from './bookingWords';
 import './booking-slip.css';
 
 // The two slips a booking prints (18 Nov 2026), drawn into the print host (slipHost.tsx), never on screen.
@@ -30,7 +31,7 @@ type SlipProps = {
   readonly booking: Booking;
   readonly words: SlipWords;
   readonly locale: string;
-  readonly unitWord: (unit: BookingUnit) => string;
+  readonly unitWord: UnitWords;
 };
 
 // `money`: given on the customer's slip only, which shows what each priced line comes to (bookings step 2); the lab's has no prices.
@@ -39,7 +40,7 @@ function Lines({ booking, locale, unitWord, money }: Omit<SlipProps, 'words'> & 
     <ul className="bk-slip-lines">
       {booking.lines.map((line, index) => (
         <li key={index} className="bk-slip-line">
-          <span className="bk-slip-qty">{qtyText(line.qty, line.unit, locale, unitWord)}</span>
+          <span className="bk-slip-qty">{lineQtyText(line, locale, unitWord)}</span>
           <span className="bk-slip-name">
             {line.name}
             {money !== undefined && line.unitPrice !== null

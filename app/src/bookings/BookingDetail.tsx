@@ -14,7 +14,8 @@ import { BOOKING_STATUSES, toPay } from './bookingModel';
 import type { Booking, BookingStatus } from './bookingModel';
 import { CustomerSlip, LabSlip } from './BookingSlips';
 import type { SlipWords } from './BookingSlips';
-import { qtyText, slipLocale, slipUnitWord, spellDate } from './bookingWords';
+import { lineQtyText, slipLocale, slipUnitWords, spellDate } from './bookingWords';
+import type { UnitWords } from './bookingWords';
 import { useBookings, useBookingsStore } from './BookingsContext';
 import { STATUS_WORD } from './BookingsList';
 import { FROM_BOOKING, cameFromList } from './bookingsNav';
@@ -73,7 +74,10 @@ function Shown({ booking, onBack }: { booking: Booking; onBack: () => void }) {
     if (cameFromList(state)) title.current?.focus();
   }, []);
 
-  const unitWord = (unit: 'pcs' | 'kg') => t(unit === 'kg' ? 'bookings.unit.kg' : 'bookings.unit.pcs');
+  const words: UnitWords = {
+    unit: unit => t(unit === 'kg' ? 'bookings.unit.kg' : 'bookings.unit.pcs'),
+    packs: n => t('bookings.unit.packs', { n }),
+  };
   const modeWord = t(booking.mode === 'delivery' ? 'bookings.mode.delivery' : 'bookings.mode.pickup');
   const due = toPay(booking.total, booking.deposit);
 
@@ -120,7 +124,7 @@ function Shown({ booking, onBack }: { booking: Booking; onBack: () => void }) {
       privacy: t('bookings.slip.privacy'),
     };
     const paperLocale = slipLocale(location, locale);
-    const paperUnit = slipUnitWord(location);
+    const paperUnit = slipUnitWords(location);
     printSlip(kind === 'lab'
       ? <LabSlip booking={booking} words={words} locale={paperLocale} unitWord={paperUnit} />
       : <CustomerSlip booking={booking} words={words} locale={paperLocale} unitWord={paperUnit} venueName={venueName ?? ''} money={money} />);
@@ -181,7 +185,7 @@ function Shown({ booking, onBack }: { booking: Booking; onBack: () => void }) {
               <ul className={styles.lines}>
                 {booking.lines.map((line, index) => (
                   <li key={index} className={styles.line}>
-                    <span className={styles.qty}>{qtyText(line.qty, line.unit, locale, unitWord)}</span>
+                    <span className={styles.qty}>{lineQtyText(line, locale, words)}</span>
                     <span>
                       <span className={styles.strong}>{line.name}</span>
                       {line.note !== '' ? <span className={styles.lineNote}>{line.note}</span> : null}

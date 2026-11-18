@@ -3078,4 +3078,6 @@ export const it: Messages = {
   'bookings.form.priceListUnreadable': 'Il listino non si può leggere ora: scrivi il prodotto, e il totale a mano.',
   'fc.priceList.waiting': 'In attesa del listino pubblicato dal server — serve la connessione.',
   'fc.priceList.clash': 'Due prodotti spuntati si chiamano «{names}»: il banco ne potrebbe prenotare solo uno. Spuntane uno solo, o rinominalo nella sua scheda.',
+  'bookings.unit.packs': { one: "confezione", other: "confezioni" },
+  'bookings.form.unitPacks': 'confezioni ({size})',
 };

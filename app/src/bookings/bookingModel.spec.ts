@@ -28,8 +28,8 @@ describe('readBooking', () => {
     expect(b).toEqual({
       id: 'A', customerName: 'Mario Prova', phone: '+39 1', mode: 'delivery', address: 'Via Finta 1', date: '2026-12-24', time: '09:30',
       lines: [
-        { recipeId: 'R1', productId: null, unitPrice: null, name: 'Focaccia', qty: 1.5, unit: 'kg', note: 'sliced' },
-        { recipeId: null, productId: 'p9', unitPrice: 2.5, name: 'Pane', qty: 2, unit: 'pcs', note: '' },
+        { recipeId: 'R1', productId: null, unitPrice: null, packSize: null, packUnit: null, name: 'Focaccia', qty: 1.5, unit: 'kg', note: 'sliced' },
+        { recipeId: null, productId: 'p9', unitPrice: 2.5, packSize: null, packUnit: null, name: 'Pane', qty: 2, unit: 'pcs', note: '' },
       ],
       deposit: 10, total: 42.5, notes: 'x', status: 'ready', number: 7,
     });
@@ -167,7 +167,7 @@ describe('toBookingData: what is written', () => {
   });
 
   it('round-trips: a stored booking opened and saved unchanged writes the same, a step-1 recipe link kept', () => {
-    const stored: Booking = bookingFixture({ id: 'A', lines: [{ recipeId: 'R1', productId: null, unitPrice: null, name: 'Focaccia alta', qty: 1.5, unit: 'kg', note: 'sliced' }], deposit: 5, total: 20 });
+    const stored: Booking = bookingFixture({ id: 'A', lines: [{ recipeId: 'R1', productId: null, unitPrice: null, packSize: null, packUnit: null, name: 'Focaccia alta', qty: 1.5, unit: 'kg', note: 'sliced' }], deposit: 5, total: 20 });
     const draft = draftFrom(stored, nextKey, ',');
     expect(sameDraft(draft, draftFrom(stored, nextKey, ','))).toBe(true);
     const data = toBookingData(draft, { status: stored.status, number: stored.number, items });
@@ -177,11 +177,11 @@ describe('toBookingData: what is written', () => {
   });
 
   it('⚠️ a saved line keeps its price while its name and unit stay — a new price list does not change it', () => {
-    const stored = bookingFixture({ id: 'A', total: 20, lines: [{ recipeId: null, productId: 'pF', unitPrice: 10, name: 'Focaccia', qty: 2, unit: 'kg', note: '' }] });
+    const stored = bookingFixture({ id: 'A', total: 20, lines: [{ recipeId: null, productId: 'pF', unitPrice: 10, packSize: null, packUnit: null, name: 'Focaccia', qty: 2, unit: 'kg', note: '' }] });
     const draft = draftFrom(stored, nextKey, ',');
     // The total is the lines' own sum: the box starts empty, so it keeps following the lines.
     expect(draft.total).toBe('');
-    expect(linePrice(draft.lines[0]!, items)).toEqual({ kind: 'frozen', productId: 'pF', unitPrice: 10 });
+    expect(linePrice(draft.lines[0]!, items)).toEqual({ kind: 'frozen', productId: 'pF', unitPrice: 10, packSize: null, packUnit: null });
     const more = { ...draft, lines: [{ ...draft.lines[0]!, qty: '3' }] };
     expect(toBookingData(more, { status: 'todo', number: 1, items })).toMatchObject({ total: 30, lines: [{ unitPrice: 10, qty: 3 }] });
     // Another product typed in its place takes today's list price.
@@ -190,7 +190,7 @@ describe('toBookingData: what is written', () => {
   });
 
   it('⚠️ a saved line with no price stays without one, even once its name is on the list, while it is left as it was', () => {
-    const stored = bookingFixture({ id: 'A', lines: [{ recipeId: null, productId: null, unitPrice: null, name: 'Panettone', qty: 1, unit: 'kg', note: '' }] });
+    const stored = bookingFixture({ id: 'A', lines: [{ recipeId: null, productId: null, unitPrice: null, packSize: null, packUnit: null, name: 'Panettone', qty: 1, unit: 'kg', note: '' }] });
     const draft = draftFrom(stored, nextKey, ',');
     expect(linePrice(draft.lines[0]!, items)).toEqual({ kind: 'none' });
     expect(toBookingData(draft, { status: 'todo', number: 1, items }).lines[0]).toMatchObject({ unitPrice: null, unit: 'kg' });
@@ -207,8 +207,21 @@ describe('toBookingData: what is written', () => {
     expect(firstProblem({ ...good, total: '', lines: [line] }, { ...ctx, items })).toEqual({ field: 'total', reason: 'tooHigh' });
   });
 
+  it('a product sold by the pack keeps what one pack holds, from the list and once saved', () => {
+    const packs = priceListOf([{ productId: 'pG', name: 'Grissini', price: 3.5, per: 'pack', packSize: 250, packUnit: 'g' }]).items;
+    const line = { key: 1, name: 'Grissini', qty: '3', unit: 'pcs' as const, note: '', kept: null };
+    const data = toBookingData({ ...good, lines: [line] }, { status: 'todo', number: 1, items: packs });
+    expect(data.lines[0]).toEqual({ recipeId: null, productId: 'pG', unitPrice: 3.5, name: 'Grissini', qty: 3, unit: 'pcs', packSize: 250, packUnit: 'g' });
+    // Saved and opened again with a price list that no longer has it: the pack's size stays with the frozen price.
+    const stored = bookingFixture({ id: 'A', lines: [{ ...data.lines[0]!, note: '', recipeId: null, packSize: 250, packUnit: 'g' }] });
+    const again = toBookingData(draftFrom(stored, nextKey, ','), { status: 'todo', number: 1, items: [] });
+    expect(again.lines[0]).toMatchObject({ unitPrice: 3.5, packSize: 250, packUnit: 'g' });
+    expect(readBooking('A', { customerName: 'x', date: '2026-12-24', time: '09:30', lines: [{ name: 'G', qty: 2, unit: 'pcs', packSize: -1, packUnit: 'g' }] })?.lines[0])
+      .toMatchObject({ packSize: null, packUnit: null });
+  });
+
   it('a total typed at the counter (a discount) is shown in the box when the booking is opened again', () => {
-    const stored = bookingFixture({ id: 'A', total: 18, lines: [{ recipeId: null, productId: 'pF', unitPrice: 10, name: 'Focaccia', qty: 2, unit: 'kg', note: '' }] });
+    const stored = bookingFixture({ id: 'A', total: 18, lines: [{ recipeId: null, productId: 'pF', unitPrice: 10, packSize: null, packUnit: null, name: 'Focaccia', qty: 2, unit: 'kg', note: '' }] });
     expect(draftFrom(stored, nextKey, ',').total).toBe('18');
   });
 });
