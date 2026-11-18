@@ -7,6 +7,7 @@ import { useFocusOnBack } from '../shell/away/useFocusOnBack';
 import { StatusMessageProvider, useStatusMessage } from '../ui/StatusMessage';
 import { AwayBand } from './AwayBand';
 import { InstallHint } from './InstallHint';
+import { KioskBand } from './KioskBand';
 import { OrdersDuePart } from './OrdersDuePart';
 import { TodoCard } from './TodoCard';
 import { TodosProvider, useTodosStore } from './TodosContext';
@@ -36,6 +37,10 @@ export default function HomeSection() {
         <StatusMessageProvider>
           <StoreMessages />
           <div className={styles.column} data-two={two ? 'true' : undefined}>
+            {/* «Rest» and «Exit», only on a kiosk device (staff slice 6, D8). */}
+            <PartBoundary>
+              <KioskBand />
+            </PartBoundary>
             <PartBoundary>
               <AwayBand onBack={armFocus} />
             </PartBoundary>

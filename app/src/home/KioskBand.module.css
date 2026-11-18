@@ -1,0 +1,25 @@
+/* The kiosk band (staff slice 6): «Rest» and «Exit» side by side above «Da fare», each as tall as a thumb's target, wrapping one under
+   the other on the narrowest phone rather than shrinking. */
+
+.band {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s3);
+  margin-bottom: var(--s4);
+}
+
+/* Icon and words on one line: the button AND its content are a flex row, or the icon sits low. */
+.button {
+  display: inline-flex;
+  flex: 1 1 8rem;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s2);
+  min-height: var(--hit);
+}
+
+.icon {
+  flex: none;
+  width: 20px;
+  height: 20px;
+}
