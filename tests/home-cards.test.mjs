@@ -13,6 +13,7 @@ import {
   isHiddenForStaff, cardVisibleTo, mayBeTold, cleanOrder, isValidOrder, orderedCardIds,
 } from '../js/home-cards.js';
 import { PUSH_KINDS, cardForKind, targetPage } from '../js/push-model.js';
+import { SECTIONS as APP_SECTIONS } from '../js/sections.js';
 import { missingFromPrecache } from './helpers/precache.mjs';
 
 const read = p => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
@@ -27,6 +28,12 @@ const PAGE_OF = Object.freeze({
   foodcost: 'foodcost.html',
   inventory: 'inventory.html',
 });
+
+// ⚠️ A CARD OF MISE 2 ONLY (bookings, 18 Nov 2026): its section is not one the current app knows, so the current app has no
+// page and no Home card for it, and its switch screen never lists it (it filters by allowedSections). The markup checks
+// below are about the current app's pages, so they walk only the cards of the current app.
+const CURRENT_APP_CARDS = STAFF_CARDS.filter(card => APP_SECTIONS.includes(card.section));
+const MISE2_ONLY = STAFF_CARDS.filter(card => !APP_SECTIONS.includes(card.section));
 
 // The work, as opposed to the money: visible to employees unless hidden.
 const EVERYDAY = HIDEABLE_IDS.filter(id => !OPT_IN_IDS.includes(id));
@@ -87,9 +94,11 @@ test('a card with no id, or one this layer does not know, is never hidden', () =
   }
 });
 
-test('the ids are the seven Home cards, and the two money cards are the opt-in ones', () => {
+test('the ids are the seven Home cards plus Mise 2\'s bookings, and the two money cards are the opt-in ones', () => {
   assert.deepEqual([...HIDEABLE_IDS],
-    ['calculator', 'catalogue', 'orders', 'suppliers', 'pastries', 'foodcost', 'inventory']);
+    ['calculator', 'catalogue', 'orders', 'suppliers', 'pastries', 'foodcost', 'inventory', 'bookings']);
+  assert.deepEqual(MISE2_ONLY.map(card => card.id), ['bookings'], 'the only card the current app does not draw');
+  assert.equal(MISE2_ONLY[0].optIn, false, 'bookings are everyday work: shown to employees unless hidden');
   assert.deepEqual([...OPT_IN_IDS], ['foodcost', 'inventory']);
   assert.ok(Object.isFrozen(STAFF_CARDS) && STAFF_CARDS.every(Object.isFrozen));
 });
@@ -118,7 +127,7 @@ test('⚠️ the two maps do not cross: «hidden» cannot touch a money card, no
 
 test('every hideable card carries its id on the Home, exactly once, on the right link', () => {
   const home = read('index.html');
-  for (const card of STAFF_CARDS) {
+  for (const card of CURRENT_APP_CARDS) {
     const tags = home.match(new RegExp(`<a class="home-card"[^>]*\\bdata-card="${card.id}"[^>]*>`, 'g')) || [];
     assert.equal(tags.length, 1, `index.html: data-card="${card.id}" must appear on exactly one card`);
     assert.match(tags[0], new RegExp(`href="${PAGE_OF[card.id].replace('.', '\\.')}"`));
@@ -128,12 +137,12 @@ test('every hideable card carries its id on the Home, exactly once, on the right
   // ⚠️ EVERY card, because a card without one is judged by nobody: the Home would show it
   // to everybody, the money cards included.
   const tags = home.match(/<a class="home-card"[^>]*>/g) || [];
-  assert.equal(tags.length, HIDEABLE_IDS.length + ROLE_ONLY_CARDS.length, 'one card on the Home per id, and no other');
+  assert.equal(tags.length, CURRENT_APP_CARDS.length + ROLE_ONLY_CARDS.length, 'one card on the Home per id, and no other');
   for (const tag of tags) assert.match(tag, /\bdata-card="/, `${tag} carries no data-card`);
 });
 
 test('⚠️ every hideable page declares its card on <body>, or an address typed by hand walks past', () => {
-  for (const card of STAFF_CARDS) {
+  for (const card of CURRENT_APP_CARDS) {
     const page = read(PAGE_OF[card.id]);
     assert.match(page, new RegExp(`<body[^>]*\\bdata-card="${card.id}"`), PAGE_OF[card.id]);
     assert.match(page, new RegExp(`<body[^>]*\\bdata-section="${card.section}"`), PAGE_OF[card.id]);

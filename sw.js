@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v775';
+const CACHE_NAME = 'theitalianclub-v776';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -159,10 +159,10 @@ const ASSET_HASHES = {
   "./install-guide.html": '322c79acf63896ef',
   "./reset-password.html": '298724d76511df05',
   "./dist/i18n.js": 'f0ebe202cb983e3e',
-  "./dist/index.js": '19c36fef58413f08',
-  "./dist/calculator.js": 'fc8c364a69e07796',
-  "./dist/orders.js": '8e3b21299c785c71',
-  "./dist/suppliers.js": '933942ea038a557a',
+  "./dist/index.js": '1316caefe3d6a702',
+  "./dist/calculator.js": '494ecdc9849ce260',
+  "./dist/orders.js": 'deace4378de5edf2',
+  "./dist/suppliers.js": '20194cba68606710',
   "./dist/install-guide.js": 'beda437b74a9c6f8',
   "./js/allergen-model.js": 'a9ad7592da832a56',
   "./js/calculator-config.js": '5dd726117544e2d4',
@@ -170,7 +170,7 @@ const ASSET_HASHES = {
   "./js/currency.js": '241b1dbdf4cc465f',
   "./js/firebase-target.js": 'b3759997e54ddbc3',
   "./js/firebase.js": '2acc9652e4f27abf',
-  "./js/home-cards.js": '4e0740cfb8b8e092',
+  "./js/home-cards.js": '5ac9de8ef432c1b8',
   "./js/i18n-dom.js": '24249af4367511e5',
   "./js/i18n.js": '0df72bb0c34f4a66',
   "./js/keyboard-done.js": 'de05a6dd1f3aac26',
@@ -187,11 +187,11 @@ const ASSET_HASHES = {
   "./js/update-gate.js": '95f4f9f99e1fd1f4',
   "./js/vendor/jspdf.esm.js": 'c59e9f48f24c403f',
   "./js/vendor/write-excel-file.esm.js": '9c9b6920e629cb74',
-  "./dist/catalogue.js": '20e23025f98c81a1',
-  "./dist/pastries.js": '687f6f6d55a39dca',
-  "./dist/foodcost.js": '7d79c826e9f67387',
-  "./dist/inventory.js": '1550bab38d293cf6',
-  "./dist/clients.js": '009d52abdf7fc7a4',
+  "./dist/catalogue.js": 'bc567ea4321efab1',
+  "./dist/pastries.js": '9393c11bcd1459dc',
+  "./dist/foodcost.js": 'd1423630f327afdd',
+  "./dist/inventory.js": 'bc35deebaaee069d',
+  "./dist/clients.js": '63e40f66d307d38e',
   "./qr.png": '761a95e5bc25e2ba',
   "./dist/tokens.css": 'ec4a097cd572be90',
   "./dist/auth.css": 'cf2810b6fbcabb0c',
