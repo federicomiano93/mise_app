@@ -211,7 +211,8 @@ firestore:indexes`); the override keeps the collection-scope ascending/descendin
 (server time) }`, published WHOLE from Food cost («Listino prenotazioni») by `cardAccess(lid,'foodcost','foodcost') == 'manage'`;
 read by `usesBookings(lid)` or `cardAccess != 'none'` (up to 4 reads); never deleted. ⚠️ No cost, margin or VAT rate on it, ever:
 employees read it. The shape is `shared/src/price-list.ts`. A booking line now also carries `productId` and `unitPrice` (the price of
-one unit when saved, FROZEN; null without a price) — inside the `lines` list, which the rules do not look into.
+one unit when saved, FROZEN; null without a price), and for a product sold by the pack `packSize` + `packUnit` (what one pack holds;
+the quantity is then a number of packs) — inside the `lines` list, which the rules do not look into.
 
 **Device count:** `devices/{20-char id}` — `{ bakery, uid, kind (phone|tablet|computer),
 appVersion (≤12 chars or null), installed, lastSeen (server time) }`, written by

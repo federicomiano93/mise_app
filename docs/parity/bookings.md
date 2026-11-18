@@ -146,7 +146,10 @@ the reader also keeps only the first of two names). In the booking editor a list
 why), a total from the list over 100,000 is stopped at Save, nothing is said about the list while it is on its way, and a product box
 takes names up to 200 characters. A line comes to quantity × price with a half cent rounded up. The day's heading in the list starts
 with a capital (Intl writes «mercoledì»).
-**Open for the owner**: a pack on the list is booked as pieces («3 pz Grissini stirati»): the slips do not say the pack's size.
+**Packs (the owner, 18 Nov 2026: «sì, scrivi «3 confezioni (250 g)» sui fogli»)**: a product sold by the pack is booked in packs.
+The line keeps what one pack holds (`packSize`, `packUnit`, from the list, and frozen with the price once saved); the editor's unit
+reads «confezioni (250 g)» (locked), and the list row, the booking and BOTH slips say «3 confezioni (250 g)» — on paper in the
+venue's country's words («3 packs (250 g)» in the UK), never «3 pz».
 
 **Tests**: `shared/src/price-list.spec.ts`, `foodcost/FoodcostSection.priceList.spec.tsx`, the priced cases of
 `bookings/bookingModel.spec.ts` and `BookingsSection.spec.tsx`, the `priceList` scenario of the rules suite, `tests/rules-read-budget.test.mjs`.
