@@ -3206,7 +3206,7 @@ export const en = {
   'bookings.detail.print': 'Print',
   'bookings.detail.call': 'Call {phone}',
   'bookings.reminder.button': 'WhatsApp reminder',
-  'bookings.reminder.hint': 'Opens WhatsApp with the message written: check it, then send it.',
+  'bookings.reminder.hint': 'Opens WhatsApp with the message ready: check it, then send it.',
   'bookings.reminder.hello': 'Hello {name},',
   'bookings.reminder.pickup': 'a reminder of your booking {number} with {venue}, to collect on:',
   'bookings.reminder.delivery': 'a reminder of your booking {number} with {venue}, to be delivered on:',

@@ -128,13 +128,13 @@ describe('a booking', () => {
     show('/bookings/A2', undefined, { session: { location: { country: 'IT' }, name: 'Panificio Prova' } });
     const card = await screen.findByRole('region', { name: 'Booking No. 4' }, LOAD);
     const link = within(card).getByRole('link', { name: 'WhatsApp reminder' });
-    expect(link).toHaveAccessibleDescription('Opens WhatsApp with the message written: check it, then send it.');
+    expect(link).toHaveAccessibleDescription('Opens WhatsApp with the message ready: check it, then send it.');
     expect(link).toHaveAttribute('target', '_blank');
     expect(link).toHaveAttribute('rel', 'noopener noreferrer');
     const url = new URL(link.getAttribute('href') as string);
     expect(url.origin + url.pathname).toBe('https://wa.me/393330000000');
     const text = (url.searchParams.get('text') ?? '').replace(/\u00a0/g, ' ');
-    expect(text).toMatch(/^Hello Anna Finta,\na reminder of your booking No\. 4 with Panificio Prova, to be delivered on:\n.+ at 09:00\nAddress: Via Finta 1, Roma\n/);
+    expect(text).toMatch(/^Hello Anna Finta,\na reminder of your booking No\. 4 with Panificio Prova, to be delivered on:\n\S+ \d+ \S+ at 09:00\nAddress: Via Finta 1, Roma\n/);
     expect(text).toContain('• 1,5 kg Focaccia');
     expect(text).toContain('To pay: 32,50 €');
     expect(text).not.toContain('Ring twice');
@@ -159,7 +159,7 @@ describe('a booking', () => {
     const card = await screen.findByRole('region', { name: /N\. 3/ }, LOAD);
     const link = within(card).getByRole('link', { name: 'Promemoria WhatsApp' });
     const text = new URL(link.getAttribute('href') as string).searchParams.get('text') ?? '';
-    expect(text).toMatch(/^Ciao Mario Prova,\nti ricordiamo la tua prenotazione N\. 3 da Panificio Prova, con ritiro:\n.+ alle 11:00\n/);
+    expect(text).toMatch(/^Ciao Mario Prova,\nti ricordiamo il ritiro della tua prenotazione N\. 3 da Panificio Prova:\n.+ alle 11:00\n/);
     expect(text).toMatch(/A presto!$/);
   });
 

@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { MessageCircle, Pencil, Printer, Trash2 } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router';
 import { formatMoney } from '@mise/shared/price-model';
+import { todayISO } from '@mise/shared/day';
 import { useT } from '../i18n/useT';
 import { useMoney } from '../session/useMoney';
 import { useSession } from '../session/SessionContext';
@@ -90,7 +91,7 @@ function Shown({ booking, onBack }: { booking: Booking; onBack: () => void }) {
   // message written; the person reads it and sends it. Only while the order is still to come, and only for a phone WhatsApp can
   // open (the venue's country code is added to a number typed without one). Words in the interface's language, as the slips;
   // the date and the money in the venue's country's way.
-  const reminder = wantsReminder(booking) ? reminderUrl(whatsappNumber(booking.phone, countryOf(location)), reminderMessage({
+  const reminder = wantsReminder(booking, todayISO()) ? reminderUrl(whatsappNumber(booking.phone, countryOf(location)), reminderMessage({
     booking,
     locale: slipLocale(location, locale),
     units: slipUnitWords(location),

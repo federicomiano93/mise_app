@@ -220,19 +220,21 @@ the app writes the message and WhatsApp on the device sends it, from the shop's 
 it.
 
 **On the booking** (`bookings/BookingDetail.tsx`): under the customer's phone, «Promemoria WhatsApp» / «WhatsApp reminder», with
-the line «Opens WhatsApp with the message written: check it, then send it.» It is a link to `https://wa.me/<number>?text=…` in a
+the line «Opens WhatsApp with the message ready: check it, then send it.» It is a link to `https://wa.me/<number>?text=…` in a
 new tab — WhatsApp (the app, or WhatsApp Web) opens on the customer's chat. Shown only while the order is still to come (to do,
-ready), and only for a phone WhatsApp can open.
+ready, of today or a day ahead), and only for a phone WhatsApp can open.
 
 **The number** (`bookings/reminderText.ts`, `whatsappNumber`): digits only, with the country code. A number typed with «+» or
 «00» keeps its own; one typed without gets the VENUE's country code (Italy 39, every digit kept; the UK 44, its leading 0 dropped).
+The venue's own code typed without «+» («39 333 …», 12 digits; «44 7700 …») is not added twice, and a UK 0 written after +44
+(«+44 07700 …») is dropped (never Italy's: «+39 06 …» keeps it).
 Fewer than 8 or more than 15 digits, or a venue with no country: no button.
 
 **The message** (`reminderMessage`), in the interface's language like the slips, the date and the money in the venue's country's
 way:
 
     Ciao Anna Finta,
-    ti ricordiamo la tua prenotazione N. 4 da Panificio Miano, con ritiro:
+    ti ricordiamo il ritiro della tua prenotazione N. 4 da Panificio Miano:
     giovedì 24 dicembre alle 09:30
 
     • 1,5 kg Focaccia
@@ -241,14 +243,21 @@ way:
     Da pagare: 32,50 €
     A presto!
 
-A delivery says «con consegna:» and adds «Indirizzo: …». «Da pagare» is the total less the deposit, or the total when no deposit
+A delivery says «ti ricordiamo la consegna della tua prenotazione …:» and adds «Indirizzo: …». «Da pagare» is the total less the deposit, or the total when no deposit
 was taken; nothing when it is all paid or there is no total. The booking's notes and the line notes are NOT in it (they are for the
 lab); no price per line.
 
 **Privacy**: the phone and the name go to WhatsApp only when the person taps and sends, to the customer themselves, about this
-order (the use the slip's privacy line names). Nothing is stored about the reminder and nothing is logged.
+order (the use the slip's privacy line names). The app stores nothing about the reminder and logs nothing. ⚠️ The browser does:
+the wa.me address carries the message (name, order, a delivery's address), so it stays in the tablet's browser history (Chrome
+keeps about 90 days, beyond the booking's 30) and is synced if Chrome sync is on. Clearing the history, or a profile without sync
+on the counter tablet, is the owner's choice.
 
 **Tests**: `bookings/reminderText.spec.ts`, the reminder cases of `bookings/BookingsSection.spec.tsx`.
+
+**Left for the owner**: the words follow the INTERFACE's language (as the slips) while the date, the units and the money follow
+the venue's country — a venue whose screens are in another language than its customers' would send a mixed message («Hello Anna,
+… giovedì 24 dicembre at 09:30»). Not the case at Panificio Miano (Italian screens, Italian venue).
 
 **Not verified**: WhatsApp opening on the counter tablet (it needs WhatsApp or WhatsApp Business installed, or it opens WhatsApp
 Web in the browser), a number from abroad typed without «+» (it gets the venue's code, wrongly), a landline (WhatsApp says the

@@ -24,7 +24,8 @@ const MAX_DIGITS = 15;
 // The number as wa.me wants it: digits only, WITH the country code, no «+», no «00».
 //   «+39 333 123 4567» / «0039 333…» → 393331234567 (already international);
 //   «333 123 4567» in an Italian venue → 39 + the number as typed (Italian numbers keep their leading digit, a 0 included);
-//   «07700 900123» in a UK venue → 44 + the number WITHOUT its leading 0 (the UK's trunk prefix).
+//   «07700 900123» in a UK venue → 44 + the number WITHOUT its leading 0 (the UK's trunk prefix);
+//   «39 333 123 4567» / «44 7700 900123» — the venue's own code typed without «+» — is not given it twice.
 // '' when it cannot be a phone WhatsApp could open (too short, too long, or no country to add).
 export function whatsappNumber(phone: string, country: Country | null): string {
   const typed = phone.trim();
@@ -32,9 +33,16 @@ export function whatsappNumber(phone: string, country: Country | null): string {
   let full: string;
   if (typed.startsWith('+')) full = digits;
   else if (digits.startsWith('00')) full = digits.slice(2);
+  // The venue's own code typed without «+»: «39 333 123 4567» (12 digits; an Italian number alone is at most 11, so a 10-digit
+  // mobile starting 39… is never taken for it), «44 7700 900000» (no UK number starts with 44 once its 0 is dropped).
+  else if (country === 'IT' && digits.length === 12 && digits.startsWith('39')) full = digits;
+  else if (country === 'GB' && digits.startsWith('44')) full = digits;
   else if (country === 'GB') full = `${CALLING_CODE.GB}${digits.replace(/^0/, '')}`;
   else if (country === 'IT') full = `${CALLING_CODE.IT}${digits}`;
   else return '';
+  // «+44 07700 900000»: the UK's trunk 0 written after the code (a common habit) is dropped. Never after 39: Italian landlines
+  // keep their 0 («+39 06…»).
+  if (full.startsWith('440')) full = `44${full.slice(3)}`;
   return full.length >= MIN_DIGITS && full.length <= MAX_DIGITS ? full : '';
 }
 
@@ -43,6 +51,8 @@ export type ReminderWords = {
   // «Ciao {name},» — already filled with the customer's name.
   readonly hello: string;
   // «ti ricordiamo il ritiro della tua prenotazione N. 4 da Panificio Miano:» — already filled (pickup or delivery).
+  // ⚠️ In the INTERFACE's language (as the slips), while the date and the units follow the venue's country: a venue whose screens
+  // are in another language than its customers' would send a mixed message. Left for the owner (docs/parity/bookings.md).
   readonly intro: string;
   // «{date} alle {time}» → a function, because the date is spelled here in the venue's locale.
   readonly when: (date: string, time: string) => string;
@@ -90,7 +100,8 @@ export function reminderUrl(number: string, message: string): string {
   return number === '' ? '' : `https://wa.me/${number}?text=${encodeURIComponent(message)}`;
 }
 
-// Whether a reminder still makes sense: not for an order already collected or cancelled.
-export function wantsReminder(booking: Pick<Booking, 'status'>): boolean {
-  return booking.status === 'todo' || booking.status === 'ready';
+// Whether a reminder still makes sense: an order still to come — not collected, not cancelled, and not of a day gone by.
+// `today` is the venue's day as YYYY-MM-DD (the same strings, so they compare as text).
+export function wantsReminder(booking: Pick<Booking, 'status' | 'date'>, today: string): boolean {
+  return (booking.status === 'todo' || booking.status === 'ready') && booking.date >= today;
 }

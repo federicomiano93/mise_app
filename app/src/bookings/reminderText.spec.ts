@@ -11,7 +11,7 @@ import type { BookingLine } from './bookingModel';
 const money = moneyOf('€', { decimal: ',', group: '.', symbolAfter: true });
 const words: ReminderWords = {
   hello: 'Ciao Anna,',
-  intro: 'ti ricordiamo la tua prenotazione N. 4 da Panificio Prova, con ritiro:',
+  intro: 'ti ricordiamo il ritiro della tua prenotazione N. 4 da Panificio Prova:',
   when: (date, time) => `${date} alle ${time}`,
   address: address => `Indirizzo: ${address}`,
   toPay: amount => `Da pagare: ${amount}`,
@@ -36,6 +36,14 @@ describe('the customer\'s number for WhatsApp', () => {
     expect(whatsappNumber('07700 900000', 'GB')).toBe('447700900000');
   });
 
+  it('never adds the venue\'s code twice, and drops the UK\'s 0 written after +44 (never Italy\'s)', () => {
+    expect(whatsappNumber('39 333 000 0000', 'IT')).toBe('393330000000');
+    expect(whatsappNumber('393 000 0000', 'IT')).toBe('393930000000');
+    expect(whatsappNumber('44 7700 900000', 'GB')).toBe('447700900000');
+    expect(whatsappNumber('+44 07700 900000', 'GB')).toBe('447700900000');
+    expect(whatsappNumber('+39 06 0000 0000', 'IT')).toBe('390600000000');
+  });
+
   it('is nothing when it cannot be a phone: too short, too long, or no country to add', () => {
     expect(whatsappNumber('12 34', 'IT')).toBe('');
     expect(whatsappNumber('+39 1234567890123456', 'IT')).toBe('');
@@ -51,7 +59,7 @@ describe('the reminder', () => {
     const text = reminderMessage({ booking, words, locale: 'it-IT', units, money }).replace(/ /g, ' ');
     expect(text).toBe([
       'Ciao Anna,',
-      'ti ricordiamo la tua prenotazione N. 4 da Panificio Prova, con ritiro:',
+      'ti ricordiamo il ritiro della tua prenotazione N. 4 da Panificio Prova:',
       'giovedì 24 dicembre alle 09:30',
       '',
       '• 1,5 kg Focaccia',
@@ -78,10 +86,12 @@ describe('the reminder', () => {
     expect(reminderUrl('', 'Ciao')).toBe('');
   });
 
-  it('only for an order still to come', () => {
-    expect(wantsReminder({ status: 'todo' })).toBe(true);
-    expect(wantsReminder({ status: 'ready' })).toBe(true);
-    expect(wantsReminder({ status: 'collected' })).toBe(false);
-    expect(wantsReminder({ status: 'cancelled' })).toBe(false);
+  it('only for an order still to come, of today or a day ahead', () => {
+    const today = '2026-11-18';
+    expect(wantsReminder({ status: 'todo', date: today }, today)).toBe(true);
+    expect(wantsReminder({ status: 'ready', date: '2026-12-24' }, today)).toBe(true);
+    expect(wantsReminder({ status: 'collected', date: today }, today)).toBe(false);
+    expect(wantsReminder({ status: 'cancelled', date: today }, today)).toBe(false);
+    expect(wantsReminder({ status: 'todo', date: '2026-11-17' }, today)).toBe(false);
   });
 });
