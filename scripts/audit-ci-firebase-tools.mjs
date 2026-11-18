@@ -27,8 +27,9 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 // Each entry: the advisory, the severity it was measured at (reported any higher, it fails again:
 // somebody must look), why it cannot hurt CI, and why it cannot be fixed. (braces GHSA-vfj7-8cjw-p6xm was
-// removed on 23 Oct 2026, basic-ftp GHSA-c475-qrg2-pj4r on 2 Nov 2026 with firebase-tools 15.34.2: npm no
-// longer reports them for this tree.) Re-measure on every firebase-tools raise; an entry whose advisory
+// removed on 23 Oct 2026, basic-ftp GHSA-c475-qrg2-pj4r on 2 Nov 2026 with firebase-tools 15.34.2, picomatch
+// GHSA-fc5q-39xc-vjpf on 18 Nov 2026 when npm withdrew it a day after raising it: npm no longer reports them
+// for this tree.) Re-measure on every firebase-tools raise; an entry whose advisory
 // is gone from the tree fails the gate until removed. ⚠️ The list may not simply go empty, or nothing
 // proves the audit looked: with no high left, a moderate still in the tree does that job.
 export const ALLOWED = new Map([
@@ -36,10 +37,6 @@ export const ALLOWED = new Map([
     'to v3/v5/v6. The tree\'s gaxios calls only v4() with no buffer, so CI never reaches it; Google\'s libraries ' +
     'decide when it goes. Named here as the finding that proves the audit looked (measured on firebase-tools ' +
     '15.34.2: no high or critical in the tree).' }],
-  ['GHSA-fc5q-39xc-vjpf', { upTo: 'high', why: 'picomatch <= 4.0.7: ReDoS when a glob PATTERN repeats a single-branch ' +
-    'extglob. Only the patterns are dangerous, and every pattern here is written in the tools\' own code or ours (file ' +
-    'globs, never text from a person or the network), so CI never builds one. No patched version exists (advisory ' +
-    'raised to cover every version on 17 Nov 2026). Remove this entry when the lockfile moves to the fixed picomatch.' }],
 ]);
 
 const MALICIOUS = 'CWE-506';
