@@ -1,0 +1,255 @@
+/* One booking: a card with the form bar (Back · title · Edit), the four statuses, the facts, the two print buttons and the bin.
+   ⚠️ NOTHING ON THE CARD MAY CLIP (no `overflow`): the form bar sticks to the top of the shell's scrolling area. */
+
+.card {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+  padding: var(--s4);
+}
+
+.muted {
+  color: var(--ink-2);
+}
+
+.edit,
+.print {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  min-height: var(--hit);
+}
+
+.edit > svg,
+.print > svg {
+  flex: none;
+  width: 20px;
+  height: 20px;
+}
+
+.statuses {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s2);
+}
+
+@media (min-width: 520px) {
+  .statuses {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.statusChoice {
+  min-height: var(--hit);
+  padding: var(--s1) var(--s2);
+  border: 1.5px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.statusChoice:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (hover: hover) {
+  .statusChoice:hover {
+    background: var(--sunken);
+  }
+}
+
+.statusChoice[aria-pressed="true"][data-status="todo"] {
+  border-color: var(--warn);
+  background: var(--warn-tint);
+  color: var(--warn-ink);
+}
+
+.statusChoice[aria-pressed="true"][data-status="ready"] {
+  border-color: var(--ok);
+  background: var(--ok-tint);
+  color: var(--ok-ink);
+}
+
+.statusChoice[aria-pressed="true"][data-status="collected"] {
+  border-color: var(--ink-2);
+  background: var(--sunken);
+  color: var(--ink);
+}
+
+.statusChoice[aria-pressed="true"][data-status="cancelled"] {
+  border-color: var(--danger);
+  background: var(--danger-tint);
+  color: var(--danger-ink);
+}
+
+.facts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  margin: 0;
+}
+
+.fact {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+}
+
+.fact > dt {
+  color: var(--ink-3);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.fact > dd {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s1);
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.when {
+  font-size: var(--fs-md);
+  font-weight: 600;
+}
+
+.when::first-letter {
+  text-transform: uppercase;
+}
+
+.mode {
+  padding: 2px var(--s2);
+  border-radius: var(--r-pill);
+  background: var(--sunken);
+  color: var(--ink-2);
+  font-size: var(--fs-xs);
+  font-weight: 650;
+}
+
+.mode[data-mode="delivery"] {
+  background: var(--accent-tint);
+  color: var(--accent-ink);
+}
+
+.strong {
+  font-weight: 600;
+}
+
+.link {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--hit);
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+
+.lines {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.line {
+  display: flex;
+  gap: var(--s3);
+}
+
+.qty {
+  flex: none;
+  min-width: 4.5rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+}
+
+.lineNote {
+  display: block;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  font-style: italic;
+}
+
+.notes {
+  white-space: pre-wrap;
+}
+
+.money {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: var(--s1) var(--s4);
+  margin: 0;
+}
+
+.money dd {
+  margin: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.due {
+  font-weight: 700;
+}
+
+.prints {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+}
+
+.print {
+  flex: 1 1 12rem;
+  justify-content: center;
+}
+
+/* The bin: small and low-key, at the foot, never beside the main actions. */
+.foot {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.delete {
+  display: grid;
+  place-items: center;
+  width: var(--hit);
+  height: var(--hit);
+  border: 0;
+  border-radius: var(--r-md);
+  background: transparent;
+  color: var(--danger-ink);
+  cursor: pointer;
+}
+
+.delete > svg {
+  width: 20px;
+  height: 20px;
+}
+
+.delete[data-focus-visible] {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (hover: hover) {
+  .delete[data-hovered] {
+    background: var(--danger-tint);
+  }
+}

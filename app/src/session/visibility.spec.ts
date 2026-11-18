@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readsPurchasePrices, visibleSectionIds } from './visibility';
 
-const ALL = ['home', 'orders', 'suppliers', 'recipes', 'labels', 'calculator', 'pastries', 'stocktake', 'foodcost', 'settings'];
+const ALL = ['home', 'bookings', 'orders', 'suppliers', 'recipes', 'labels', 'calculator', 'pastries', 'stocktake', 'foodcost', 'settings'];
 const ids = (location: Record<string, unknown> | null, canManage: boolean, role: string = canManage ? 'owner' : 'staff') =>
   [...visibleSectionIds(location, canManage, role)].sort();
 const sorted = (list: string[]) => [...list].sort();
@@ -12,9 +12,9 @@ describe('visibleSectionIds', () => {
   });
 
   it('shows an employee the everyday sections, not the money ones, when the venue has said nothing', () => {
-    expect(ids(null, false)).toEqual(sorted(['home', 'orders', 'suppliers', 'recipes', 'labels', 'calculator', 'pastries', 'settings']));
+    expect(ids(null, false)).toEqual(sorted(['home', 'bookings', 'orders', 'suppliers', 'recipes', 'labels', 'calculator', 'pastries', 'settings']));
     expect(ids({ name: 'A place' }, false)).toEqual(
-      sorted(['home', 'orders', 'suppliers', 'recipes', 'labels', 'calculator', 'pastries', 'settings']),
+      sorted(['home', 'bookings', 'orders', 'suppliers', 'recipes', 'labels', 'calculator', 'pastries', 'settings']),
     );
   });
 
@@ -67,9 +67,12 @@ describe('visibleSectionIds', () => {
   });
 
   it('shows a restaurant that bought only Orders: Home, Orders, Suppliers and Settings', () => {
-    const restaurant = { sections: { calculator: false, catalogue: false, pastries: false, foodcost: false } };
+    const restaurant = { sections: { calculator: false, catalogue: false, pastries: false, foodcost: false, bookings: false } };
     expect(ids(restaurant, true)).toEqual(sorted(['home', 'orders', 'suppliers', 'settings']));
     expect(ids(restaurant, false)).toEqual(sorted(['home', 'orders', 'suppliers', 'settings']));
+    // Bookings (Mise 2 only, 18 Nov 2026) are on wherever the venue did not say `bookings: false`, as the rules read it.
+    const { bookings: _off, ...older } = restaurant.sections;
+    expect(ids({ sections: older }, true)).toEqual(sorted(['home', 'bookings', 'orders', 'suppliers', 'settings']));
   });
 
   // Straight from production (30 July 2026): the field names were saved with a stray space.
@@ -77,7 +80,8 @@ describe('visibleSectionIds', () => {
     const restaurant = {
       'sections ': { orders: true, 'calculator ': false, catalogue: false, 'pastries ': false, foodcost: false },
     };
-    expect(ids(restaurant, true)).toEqual(sorted(['home', 'orders', 'suppliers', 'settings']));
+    // The production document predates Bookings, so they are on for it (only an explicit false switches them off).
+    expect(ids(restaurant, true)).toEqual(sorted(['home', 'bookings', 'orders', 'suppliers', 'settings']));
   });
 
   it('shows Home to everybody: an employee, a manager and a venue that bought nothing', () => {
@@ -88,7 +92,7 @@ describe('visibleSectionIds', () => {
   });
 
   it('never hides Home or Settings', () => {
-    const nothing = { sections: { orders: false, calculator: false, catalogue: false, pastries: false, foodcost: false } };
+    const nothing = { sections: { orders: false, calculator: false, catalogue: false, pastries: false, foodcost: false, bookings: false } };
     expect(ids(nothing, true)).toEqual(['home', 'settings']);
     expect(ids(nothing, false)).toEqual(['home', 'settings']);
   });
@@ -102,8 +106,9 @@ describe('visibleSectionIds', () => {
 // an owner: a call without it would show the sales owner the kitchen and the kitchen owner the prices.
 describe('visibleSectionIds for the partial owners', () => {
   it('shows the sales owner Home, Clients, Food cost and Settings, and nothing of the kitchen', () => {
-    expect(ids({}, true, 'owner-sales')).toEqual(sorted(['home', 'clients', 'foodcost', 'settings']));
-    expect(ids(null, true, 'owner-sales')).toEqual(sorted(['home', 'clients', 'foodcost', 'settings']));
+    // Bookings (customers at the counter) are the sales side's (18 Nov 2026).
+    expect(ids({}, true, 'owner-sales')).toEqual(sorted(['home', 'bookings', 'clients', 'foodcost', 'settings']));
+    expect(ids(null, true, 'owner-sales')).toEqual(sorted(['home', 'bookings', 'clients', 'foodcost', 'settings']));
   });
 
   it('shows the kitchen owner everything but Food cost, Stocktake kept', () => {
@@ -112,7 +117,8 @@ describe('visibleSectionIds for the partial owners', () => {
   });
 
   it('never shows a partial owner what the venue switched off', () => {
-    expect(ids({ sections: { foodcost: false } }, true, 'owner-sales')).toEqual(['clients', 'home', 'settings']);
+    expect(ids({ sections: { foodcost: false } }, true, 'owner-sales')).toEqual(['bookings', 'clients', 'home', 'settings']);
+    expect(ids({ sections: { foodcost: false, bookings: false } }, true, 'owner-sales')).toEqual(['clients', 'home', 'settings']);
     expect(ids({ sections: { orders: false } }, true, 'owner-kitchen')).not.toContain('orders');
   });
 

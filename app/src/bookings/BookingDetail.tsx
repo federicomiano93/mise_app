@@ -1,0 +1,233 @@
+import { useEffect, useId, useRef } from 'react';
+import { Pencil, Printer, Trash2 } from 'lucide-react';
+import { Link, useLocation, useNavigate } from 'react-router';
+import { formatMoney } from '@mise/shared/price-model';
+import { useT } from '../i18n/useT';
+import { useMoney } from '../session/useMoney';
+import { useSession } from '../session/SessionContext';
+import { Button } from '../ui/Button';
+import { FormBar } from '../ui/FormBar';
+import { useStatusMessage } from '../ui/StatusMessage';
+import { useConfirm } from '../ui/useConfirm';
+import { BOOKING_STATUSES, toPay } from './bookingModel';
+import type { Booking, BookingStatus } from './bookingModel';
+import { CustomerSlip, LabSlip } from './BookingSlips';
+import type { SlipWords } from './BookingSlips';
+import { qtyText, slipLocale, slipUnitWord, spellDate } from './bookingWords';
+import { useBookings, useBookingsStore } from './BookingsContext';
+import { STATUS_WORD } from './BookingsList';
+import { cameFromList } from './bookingsNav';
+import { BOOKINGS_PATH, editBookingPath } from './bookingsPath';
+import { printSlip } from './slipHost';
+import styles from './BookingDetail.module.css';
+
+// One booking (18 Nov 2026): its status (a tap saves it), when, who, what, the money, the two slips and the bin.
+//
+// ⚠️ THE BIN IS ALSO HOW A CUSTOMER'S «DELETE MY DATA» IS HONOURED: the booking goes for good, with the name, phone and address.
+export function BookingDetail({ id }: { id: string }) {
+  const { t } = useT();
+  const { status, items } = useBookings();
+  const booking = items.find(item => item.id === id) ?? null;
+  const navigate = useNavigate();
+  const { state } = useLocation();
+  // A booking opened from the list goes back by the browser's Back (the list is the entry behind it); opened by its address it
+  // replaces itself with the list.
+  const back = () => {
+    if (cameFromList(state)) void navigate(-1);
+    else void navigate(BOOKINGS_PATH, { replace: true });
+  };
+
+  if (booking === null) {
+    return (
+      <section className={styles.card} aria-busy={status === 'loading'}>
+        <FormBar backLabel={t('ui.back')} onBack={back} title={t('section.bookings')} />
+        <div className={styles.body}>
+          {status === 'loading' ? <p className={styles.muted}>{t('bookings.loading')}</p> : (
+            <>
+              <p>{t('bookings.notFound')}</p>
+              <Link to={BOOKINGS_PATH} replace className={styles.link}>{t('bookings.backToList')}</Link>
+            </>
+          )}
+        </div>
+      </section>
+    );
+  }
+  return <Shown booking={booking} onBack={back} />;
+}
+
+function Shown({ booking, onBack }: { booking: Booking; onBack: () => void }) {
+  const { t, locale } = useT();
+  const store = useBookingsStore();
+  const navigate = useNavigate();
+  const say = useStatusMessage();
+  const money = useMoney();
+  const { location, name: venueName } = useSession();
+  const [confirm, confirmDialog] = useConfirm();
+  const ids = useId();
+  const number = t('bookings.number', { n: booking.number });
+  const title = useRef<HTMLHeadingElement>(null);
+  const { state } = useLocation();
+  // Opened from the list, the page leaves the focus alone: it goes to this booking's title, so its name is what is heard.
+  useEffect(() => {
+    if (cameFromList(state)) title.current?.focus();
+  }, []);
+
+  const unitWord = (unit: 'pcs' | 'kg') => t(unit === 'kg' ? 'bookings.unit.kg' : 'bookings.unit.pcs');
+  const modeWord = t(booking.mode === 'delivery' ? 'bookings.mode.delivery' : 'bookings.mode.pickup');
+  const due = toPay(booking.total, booking.deposit);
+
+  async function changeStatus(next: BookingStatus) {
+    if (next === booking.status) return;
+    if (next === 'cancelled') {
+      const ok = await confirm({
+        title: t('bookings.cancel.title'),
+        message: t('bookings.cancel.body'),
+        okLabel: t('bookings.cancel.ok'),
+        cancelLabel: t('bookings.cancel.keep'),
+        danger: true,
+      });
+      if (!ok) return;
+    }
+    store.setStatus(booking.id, next);
+    say(t('bookings.statusSaved', { status: t(STATUS_WORD[next]) }));
+  }
+
+  async function remove() {
+    const ok = await confirm({
+      title: t('bookings.delete.title'),
+      message: t('bookings.delete.body', { name: booking.customerName }),
+      okLabel: t('ui.delete'),
+      cancelLabel: t('common.cancel'),
+      danger: true,
+    });
+    if (!ok) return;
+    store.remove(booking.id);
+    say(t('bookings.deleted'));
+    void navigate(BOOKINGS_PATH, { replace: true });
+  }
+
+  // ⚠️ READ WHILE PRINTING, never at module load: the slip's unit word and its numbers follow the venue's country.
+  function print(kind: 'lab' | 'customer') {
+    const words: SlipWords = {
+      number,
+      mode: modeWord,
+      labTitle: t('bookings.slip.labTitle'),
+      notes: t('bookings.slip.notes'),
+      total: t('bookings.slip.total'),
+      deposit: t('bookings.slip.deposit'),
+      toPay: t('bookings.slip.toPay'),
+      privacy: t('bookings.slip.privacy'),
+    };
+    const paperLocale = slipLocale(location, locale);
+    const paperUnit = slipUnitWord(location);
+    printSlip(kind === 'lab'
+      ? <LabSlip booking={booking} words={words} locale={paperLocale} unitWord={paperUnit} />
+      : <CustomerSlip booking={booking} words={words} locale={paperLocale} unitWord={paperUnit} venueName={venueName ?? ''} money={money} />);
+  }
+
+  return (
+    <section className={styles.card} aria-labelledby={`${ids}-title`}>
+      <FormBar
+        backLabel={t('ui.back')}
+        onBack={onBack}
+        title={t('bookings.detail.title', { number })}
+        titleId={`${ids}-title`}
+        titleRef={title}
+        action={(
+          <Button variant="primary" className={styles.edit} onPress={() => { void navigate(editBookingPath(booking.id)); }}>
+            <Pencil aria-hidden="true" />
+            <span>{t('ui.edit')}</span>
+          </Button>
+        )}
+      />
+      <div className={styles.body}>
+        <div role="group" aria-label={t('bookings.status.label')} className={styles.statuses}>
+          {BOOKING_STATUSES.map(value => (
+            <button
+              key={value}
+              type="button"
+              className={styles.statusChoice}
+              data-status={value}
+              aria-pressed={booking.status === value}
+              onClick={() => { void changeStatus(value); }}
+            >
+              {t(STATUS_WORD[value])}
+            </button>
+          ))}
+        </div>
+
+        <dl className={styles.facts}>
+          <div className={styles.fact}>
+            <dt>{t('bookings.detail.when')}</dt>
+            <dd>
+              <span className={styles.when}>{spellDate(booking.date, locale)} · {booking.time}</span>
+              <span className={styles.mode} data-mode={booking.mode}>{modeWord}</span>
+            </dd>
+          </div>
+          <div className={styles.fact}>
+            <dt>{t('bookings.detail.customer')}</dt>
+            <dd>
+              <span className={styles.strong}>{booking.customerName}</span>
+              <a className={styles.link} href={`tel:${booking.phone.replace(/\s+/g, '')}`} aria-label={t('bookings.detail.call', { phone: booking.phone })}>
+                {booking.phone}
+              </a>
+              {booking.mode === 'delivery' && booking.address !== '' ? <span>{booking.address}</span> : null}
+            </dd>
+          </div>
+          <div className={styles.fact}>
+            <dt>{t('bookings.detail.items')}</dt>
+            <dd>
+              <ul className={styles.lines}>
+                {booking.lines.map((line, index) => (
+                  <li key={index} className={styles.line}>
+                    <span className={styles.qty}>{qtyText(line.qty, line.unit, locale, unitWord)}</span>
+                    <span>
+                      <span className={styles.strong}>{line.name}</span>
+                      {line.note !== '' ? <span className={styles.lineNote}>{line.note}</span> : null}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </dd>
+          </div>
+          {booking.notes !== '' ? (
+            <div className={styles.fact}>
+              <dt>{t('bookings.detail.notes')}</dt>
+              <dd className={styles.notes}>{booking.notes}</dd>
+            </div>
+          ) : null}
+          {booking.total !== null || booking.deposit !== null ? (
+            <div className={styles.fact}>
+              <dt>{t('bookings.detail.money')}</dt>
+              <dd>
+                <dl className={styles.money}>
+                  {booking.total !== null ? <><dt>{t('bookings.slip.total')}</dt><dd>{formatMoney(booking.total, money)}</dd></> : null}
+                  {booking.deposit !== null ? <><dt>{t('bookings.slip.deposit')}</dt><dd>{formatMoney(booking.deposit, money)}</dd></> : null}
+                  {due !== null ? <><dt className={styles.due}>{t('bookings.slip.toPay')}</dt><dd className={styles.due}>{formatMoney(due, money)}</dd></> : null}
+                </dl>
+              </dd>
+            </div>
+          ) : null}
+        </dl>
+
+        <div className={styles.prints} role="group" aria-label={t('bookings.detail.print')}>
+          <Button variant="secondary" className={styles.print} onPress={() => { print('lab'); }}>
+            <Printer aria-hidden="true" />
+            <span>{t('bookings.print.lab')}</span>
+          </Button>
+          <Button variant="secondary" className={styles.print} onPress={() => { print('customer'); }}>
+            <Printer aria-hidden="true" />
+            <span>{t('bookings.print.customer')}</span>
+          </Button>
+        </div>
+
+        <div className={styles.foot}>
+          <Button variant="bare" className={styles.delete} aria-label={t('bookings.delete')} onPress={() => { void remove(); }}>
+            <Trash2 aria-hidden="true" />
+          </Button>
+        </div>
+      </div>
+      {confirmDialog}
+    </section>
+  );
+}

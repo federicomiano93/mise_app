@@ -107,12 +107,13 @@
 
 /* ⚠️ A SHORT WINDOW GETS SHORTER ITEMS, NOT A SCROLLING RAIL. The lab tablet in landscape shows 648px under Chrome's
    bars, and the rail at 64px an item needed 700: the account at its foot was cut and the rail grew a scrollbar
-   (driven 13 Oct 2026). An owner sees TEN items. With the bigger icon and label (16 Nov 2026) an item's content is
-   27 + gap + 15.5 + padding, so each step shrinks the padding with the height: up to 835px of height 56px an item (the
-   rail needs 756), up to 755px 52px without the brand letter at the top, which is only decoration (it needs 656), and
-   up to 675px 51px (it needs 646 — the lab tablet's 648 fits, Settings and the account included). The items never go
-   below the 48px touch target. railHeight.spec.ts adds it up. */
-@media (max-height: 835px) {
+   (driven 13 Oct 2026). Since «Bookings» (18 Nov 2026) an owner sees ELEVEN items. With the bigger icon and label (16 Nov
+   2026) an item's content is 27 + gap + 15.5 + padding, so each step shrinks the padding with the height: up to 903px of
+   height 56px an item (the rail needs 816), up to 815px 52px without the brand letter at the top, which is only
+   decoration (it needs 712), and up to 715px 49px with the rail's own padding and gaps tightened (it needs 637 — the lab
+   tablet's 648 fits, Settings and the account included). The items never go below the 48px touch target.
+   railHeight.spec.ts adds it up. */
+@media (max-height: 903px) {
   .railItem {
     min-height: 56px;
     padding: 4px 0;
@@ -120,7 +121,7 @@
   }
 }
 
-@media (max-height: 755px) {
+@media (max-height: 815px) {
   .railItem {
     min-height: 52px;
     padding: 3px 0;
@@ -132,9 +133,21 @@
   }
 }
 
-@media (max-height: 675px) {
+@media (max-height: 715px) {
+  .rail {
+    gap: 2px;
+    padding-top: var(--s2);
+    padding-bottom: var(--s2);
+  }
+
+  .railNav {
+    gap: 2px;
+  }
+
   .railItem {
-    min-height: 51px;
+    min-height: 49px;
+    padding: 2px 0;
+    gap: 1px;
   }
 }
 
