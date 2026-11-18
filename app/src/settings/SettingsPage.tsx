@@ -9,6 +9,7 @@ import { SwitchVenueButton } from '../session/SwitchVenueButton';
 import { Page } from '../shell/Page';
 import { StatusMessageProvider } from '../ui/StatusMessage';
 import { AwayRow } from './AwayRow';
+import { DeviceCard } from './DeviceCard';
 import { SettingsRow } from './SettingsRow';
 import { FROM_SETTINGS, isHandBack, usePendingDoor } from './settingsHandBack';
 import { LANGUAGE_PATH, PEOPLE_PATH, SECTIONS_PATH } from './settingsPath';
@@ -29,8 +30,9 @@ function Card({ title, children }: { title: string; children: ReactNode }) {
 //   You        — the holiday (everybody);
 //   The venue  — the app language and the sections for employees (an owner, a manager or a head chef — `canManageVenue`, which a partial owner does not have),
 //                and «Who can get in» (the full owner only — `isOwner`);
-//   Account    — who is signed in, which venue, the way to another.
-// There is no «This device» card yet: the app's version waits for the service worker (step 5) and the kiosk for its own slice.
+//   Account    — who is signed in, which venue, the way to another;
+//   This device — kiosk mode for this tablet or phone (everybody, an employee too: staff slice 5, DeviceCard). The app's version, the
+//                 current app's other row of that card, is not here yet.
 // The way out, «Log out», is a small quiet button at the far right of the title line (the owner's choice, 15 Oct 2026).
 //
 // ⚠️ NOTHING HERE IS A PERMISSION (P2): the venue's two rows are not drawn for an employee and their addresses send an employee back
@@ -96,6 +98,10 @@ export function SettingsPage() {
               </div>
             </div>
           </Card>
+
+          <PartBoundary>
+            <DeviceCard />
+          </PartBoundary>
         </div>
       </StatusMessageProvider>
     </Page>

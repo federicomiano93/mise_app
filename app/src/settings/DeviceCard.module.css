@@ -1,0 +1,121 @@
+/* «This device»: the card of Settings with kiosk mode — its title line («Saved ✓» at its end), the switch row, the two choices and
+   the note. The same frame as SettingsPage's other cards. */
+
+.card {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+/* The title on the left, «Saved ✓» on the right of the same line: it never moves a row. */
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s2);
+  padding: var(--s4) var(--s4) var(--s2);
+}
+
+.title {
+  font-size: var(--fs-lg);
+  font-weight: 650;
+}
+
+.saved {
+  color: var(--ok-ink);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+/* The switch row: the words on the left, the switch on the right, as tall as a thumb's target. */
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  min-height: var(--hit);
+  padding: var(--s3) var(--s4);
+  border-top: 1px solid var(--line);
+}
+
+.text {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--s1);
+  min-width: 0;
+}
+
+.rowTitle {
+  font-weight: 600;
+  overflow-wrap: break-word;
+}
+
+.sub {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  overflow-wrap: break-word;
+}
+
+.block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  padding: var(--s3) var(--s4);
+  border-top: 1px solid var(--line);
+}
+
+.label {
+  font-weight: 600;
+}
+
+/* The segments: one choice among four, side by side, wrapping rather than shrinking below a thumb's width (296px). */
+.segments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+}
+
+.segment {
+  flex: 1 1 auto;
+  min-width: var(--hit);
+  min-height: var(--hit);
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .segment:hover {
+    background: var(--sunken);
+  }
+}
+
+/* The chosen one is told apart by colour AND by the frame (and by aria-checked for a screen reader). */
+.segment[data-selected="true"] {
+  border-color: var(--accent);
+  background: var(--accent-tint);
+  box-shadow: inset 0 0 0 1px var(--accent);
+  color: var(--accent-ink);
+}
+
+.segment[data-focus-visible="true"] {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.note {
+  padding: var(--s3) var(--s4) var(--s4);
+  border-top: 1px solid var(--line);
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  overflow-wrap: break-word;
+}
