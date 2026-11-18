@@ -114,7 +114,7 @@ export function fakeBookingsSource(
       });
       return () => { settingsWatchers.delete(onChange); };
     }),
-    saveSettings: vi.fn(async (value: BookingSettings) => {
+    saveSettings: vi.fn(async (value: BookingSettings, _previous: BookingSettings) => {
       if (refuseSettingsWith !== null) throw refuseSettingsWith as Error;
       source.settings = value;
       tellSettings();

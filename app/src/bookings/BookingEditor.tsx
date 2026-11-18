@@ -357,7 +357,8 @@ function EditorForm({ id, booking, refused, settings }: FormProps) {
           ) : null}
           {/* A venue that takes one mode only has nothing to choose: the line under the day and time says which. An old booking in the
               other mode keeps the choice, so it is seen and can be put right. */}
-          {only === null || draft.mode !== only ? (
+          {/* ⚠️ DECIDED ON THE COPY AS IT OPENED, never on the typing: a tap on the venue's mode must not take the choice away. */}
+          {only === null || initial.mode !== only ? (
             <ModeChoice
               id={domId('mode')}
               value={draft.mode}
@@ -412,7 +413,7 @@ function EditorForm({ id, booking, refused, settings }: FormProps) {
               />
             )}
           </div>
-          {only !== null && draft.mode === only ? (
+          {only !== null && initial.mode === only ? (
             <p className={styles.onlyMode}>{t(only === 'delivery' ? 'bookings.form.onlyDelivery' : 'bookings.form.onlyPickup')}</p>
           ) : null}
         </fieldset>
@@ -617,8 +618,9 @@ function SlotField({ id, draft, slots, rules, error, onChange }: {
   const { t } = useT();
   const chosen = chosenSlot(draft, slots);
   const keptValue = rules.editing === null ? null : `kept:${rules.editing.time}-${rules.editing.slotEnd}`;
-  // The stored time, when it is on none of the venue's slots.
-  const keptOff = rules.editing !== null && chosenSlot(rules.editing, slots) === null;
+  // The stored time, when it is on none of the venue's slots — offered on its own day only: moved to another day, a booking takes
+  // a slot like any other.
+  const keptOff = rules.editing !== null && chosenSlot(rules.editing, slots) === null && rules.editing.date === draft.date;
   const value = chosen !== null ? slotValue(chosen) : keptOff && keepsStoredTime(draft, rules.editing) && keptValue !== null ? keptValue : '';
   const editingId = rules.editing?.id ?? null;
   return (

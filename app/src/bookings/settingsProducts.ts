@@ -60,11 +60,20 @@ export function choicesFrom(published: PriceList): ReadonlyMap<string, ProductCh
 
 export const choiceOf = (choices: ReadonlyMap<string, ProductChoice>, id: string): ProductChoice => choices.get(id) ?? NO_CHOICE;
 
-// The ingredients a customer may leave out: what was chosen, else the recipe's (pre-filled; the owner unticks the basic ones),
-// else not chosen at all.
-export function removableOf(choice: ProductChoice, row: ProductRow): readonly string[] | null {
-  if (choice.removable !== null) return choice.removable;
-  return row.prefill.length > 0 ? row.prefill : null;
+// The ingredients a customer may leave out, as the dialog opens on them: what was chosen, else the recipe's (pre-filled: the
+// owner unticks the basic ones).
+export function removableOf(choice: ProductChoice, row: ProductRow): readonly string[] {
+  return choice.removable ?? row.prefill;
+}
+
+// A product ticked for the counter: its «Si può togliere» is PRE-FILLED from its recipe at that moment, as a visible change the
+// owner sees and can untick before saving. ⚠️ NEVER SILENTLY AT SAVE (review, 18 Nov 2026): a product published before, never
+// opened in the dialog, keeps «not chosen» — a Save that only switched off the phone must not publish «without flour, water, salt»
+// for every product. With no recipe (or the recipes not read yet) nothing is pre-filled.
+export function tickChoice(choice: ProductChoice, row: ProductRow, ticked: boolean): ProductChoice {
+  if (!ticked) return { ...choice, ticked: false };
+  const removable = choice.removable ?? (row.prefill.length > 0 ? row.prefill : null);
+  return { ...choice, ticked: true, removable };
 }
 
 // The items a Save publishes: the ticked products, at Food cost's name and price NOW, with what was chosen for each.
@@ -79,7 +88,8 @@ export function itemsToPublish(rows: readonly ProductRow[], choices: ReadonlyMap
         perPiece: choice.perPiece,
         // Weights only for a product sold by the kilo: a piece or a pack has none to offer.
         weights: row.item.per === 'kg' ? choice.weights : [],
-        removable: removableOf(choice, row),
+        // Only what was chosen: never the recipe's pre-fill unless it became a choice (tickChoice, the dialog's «Fatto»).
+        removable: choice.removable,
       };
     });
 }

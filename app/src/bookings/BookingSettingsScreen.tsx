@@ -227,7 +227,7 @@ function SettingsForm({ initial, data }: { initial: BookingSettings; data: Produ
     }
     // Never awaited (local-first): Firestore shows the new settings at once and sends them when it can; only a refusal is said.
     if (!sameSettings(initial, effective)) {
-      services.bookings(locationId).saveSettings(effective).catch((err: unknown) => {
+      services.bookings(locationId).saveSettings(effective, initial).catch((err: unknown) => {
         console.error('Saving the bookings settings failed:', err);
         say(t('bookings.settings.notSaved'), 5000);
       });

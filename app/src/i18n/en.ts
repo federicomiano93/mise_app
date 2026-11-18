@@ -3368,6 +3368,7 @@ export const en = {
   'bookings.settings.done': 'Done',
   'bookings.settings.removeChip': 'Remove {name}',
   'bookings.settings.removableLine': 'Can be left out: {list}',
+  'bookings.settings.removableUnchosen': 'Choose what can be left out',
   'bookings.settings.removableNone': 'Nothing can be left out',
   'bookings.settings.removableTitle': 'What can be left out of {name}',
   'bookings.settings.removableHint': 'Untick the basic ones (flour, water, salt).',

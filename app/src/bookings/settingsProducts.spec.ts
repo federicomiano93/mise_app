@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { readPriceList } from '@mise/shared/price-list';
 import {
   NO_CHOICE, changesSincePublish, choiceOf, choicesFrom, itemsToPublish, productRows, publishDiffers, removableOf, sameChoices,
+  tickChoice,
 } from './settingsProducts';
 
 // The «Prodotti» group of the bookings settings: Food cost's products → the working copy → the published list.
@@ -43,12 +44,23 @@ describe('the working copy and what is published', () => {
     expect(publishDiffers(itemsToPublish(rows, choicesFrom(published)), published)).toBe(false);
   });
 
-  it('⚠️ removable never chosen is pre-filled from the recipe; a product with no recipe stays unchosen', () => {
-    const choices = new Map([['p1', { ...NO_CHOICE, ticked: true }], ['p2', { ...NO_CHOICE, ticked: true }]]);
-    const items = itemsToPublish(rows, choices);
-    expect(items.find(i => i.productId === 'p1')?.removable).toEqual(['Farina', 'Cipolla', 'Acciughe']);
-    expect(items.find(i => i.productId === 'p2')?.removable).toBeNull();
-    // Once the owner unticks them all, nothing is pre-filled again.
+  it('ticking a product pre-fills «can be left out» from its recipe, as a choice; no recipe, nothing', () => {
+    const pizza = rows[1]!;
+    const cornetto = rows[0]!;
+    expect(tickChoice(NO_CHOICE, pizza, true)).toEqual({ ...NO_CHOICE, ticked: true, removable: ['Farina', 'Cipolla', 'Acciughe'] });
+    expect(tickChoice(NO_CHOICE, cornetto, true)).toEqual({ ...NO_CHOICE, ticked: true, removable: null });
+    // A choice already made is kept, ticked again or not.
+    expect(tickChoice({ ...NO_CHOICE, removable: ['Cipolla'] }, pizza, true).removable).toEqual(['Cipolla']);
+    expect(tickChoice({ ...NO_CHOICE, ticked: true, removable: ['Cipolla'] }, pizza, false)).toMatchObject({ ticked: false, removable: ['Cipolla'] });
+  });
+
+  it('⚠️ a product never chosen is never published with the recipe\'s list by a Save that changed something else', () => {
+    const choices = new Map([['p1', { ...NO_CHOICE, ticked: true }]]);
+    expect(itemsToPublish(rows, choices)[0]?.removable).toBeNull();
+    const step2 = readPriceList({ items: [{ productId: 'p1', name: 'Pizza di cipolla', price: 16, per: 'kg' }] });
+    expect(publishDiffers(itemsToPublish(rows, choicesFrom(step2)), step2)).toBe(false);
+    // The dialog opens on the recipe's ingredients until something is chosen; once chosen, never again.
+    expect(removableOf(NO_CHOICE, rows[1]!)).toEqual(['Farina', 'Cipolla', 'Acciughe']);
     expect(removableOf({ ...NO_CHOICE, removable: [] }, rows[1]!)).toEqual([]);
   });
 

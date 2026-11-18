@@ -121,6 +121,18 @@ export function settingsToStore(settings: BookingSettings): { fields: Record<str
   return { fields, cleared };
 }
 
+// Only what a Save CHANGED, from the settings the screen opened on to the ones saved (review, 18 Nov 2026): with merge, a setting
+// another device changed meanwhile and this screen did not touch is left as that device saved it.
+export function settingsChanges(previous: BookingSettings, next: BookingSettings): { fields: Record<string, unknown>; cleared: string[] } {
+  const before = settingsToStore(previous);
+  const after = settingsToStore(next);
+  const fields: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(after.fields)) {
+    if (JSON.stringify(before.fields[key]) !== JSON.stringify(value)) fields[key] = value;
+  }
+  return { fields, cleared: after.cleared.filter(key => !before.cleared.includes(key)) };
+}
+
 // Whether two settings say the same (what «unsaved changes» compares).
 export function sameSettings(a: BookingSettings, b: BookingSettings): boolean {
   return a.askPhone === b.askPhone && a.whatsappReminder === b.whatsappReminder && a.modes === b.modes

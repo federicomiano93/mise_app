@@ -10,7 +10,7 @@ import { Dialog } from '../ui/Dialog';
 import { SettingSwitch } from '../ui/SettingSwitch';
 import { MAX_EXTRAS, MAX_EXTRA_LENGTH, cleanExtras } from './bookingSettings';
 import { useHelp } from './SettingHelp';
-import { choiceOf, removableOf } from './settingsProducts';
+import { choiceOf, removableOf, tickChoice } from './settingsProducts';
 import type { ProductChoice, ProductDoc, ProductRow } from './settingsProducts';
 import styles from './SettingsProductsGroup.module.css';
 
@@ -93,6 +93,11 @@ export function ProductsGroup({ data, rows, unpriced, choices, onChoices, perPie
                     choice={choiceOf(choices, row.item.productId)}
                     perPieceShown={perPieceShown}
                     onChange={patch => { change(row.item.productId, patch); }}
+                    onTick={ticked => {
+                      const next = new Map(choices);
+                      next.set(row.item.productId, tickChoice(choiceOf(choices, row.item.productId), row, ticked));
+                      onChoices(next);
+                    }}
                     onWeights={() => { setDialog({ kind: 'weights', row }); }}
                     onRemovable={() => { setDialog({ kind: 'removable', row }); }}
                   />
@@ -118,7 +123,7 @@ export function ProductsGroup({ data, rows, unpriced, choices, onChoices, perPie
         <RemovableDialog
           name={dialog.row.item.name}
           prefill={dialog.row.prefill}
-          chosen={removableOf(choiceOf(choices, dialog.row.item.productId), dialog.row) ?? []}
+          chosen={removableOf(choiceOf(choices, dialog.row.item.productId), dialog.row)}
           onDone={removable => { change(dialog.row.item.productId, { removable }); setDialog(null); }}
           onCancel={() => { setDialog(null); }}
         />
@@ -139,11 +144,12 @@ function usePriceWords(): (item: PriceItem) => string {
   };
 }
 
-function ProductCard({ row, choice, perPieceShown, onChange, onWeights, onRemovable }: {
+function ProductCard({ row, choice, perPieceShown, onChange, onTick, onWeights, onRemovable }: {
   row: ProductRow;
   choice: ProductChoice;
   perPieceShown: boolean;
   onChange: (patch: Partial<ProductChoice>) => void;
+  onTick: (ticked: boolean) => void;
   onWeights: () => void;
   onRemovable: () => void;
 }) {
@@ -151,7 +157,8 @@ function ProductCard({ row, choice, perPieceShown, onChange, onWeights, onRemova
   const priceWords = usePriceWords();
   const ids = useId();
   const { item } = row;
-  const removable = removableOf(choice, row);
+  // Only what was chosen is said: a product never opened in the dialog says so, and the dialog offers the recipe's ingredients.
+  const removable = choice.removable;
   const weightsText = choice.weights.map(kg => formatWeight(kg, locale)).join(' · ');
   return (
     <div className={styles.card} data-checked={choice.ticked ? 'true' : undefined}>
@@ -161,7 +168,7 @@ function ProductCard({ row, choice, perPieceShown, onChange, onWeights, onRemova
           className={styles.check}
           checked={choice.ticked}
           aria-describedby={`${ids}-price`}
-          onChange={event => { onChange({ ticked: event.currentTarget.checked }); }}
+          onChange={event => { onTick(event.currentTarget.checked); }}
         />
         <span className={styles.productName}>{item.name}</span>
       </label>
@@ -201,9 +208,11 @@ function ProductCard({ row, choice, perPieceShown, onChange, onWeights, onRemova
           <Button variant="bare" className={styles.editLine} onPress={onRemovable}>
             <Pencil aria-hidden="true" />
             <span>
-              {removable === null || removable.length === 0
-                ? t('bookings.settings.removableNone')
-                : t('bookings.settings.removableLine', { list: removable.join(', ') })}
+              {removable === null
+                ? t('bookings.settings.removableUnchosen')
+                : removable.length === 0
+                  ? t('bookings.settings.removableNone')
+                  : t('bookings.settings.removableLine', { list: removable.join(', ') })}
             </span>
           </Button>
         ) : null}
@@ -249,7 +258,7 @@ function ReadOnlyProducts({ published }: { published: PriceList | null }) {
   );
 }
 
-// A chip with its ×.
+// A chip with its ×. ⚠️ The caller moves the focus before the chip goes (to the add field), or it would fall to the page.
 function Chip({ text, removeLabel, onRemove }: { text: string; removeLabel: string; onRemove: () => void }) {
   return (
     <li className={styles.chip}>
@@ -294,7 +303,7 @@ function WeightsDialog({ name, weights, onDone, onCancel }: {
         <ul className={styles.chips}>
           {list.map(kg => {
             const text = formatWeight(kg, locale);
-            return <Chip key={kg} text={text} removeLabel={t('bookings.settings.removeChip', { name: text })} onRemove={() => { setList(list.filter(x => x !== kg)); }} />;
+            return <Chip key={kg} text={text} removeLabel={t('bookings.settings.removeChip', { name: text })} onRemove={() => { document.getElementById(`${ids}-weight`)?.focus(); setList(list.filter(x => x !== kg)); }} />;
           })}
         </ul>
       )}
@@ -402,7 +411,7 @@ function ExtrasEditor({ extras, onExtras }: { extras: readonly string[]; onExtra
       {extras.length > 0 ? (
         <ul className={styles.chips} aria-labelledby={`${ids}-title`}>
           {extras.map(word => (
-            <Chip key={word} text={word} removeLabel={t('bookings.settings.removeChip', { name: word })} onRemove={() => { onExtras(extras.filter(e => e !== word)); }} />
+            <Chip key={word} text={word} removeLabel={t('bookings.settings.removeChip', { name: word })} onRemove={() => { document.getElementById(`${ids}-extra`)?.focus(); onExtras(extras.filter(e => e !== word)); }} />
           ))}
         </ul>
       ) : null}

@@ -184,7 +184,7 @@ describe('the products', () => {
     expect(within(weights).getByText('A weight from 1 g to 50 kg, like 800 g or 1.5 kg.')).toBeInTheDocument();
     await user.click(within(weights).getByRole('button', { name: 'Done' }));
     expect(screen.getByRole('button', { name: 'Weights: 800 g · 1.5 kg' })).toBeInTheDocument();
-    // Removable: pre-filled from the recipe; the basic one unticked.
+    // Removable: pre-filled from the recipe when it was ticked; the basic one unticked.
     await user.click(screen.getByRole('button', { name: 'Can be left out: Farina, Cipolla, Acciughe' }));
     const removable = await screen.findByRole('dialog', { name: 'What can be left out of Pizza di cipolla' });
     await user.click(within(removable).getByRole('checkbox', { name: 'Farina' }));
@@ -210,6 +210,17 @@ describe('the products', () => {
     await user.click(screen.getByRole('switch', { name: 'Slips per piece' }));
     expect(screen.queryByRole('switch', { name: 'Ask per piece: Cornetto' })).toBeNull();
     expect(screen.queryByText('Ask per piece')).toBeNull();
+  });
+
+  it('⚠️ a Save that changed only a setting publishes nothing: no recipe list slipped into a product never chosen', async () => {
+    const { user, foodcost, bookings } = show({ priceList: { items: [{ productId: 'pPizza', name: 'Pizza di cipolla', price: 16, per: 'kg' }] } });
+    await opened();
+    expect(screen.getByRole('button', { name: 'Choose what can be left out' })).toBeInTheDocument();
+    await user.click(screen.getByRole('switch', { name: 'Ask for the phone number' }));
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await user.click(within(await question('Save the settings?')).getByRole('button', { name: 'Save' }));
+    await waitFor(() => { expect(bookings.saveSettings).toHaveBeenCalledTimes(1); });
+    expect(foodcost.publishPriceList).not.toHaveBeenCalled();
   });
 
   it('says when a price changed in Food cost since the last publish', async () => {
@@ -242,6 +253,8 @@ describe('the products', () => {
     await user.type(screen.getByRole('textbox', { name: 'New extra' }), 'Scritta');
     await user.click(screen.getAllByRole('button', { name: 'Add' }).at(-1) as HTMLElement);
     await user.click(screen.getByRole('button', { name: 'Remove Candeline' }));
+    // The focus goes to the add field, never to the page.
+    expect(screen.getByRole('textbox', { name: 'New extra' })).toHaveFocus();
     await user.click(screen.getByRole('button', { name: 'Save' }));
     await user.click(within(await question('Save the settings?')).getByRole('button', { name: 'Save' }));
     await waitFor(() => { expect(bookings.saveSettings).toHaveBeenCalledTimes(1); });

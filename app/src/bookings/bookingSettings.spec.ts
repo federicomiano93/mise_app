@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_SETTINGS, HALF_HOURS, MAX_EXTRAS, cleanExtras, generateSlots, onlyMode, placesLeft, readSettings, reminderOn,
-  sameSettings, settingsToStore, slotFromValue, slotValue, slotsOf,
+  sameSettings, settingsChanges, settingsToStore, slotFromValue, slotValue, slotsOf,
 } from './bookingSettings';
 import type { BookingSettings } from './bookingSettings';
 import { bookingFixture } from '../testing/fakeBookingsSource';
@@ -175,5 +175,27 @@ describe('placesLeft', () => {
     const late = [bookingFixture({ id: 'z', date: DAY, time: '10:00' })];
     expect(placesLeft(late, { date: DAY, slot, limit: 1, editingId: null, chosen: false })).toBe(1);
     expect(placesLeft(late, { date: DAY, slot: { start: '10:00', end: '11:00' }, limit: 1, editingId: null, chosen: false })).toBe(0);
+  });
+});
+
+describe('settingsChanges: a Save writes only what it changed', () => {
+  it('one setting changed, one field written; another device\'s change to another field is left alone', () => {
+    expect(settingsChanges(DEFAULT_SETTINGS, { ...DEFAULT_SETTINGS, modes: 'pickup' })).toEqual({ fields: { modes: 'pickup' }, cleared: [] });
+  });
+
+  it('slots set, slots cleared', () => {
+    const slots = { ...DEFAULT_SETTINGS, slotFirst: '08:00', slotLast: '12:00', slotLimit: 4 };
+    expect(settingsChanges(DEFAULT_SETTINGS, slots)).toEqual({ fields: { slotFirst: '08:00', slotLast: '12:00', slotLimit: 4 }, cleared: [] });
+    expect(settingsChanges(slots, DEFAULT_SETTINGS)).toEqual({ fields: {}, cleared: ['slotFirst', 'slotLast', 'slotLimit'] });
+  });
+
+  it('the phone off takes the reminder with it', () => {
+    expect(settingsChanges(DEFAULT_SETTINGS, { ...DEFAULT_SETTINGS, askPhone: false })).toEqual({
+      fields: { askPhone: false, whatsappReminder: false }, cleared: [],
+    });
+  });
+
+  it('nothing changed, nothing written', () => {
+    expect(settingsChanges(DEFAULT_SETTINGS, DEFAULT_SETTINGS)).toEqual({ fields: {}, cleared: [] });
   });
 });

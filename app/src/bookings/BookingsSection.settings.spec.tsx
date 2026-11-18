@@ -172,3 +172,15 @@ describe('the day the list shows', () => {
     expect(screen.getByLabelText('Day')).toHaveValue('');
   });
 });
+
+describe('an old booking in the mode the venue no longer takes', () => {
+  it('keeps the choice on screen while it is changed: a mistaken tap can be put back', async () => {
+    const { user } = show('/bookings/D1/edit', { ...DEFAULT_SETTINGS, modes: 'pickup' },
+      [bookingFixture({ id: 'D1', date: TOMORROW, mode: 'delivery', address: 'Via Finta 1', number: 8 })]);
+    await screen.findByRole('radio', { name: 'Delivery' }, LOAD);
+    await user.click(screen.getByRole('radio', { name: 'Pickup' }));
+    expect(screen.getByRole('radio', { name: 'Pickup' })).toHaveFocus();
+    await user.click(screen.getByRole('radio', { name: 'Delivery' }));
+    expect(screen.getByLabelText('Delivery address')).toHaveValue('Via Finta 1');
+  });
+});

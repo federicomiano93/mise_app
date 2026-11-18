@@ -23,7 +23,7 @@ import { PRICE_LIST_DOC, readPriceList } from '@mise/shared/price-list';
 import type { PriceList } from '@mise/shared/price-list';
 import { readBooking } from './bookingModel';
 import type { Booking, BookingData, BookingStatus } from './bookingModel';
-import { readSettings, settingsToStore } from './bookingSettings';
+import { readSettings, settingsChanges } from './bookingSettings';
 import type { BookingSettings } from './bookingSettings';
 
 const BOOKINGS = 'bookings';
@@ -54,8 +54,9 @@ export interface BookingsSource {
     onChange: (settings: BookingSettings, meta: { readonly fromServer: boolean }) => void,
     onError: (err: unknown) => void,
   ): () => void;
-  // Saves the settings (merge; a cleared slot or limit is a deleted field). Settles when the server answers.
-  saveSettings(settings: BookingSettings): Promise<void>;
+  // Saves what changed from `previous` to `settings` (merge; a cleared slot or limit is a deleted field), so a setting another
+  // device changed meanwhile and this one did not touch is kept. Settles when the server answers.
+  saveSettings(settings: BookingSettings, previous: BookingSettings): Promise<void>;
   // A new booking. The id is made here, synchronously, so the caller knows it at once.
   create(data: BookingData): { readonly id: string; readonly written: Promise<void> };
   // Every key of an existing booking again (the editor's Save); `createdAt` is left as stored.
@@ -186,9 +187,9 @@ export function createFirestoreBookingsSource(firestore: () => Promise<Firestore
       };
     },
 
-    async saveSettings(settings) {
+    async saveSettings(settings, previous) {
       const { fs, db } = await firestore();
-      const { fields, cleared } = settingsToStore(settings);
+      const { fields, cleared } = settingsChanges(previous, settings);
       const write: Record<string, unknown> = { ...fields, bakery: locationId };
       for (const key of cleared) write[key] = fs.deleteField();
       await fs.setDoc(fs.doc(db, configPath, SETTINGS_DOC), write, { merge: true });

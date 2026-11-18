@@ -362,3 +362,14 @@ describe('firstProblem with the venue\'s settings', () => {
     expect(readBooking('A', base)?.phone).toBe('');
   });
 });
+
+describe('the kept exact time belongs to its own day', () => {
+  it('moved to another day, an old exact time must become a slot', () => {
+    const slots = [{ start: '09:00', end: '10:00' }];
+    const editing = { id: 'me', date: '2026-12-24', time: '09:40', slotEnd: '' };
+    const rules = { ...NO_FORM_RULES, slots, editing };
+    expect(firstProblem({ ...good, date: '2026-12-24', time: '09:40', slotEnd: '' }, { ...ctx, isNew: false, rules })).toBeNull();
+    expect(firstProblem({ ...good, date: '2026-12-23', time: '09:40', slotEnd: '' }, { ...ctx, isNew: false, rules }))
+      .toEqual({ field: 'time', reason: 'required' });
+  });
+});

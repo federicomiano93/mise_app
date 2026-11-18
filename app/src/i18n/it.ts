@@ -3132,6 +3132,7 @@ export const it: Messages = {
   'bookings.settings.done': 'Fatto',
   'bookings.settings.removeChip': 'Togli {name}',
   'bookings.settings.removableLine': 'Si può togliere: {list}',
+  'bookings.settings.removableUnchosen': 'Scegli cosa si può togliere',
   'bookings.settings.removableNone': 'Non si toglie niente',
   'bookings.settings.removableTitle': 'Cosa si può togliere da {name}',
   'bookings.settings.removableHint': 'Togli la spunta a quelli di base (farina, acqua, sale).',

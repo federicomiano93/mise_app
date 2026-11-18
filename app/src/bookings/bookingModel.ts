@@ -325,9 +325,9 @@ export function chosenSlot(draft: Pick<Draft, 'time' | 'slotEnd'>, slots: readon
   return slots.find(slot => slot.start === draft.time && slot.end === draft.slotEnd) ?? null;
 }
 
-// Whether the working copy still holds the edited booking's own time, as stored (kept even when it is on no slot).
-export function keepsStoredTime(draft: Pick<Draft, 'time' | 'slotEnd'>, editing: FormRules['editing']): boolean {
-  return editing !== null && draft.time === editing.time && draft.slotEnd === editing.slotEnd;
+// Whether the working copy still holds the edited booking's own day and time, as stored (kept even when it is on no slot).
+export function keepsStoredTime(draft: Pick<Draft, 'date' | 'time' | 'slotEnd'>, editing: FormRules['editing']): boolean {
+  return editing !== null && draft.date === editing.date && draft.time === editing.time && draft.slotEnd === editing.slotEnd;
 }
 
 export function fieldId(field: DraftField): string {
