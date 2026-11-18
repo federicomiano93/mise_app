@@ -52,6 +52,7 @@ describe('the bookings price list in Food cost', () => {
     expect(ask).toHaveTextContent('The counter will see 2 products at these prices.');
     await user.click(within(ask).getByRole('button', { name: 'Publish' }));
     await waitFor(() => { expect(fake.publishPriceList).toHaveBeenCalledTimes(1); });
+    // Published: nothing is unsaved any more, so leaving would ask nothing.
     expect(vi.mocked(fake.publishPriceList).mock.calls[0]?.[0]).toEqual([
       { productId: 'Focaccia', name: 'Focaccia', price: 12, per: 'kg' },
       { productId: 'Grissini', name: 'Grissini', price: 3.5, per: 'pack', packSize: 250, packUnit: 'g' },
@@ -69,6 +70,36 @@ describe('the bookings price list in Food cost', () => {
     expect(screen.getByText('Changed since publishing (the counter still sees £22.00)')).toBeInTheDocument();
     // A changed price is something to publish.
     expect(screen.getByText('Not published yet')).toBeInTheDocument();
+  });
+
+  it('⚠️ waits for the server: a phone with no copy, offline, is never offered an empty list to publish over the real one', async () => {
+    const fake = sourceWith(products(), { priceList: { items: [{ productId: 'Panettone', name: 'Panettone', price: 25, per: 'piece' }] } });
+    fake.holdPriceList();
+    renderFoodcost('/food-cost/price-list', { source: fake });
+    expect(await screen.findByText('Waiting for the published list from the server — this needs a connection.', {}, LOAD)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Publish' })).toBeNull();
+    expect(screen.queryByRole('checkbox')).toBeNull();
+    fake.releasePriceList();
+    expect(await screen.findByRole('checkbox', { name: /^Panettone/ })).toBeChecked();
+  });
+
+  it('a price changed elsewhere is to publish, but leaving loses nothing, so it does not ask', async () => {
+    const fake = sourceWith(products(), { priceList: { items: [{ productId: 'Panettone', name: 'Panettone', price: 22, per: 'piece' }] } });
+    const { user, router } = await open(fake);
+    expect(screen.getByText('Not published yet')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Back' }));
+    await waitFor(() => { expect(router.state.location.pathname).toBe('/food-cost'); });
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+  });
+
+  it('refuses to publish two ticked products of the same name', async () => {
+    const fake = sourceWith([...products(), product('Focaccia piece', { name: 'Focaccia', sellingPrice: 2.5 })]);
+    const { user } = await open(fake);
+    for (const box of screen.getAllByRole('checkbox', { name: /^Focaccia/ })) await user.click(box);
+    expect(screen.getAllByText(/Two ticked products share the name «Focaccia»/).length).toBeGreaterThan(0);
+    await user.click(screen.getByRole('button', { name: 'Publish' }));
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(fake.publishPriceList).not.toHaveBeenCalled();
   });
 
   it('says when a published product no longer has a price', async () => {

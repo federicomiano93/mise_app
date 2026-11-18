@@ -25,6 +25,9 @@ export type FakeFoodcostSource = FoodcostSource & {
   history: Map<string, StoredDoc[]>;
   // The bookings price list as stored (null: never published). `publishedAt` is a fake timestamp.
   priceList: Record<string, unknown> | null;
+  // The server's answer about the price list is held back until releasePriceList(): a phone offline that never read it.
+  holdPriceList(): void;
+  releasePriceList(): void;
   // The next calls of this kind fail.
   // `recipes`: the recipes' stream fails when it is opened.
   refuse: { save: boolean; create: boolean; loss: boolean; remove: boolean; rate: boolean; history: boolean; products: boolean; recipes: boolean; publish?: boolean };
@@ -73,13 +76,14 @@ export function fakeFoodcostSource(seed: {
   const ingredientWatchers = new Set<ListListener>();
   const supplierWatchers = new Set<ListListener>();
   const settingsWatchers = new Set<(data: Record<string, unknown> | null, meta: { readonly fromServer: boolean }) => void>();
-  const priceListWatchers = new Set<(data: Record<string, unknown> | null) => void>();
+  const priceListWatchers = new Set<(data: Record<string, unknown> | null, meta: { readonly fromServer: boolean }) => void>();
   const refuse = { save: false, create: false, loss: false, remove: false, rate: false, history: false, products: false, recipes: false, publish: false };
   const saved: FakeFoodcostSource['saved'] = [];
   let held = false;
   let ingredientsHeld = false;
   let suppliersHeld = false;
   let recipesHeld = false;
+  let priceListHeld = false;
   let recipesCached: StoredDoc[] | null = null;
   let ids = 0;
 
@@ -90,6 +94,12 @@ export function fakeFoodcostSource(seed: {
     products, recipes, ingredients, suppliers, prices, history, refuse, saved,
     settings: seed.settings === undefined ? null : seed.settings,
     priceList: seed.priceList ?? null,
+
+    holdPriceList() { priceListHeld = true; },
+    releasePriceList() {
+      priceListHeld = false;
+      for (const watcher of priceListWatchers) watcher(fake.priceList, { fromServer: true });
+    },
 
     push() {
       if (!held) for (const w of productWatchers) w.onChange([...products.values()], FROM_SERVER);
@@ -210,7 +220,12 @@ export function fakeFoodcostSource(seed: {
 
     watchPriceList: vi.fn<FoodcostSource['watchPriceList']>(onChange => {
       priceListWatchers.add(onChange);
-      queueMicrotask(() => { if (priceListWatchers.has(onChange)) onChange(fake.priceList); });
+      queueMicrotask(() => {
+        if (!priceListWatchers.has(onChange)) return;
+        // Held (holdPriceList): this device's own copy answers first — empty, as a phone that never read the list.
+        if (priceListHeld) onChange(null, { fromServer: false });
+        else onChange(fake.priceList, { fromServer: true });
+      });
       return () => { priceListWatchers.delete(onChange); };
     }),
 
@@ -218,7 +233,7 @@ export function fakeFoodcostSource(seed: {
       if (refuse.publish) throw refused();
       const at = Date.now();
       fake.priceList = { bakery: 'bakery', items: items.map(item => ({ ...item })), publishedAt: { toMillis: () => at } };
-      for (const watcher of priceListWatchers) watcher(fake.priceList);
+      for (const watcher of priceListWatchers) watcher(fake.priceList, { fromServer: true });
     }),
 
     saveLabourCostPerHour: vi.fn<FoodcostSource['saveLabourCostPerHour']>(async (rate, updatedAt) => {

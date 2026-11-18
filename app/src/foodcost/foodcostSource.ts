@@ -86,9 +86,14 @@ export interface FoodcostSource {
   getProductHistory(productId: string, max?: number): Promise<StoredDoc[]>;
   // The hourly labour cost (null clears it), merged with its stamp.
   saveLabourCostPerHour(rate: number | null, updatedAt: string): Promise<void>;
-  // The bookings price list (bookings step 2, `price-list/bookings`), live: its fields, or null when it does not exist yet.
+  // The bookings price list (bookings step 2, `price-list/bookings`), live: its fields, or null when it does not exist. `fromServer`
+  // tells the server's word from this device's own copy (offline, a device that never read it): only the first may be copied into
+  // the screen's ticks, or a phone with no copy would offer an empty list to publish over the real one.
   // Read only by the price-list screen, for whoever runs Food cost.
-  watchPriceList(onChange: (data: Record<string, unknown> | null) => void, onError: (err: unknown) => void): () => void;
+  watchPriceList(
+    onChange: (data: Record<string, unknown> | null, meta: { readonly fromServer: boolean }) => void,
+    onError: (err: unknown) => void,
+  ): () => void;
   // Publishes the list WHOLE (names and selling prices only: shared/src/price-list.ts), stamped by the server. Firestore applies it
   // to its offline copy at once; the promise settles when the server answers (offline: later), and the screen never awaits it.
   publishPriceList(items: ReadonlyArray<Record<string, unknown>>): Promise<void>;
@@ -332,11 +337,11 @@ export function createFirestoreFoodcostSource(
       return docsOf(snap);
     },
 
-    // A MERGE with the stamp, so a field added to this document later is never wiped by a screen
-    // that only knows the rate. Never deleted: clearing is a write of null.
+    // ⚠️ WITH METADATA CHANGES, so the server's answer is delivered even when it says the same as this device's copy.
     watchPriceList: (onChange, onError) => listen(kit => kit.fs.onSnapshot(
       kit.fs.doc(kit.db, priceListPath, PRICE_LIST_DOC),
-      snap => onChange(snap.exists() ? snap.data({ serverTimestamps: 'estimate' }) : null),
+      { includeMetadataChanges: true },
+      snap => onChange(snap.exists() ? snap.data({ serverTimestamps: 'estimate' }) : null, { fromServer: !snap.metadata.fromCache }),
       err => {
         console.error('watch(price list) failed:', err);
         onError(err);
@@ -348,6 +353,8 @@ export function createFirestoreFoodcostSource(
       await fs.setDoc(fs.doc(db, priceListPath, PRICE_LIST_DOC), withBakery({ items, publishedAt: fs.serverTimestamp() }));
     },
 
+    // A MERGE with the stamp, so a field added to this document later is never wiped by a screen
+    // that only knows the rate. Never deleted: clearing is a write of null.
     async saveLabourCostPerHour(rate, updatedAt) {
       const { fs, db } = await firestore();
       await fs.setDoc(fs.doc(db, settingsPath, SETTINGS_DOC), withBakery({

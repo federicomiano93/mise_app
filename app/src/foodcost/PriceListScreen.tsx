@@ -2,7 +2,8 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { Navigate, useBlocker, useLocation } from 'react-router';
 import type { BlockerFunction } from 'react-router';
 import { fcMoney } from '@mise/shared/fc-number';
-import { itemIsStale, itemsToStore, priceItemOf, readPriceList } from '@mise/shared/price-list';
+import { localNumber } from '@mise/shared/currency';
+import { itemIsStale, itemsToStore, priceItemOf, readPriceList, sharedNames } from '@mise/shared/price-list';
 import type { PriceItem, PriceList } from '@mise/shared/price-list';
 import { useDataServices } from '../data/DataContext';
 import { useT } from '../i18n/useT';
@@ -34,29 +35,37 @@ export function PriceListScreen() {
   const { canManage, locationId } = useSession();
   const services = useDataServices();
   const { productsLoaded } = useFoodcost();
+  // ⚠️ ONLY THE SERVER'S ANSWER OPENS THE FORM (review, 18 Nov 2026). The ticks are copied once from what is published: a copy
+  // taken from this device's own database — empty on a phone that never read the list, offline — would offer «Never published»
+  // with nothing ticked, and a Publish would replace the counter's real list. So the form waits for the server, and without it
+  // says so instead of drawing anything that could be published (the labour rate's own rule: foodcostStore.ts settingsLoaded).
   const [published, setPublished] = useState<PriceList | null>(null);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     if (!canManage || !locationId) return undefined;
     return services.foodcost(locationId).watchPriceList(
-      data => { setPublished(readPriceList(data)); setFailed(false); },
+      (data, meta) => {
+        if (!meta.fromServer) return;
+        setPublished(readPriceList(data));
+        setFailed(false);
+      },
       () => { setFailed(true); },
     );
   }, [canManage, locationId, services]);
 
   if (!canManage) return <Navigate to={FOODCOST_PATH} replace state={KEEP_FOCUS} />;
-  if (!productsLoaded || (published === null && !failed)) {
+  if (!productsLoaded || published === null) {
     return (
-      <section className={styles.screen} aria-busy="true">
-        <p className={styles.loading}>{t('session.loading')}</p>
+      <section className={styles.screen} aria-busy={!failed}>
+        <p className={styles.loading}>{failed ? t('fc.priceList.readFailed') : t('fc.priceList.waiting')}</p>
       </section>
     );
   }
-  return <PriceListForm published={published ?? { items: [], publishedAtMs: null }} readFailed={failed} />;
+  return <PriceListForm published={published} />;
 }
 
-function PriceListForm({ published, readFailed }: { published: PriceList; readFailed: boolean }) {
+function PriceListForm({ published }: { published: PriceList }) {
   const { t, locale } = useT();
   const { products } = useFoodcost();
   const { locationId } = useSession();
@@ -80,12 +89,18 @@ function PriceListForm({ published, readFailed }: { published: PriceList; readFa
 
   // The working copy: the ticks, copied ONCE from the published list (a colleague publishing meanwhile never moves a tick under
   // somebody's finger).
-  const [ticked, setTicked] = useState<ReadonlySet<string>>(() => new Set(published.items.map(item => item.productId)));
+  const [startTicks, setStartTicks] = useState<ReadonlySet<string>>(() => new Set(published.items.map(item => item.productId)));
+  const [ticked, setTicked] = useState<ReadonlySet<string>>(startTicks);
   const chosen = items.filter(item => ticked.has(item.productId));
-  // Unpublished: the ticks differ from what is published, or a ticked product's name or price changed since.
-  const differs = chosen.length !== published.items.length
+  // «Not published yet»: what the counter sees is not what this screen would publish — the ticks differ from the published list,
+  // or a ticked product's name or price changed in Food cost since.
+  const needsPublish = chosen.length !== published.items.length
     || chosen.some(item => { const was = publishedById.get(item.productId); return was === undefined || itemIsStale(was, item); });
-  const dirty = differs;
+  // ⚠️ «Unsaved» is narrower: only ticks THIS PERSON changed. A price changed elsewhere is something to publish, not something to
+  // lose by leaving, so it neither holds the app's busy marker nor asks «Discard changes?» (review, 18 Nov 2026).
+  const dirty = ticked.size !== startTicks.size || [...ticked].some(id => !startTicks.has(id));
+  // Two ticked products with the same name: the counter could book only the first, so Publish refuses them together.
+  const clashes = sharedNames(chosen);
   const dirtyRef = useRef(dirty);
   dirtyRef.current = dirty;
   const leavingClean = useRef(false);
@@ -166,6 +181,10 @@ function PriceListForm({ published, readFailed }: { published: PriceList; readFa
 
   async function publish() {
     if (asking.current || askingLeave.current) return;
+    if (clashes.length > 0) {
+      say(t('fc.priceList.clash', { names: clashes.join(', ') }), 5000);
+      return;
+    }
     asking.current = true;
     try {
       const ok = await confirm({
@@ -178,6 +197,9 @@ function PriceListForm({ published, readFailed }: { published: PriceList; readFa
     } finally {
       asking.current = false;
     }
+    // Published: what is ticked now is the new start, so nothing is unsaved and leaving asks nothing.
+    dirtyRef.current = false;
+    setStartTicks(new Set(ticked));
     // Never awaited (local-first): Firestore shows the new list at once and sends it when it can; only a refusal is said.
     services.foodcost(locationId).publishPriceList(itemsToStore(chosen)).catch((err: unknown) => {
       console.error('Publishing the price list failed:', err);
@@ -190,7 +212,8 @@ function PriceListForm({ published, readFailed }: { published: PriceList; readFa
     const amount = fcMoney(item.price, money);
     if (item.per === 'kg') return t('fc.priceList.perKg', { price: amount });
     if (item.per === 'piece') return t('fc.priceList.perPiece', { price: amount });
-    const size = `${new Intl.NumberFormat(locale, { maximumFractionDigits: 3 }).format(item.packSize ?? 0)} ${item.packUnit === 'pcs' ? t('bookings.unit.pcs') : item.packUnit ?? ''}`;
+    // The pack's size in the venue's own number layout, as every Food cost figure.
+    const size = `${localNumber(String(item.packSize ?? 0), money)} ${item.packUnit === 'pcs' ? t('fc.unit.pieces') : item.packUnit ?? ''}`;
     return t('fc.priceList.perPack', { price: amount, size });
   };
 
@@ -210,13 +233,13 @@ function PriceListForm({ published, readFailed }: { published: PriceList; readFa
         title={t('fc.priceList.title')}
         titleId={`${ids}-title`}
         titleRef={title}
-        sub={<span className={styles.dirty} data-dirty={dirty ? 'true' : undefined} aria-live="polite">{dirty ? t('fc.priceList.unpublished') : ''}</span>}
+        sub={<span className={styles.dirty} data-dirty={needsPublish ? 'true' : undefined} aria-live="polite">{needsPublish ? t('fc.priceList.unpublished') : ''}</span>}
         action={<Button variant="primary" className={styles.publish} onPress={() => { void publish(); }}>{t('fc.priceList.publish')}</Button>}
       />
       <div className={styles.body}>
         <p className={styles.intro}>{t('fc.priceList.intro')}</p>
         <p className={styles.when}>{when}</p>
-        {readFailed ? <p className={styles.warn}>{t('fc.priceList.readFailed')}</p> : null}
+        {clashes.length > 0 ? <p className={styles.warn}>{t('fc.priceList.clash', { names: clashes.join(', ') })}</p> : null}
         {gone > 0 ? <p className={styles.warn}>{t('fc.priceList.gone', { n: gone })}</p> : null}
         {items.length === 0 ? (
           <p className={styles.empty}>{t('fc.priceList.none')}</p>
