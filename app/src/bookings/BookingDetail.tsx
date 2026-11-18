@@ -17,7 +17,8 @@ import { CustomerSlip, LabSlip } from './BookingSlips';
 import type { SlipWords } from './BookingSlips';
 import { lineQtyText, slipLocale, slipUnitWords, spellDate } from './bookingWords';
 import type { UnitWords } from './bookingWords';
-import { useBookings, useBookingsStore } from './BookingsContext';
+import { useBookingSettings, useBookings, useBookingsStore } from './BookingsContext';
+import { reminderOn } from './bookingSettings';
 import { STATUS_WORD } from './BookingsList';
 import { FROM_BOOKING, cameFromList } from './bookingsNav';
 import { BOOKINGS_PATH, editBookingPath } from './bookingsPath';
@@ -70,6 +71,8 @@ function Shown({ booking, onBack }: { booking: Booking; onBack: () => void }) {
   const say = useStatusMessage();
   const money = useMoney();
   const { location, name: venueName } = useSession();
+  // The venue's settings (bookings settings, 18 Nov 2026): without the phone asked, no phone and no reminder on this page.
+  const { settings } = useBookingSettings();
   const [confirm, confirmDialog] = useConfirm();
   const ids = useId();
   const number = t('bookings.number', { n: booking.number });
@@ -91,7 +94,7 @@ function Shown({ booking, onBack }: { booking: Booking; onBack: () => void }) {
   // message written; the person reads it and sends it. Only while the order is still to come, and only for a phone WhatsApp can
   // open (the venue's country code is added to a number typed without one). Words in the interface's language, as the slips;
   // the date and the money in the venue's country's way.
-  const reminder = wantsReminder(booking, todayISO()) ? reminderUrl(whatsappNumber(booking.phone, countryOf(location)), reminderMessage({
+  const reminder = reminderOn(settings) && wantsReminder(booking, todayISO()) ? reminderUrl(whatsappNumber(booking.phone, countryOf(location)), reminderMessage({
     booking,
     locale: slipLocale(location, locale),
     units: slipUnitWords(location),
@@ -245,9 +248,11 @@ function Shown({ booking, onBack }: { booking: Booking; onBack: () => void }) {
             <dt>{t('bookings.detail.customer')}</dt>
             <dd>
               <span className={styles.strong}>{booking.customerName}</span>
-              <a className={styles.link} href={`tel:${booking.phone.replace(/\s+/g, '')}`} aria-label={t('bookings.detail.call', { phone: booking.phone })}>
-                {booking.phone}
-              </a>
+              {settings.askPhone && booking.phone !== '' ? (
+                <a className={styles.link} href={`tel:${booking.phone.replace(/\s+/g, '')}`} aria-label={t('bookings.detail.call', { phone: booking.phone })}>
+                  {booking.phone}
+                </a>
+              ) : null}
               {booking.mode === 'delivery' && booking.address !== '' ? <span>{booking.address}</span> : null}
               {reminder !== '' ? (
                 <>

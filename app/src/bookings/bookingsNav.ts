@@ -8,6 +8,18 @@ export function cameFromList(state: unknown): boolean {
   return typeof state === 'object' && state !== null && 'fromBookingsList' in state;
 }
 
+// «New booking» from the list (bookings settings, 18 Nov 2026): the form starts on the day the list is showing — today or
+// tomorrow; a day already gone or the several days of «Later» give no day.
+export function newFromList(date: string | null): typeof FROM_LIST & { readonly newBookingDate?: string } {
+  return date === null ? FROM_LIST : { ...FROM_LIST, newBookingDate: date };
+}
+
+export function newBookingDateOf(state: unknown): string {
+  if (typeof state !== 'object' || state === null || !('newBookingDate' in state)) return '';
+  const value = (state as { newBookingDate: unknown }).newBookingDate;
+  return typeof value === 'string' && /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(value) ? value : '';
+}
+
 // Back to the list after a save: the list opens on the booking's day, and the page keeps the focus where the editor puts it.
 export function afterSave(date: string, id: string | null): { readonly bookingSavedDate: string; readonly bookingSavedId: string | null; readonly keepFocus: true } {
   return { bookingSavedDate: date, bookingSavedId: id, keepFocus: true };

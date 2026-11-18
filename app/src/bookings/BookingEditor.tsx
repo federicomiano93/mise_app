@@ -16,13 +16,15 @@ import { useStatusMessage } from '../ui/StatusMessage';
 import { useConfirm } from '../ui/useConfirm';
 import {
   BOOKING_MODES, LIMITS, blankLine, draftFrom, emptyDraft, fieldId, firstProblem, nextNumber, parseMoney, sameDraft,
-  draftLineAmount, effectiveTotal, linePack, linePrice, listTotal, toBookingData, toPay,
+  chosenSlot, draftLineAmount, effectiveTotal, keepsStoredTime, linePack, linePrice, listTotal, toBookingData, toPay,
 } from './bookingModel';
-import type { Booking, BookingMode, BookingStatus, BookingUnit, Draft, DraftField, DraftLine, DraftProblem } from './bookingModel';
+import type { Booking, BookingMode, BookingStatus, BookingUnit, Draft, DraftField, DraftLine, DraftProblem, FormRules } from './bookingModel';
+import { onlyMode, placesLeft, slotFromValue, slotValue, slotsOf } from './bookingSettings';
+import type { BookingSettings, Slot } from './bookingSettings';
 import type { PriceItem, PriceList } from '@mise/shared/price-list';
 import { spellDate } from './bookingWords';
-import { useBookings, useBookingsStore } from './BookingsContext';
-import { afterSave, cameFromBooking, cameFromList, restoresRefused } from './bookingsNav';
+import { useBookingSettings, useBookings, useBookingsStore } from './BookingsContext';
+import { afterSave, cameFromBooking, cameFromList, newBookingDateOf, restoresRefused } from './bookingsNav';
 import { BOOKINGS_PATH, bookingPath } from './bookingsPath';
 import type { RefusedSave } from './bookingsStore';
 import styles from './BookingEditor.module.css';
@@ -46,6 +48,9 @@ const PROBLEM_TEXT: Readonly<Record<DraftProblem['reason'], MessageKey>> = {
 export function BookingEditor({ id }: { id: string | null }) {
   const { t } = useT();
   const { status, items } = useBookings();
+  // The venue's settings (bookings settings, 18 Nov 2026): the form is drawn only once they have answered, so a form copied before
+  // them never asks for a phone the venue does not want, nor offers a time the venue takes in slots.
+  const { status: settingsStatus, settings } = useBookingSettings();
   const store = useBookingsStore();
   const { state } = useLocation();
   const navigate = useNavigate();
@@ -63,13 +68,13 @@ export function BookingEditor({ id }: { id: string | null }) {
   // A new booking waits for the bookings too (from this device's copy, offline): its short number is one more than the highest held.
   const [start, setStart] = useState<{ booking: Booking | null } | null>(null);
 
-  if (start === null && status !== 'loading') {
+  if (start === null && status !== 'loading' && settingsStatus === 'ready') {
     const booking = id === null ? null : items.find(item => item.id === id) ?? null;
     if (id === null || booking !== null || refused !== null) setStart({ booking });
   }
 
   if (start === null) {
-    const gone = status !== 'loading';
+    const gone = status !== 'loading' && settingsStatus === 'ready';
     return (
       <section className={styles.editor} aria-busy={!gone}>
         <FormBar
@@ -81,12 +86,12 @@ export function BookingEditor({ id }: { id: string | null }) {
       </section>
     );
   }
-  return <EditorForm id={id} booking={start.booking} refused={refused} />;
+  return <EditorForm id={id} booking={start.booking} refused={refused} settings={settings} />;
 }
 
-type FormProps = { id: string | null; booking: Booking | null; refused: RefusedSave | null };
+type FormProps = { id: string | null; booking: Booking | null; refused: RefusedSave | null; settings: BookingSettings };
 
-function EditorForm({ id, booking, refused }: FormProps) {
+function EditorForm({ id, booking, refused, settings }: FormProps) {
   const { t, locale } = useT();
   const store = useBookingsStore();
   const navigate = useNavigate();
@@ -114,8 +119,15 @@ function EditorForm({ id, booking, refused }: FormProps) {
     return keyCounter.current;
   }, []);
 
-  // The working copy (P20): nothing touches the stored booking until Save is pressed and confirmed.
-  const [initial] = useState<Draft>(() => (booking !== null ? draftFrom(booking, nextKey, decimal) : emptyDraft(nextKey)));
+  // What the venue's settings ask of this form (bookings settings, 18 Nov 2026).
+  const only = onlyMode(settings);
+  const slots = slotsOf(settings);
+  const { items: bookings } = useBookings();
+  // The working copy (P20): nothing touches the stored booking until Save is pressed and confirmed. A new booking starts on the day
+  // the list was showing, and in the venue's only mode when it takes one only (then there is nothing to choose).
+  const [initial] = useState<Draft>(() => (booking !== null
+    ? draftFrom(booking, nextKey, decimal)
+    : emptyDraft(nextKey, { date: newBookingDateOf(arrivedWith), mode: only })));
   const [draft, setDraft] = useState<Draft>(() => refused?.draft ?? initial);
   const [problem, setProblem] = useState<DraftProblem | null>(null);
   const dirty = refused !== null || !sameDraft(initial, draft);
@@ -222,16 +234,24 @@ function EditorForm({ id, booking, refused }: FormProps) {
     else void navigate(isNew ? BOOKINGS_PATH : bookingPath(id), { replace: true });
   };
 
+  const rules: FormRules = {
+    askPhone: settings.askPhone,
+    slots,
+    slotLimit: settings.slotLimit,
+    bookings,
+    editing: booking === null ? null : { id: booking.id, date: booking.date, time: booking.time, slotEnd: booking.slotEnd ?? '' },
+  };
+
   // ── Saving ──
   const asking = useRef(false);
   async function save() {
     if (asking.current) return;
-    const found = firstProblem(draft, { today, isNew, items });
+    const found = firstProblem(draft, { today, isNew, items, rules });
     if (found !== null) {
       setProblem(found);
       // Block, jump to the first problem and say it; the box is marked until it is put right.
       document.getElementById(domId(found.field))?.focus();
-      say(t('bookings.err.check', { field: fieldName(t, found.field) }));
+      say(t('bookings.err.check', { field: fieldName(t, found.field, slots !== null) }));
       return;
     }
     setProblem(null);
@@ -239,7 +259,9 @@ function EditorForm({ id, booking, refused }: FormProps) {
     try {
       const ok = await confirm({
         title: t('bookings.save.title'),
-        message: t('bookings.save.body', { name: draft.customerName.trim(), date: spellDate(draft.date, locale), time: draft.time }),
+        message: t('bookings.save.body', {
+          name: draft.customerName.trim(), date: spellDate(draft.date, locale), time: draft.slotEnd === '' ? draft.time : `${draft.time}–${draft.slotEnd}`,
+        }),
         okLabel: t('ui.save'),
         cancelLabel: t('common.cancel'),
       });
@@ -282,7 +304,7 @@ function EditorForm({ id, booking, refused }: FormProps) {
   }
 
   // A box is marked only once Save has found it wrong, and only while it still is.
-  const live = problem === null ? null : firstProblem(draft, { today, isNew, items });
+  const live = problem === null ? null : firstProblem(draft, { today, isNew, items, rules });
   const errorOn = (field: DraftField): string | null => {
     if (live === null || fieldId(live.field) !== fieldId(field)) return null;
     return t(PROBLEM_TEXT[live.reason]);
@@ -318,24 +340,31 @@ function EditorForm({ id, booking, refused }: FormProps) {
             error={errorOn('customerName')}
             onChange={value => { update({ customerName: value }); }}
           />
-          <TextField
-            id={domId('phone')}
-            label={t('bookings.form.phone')}
-            value={draft.phone}
-            placeholder={t('bookings.form.phonePlaceholder')}
-            maxLength={LIMITS.phone}
-            type="tel"
-            inputMode="tel"
-            autoComplete="off"
-            error={errorOn('phone')}
-            onChange={value => { update({ phone: value }); }}
-          />
-          <ModeChoice
-            id={domId('mode')}
-            value={draft.mode}
-            error={errorOn('mode')}
-            onChange={mode => { update({ mode }); }}
-          />
+          {/* Only where the venue asks for the phone (bookings settings): otherwise the form neither asks nor shows it. */}
+          {settings.askPhone ? (
+            <TextField
+              id={domId('phone')}
+              label={t('bookings.form.phone')}
+              value={draft.phone}
+              placeholder={t('bookings.form.phonePlaceholder')}
+              maxLength={LIMITS.phone}
+              type="tel"
+              inputMode="tel"
+              autoComplete="off"
+              error={errorOn('phone')}
+              onChange={value => { update({ phone: value }); }}
+            />
+          ) : null}
+          {/* A venue that takes one mode only has nothing to choose: the line under the day and time says which. An old booking in the
+              other mode keeps the choice, so it is seen and can be put right. */}
+          {only === null || draft.mode !== only ? (
+            <ModeChoice
+              id={domId('mode')}
+              value={draft.mode}
+              error={errorOn('mode')}
+              onChange={mode => { update({ mode }); }}
+            />
+          ) : null}
           {draft.mode === 'delivery' ? (
             <TextField
               id={domId('address')}
@@ -362,15 +391,30 @@ function EditorForm({ id, booking, refused }: FormProps) {
               error={errorOn('date')}
               onChange={value => { update({ date: value }); }}
             />
-            <TextField
-              id={domId('time')}
-              label={t('bookings.form.time')}
-              value={draft.time}
-              type="time"
-              error={errorOn('time')}
-              onChange={value => { update({ time: value }); }}
-            />
+            {slots === null ? (
+              <TextField
+                id={domId('time')}
+                label={t('bookings.form.time')}
+                value={draft.time}
+                type="time"
+                error={errorOn('time')}
+                // An exact time is not a slot: an old slot's end goes with it.
+                onChange={value => { update({ time: value, slotEnd: '' }); }}
+              />
+            ) : (
+              <SlotField
+                id={domId('time')}
+                draft={draft}
+                slots={slots}
+                rules={rules}
+                error={errorOn('time')}
+                onChange={(time, slotEnd) => { update({ time, slotEnd }); }}
+              />
+            )}
           </div>
+          {only !== null && draft.mode === only ? (
+            <p className={styles.onlyMode}>{t(only === 'delivery' ? 'bookings.form.onlyDelivery' : 'bookings.form.onlyPickup')}</p>
+          ) : null}
         </fieldset>
 
         <fieldset className={styles.group}>
@@ -472,7 +516,7 @@ function EditorForm({ id, booking, refused }: FormProps) {
 }
 
 // The words of a field, for «Check “…”.».
-function fieldName(t: ReturnType<typeof useT>['t'], field: DraftField): string {
+function fieldName(t: ReturnType<typeof useT>['t'], field: DraftField, inSlots: boolean): string {
   if (typeof field !== 'string') {
     return `${t('bookings.form.item', { n: field.line + 1 })} — ${field.part === 'name' ? t('bookings.form.itemName') : t('bookings.form.qty')}`;
   }
@@ -482,7 +526,7 @@ function fieldName(t: ReturnType<typeof useT>['t'], field: DraftField): string {
     mode: 'bookings.form.mode',
     address: 'bookings.form.address',
     date: 'bookings.form.date',
-    time: 'bookings.form.time',
+    time: inSlots ? 'bookings.form.slot' : 'bookings.form.time',
     deposit: 'bookings.slip.deposit',
     total: 'bookings.slip.total',
   };
@@ -553,6 +597,68 @@ function TextField({ id, label, value, onChange, error, placeholder, maxLength, 
       />
       {error !== null ? <p id={`${id}-error`} className={styles.error}>{error}</p> : null}
       {hint !== null ? <p id={`${id}-hint`} className={styles.hint}>{hint}</p> : null}
+    </div>
+  );
+}
+
+// «Fascia oraria» (bookings settings, 18 Nov 2026): the venue's slots, «Scegli la fascia» first. Each says how many places it has
+// left when the venue set a limit («09:00–10:00 · 3 left»); a full one says so and cannot be chosen. The booking being edited keeps
+// its own time as an extra choice when it is on no slot (an exact time from before slots), so nothing is lost.
+// ⚠️ THE PLACES ARE COUNTED ON THIS DEVICE (the owner accepted it): two tablets taking the last place at the same moment, or one
+// offline, can put one booking more in a slot than its limit. bookingSettings.ts placesLeft says how the count is made.
+function SlotField({ id, draft, slots, rules, error, onChange }: {
+  id: string;
+  draft: Draft;
+  slots: readonly Slot[];
+  rules: FormRules;
+  error: string | null;
+  onChange: (time: string, slotEnd: string) => void;
+}) {
+  const { t } = useT();
+  const chosen = chosenSlot(draft, slots);
+  const keptValue = rules.editing === null ? null : `kept:${rules.editing.time}-${rules.editing.slotEnd}`;
+  // The stored time, when it is on none of the venue's slots.
+  const keptOff = rules.editing !== null && chosenSlot(rules.editing, slots) === null;
+  const value = chosen !== null ? slotValue(chosen) : keptOff && keepsStoredTime(draft, rules.editing) && keptValue !== null ? keptValue : '';
+  const editingId = rules.editing?.id ?? null;
+  return (
+    <div className={styles.field}>
+      <label className={styles.label} htmlFor={id}>{t('bookings.form.slot')}</label>
+      <select
+        id={id}
+        className={styles.input}
+        value={value}
+        aria-invalid={error !== null ? true : undefined}
+        aria-describedby={error !== null ? `${id}-error` : undefined}
+        onChange={event => {
+          const picked = event.currentTarget.value;
+          if (picked.startsWith('kept:') && rules.editing !== null) { onChange(rules.editing.time, rules.editing.slotEnd); return; }
+          const slot = slotFromValue(picked);
+          onChange(slot?.start ?? '', slot?.end ?? '');
+        }}
+      >
+        <option value="">{t('bookings.form.slotChoose')}</option>
+        {keptOff && rules.editing !== null && keptValue !== null ? (
+          <option value={keptValue}>
+            {t('bookings.form.slotKept', { time: rules.editing.slotEnd === '' ? rules.editing.time : `${rules.editing.time}–${rules.editing.slotEnd}` })}
+          </option>
+        ) : null}
+        {slots.map(slot => {
+          const isChosen = chosen !== null && slotValue(chosen) === slotValue(slot);
+          const left = placesLeft(rules.bookings, { date: draft.date, slot, limit: rules.slotLimit, editingId, chosen: isChosen });
+          // The booking already in this slot (stored on this day) keeps it, whatever the count says.
+          const alreadyThere = rules.editing !== null && rules.editing.date === draft.date
+            && rules.editing.time >= slot.start && rules.editing.time < slot.end;
+          const label = `${slot.start}–${slot.end}`;
+          const full = left !== null && left <= 0;
+          return (
+            <option key={slotValue(slot)} value={slotValue(slot)} disabled={full && !isChosen && !alreadyThere}>
+              {left === null ? label : full ? t('bookings.form.slotFull', { slot: label }) : t('bookings.form.slotLeft', { slot: label, n: left })}
+            </option>
+          );
+        })}
+      </select>
+      {error !== null ? <p id={`${id}-error`} className={styles.error}>{error}</p> : null}
     </div>
   );
 }

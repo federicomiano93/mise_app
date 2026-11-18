@@ -334,3 +334,11 @@
   background: var(--sunken);
   color: var(--ink-2);
 }
+
+/* «✓ Ritiro» / «✓ Consegna» (bookings settings): a venue that takes one mode only says which, quietly, under the day and time. */
+.onlyMode {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}

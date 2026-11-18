@@ -10,7 +10,7 @@ import type { Booking, BookingStatus, ListChoice } from './bookingModel';
 import { linesSummary, spellDate } from './bookingWords';
 import type { UnitWords } from './bookingWords';
 import { useBookings } from './BookingsContext';
-import { FROM_LIST, RESTORE_REFUSED, savedIdOf } from './bookingsNav';
+import { FROM_LIST, RESTORE_REFUSED, newFromList, savedIdOf } from './bookingsNav';
 import { bookingPath, editBookingPath, newBookingPath, printerPath, settingsPath } from './bookingsPath';
 import styles from './BookingsList.module.css';
 
@@ -74,7 +74,15 @@ export function BookingsList({ choice, onChoice, today, selectedId }: Props) {
   return (
     <section ref={rowsBox} className={styles.list} aria-labelledby={`${ids}-title`}>
       <h2 id={`${ids}-title`} className="visually-hidden">{t('section.bookings')}</h2>
-      <Button variant="primary" className={styles.add} onPress={() => { void navigate(newBookingPath(), { state: FROM_LIST }); }}>
+      {/* The new booking starts on the day the list is showing: today or tomorrow (bookings settings, 18 Nov 2026). */}
+      <Button
+        variant="primary"
+        className={styles.add}
+        onPress={() => {
+          const day = choice.kind === 'today' ? today : choice.kind === 'tomorrow' ? dayAfter(today, 1) : null;
+          void navigate(newBookingPath(), { state: newFromList(day) });
+        }}
+      >
         <Plus aria-hidden="true" />
         <span>{t('bookings.new')}</span>
       </Button>
