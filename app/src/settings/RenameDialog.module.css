@@ -1,0 +1,70 @@
+/* «Rename» of the people list: first and last name in a dialog, each box with its reason under it when it is wrong. */
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+  margin: 0;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  width: 100%;
+}
+
+.label {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+/* 16px type on purpose: a smaller size makes iOS zoom the page in when the field is focused. */
+.input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: var(--hit);
+  padding: 0 var(--s3);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: var(--fs-md)/1.2 var(--font);
+}
+
+.input[aria-invalid='true'] {
+  border-color: var(--danger);
+}
+
+.input[readonly] {
+  background: var(--sunken);
+}
+
+.error,
+.refusal {
+  margin: 0;
+  color: var(--danger-ink);
+  font-size: var(--fs-sm);
+}
+
+.refusal {
+  font-weight: 600;
+}
+
+.status {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+/* A sentence that is empty until it speaks stays on the page (so a screen reader announces it) but takes no room. Not `display: none`. */
+.refusal:empty,
+.status:empty {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  clip-path: inset(50%);
+}

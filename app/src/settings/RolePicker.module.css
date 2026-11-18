@@ -1,0 +1,87 @@
+/* «Change role»: the six choices of the people list as whole-row buttons in a dialog, each with what it can do, the one held now
+   tinted and marked «Current». The same look as the invite card's list. */
+
+.list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  list-style: none;
+}
+
+.list > li + li {
+  border-top: 1px solid var(--line);
+}
+
+/* A whole row is the target of a tap: the role's name and what it can do. */
+.choice {
+  display: flex;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: var(--hit);
+  padding: var(--s2) var(--s4);
+  border: 0;
+  border-radius: var(--r-md);
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.choice[data-hovered] {
+  background: var(--bg);
+}
+
+.choice[data-pressed] {
+  background: var(--sunken);
+}
+
+/* The role held now is told by its tint, its weight and the word «Current», never by colour alone. */
+.choice[data-current="true"] {
+  background: var(--accent-tint);
+}
+
+.text {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+  overflow-wrap: break-word;
+}
+
+.choice[data-current="true"] .name {
+  font-weight: 600;
+}
+
+.current {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
+  color: var(--accent-ink);
+  font-size: var(--fs-sm);
+}
+
+.icon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+
+/* ink-2 is above 4.5:1 on the surface and on the current row's tint. */
+.means {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  overflow-wrap: break-word;
+}
