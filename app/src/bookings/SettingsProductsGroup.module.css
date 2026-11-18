@@ -84,13 +84,27 @@
 .card {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-areas: "tick side" "details side";
+  /* ⚠️ The details take the whole width under the name: beside the star and the switch, at 296px, the edit lines were squeezed
+     to one letter a line (driven, 18 Nov 2026). */
+  grid-template-areas: "tick side" "details details";
   align-items: center;
   gap: 0 var(--s2);
   padding: var(--s2) var(--s3);
   border: 1.5px solid var(--line);
   border-radius: var(--r-md);
   background: var(--surface);
+}
+
+/* A phone: the name takes the whole first row (at 296px it was cut into «Cor/net/to» beside the star and the switch), the star
+   and the switch a row of their own at the right edge, under the column titles. */
+@media (max-width: 479px) {
+  .card {
+    grid-template-areas: "tick tick" "side side" "details details";
+  }
+
+  .side {
+    justify-self: end;
+  }
 }
 
 .card[data-checked="true"] {
