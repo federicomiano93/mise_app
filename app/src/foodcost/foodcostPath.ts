@@ -6,7 +6,6 @@
 //   /food-cost/product/<id>          one product (the id percent-encoded)
 //   /food-cost/product/<id>/history  that product's margin history
 //   /food-cost/settings              the hourly labour cost (whoever runs the place)
-//   /food-cost/price-list            the bookings price list: which products the counter books, and publishing it (whoever runs the place)
 //   anything else                    unknown: the section goes back to /food-cost
 //
 // A recipe can lead here, and says so in the QUERY of the address (read with recipeIdParam; an id that
@@ -34,7 +33,6 @@ export type FoodcostView =
   | { readonly kind: 'product'; readonly id: string }
   | { readonly kind: 'history'; readonly id: string }
   | { readonly kind: 'settings' }
-  | { readonly kind: 'priceList' }
   | { readonly kind: 'unknown' };
 
 const queryOf = (origin: Origin): string => {
@@ -45,7 +43,6 @@ const queryOf = (origin: Origin): string => {
 
 export const newPath = `${FOODCOST_PATH}/new`;
 export const settingsPath = `${FOODCOST_PATH}/settings`;
-export const priceListPath = `${FOODCOST_PATH}/price-list`;
 export const productPath = (id: string, origin: Origin = NO_ORIGIN): string =>
   `${FOODCOST_PATH}/product/${encodeURIComponent(id)}${queryOf(origin)}`;
 export const historyPath = (id: string, origin: Origin = NO_ORIGIN): string =>
@@ -75,7 +72,6 @@ export function parseFoodcostPath(rest: string | undefined): FoodcostView {
   if (parts.length === 0) return { kind: 'list' };
   if (parts.length === 1 && first === 'new') return { kind: 'new' };
   if (parts.length === 1 && first === 'settings') return { kind: 'settings' };
-  if (parts.length === 1 && first === 'price-list') return { kind: 'priceList' };
   if (first === 'product' && second !== undefined && (parts.length === 2 || (parts.length === 3 && third === 'history'))) {
     const id = decoded(second);
     // An empty id is not a product (and not a Firestore document id either).
@@ -97,7 +93,7 @@ export type Resolved = { readonly redirect: string } | { readonly view: ShownVie
 export function resolveFoodcostPath(rest: string | undefined, search: string = ''): Resolved {
   const view = parseFoodcostPath(rest);
   if (view.kind === 'unknown') return { redirect: FOODCOST_PATH };
-  if (view.kind === 'settings' || view.kind === 'priceList') return { view, origin: NO_ORIGIN };
+  if (view.kind === 'settings') return { view, origin: NO_ORIGIN };
   const recipe = recipeIdParam(search, 'recipe');
   if (view.kind === 'list' && recipe !== null) return { view: { kind: 'entry', recipeId: recipe }, origin: { recipe, using: null } };
   if (view.kind === 'new') return { view, origin: { recipe, using: null } };

@@ -3287,28 +3287,6 @@ export const en = {
   'bookings.slip.privacy': 'Your details (name, phone, address) are used only for this order and are deleted 30 days after pickup. You can ask for them to be deleted at any time.',
   'home.bookingsToday.title': 'Today’s bookings',
 
-  // The bookings price list in Food cost (bookings step 2, 18 Nov 2026): foodcost/PriceListScreen.tsx.
-  'fc.priceList.door': 'Bookings price list',
-  'fc.priceList.title': 'Bookings price list',
-  'fc.priceList.intro': 'Tick the products the counter may book. The counter sees only their name and selling price (VAT included), never costs or margins. Nothing changes for the counter until you publish.',
-  'fc.priceList.publish': 'Publish',
-  'fc.priceList.publishQ': 'Publish the price list?',
-  'fc.priceList.publishBody': { one: "The counter will see {n} product at these prices. Bookings already taken keep their prices.", other: "The counter will see {n} products at these prices. Bookings already taken keep their prices." },
-  'fc.priceList.published': 'Price list published ✓',
-  'fc.priceList.notPublished': 'The price list was not published — check your connection.',
-  'fc.priceList.unpublished': 'Not published yet',
-  'fc.priceList.never': 'Never published: the counter has no price list yet.',
-  'fc.priceList.publishedOn': { one: "Published on {date} at {time} · {n} product", other: "Published on {date} at {time} · {n} products" },
-  'fc.priceList.readFailed': 'The published list can’t be read now. Try again when there is a connection: publishing without it could replace the counter’s list.',
-  'fc.priceList.gone': { one: "{n} product on the published list no longer has a selling price: the next publish leaves it out.", other: "{n} products on the published list no longer have a selling price: the next publish leaves them out." },
-  'fc.priceList.none': 'No product has a selling price yet: give one in its card, then come back.',
-  'fc.priceList.unpriced': { one: "{n} product has no selling price or no way of selling it, so it is not listed.", other: "{n} products have no selling price or no way of selling them, so they are not listed." },
-  'fc.priceList.perKg': '{price} per kg',
-  'fc.priceList.perPiece': '{price} each',
-  'fc.priceList.perPack': '{price} per pack ({size})',
-  'fc.priceList.changed': 'Changed since publishing (the counter still sees {price})',
-  'fc.priceList.discardBody': 'The ticks you changed are not published and will be lost.',
-
   // Bookings priced from the price list (bookings step 2, 18 Nov 2026).
   'bookings.form.noPriceList': 'No price list published yet: type the product, and the total by hand.',
   'bookings.form.fromList': 'From the price list · {price}',
@@ -3322,8 +3300,6 @@ export const en = {
   'bookings.price.perPack': '{price} per pack',
   'bookings.err.tooHigh': 'The total is over 100,000: check the quantities.',
   'bookings.form.priceListUnreadable': 'The price list can’t be read now: type the product, and the total by hand.',
-  'fc.priceList.waiting': 'Waiting for the published list from the server — this needs a connection.',
-  'fc.priceList.clash': 'Two ticked products share the name «{names}»: the counter could book only one. Tick one of them, or rename it in its card.',
   'bookings.unit.packs': { one: "pack", other: "packs" },
   'bookings.form.unitPacks': 'packs ({size})',
 

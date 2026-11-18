@@ -89,12 +89,13 @@ export interface FoodcostSource {
   // The bookings price list (bookings step 2, `price-list/bookings`), live: its fields, or null when it does not exist. `fromServer`
   // tells the server's word from this device's own copy (offline, a device that never read it): only the first may be copied into
   // the screen's ticks, or a phone with no copy would offer an empty list to publish over the real one.
-  // Read only by the price-list screen, for whoever runs Food cost.
+  // Read only by Bookings' settings screen («Impostazioni», bookings settings 18 Nov 2026), for whoever runs Food cost.
   watchPriceList(
     onChange: (data: Record<string, unknown> | null, meta: { readonly fromServer: boolean }) => void,
     onError: (err: unknown) => void,
   ): () => void;
-  // Publishes the list WHOLE (names and selling prices only: shared/src/price-list.ts), stamped by the server. Firestore applies it
+  // Publishes the list WHOLE (names, selling prices and the settings' choices only: shared/src/price-list.ts), stamped by the
+  // server. Called by Bookings' settings screen on Save (the list moved there from Food cost, 18 Nov 2026). Firestore applies it
   // to its offline copy at once; the promise settles when the server answers (offline: later), and the screen never awaits it.
   publishPriceList(items: ReadonlyArray<Record<string, unknown>>): Promise<void>;
 }

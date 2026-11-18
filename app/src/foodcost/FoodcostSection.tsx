@@ -13,10 +13,10 @@ import { FoodcostList } from './FoodcostList';
 import { messageText } from './foodcostMessages';
 import { FROM_LIST, ScrollTopContext, cameFromList, keepDepth, pushDepth, useBackToRecipe, withoutKeepFocus } from './foodcostNav';
 import {
-  FOODCOST_PATH, historyPath, newPath, priceListPath, productPath, resolveFoodcostPath, settingsPath,
+  FOODCOST_PATH, historyPath, newPath, productPath, resolveFoodcostPath, settingsPath,
 } from './foodcostPath';
 import type { Origin, ShownView } from './foodcostPath';
-import { HandBackProvider, NEW_OPENER, PRICE_LIST_OPENER, SETTINGS_OPENER, productOpener, useHandBackState } from './handBack';
+import { HandBackProvider, NEW_OPENER, SETTINGS_OPENER, productOpener, useHandBackState } from './handBack';
 import { ProductPreviewDialog } from './ProductPreviewDialog';
 import styles from './FoodcostSection.module.css';
 
@@ -138,10 +138,6 @@ function FoodcostLayout({ view, origin }: { view: ShownView; origin: Origin }) {
     handBack.expect(SETTINGS_OPENER);
     openScreen(settingsPath);
   };
-  const openPriceList = () => {
-    handBack.expect(PRICE_LIST_OPENER);
-    openScreen(priceListPath);
-  };
 
   // «Show all»: the page stops being the recipe's. A product open beside stays open.
   // ⚠️ THE BUTTON PRESSED GOES WITH THE NARROWED BAR, so the focus would drop to <body>: the state carries no KEEP_FOCUS and
@@ -214,7 +210,6 @@ function FoodcostLayout({ view, origin }: { view: ShownView; origin: Origin }) {
                 onOpenProduct={openProduct}
                 onOpenNew={openNew}
                 onOpenSettings={openSettings}
-                onOpenPriceList={openPriceList}
                 using={listUsing}
                 onShowAll={showAll}
                 onBackToRecipe={backToRecipe}

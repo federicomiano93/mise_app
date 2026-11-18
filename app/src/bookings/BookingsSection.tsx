@@ -11,6 +11,7 @@ import { useMediaQuery } from '../ui/useMediaQuery';
 import { BookingDetail } from './BookingDetail';
 import { BookingEditor } from './BookingEditor';
 import { PrinterScreen } from './PrinterScreen';
+import { BookingSettingsScreen } from './BookingSettingsScreen';
 import { BookingsList } from './BookingsList';
 import { choiceForDate } from './bookingModel';
 import type { ListChoice } from './bookingModel';
@@ -130,5 +131,7 @@ function Detail({ view }: { view: Exclude<BookingsView, { kind: 'unknown' }> }) 
       return <BookingEditor key={view.id} id={view.id} />;
     case 'printer':
       return <PrinterScreen />;
+    case 'settings':
+      return <BookingSettingsScreen />;
   }
 }

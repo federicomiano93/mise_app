@@ -45,7 +45,7 @@ function fakeSource() {
     removeProduct: id => write('remove', id),
     getProductHistory: vi.fn(async () => [{ id: 'h1', foodCostPct: 30 }]),
     saveLabourCostPerHour: (rate, updatedAt) => write('rate', rate, updatedAt),
-    // The bookings price list is the price-list screen's own (bookings step 2): the store never touches it.
+    // The bookings price list is Bookings' settings screen's own (it moved there from Food cost): the store never touches it.
     watchPriceList: () => () => undefined,
     publishPriceList: () => Promise.resolve(),
   };

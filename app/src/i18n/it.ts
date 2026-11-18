@@ -3051,28 +3051,6 @@ export const it: Messages = {
   'bookings.slip.privacy': 'I tuoi dati (nome, telefono, indirizzo) servono solo per questo ordine e vengono cancellati 30 giorni dopo il ritiro. Puoi chiederne la cancellazione in qualsiasi momento.',
   'home.bookingsToday.title': 'Prenotazioni di oggi',
 
-  // The bookings price list in Food cost (bookings step 2, 18 Nov 2026): foodcost/PriceListScreen.tsx.
-  'fc.priceList.door': 'Listino prenotazioni',
-  'fc.priceList.title': 'Listino prenotazioni',
-  'fc.priceList.intro': 'Spunta i prodotti che il banco può prenotare. Il banco vede solo il nome e il prezzo di vendita (IVA inclusa), mai costi o margini. Per il banco non cambia nulla finché non pubblichi.',
-  'fc.priceList.publish': 'Pubblica',
-  'fc.priceList.publishQ': 'Vuoi pubblicare il listino?',
-  'fc.priceList.publishBody': { one: "Il banco vedrà {n} prodotto con questi prezzi. Le prenotazioni già prese mantengono i loro prezzi.", other: "Il banco vedrà {n} prodotti con questi prezzi. Le prenotazioni già prese mantengono i loro prezzi." },
-  'fc.priceList.published': 'Listino pubblicato ✓',
-  'fc.priceList.notPublished': 'Il listino non è stato pubblicato — controlla la connessione.',
-  'fc.priceList.unpublished': 'Non ancora pubblicato',
-  'fc.priceList.never': 'Mai pubblicato: il banco non ha ancora un listino.',
-  'fc.priceList.publishedOn': { one: "Pubblicato il {date} alle {time} · {n} prodotto", other: "Pubblicato il {date} alle {time} · {n} prodotti" },
-  'fc.priceList.readFailed': 'Il listino pubblicato non si può leggere ora. Riprova quando c’è connessione: pubblicare senza potrebbe sostituire il listino del banco.',
-  'fc.priceList.gone': { one: "{n} prodotto del listino pubblicato non ha più un prezzo di vendita: alla prossima pubblicazione esce.", other: "{n} prodotti del listino pubblicato non hanno più un prezzo di vendita: alla prossima pubblicazione escono." },
-  'fc.priceList.none': 'Nessun prodotto ha ancora un prezzo di vendita: dallo nella sua scheda, poi torna qui.',
-  'fc.priceList.unpriced': { one: "{n} prodotto non ha prezzo di vendita o modo di vendita, quindi non è elencato.", other: "{n} prodotti non hanno prezzo di vendita o modo di vendita, quindi non sono elencati." },
-  'fc.priceList.perKg': '{price} al kg',
-  'fc.priceList.perPiece': '{price} al pezzo',
-  'fc.priceList.perPack': '{price} a confezione ({size})',
-  'fc.priceList.changed': 'Cambiato dopo la pubblicazione (il banco vede ancora {price})',
-  'fc.priceList.discardBody': 'Le spunte che hai cambiato non sono pubblicate e andranno perse.',
-
   // Bookings priced from the price list (bookings step 2, 18 Nov 2026).
   'bookings.form.noPriceList': 'Nessun listino pubblicato: scrivi il prodotto, e il totale a mano.',
   'bookings.form.fromList': 'Dal listino · {price}',
@@ -3086,8 +3064,6 @@ export const it: Messages = {
   'bookings.price.perPack': '{price} a confezione',
   'bookings.err.tooHigh': 'Il totale supera 100.000: controlla le quantità.',
   'bookings.form.priceListUnreadable': 'Il listino non si può leggere ora: scrivi il prodotto, e il totale a mano.',
-  'fc.priceList.waiting': 'In attesa del listino pubblicato dal server — serve la connessione.',
-  'fc.priceList.clash': 'Due prodotti spuntati si chiamano «{names}»: il banco ne potrebbe prenotare solo uno. Spuntane uno solo, o rinominalo nella sua scheda.',
   'bookings.unit.packs': { one: "confezione", other: "confezioni" },
   'bookings.form.unitPacks': 'confezioni ({size})',
 

@@ -1,7 +1,8 @@
 import { useEffect, useId, useRef } from 'react';
-import { Plus, Printer } from 'lucide-react';
+import { Plus, Printer, Settings } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router';
 import { useT } from '../i18n/useT';
+import { useSession } from '../session/SessionContext';
 import type { MessageKey } from '../i18n/en';
 import { Button } from '../ui/Button';
 import { dayAfter, groupsFor, oldestKeptDay } from './bookingModel';
@@ -10,7 +11,7 @@ import { linesSummary, spellDate } from './bookingWords';
 import type { UnitWords } from './bookingWords';
 import { useBookings } from './BookingsContext';
 import { FROM_LIST, RESTORE_REFUSED, savedIdOf } from './bookingsNav';
-import { bookingPath, editBookingPath, newBookingPath, printerPath } from './bookingsPath';
+import { bookingPath, editBookingPath, newBookingPath, printerPath, settingsPath } from './bookingsPath';
 import styles from './BookingsList.module.css';
 
 export const STATUS_WORD: Readonly<Record<BookingStatus, MessageKey>> = {
@@ -42,6 +43,7 @@ export function BookingsList({ choice, onChoice, today, selectedId }: Props) {
   const { t, locale } = useT();
   const navigate = useNavigate();
   const { status, items, refused } = useBookings();
+  const { canManage } = useSession();
   const ids = useId();
   const yesterday = dayAfter(today, -1);
   const oldest = oldestKeptDay(today);
@@ -160,6 +162,13 @@ export function BookingsList({ choice, onChoice, today, selectedId }: Props) {
         <Printer aria-hidden="true" />
         <span>{t('bookings.printer.door')}</span>
       </Button>
+      {/* The venue's bookings settings (bookings settings, 18 Nov 2026): only for whoever manages bookings (the rules' managesBookings). */}
+      {canManage ? (
+        <Button variant="secondary" className={styles.printer} onPress={() => { void navigate(settingsPath(), { state: FROM_LIST }); }}>
+          <Settings aria-hidden="true" />
+          <span>{t('bookings.settings.door')}</span>
+        </Button>
+      ) : null}
     </section>
   );
 }
