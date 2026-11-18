@@ -12,6 +12,7 @@ import { typedDecimal } from '@mise/shared/currency';
 import { addDays, parseISODate, toISODate } from '@mise/shared/day';
 import { bookingUnitOf, itemNamed, lineAmount } from '@mise/shared/price-list';
 import type { PackUnit, PriceItem } from '@mise/shared/price-list';
+import type { Slot } from './bookingSettings';
 
 export type BookingMode = 'pickup' | 'delivery';
 export type BookingStatus = 'todo' | 'ready' | 'collected' | 'cancelled';
@@ -65,7 +66,11 @@ export type Booking = {
   readonly mode: BookingMode;
   readonly address: string;
   readonly date: string;
+  // The exact time, or — for a booking taken in a time slot — the slot's start.
   readonly time: string;
+  // The end of the slot it was taken in (bookings settings, 18 Nov 2026), later than `time`; null for an exact time (every
+  // booking taken before slots).
+  readonly slotEnd: string | null;
   readonly lines: readonly BookingLine[];
   readonly deposit: number | null;
   readonly total: number | null;
@@ -94,8 +99,12 @@ export type BookingData = Omit<Booking, 'id' | 'lines'> & {
 
 export const DATE_RE = /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/;
 export const TIME_RE = /^([01][0-9]|2[0-3]):[0-5][0-9]$/;
-// Digits, spaces and «+» only, with at least one digit: the rules' own pattern.
+// Digits, spaces and «+» only, with at least one digit: the rules' own pattern. ⚠️ An EMPTY phone is also allowed by the rules
+// (bookings settings: a venue that does not ask for it); whether one is required is the venue's askPhone, asked by firstProblem.
 export const PHONE_RE = /^[0-9 +]*[0-9][0-9 +]*$/;
+
+// A phone the rules accept: none, or the pattern within the bound.
+export const phoneStorable = (phone: string): boolean => phone === '' || (PHONE_RE.test(phone) && phone.length <= LIMITS.phone);
 
 const isOneOf = <T extends string>(list: readonly T[], value: unknown): value is T => list.some(item => item === value);
 
@@ -135,6 +144,7 @@ export function readBooking(id: string, data: Record<string, unknown>): Booking 
   if (typeof customerName !== 'string' || customerName === '') return null;
   if (typeof date !== 'string' || !DATE_RE.test(date)) return null;
   if (typeof time !== 'string' || !TIME_RE.test(time)) return null;
+  const slotEnd = typeof data.slotEnd === 'string' && TIME_RE.test(data.slotEnd) && data.slotEnd > time ? data.slotEnd : null;
   const lines = Array.isArray(data.lines) ? data.lines.map(readLine).filter((line): line is BookingLine => line !== null) : [];
   return {
     id,
@@ -144,6 +154,7 @@ export function readBooking(id: string, data: Record<string, unknown>): Booking 
     address: typeof data.address === 'string' ? data.address : '',
     date,
     time,
+    slotEnd,
     lines,
     deposit: moneyOrNull(data.deposit),
     total: moneyOrNull(data.total),
@@ -185,6 +196,8 @@ export type Draft = {
   readonly address: string;
   readonly date: string;
   readonly time: string;
+  // The slot's end when a slot is chosen, '' for an exact time.
+  readonly slotEnd: string;
   readonly lines: readonly DraftLine[];
   readonly deposit: string;
   readonly total: string;
@@ -195,9 +208,11 @@ export function blankLine(key: number): DraftLine {
   return { key, name: '', qty: '', unit: 'pcs', note: '', kept: null };
 }
 
-export function emptyDraft(nextKey: () => number): Draft {
+// A new booking's working copy. `date` is the day the list is showing (the form pre-fills it); `mode` the venue's only mode,
+// when it takes one only (bookings settings): there is then nothing to choose.
+export function emptyDraft(nextKey: () => number, { date = '', mode = null }: { date?: string; mode?: BookingMode | null } = {}): Draft {
   return {
-    customerName: '', phone: '', mode: null, address: '', date: '', time: '',
+    customerName: '', phone: '', mode, address: '', date, time: '', slotEnd: '',
     lines: [blankLine(nextKey())], deposit: '', total: '', notes: '',
   };
 }
@@ -217,6 +232,7 @@ export function draftFrom(booking: Booking, nextKey: () => number, decimal: stri
     address: booking.address,
     date: booking.date,
     time: booking.time,
+    slotEnd: booking.slotEnd ?? '',
     lines: booking.lines.length > 0
       ? booking.lines.map(line => ({
         key: nextKey(), name: line.name, qty: boxNumber(line.qty, decimal), unit: line.unit, note: line.note,
@@ -238,7 +254,7 @@ export function draftFrom(booking: Booking, nextKey: () => number, decimal: stri
 export function sameDraft(a: Draft, b: Draft): boolean {
   const lineText = (d: Draft) => JSON.stringify(d.lines.map(({ name, qty, unit, note }) => [name, qty, unit, note]));
   return a.customerName === b.customerName && a.phone === b.phone && a.mode === b.mode && a.address === b.address
-    && a.date === b.date && a.time === b.time && a.deposit === b.deposit && a.total === b.total && a.notes === b.notes
+    && a.date === b.date && a.time === b.time && a.slotEnd === b.slotEnd && a.deposit === b.deposit && a.total === b.total && a.notes === b.notes
     && lineText(a) === lineText(b);
 }
 
@@ -284,8 +300,35 @@ export type DraftField =
 export type DraftProblem = {
   readonly field: DraftField;
   // A message key ending of `bookings.err.*`.
-  readonly reason: 'required' | 'phone' | 'noLines' | 'qty' | 'money' | 'pastDate' | 'tooHigh';
+  readonly reason: 'required' | 'phone' | 'noLines' | 'qty' | 'money' | 'pastDate' | 'tooHigh' | 'slotFull';
 };
+
+// What the venue's settings ask of the form (bookings settings, 18 Nov 2026), as firstProblem needs them. Absent: today's form
+// (the phone asked, either mode, the exact time).
+export type FormRules = {
+  readonly askPhone: boolean;
+  // The venue's slots, or null for the exact time.
+  readonly slots: readonly Slot[] | null;
+  // Bookings per slot, null for no limit.
+  readonly slotLimit: number | null;
+  // The bookings the limit is counted against (this device's copy).
+  readonly bookings: readonly Booking[];
+  // The booking being edited (null for a new one): its id, and its day and time as stored, which stay valid even off the
+  // venue's slots and even in a slot that is full now (it is already in it).
+  readonly editing: { readonly id: string; readonly date: string; readonly time: string; readonly slotEnd: string } | null;
+};
+
+export const NO_FORM_RULES: FormRules = { askPhone: true, slots: null, slotLimit: null, bookings: [], editing: null };
+
+// The slot of the working copy among the venue's, or null.
+export function chosenSlot(draft: Pick<Draft, 'time' | 'slotEnd'>, slots: readonly Slot[]): Slot | null {
+  return slots.find(slot => slot.start === draft.time && slot.end === draft.slotEnd) ?? null;
+}
+
+// Whether the working copy still holds the edited booking's own time, as stored (kept even when it is on no slot).
+export function keepsStoredTime(draft: Pick<Draft, 'time' | 'slotEnd'>, editing: FormRules['editing']): boolean {
+  return editing !== null && draft.time === editing.time && draft.slotEnd === editing.slotEnd;
+}
 
 export function fieldId(field: DraftField): string {
   return typeof field === 'string' ? field : `line-${field.line}-${field.part}`;
@@ -296,17 +339,33 @@ export function fieldId(field: DraftField): string {
 // `items` is the published price list: a listed product's quantity is checked in the list's unit, the one it is written in.
 export function firstProblem(
   draft: Draft,
-  { today, isNew, items = [] }: { today: string; isNew: boolean; items?: readonly PriceItem[] },
+  { today, isNew, items = [], rules = NO_FORM_RULES }: { today: string; isNew: boolean; items?: readonly PriceItem[]; rules?: FormRules },
 ): DraftProblem | null {
   if (draft.customerName.trim() === '') return { field: 'customerName', reason: 'required' };
-  const phone = draft.phone.trim();
-  if (phone === '') return { field: 'phone', reason: 'required' };
-  if (!PHONE_RE.test(phone) || phone.length > LIMITS.phone) return { field: 'phone', reason: 'phone' };
+  // The phone is required only where the venue asks for it; where it does not, the field is not on the form at all.
+  if (rules.askPhone) {
+    const phone = draft.phone.trim();
+    if (phone === '') return { field: 'phone', reason: 'required' };
+    if (!PHONE_RE.test(phone) || phone.length > LIMITS.phone) return { field: 'phone', reason: 'phone' };
+  }
   if (draft.mode === null) return { field: 'mode', reason: 'required' };
   if (draft.mode === 'delivery' && draft.address.trim() === '') return { field: 'address', reason: 'required' };
   if (!DATE_RE.test(draft.date)) return { field: 'date', reason: 'required' };
   if (isNew && draft.date < today) return { field: 'date', reason: 'pastDate' };
   if (!TIME_RE.test(draft.time)) return { field: 'time', reason: 'required' };
+  if (rules.slots !== null) {
+    const slot = chosenSlot(draft, rules.slots);
+    const kept = keepsStoredTime(draft, rules.editing);
+    if (slot === null && !kept) return { field: 'time', reason: 'required' };
+    // ⚠️ A FULL SLOT is refused on Save too: it may have filled up on another device while this form was open. The booking
+    // already in it (stored on this day, in this slot) keeps its place whatever the count.
+    const alreadyThere = rules.editing !== null && slot !== null
+      && inSlotOf(rules.editing, draft.date, slot);
+    if (slot !== null && !alreadyThere) {
+      const left = placesLeftFor(rules, draft.date, slot);
+      if (left !== null && left <= 0) return { field: 'time', reason: 'slotFull' };
+    }
+  }
   const used = draft.lines.map((line, index) => ({ line, index })).filter(({ line }) => !untouchedLine(line));
   if (used.length === 0) return { field: { line: 0, part: 'name' }, reason: 'noLines' };
   for (const { line, index } of used) {
@@ -327,6 +386,20 @@ export function firstProblem(
 }
 
 const fold = (text: string): string => text.trim().replace(/\s+/g, ' ').toLocaleLowerCase();
+
+// The same count as bookingSettings.placesLeft (written here too, so the two files import no value from each other): the
+// places a slot has for THIS booking, others only, cancelled ones aside.
+function placesLeftFor(rules: FormRules, date: string, slot: Slot): number | null {
+  if (rules.slotLimit === null) return null;
+  const editingId = rules.editing?.id ?? null;
+  const others = rules.bookings.filter(b => b.id !== editingId && b.status !== 'cancelled' && inSlotOf(b, date, slot)).length;
+  return rules.slotLimit - others;
+}
+
+// Whether a booking sits in a slot: its day, and its time from the slot's start up to (not including) its end. An old booking
+// with an exact time counts in the slot it falls in, so a limit holds across the change to slots.
+export const inSlotOf = (booking: { readonly date: string; readonly time: string }, date: string, slot: Slot): boolean =>
+  booking.date === date && booking.time >= slot.start && booking.time < slot.end;
 
 // ── Prices (bookings step 2) ─────────────────────────────────────────────────
 
@@ -408,6 +481,9 @@ export function toBookingData(
 ): BookingData {
   const cut = (text: string, max: number) => text.trim().slice(0, max);
   const mode: BookingMode = draft.mode ?? 'pickup';
+  // ⚠️ A PHONE THE RULES WOULD REFUSE IS NEVER WRITTEN: where the venue does not ask for it the box is not on the form, and
+  // whatever an old booking held is kept only while it is one the rules accept.
+  const phone = cut(draft.phone, LIMITS.phone).replace(/\s+/g, ' ');
   const lines = draft.lines
     .filter(line => !untouchedLine(line))
     .slice(0, LIMITS.lines)
@@ -443,12 +519,14 @@ export function toBookingData(
   };
   return {
     customerName: cut(draft.customerName, LIMITS.customerName),
-    phone: cut(draft.phone, LIMITS.phone).replace(/\s+/g, ' '),
+    phone: phoneStorable(phone) ? phone : '',
     mode,
     // A pickup keeps no address: nothing personal is stored that the booking does not need.
     address: mode === 'delivery' ? cut(draft.address, LIMITS.address) : '',
     date: draft.date,
     time: draft.time,
+    // Only a slot end the rules accept: 'HH:MM', after the start.
+    slotEnd: TIME_RE.test(draft.slotEnd) && draft.slotEnd > draft.time ? draft.slotEnd : null,
     lines,
     deposit: money(draft.deposit),
     // Typed, else the price list's sum (bookings step 2: computed, and the counter may type over it).

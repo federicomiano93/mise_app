@@ -3,6 +3,8 @@ import { readPriceList } from '@mise/shared/price-list';
 import type { PriceList } from '@mise/shared/price-list';
 import type { Booking, BookingData } from '../bookings/bookingModel';
 import type { BookingsSource } from '../bookings/bookingsSource';
+import { DEFAULT_SETTINGS } from '../bookings/bookingSettings';
+import type { BookingSettings } from '../bookings/bookingSettings';
 
 // A bookings source for the specs, in memory: the bookings are in one map, every write lands at once (as Firestore's local
 // copy does) and every live watcher is told. A write is refused, as the rules or the network would, by setting `refuseWith`.
@@ -14,6 +16,14 @@ export type FakeBookingsSource = BookingsSource & {
   // The published price list (an empty list: never published). Setting it tells every live watcher.
   priceList: PriceList;
   refuseWith: unknown;
+  // The venue's settings (config/bookings). Setting it tells every live watcher, as the server.
+  settings: BookingSettings;
+  // The server's answer about the settings is held back until releaseSettings(): this device's copy answers first, with the
+  // defaults (a phone that never read them, offline).
+  holdSettings(): void;
+  releaseSettings(): void;
+  // A refused settings write (the rules, offline).
+  refuseSettingsWith: unknown;
   push(): void;
   breakStreams(): void;
   watching(): number;
@@ -31,6 +41,7 @@ export function bookingFixture(partial: Partial<Booking> & { id: string }): Book
     address: '',
     date: '2026-11-18',
     time: '10:00',
+    slotEnd: null,
     lines: [{ recipeId: null, productId: null, unitPrice: null, packSize: null, packUnit: null, name: 'Panettone', qty: 2, unit: 'pcs', note: '' }],
     deposit: null,
     total: null,
@@ -44,19 +55,29 @@ export function bookingFixture(partial: Partial<Booking> & { id: string }): Book
 const fromData = (id: string, data: BookingData): Booking => ({
   id,
   ...data,
+  slotEnd: data.slotEnd ?? null,
   lines: data.lines.map(({ packSize, packUnit, ...line }) => ({ ...line, note: line.note ?? '', packSize: packSize ?? null, packUnit: packUnit ?? null })),
 });
 
 // A price list for a spec, from stored-shape items.
 export const priceListOf = (items: ReadonlyArray<Record<string, unknown>>): PriceList => readPriceList({ items });
 
-export function fakeBookingsSource(seed: readonly Booking[] = [], priceList: PriceList = { items: [], publishedAtMs: null }): FakeBookingsSource {
+export function fakeBookingsSource(
+  seed: readonly Booking[] = [],
+  priceList: PriceList = { items: [], publishedAtMs: null },
+  settings: BookingSettings = DEFAULT_SETTINGS,
+): FakeBookingsSource {
   const items = new Map(seed.map(item => [item.id, item] as const));
   const watchers = new Set<Watcher>();
   const listWatchers = new Set<(list: PriceList) => void>();
+  type SettingsWatcher = (value: BookingSettings, meta: { readonly fromServer: boolean }) => void;
+  const settingsWatchers = new Set<SettingsWatcher>();
   let counter = 0;
   let refuseWith: unknown = null;
-  const source = { priceList };
+  let refuseSettingsWith: unknown = null;
+  let settingsHeld = false;
+  const source = { priceList, settings };
+  const tellSettings = () => { for (const w of settingsWatchers) w(source.settings, { fromServer: true }); };
 
   function push(): void {
     for (const w of watchers) w.onChange([...items.values()].filter(b => b.date >= w.from), false);
@@ -72,6 +93,32 @@ export function fakeBookingsSource(seed: readonly Booking[] = [], priceList: Pri
     },
     get refuseWith() { return refuseWith; },
     set refuseWith(value: unknown) { refuseWith = value; },
+    get settings() { return source.settings; },
+    set settings(value: BookingSettings) {
+      source.settings = value;
+      tellSettings();
+    },
+    get refuseSettingsWith() { return refuseSettingsWith; },
+    set refuseSettingsWith(value: unknown) { refuseSettingsWith = value; },
+    holdSettings() { settingsHeld = true; },
+    releaseSettings() {
+      settingsHeld = false;
+      tellSettings();
+    },
+    watchSettings: vi.fn((onChange: SettingsWatcher) => {
+      settingsWatchers.add(onChange);
+      queueMicrotask(() => {
+        if (!settingsWatchers.has(onChange)) return;
+        if (settingsHeld) onChange(DEFAULT_SETTINGS, { fromServer: false });
+        else onChange(source.settings, { fromServer: true });
+      });
+      return () => { settingsWatchers.delete(onChange); };
+    }),
+    saveSettings: vi.fn(async (value: BookingSettings) => {
+      if (refuseSettingsWith !== null) throw refuseSettingsWith as Error;
+      source.settings = value;
+      tellSettings();
+    }),
     push,
     breakStreams() {
       for (const w of [...watchers]) w.onError(new Error('unavailable'));

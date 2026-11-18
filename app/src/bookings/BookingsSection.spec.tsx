@@ -330,7 +330,7 @@ describe('the editor', () => {
     await user.click(within(ask).getByRole('button', { name: 'Save' }));
     await waitFor(() => { expect(router.state.location.pathname).toBe('/bookings'); });
     expect(source.create).toHaveBeenCalledWith({
-      customerName: 'Gino Prova', phone: '+39 333 111 2222', mode: 'pickup', address: '', date: TOMORROW, time: '08:15',
+      customerName: 'Gino Prova', phone: '+39 333 111 2222', mode: 'pickup', address: '', date: TOMORROW, time: '08:15', slotEnd: null,
       lines: [{ recipeId: null, productId: 'pF', unitPrice: 12, name: 'Focaccia', qty: 1.5, unit: 'kg' }],
       deposit: 5, total: 30, notes: '', status: 'todo', number: 7,
     });

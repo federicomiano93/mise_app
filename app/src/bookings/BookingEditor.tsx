@@ -35,6 +35,7 @@ const PROBLEM_TEXT: Readonly<Record<DraftProblem['reason'], MessageKey>> = {
   money: 'bookings.err.money',
   pastDate: 'bookings.err.pastDate',
   tooHigh: 'bookings.err.tooHigh',
+  slotFull: 'bookings.err.slotFull',
 };
 
 // The editor of a booking, new (id null) or existing (18 Nov 2026).

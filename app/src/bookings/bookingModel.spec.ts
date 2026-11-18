@@ -2,8 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   LIMITS, blankLine, boxNumber, choiceForDate, dayAfter, draftFrom, emptyDraft, firstProblem, groupsFor, nextNumber, oldestKeptDay,
   effectiveTotal, linePrice, listTotal, parseMoney, parseQty, readBooking, sameDraft, sortForDay, stillToHandOver, toBookingData, toPay,
+  NO_FORM_RULES, phoneStorable,
 } from './bookingModel';
-import type { Booking, Draft } from './bookingModel';
+import type { Booking, Draft, FormRules } from './bookingModel';
 import { bookingFixture, priceListOf } from '../testing/fakeBookingsSource';
 
 // ⚠️ Fake customers only (P13).
@@ -12,7 +13,7 @@ const nextKey = () => { key += 1; return key; };
 
 const good: Draft = {
   customerName: ' Mario Prova ', phone: '+39 333 000 0000', mode: 'pickup', address: 'kept only for a delivery',
-  date: '2026-12-24', time: '09:30',
+  date: '2026-12-24', time: '09:30', slotEnd: '',
   lines: [{ key: 1, name: 'Panettone', qty: '2', unit: 'pcs', note: '' , kept: null }, { key: 2, name: 'focaccia ', qty: '1,5', unit: 'kg', note: ' sliced ' , kept: null }],
   deposit: '10', total: '42,50', notes: '',
 };
@@ -26,7 +27,7 @@ describe('readBooking', () => {
       deposit: 10, total: 42.5, notes: 'x', status: 'ready', number: 7,
     });
     expect(b).toEqual({
-      id: 'A', customerName: 'Mario Prova', phone: '+39 1', mode: 'delivery', address: 'Via Finta 1', date: '2026-12-24', time: '09:30',
+      id: 'A', customerName: 'Mario Prova', phone: '+39 1', mode: 'delivery', address: 'Via Finta 1', date: '2026-12-24', time: '09:30', slotEnd: null,
       lines: [
         { recipeId: 'R1', productId: null, unitPrice: null, packSize: null, packUnit: null, name: 'Focaccia', qty: 1.5, unit: 'kg', note: 'sliced' },
         { recipeId: null, productId: 'p9', unitPrice: 2.5, packSize: null, packUnit: null, name: 'Pane', qty: 2, unit: 'pcs', note: '' },
@@ -129,7 +130,7 @@ describe('toBookingData: what is written', () => {
   it('trims, prices a product on the list by its exact name, drops blank rows and a pickup\'s address; a typed total wins', () => {
     const data = toBookingData({ ...good, lines: [...good.lines, blankLine(9)] }, { status: 'todo', number: 7, items });
     expect(data).toEqual({
-      customerName: 'Mario Prova', phone: '+39 333 000 0000', mode: 'pickup', address: '', date: '2026-12-24', time: '09:30',
+      customerName: 'Mario Prova', phone: '+39 333 000 0000', mode: 'pickup', address: '', date: '2026-12-24', time: '09:30', slotEnd: null,
       lines: [
         { recipeId: null, productId: 'pP', unitPrice: 25, name: 'Panettone', qty: 2, unit: 'pcs' },
         { recipeId: null, productId: 'pF', unitPrice: 12, name: 'focaccia', qty: 1.5, unit: 'kg', note: 'sliced' },
@@ -273,5 +274,91 @@ describe('days', () => {
   it('lists today\'s bookings still to hand over for the Home', () => {
     const shown = stillToHandOver([...list, bookingFixture({ id: 'done', date: today, status: 'collected' })], today);
     expect(shown.map(b => b.id)).toEqual(['t1', 't2']);
+  });
+});
+
+// ── Bookings settings (18 Nov 2026): the form obeys the venue ─────────────────
+describe('firstProblem with the venue\'s settings', () => {
+  const slots = [{ start: '09:00', end: '10:00' }, { start: '10:00', end: '11:00' }];
+  const rules = (over: Partial<FormRules> = {}): FormRules => ({ ...NO_FORM_RULES, ...over });
+
+  it('the phone is required only where the venue asks for it', () => {
+    expect(firstProblem({ ...good, phone: '' }, ctx)).toEqual({ field: 'phone', reason: 'required' });
+    expect(firstProblem({ ...good, phone: '' }, { ...ctx, rules: rules({ askPhone: false }) })).toBeNull();
+    // Not asked: whatever the box held is not judged (it is not on the form).
+    expect(firstProblem({ ...good, phone: 'abc' }, { ...ctx, rules: rules({ askPhone: false }) })).toBeNull();
+  });
+
+  it('⚠️ phone optional: no phone is written as \'\', and a phone the rules would refuse is never written', () => {
+    expect(toBookingData({ ...good, phone: '' }, { status: 'todo', number: 1, items: [] }).phone).toBe('');
+    expect(toBookingData({ ...good, phone: 'abc' }, { status: 'todo', number: 1, items: [] }).phone).toBe('');
+    expect(phoneStorable('')).toBe(true);
+    expect(phoneStorable('+39 333')).toBe(true);
+    expect(phoneStorable('  ')).toBe(false);
+    expect(phoneStorable('1'.repeat(31))).toBe(false);
+  });
+
+  it('with slots: a slot must be chosen, and saving writes its start and end', () => {
+    const r = rules({ slots });
+    expect(firstProblem({ ...good, time: '' }, { ...ctx, rules: r })).toEqual({ field: 'time', reason: 'required' });
+    expect(firstProblem({ ...good, time: '09:30', slotEnd: '' }, { ...ctx, rules: r })).toEqual({ field: 'time', reason: 'required' });
+    const chosen = { ...good, time: '09:00', slotEnd: '10:00' };
+    expect(firstProblem(chosen, { ...ctx, rules: r })).toBeNull();
+    expect(toBookingData(chosen, { status: 'todo', number: 1, items: [] })).toMatchObject({ time: '09:00', slotEnd: '10:00' });
+  });
+
+  it('without slots the exact time, and no slotEnd written', () => {
+    expect(toBookingData({ ...good, slotEnd: '' }, { status: 'todo', number: 1, items: [] }).slotEnd).toBeNull();
+    // A slot end that is not after the time is never written.
+    expect(toBookingData({ ...good, time: '10:00', slotEnd: '09:00' }, { status: 'todo', number: 1, items: [] }).slotEnd).toBeNull();
+  });
+
+  it('a full slot is refused on Save; another booking\'s cancellation frees it', () => {
+    const DAY = good.date;
+    const taken = [bookingFixture({ id: 'x', date: DAY, time: '09:00', slotEnd: '10:00' })];
+    const chosen = { ...good, time: '09:00', slotEnd: '10:00' };
+    expect(firstProblem(chosen, { ...ctx, rules: rules({ slots, slotLimit: 1, bookings: taken }) })).toEqual({ field: 'time', reason: 'slotFull' });
+    expect(firstProblem(chosen, { ...ctx, rules: rules({ slots, slotLimit: 2, bookings: taken }) })).toBeNull();
+    const cancelled = [{ ...taken[0]!, status: 'cancelled' as const }];
+    expect(firstProblem(chosen, { ...ctx, rules: rules({ slots, slotLimit: 1, bookings: cancelled }) })).toBeNull();
+    // No limit: never full.
+    expect(firstProblem(chosen, { ...ctx, rules: rules({ slots, bookings: taken }) })).toBeNull();
+  });
+
+  it('⚠️ the booking being edited keeps its place in a slot that is full now, and is not counted twice', () => {
+    const DAY = good.date;
+    const self = bookingFixture({ id: 'me', date: DAY, time: '09:00', slotEnd: '10:00' });
+    const other = bookingFixture({ id: 'x', date: DAY, time: '09:00', slotEnd: '10:00' });
+    const editing = { id: 'me', date: DAY, time: '09:00', slotEnd: '10:00' };
+    const chosen = { ...good, time: '09:00', slotEnd: '10:00' };
+    // The slot holds two with a limit of 1 (two tablets in the same second): an edit of either still saves.
+    expect(firstProblem(chosen, { ...ctx, isNew: false, rules: rules({ slots, slotLimit: 1, bookings: [self, other], editing }) })).toBeNull();
+    // Limit 2, only itself and one other: room — it is not counted as well as stored.
+    expect(firstProblem(chosen, { ...ctx, isNew: false, rules: rules({ slots, slotLimit: 2, bookings: [self, other], editing }) })).toBeNull();
+    // Moving it to a slot that is full is refused.
+    const full = [self, bookingFixture({ id: 'y', date: DAY, time: '10:00', slotEnd: '11:00' })];
+    expect(firstProblem({ ...good, time: '10:00', slotEnd: '11:00' }, { ...ctx, isNew: false, rules: rules({ slots, slotLimit: 1, bookings: full, editing }) }))
+      .toEqual({ field: 'time', reason: 'slotFull' });
+  });
+
+  it('an old booking with an exact time not on a slot keeps that time: nothing is lost', () => {
+    const editing = { id: 'me', date: good.date, time: '09:30', slotEnd: '' };
+    expect(firstProblem({ ...good, time: '09:30', slotEnd: '' }, { ...ctx, isNew: false, rules: rules({ slots, editing }) })).toBeNull();
+    // …but a new exact time is not offered once the venue has slots.
+    expect(firstProblem({ ...good, time: '09:40', slotEnd: '' }, { ...ctx, isNew: false, rules: rules({ slots, editing }) }))
+      .toEqual({ field: 'time', reason: 'required' });
+  });
+
+  it('a new booking starts on the day the list shows, and in the venue\'s only mode', () => {
+    expect(emptyDraft(nextKey, { date: '2026-12-24', mode: 'pickup' })).toMatchObject({ date: '2026-12-24', mode: 'pickup', slotEnd: '' });
+    expect(emptyDraft(nextKey)).toMatchObject({ date: '', mode: null });
+  });
+
+  it('readBooking reads slotEnd only when it is after the time', () => {
+    const base = { customerName: 'Mario Prova', phone: '', mode: 'pickup', date: '2026-12-24', time: '09:00', lines: [] };
+    expect(readBooking('A', { ...base, slotEnd: '10:00' })?.slotEnd).toBe('10:00');
+    expect(readBooking('A', { ...base, slotEnd: '08:00' })?.slotEnd).toBeNull();
+    expect(readBooking('A', base)?.slotEnd).toBeNull();
+    expect(readBooking('A', base)?.phone).toBe('');
   });
 });

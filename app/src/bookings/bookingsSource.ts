@@ -23,9 +23,14 @@ import { PRICE_LIST_DOC, readPriceList } from '@mise/shared/price-list';
 import type { PriceList } from '@mise/shared/price-list';
 import { readBooking } from './bookingModel';
 import type { Booking, BookingData, BookingStatus } from './bookingModel';
+import { readSettings, settingsToStore } from './bookingSettings';
+import type { BookingSettings } from './bookingSettings';
 
 const BOOKINGS = 'bookings';
 const PRICE_LIST = 'price-list';
+// The section's own settings document (bookings settings, 18 Nov 2026): `config/bookings`.
+const CONFIG = 'config';
+const SETTINGS_DOC = 'bookings';
 
 // How many bookings the list reads at most: about two a day for a year would still fit, and the retention keeps
 // 30 days of past ones only.
@@ -42,6 +47,15 @@ export interface BookingsSource {
   // The price list Food cost published (bookings step 2): the products the counter books, with their prices. An empty list when
   // nothing has been published. Read only while an editor is open.
   watchPriceList(onChange: (list: PriceList) => void, onError: (err: unknown) => void): () => void;
+  // The venue's bookings settings (config/bookings), live, read with their defaults (a missing document is today's form).
+  // `fromServer` tells the server's word from this device's own copy: the settings SCREEN copies only the first (a phone
+  // offline with no copy would offer the defaults and a Save would write them over the real ones); the form takes either.
+  watchSettings(
+    onChange: (settings: BookingSettings, meta: { readonly fromServer: boolean }) => void,
+    onError: (err: unknown) => void,
+  ): () => void;
+  // Saves the settings (merge; a cleared slot or limit is a deleted field). Settles when the server answers.
+  saveSettings(settings: BookingSettings): Promise<void>;
   // A new booking. The id is made here, synchronously, so the caller knows it at once.
   create(data: BookingData): { readonly id: string; readonly written: Promise<void> };
   // Every key of an existing booking again (the editor's Save); `createdAt` is left as stored.
@@ -63,6 +77,7 @@ export function createFirestoreBookingsSource(firestore: () => Promise<Firestore
   // Throws on a venue id that could point a write anywhere else (@mise/shared/location-id).
   const path = buildPath(locationId, BOOKINGS);
   const priceListPath = buildPath(locationId, PRICE_LIST);
+  const configPath = buildPath(locationId, CONFIG);
 
   // A live query whose Firestore may not be loaded yet; the returned stop works at any moment.
   // ⚠️ onSnapshot does NOT resubscribe after an error: onError lets the screen say so instead of looking like a venue with no
@@ -98,7 +113,8 @@ export function createFirestoreBookingsSource(firestore: () => Promise<Firestore
   }
 
   // The venue stamp is applied HERE, never by a caller: the rules require `bakery` to name the folder written to.
-  const stamped = (data: BookingData) => ({ ...data, bakery: locationId });
+  // ⚠️ `slotEnd` IS WRITTEN ONLY WHEN THERE IS ONE: the rules allow the key to be missing, never to be null.
+  const stamped = ({ slotEnd, ...data }: BookingData) => ({ ...data, ...(slotEnd === null ? {} : { slotEnd }), bakery: locationId });
 
   return {
     watch(fromDate, onChange, onError) {
@@ -145,6 +161,39 @@ export function createFirestoreBookingsSource(firestore: () => Promise<Firestore
       };
     },
 
+    watchSettings(onChange, onError) {
+      let stopped = false;
+      let unsubscribe: (() => void) | null = null;
+      firestore().then(({ fs, db }) => {
+        if (stopped) return;
+        unsubscribe = fs.onSnapshot(
+          fs.doc(db, configPath, SETTINGS_DOC),
+          // With metadata changes: the server's answer after this device's own copy arrives even when it says the same.
+          { includeMetadataChanges: true },
+          snap => { onChange(readSettings(snap.exists() ? snap.data() : null), { fromServer: !snap.metadata.fromCache }); },
+          err => {
+            console.warn('watch(bookings settings) failed:', err);
+            onError(err);
+          },
+        );
+      }).catch(err => {
+        if (!stopped) onError(err);
+      });
+      return () => {
+        stopped = true;
+        unsubscribe?.();
+        unsubscribe = null;
+      };
+    },
+
+    async saveSettings(settings) {
+      const { fs, db } = await firestore();
+      const { fields, cleared } = settingsToStore(settings);
+      const write: Record<string, unknown> = { ...fields, bakery: locationId };
+      for (const key of cleared) write[key] = fs.deleteField();
+      await fs.setDoc(fs.doc(db, configPath, SETTINGS_DOC), write, { merge: true });
+    },
+
     // setDoc on a made id rather than addDoc, so the id is known before Firestore has loaded.
     create(data) {
       const id = newBookingId();
@@ -157,9 +206,14 @@ export function createFirestoreBookingsSource(firestore: () => Promise<Firestore
     },
 
     // A merge of every key but `createdAt`: the rules judge the merged document, which keeps the stored one.
+    // ⚠️ A BOOKING MOVED FROM A SLOT TO AN EXACT TIME LOSES ITS `slotEnd` HERE: a merge never removes a key by itself.
     async update(id, data) {
       const { fs, db } = await firestore();
-      await fs.setDoc(fs.doc(db, path, id), { ...stamped(data), updatedAt: fs.serverTimestamp() }, { merge: true });
+      await fs.setDoc(fs.doc(db, path, id), {
+        ...stamped(data),
+        ...(data.slotEnd === null ? { slotEnd: fs.deleteField() } : {}),
+        updatedAt: fs.serverTimestamp(),
+      }, { merge: true });
     },
 
     async setStatus(id, status) {
