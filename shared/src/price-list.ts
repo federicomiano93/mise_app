@@ -98,15 +98,18 @@ function millisOf(value: unknown): number | null {
 }
 
 // The stored document as both sections read it. A missing document is an empty, never-published list. Duplicated product
-// ids keep their first line; the list is sorted by name for the screens (the stored order means nothing).
+// ids — and duplicated NAMES, which the counter could not tell apart (a line is matched by its name) — keep their first line;
+// the list is sorted by name for the screens (the stored order means nothing).
 export function readPriceList(data: Record<string, unknown> | null | undefined, locale?: string): PriceList {
   if (!data) return { items: [], publishedAtMs: null };
   const seen = new Set<string>();
+  const names = new Set<string>();
   const items: PriceItem[] = [];
   for (const raw of Array.isArray(data.items) ? data.items.slice(0, MAX_PRICE_ITEMS) : []) {
     const item = readItem(raw);
-    if (item === null || seen.has(item.productId)) continue;
+    if (item === null || seen.has(item.productId) || names.has(foldName(item.name))) continue;
     seen.add(item.productId);
+    names.add(foldName(item.name));
     items.push(item);
   }
   items.sort((a, b) => a.name.localeCompare(b.name, locale));
@@ -136,18 +139,35 @@ export function bookingUnitOf(per: PricePer): 'pcs' | 'kg' {
   return per === 'kg' ? 'kg' : 'pcs';
 }
 
-// What a line costs: quantity × unit price, to the cent. Never NaN: anything unreadable is 0.
+// What a line costs: quantity × unit price, to the cent, a half cent rounded UP. Never NaN: anything unreadable is 0.
+// ⚠️ THROUGH toFixed BEFORE THE ROUNDING: 0.5 × 1.15 is 0.57499999… in binary, and a plain Math.round would make 0.57 of a
+// till's 0.58.
 export function lineAmount(qty: unknown, unitPrice: unknown): number {
   const q = typeof qty === 'number' && Number.isFinite(qty) && qty > 0 ? qty : 0;
   const p = typeof unitPrice === 'number' && Number.isFinite(unitPrice) && unitPrice > 0 ? unitPrice : 0;
-  return Math.round(q * p * 100) / 100;
+  return Math.round(Number((q * p * 100).toFixed(6))) / 100;
+}
+
+// A name as the counter's matching compares it: case and spaces aside.
+export function foldName(text: string): string {
+  return text.trim().replace(/\s+/g, ' ').toLocaleLowerCase();
 }
 
 // The item a typed product name stands for: an exact match of a name on the list (case and spaces aside), else null.
-const fold = (text: string): string => text.trim().replace(/\s+/g, ' ').toLocaleLowerCase();
-
 export function itemNamed(name: string, items: readonly PriceItem[]): PriceItem | null {
-  const wanted = fold(name);
+  const wanted = foldName(name);
   if (wanted === '') return null;
-  return items.find(item => fold(item.name) === wanted) ?? null;
+  return items.find(item => foldName(item.name) === wanted) ?? null;
+}
+
+// The names that two or more of these items share (case and spaces aside): the counter could book only one of them, so Food cost
+// refuses to publish them together.
+export function sharedNames(items: readonly PriceItem[]): string[] {
+  const count = new Map<string, { name: string; n: number }>();
+  for (const item of items) {
+    const key = foldName(item.name);
+    const seen = count.get(key);
+    count.set(key, { name: seen?.name ?? item.name, n: (seen?.n ?? 0) + 1 });
+  }
+  return [...count.values()].filter(entry => entry.n > 1).map(entry => entry.name);
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  MAX_PRICE_ITEMS, bookingUnitOf, itemIsStale, itemNamed, itemsToStore, lineAmount, priceItemOf, readPriceList,
+  sharedNames, MAX_PRICE_ITEMS, bookingUnitOf, itemIsStale, itemNamed, itemsToStore, lineAmount, priceItemOf, readPriceList,
 } from './price-list';
 
 // NEW IN MISE 2 (bookings step 2): no js/ original, so not paired. The price list the counter books from.
@@ -90,6 +90,10 @@ describe('the rest', () => {
     expect(lineAmount(1.5, 12)).toBe(18);
     expect(lineAmount(3, 2.35)).toBe(7.05);
     expect(lineAmount(Number.NaN, 2)).toBe(0);
+    // A half cent goes up, as at a till, binary fractions aside.
+    expect(lineAmount(0.5, 1.15)).toBe(0.58);
+    expect(lineAmount(0.3, 3.05)).toBe(0.92);
+    expect(lineAmount(1.5, 0.35)).toBe(0.53);
     expect(lineAmount(2, null)).toBe(0);
   });
 
@@ -98,5 +102,16 @@ describe('the rest', () => {
     expect(itemNamed('  focaccia   ALTA ', items)?.productId).toBe('a');
     expect(itemNamed('Focaccia', items)).toBeNull();
     expect(itemNamed('', items)).toBeNull();
+  });
+
+  it('two products of the same name: the reader keeps the first, and Food cost is told which names clash', () => {
+    const list = readPriceList({ items: [
+      { productId: 'a', name: 'Focaccia', price: 2.5, per: 'piece' },
+      { productId: 'b', name: ' focaccia ', price: 12, per: 'kg' },
+    ] });
+    expect(list.items.map(i => i.productId)).toEqual(['a']);
+    const both = [priceItemOf(product({ id: 'a', name: 'Focaccia', sellingMode: 'piece' }))!, priceItemOf(product({ id: 'b', name: 'focaccia ' }))!];
+    expect(sharedNames(both)).toEqual(['Focaccia']);
+    expect(sharedNames([both[0]!])).toEqual([]);
   });
 });
