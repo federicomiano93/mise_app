@@ -13,6 +13,18 @@
   align-items: start;
 }
 
+/* The right-hand column (16 and 18 Nov 2026): «Ordini da fare» and «Prenotazioni di oggi», one under the other. While neither is
+   drawn it takes no room, so «Da fare» keeps no gap under it. */
+.side {
+  display: grid;
+  gap: var(--s4);
+  min-width: 0;
+}
+
+.side[data-empty="true"] {
+  display: none;
+}
+
 /* ⚠️ ONLY WHILE «Ordini da fare» IS DRAWN (`data-two`): without it «Da fare» keeps its one readable column, never half a page beside an
    empty one. */
 @media (min-width: 1000px) {
