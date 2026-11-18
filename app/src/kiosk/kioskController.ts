@@ -36,8 +36,8 @@
 // The lock is asked for again on every tick (refreshWakeLock), since a lost one is otherwise never requested twice.
 
 import {
-  KIOSK_LAST_RELOAD_KEY, KIOSK_RESUME_KEY, DEFAULT_KIOSK_SETTINGS,
-  nextKioskState, shouldAutoUpdate, shouldDailyReload, shouldReloadOnWake,
+  KIOSK_LAST_RELOAD_KEY, KIOSK_RESUME_KEY, DEFAULT_KIOSK_SETTINGS, REST_NOW_GUARD_MS,
+  nextKioskState, shouldAutoUpdate, shouldDailyReload, shouldReloadOnWake, shouldRestNow,
 } from '@mise/shared/kiosk-model';
 import type { KioskSettings, KioskState } from '@mise/shared/kiosk-model';
 import type { SessionStatus } from '../session/session';
@@ -89,6 +89,9 @@ export interface KioskSnapshot {
   readonly reloading: boolean;
   // When the cover was last painted: the clock it shows. Moves on every tick while the cover is up.
   readonly paintedAt: number;
+  // Not before this moment may the waking tap be armed: the cover raised by the Home's «Rest» must not be woken by the very tap
+  // (or the repeat of the key) that raised it (REST_NOW_GUARD_MS, wakeArmDelay). 0 for a cover raised by idleness.
+  readonly armAt: number;
 }
 
 export interface KioskController {
@@ -96,6 +99,8 @@ export interface KioskController {
   setSession(session: KioskSessionView): void;
   // The waking tap (or key) on the cover; wakeTap.ts has already swallowed it.
   wakeTap(viaKey: boolean): void;
+  // The Home's «Rest» (staff slice 6): cover the screen at once, on a kiosk device, signed in, not already resting.
+  restNow(): void;
   stop(): void;
   subscribe(listener: () => void): () => void;
   getSnapshot(): KioskSnapshot;
@@ -129,7 +134,8 @@ export function createKioskController(env: KioskEnv): KioskController {
   let focusBeforeRest: Element | null = null;
   // A release is waiting to take over (asked on every tick while the cover is up): the waking tap then lets it in under the cover.
   let updateKnown = false;
-  let snapshot: KioskSnapshot = Object.freeze({ state: 'active', reloading: false, paintedAt: 0 });
+  let wakeGuardUntil = 0;
+  let snapshot: KioskSnapshot = Object.freeze({ state: 'active', reloading: false, paintedAt: 0, armAt: 0 });
   const listeners = new Set<() => void>();
 
   // A reload this kiosk started itself (an update or the daily reload at the night step) comes back in the state it left, so the
@@ -139,7 +145,7 @@ export function createKioskController(env: KioskEnv): KioskController {
   safeRemove(env.session(), KIOSK_RESUME_KEY);
 
   function emit(): void {
-    snapshot = Object.freeze({ state, reloading: reloadingOnWake, paintedAt: env.now() });
+    snapshot = Object.freeze({ state, reloading: reloadingOnWake, paintedAt: env.now(), armAt: wakeGuardUntil });
     for (const listener of [...listeners]) listener();
   }
 
@@ -208,6 +214,7 @@ export function createKioskController(env: KioskEnv): KioskController {
     const back = focusBeforeRest;
     focusBeforeRest = null;
     pendingResume = null;
+    wakeGuardUntil = 0;
     lastInputAt = env.now();
     // A reload already on its way must not bring the cover back to a person who is here.
     if (updating) safeRemove(env.session(), KIOSK_RESUME_KEY);
@@ -399,6 +406,12 @@ export function createKioskController(env: KioskEnv): KioskController {
       syncHold();
     },
     wakeTap,
+    restNow() {
+      if (!shouldRestNow({ enabled: settings.enabled, signedIn: started && session.signedIn, state })) return;
+      wakeGuardUntil = env.now() + REST_NOW_GUARD_MS;
+      enter('rest');
+      syncLock(lockWanted());
+    },
     stop,
     subscribe(listener) {
       listeners.add(listener);

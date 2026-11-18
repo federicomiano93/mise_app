@@ -2989,4 +2989,10 @@ export const it: Messages = {
   'kiosk.rest.offline': 'Senza rete',
   'kiosk.rest.reloading': 'Un attimo, ricarico Mise…',
   'kiosk.rest.workDay': 'Giorno di lavoro: {date}',
+  'kiosk.rest.toOrderTitle': 'Da ordinare oggi',
+  'kiosk.rest.arrivingTitle': 'In arrivo oggi',
+  'kiosk.home.rest': 'Riposo',
+  'kiosk.home.exit': 'Esci',
+  'kiosk.home.cannotClose': 'Questo tablet non permette all’app di chiudersi da sola. Per chiuderla tocca il tasto delle app recenti e scorri via Mise.',
+  'kiosk.home.aria': 'Modalità chiosco',
 };

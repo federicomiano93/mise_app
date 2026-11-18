@@ -1,5 +1,6 @@
 // The kiosk rest screen's Orders lines from what Orders already holds (step 3f-8, parity M14, decision T13): no read, no render.
-// The kiosk that draws them is step 3g; until then only ordersStore.kioskSections() asks.
+// Drawn by the kiosk's rest screen (staff slice 6): while Orders is open from ordersStore.kioskSections() (kiosk/liveOrdersLines.ts),
+// anywhere else from the rest screen's own reads (kiosk/restOrders.ts), both through this function.
 //
 // ⚠️ THE GOODS-ARRIVED SWITCH IS HONOURED HERE (decision F4, his answer (c)): off, there is no «arriving» line at all; back on, only
 // the orders recorded from the day it was turned on count (askedAbout) — the same records Incoming and the debt read

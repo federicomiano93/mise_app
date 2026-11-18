@@ -3233,6 +3233,12 @@ export const en = {
   'kiosk.rest.offline': 'No connection',
   'kiosk.rest.reloading': 'One moment, reloading Mise…',
   'kiosk.rest.workDay': 'Work day: {date}',
+  'kiosk.rest.toOrderTitle': 'To order today',
+  'kiosk.rest.arrivingTitle': 'Arriving today',
+  'kiosk.home.rest': 'Rest',
+  'kiosk.home.exit': 'Exit',
+  'kiosk.home.cannotClose': 'This tablet doesn’t let the app close itself. To close it, open the recent-apps view and swipe Mise away.',
+  'kiosk.home.aria': 'Kiosk mode',
 } as const satisfies Record<string, Message>;
 
 export type MessageKey = keyof typeof en;

@@ -9,6 +9,7 @@ import { isBusy, isBusyApartFrom, markBusy } from '../session/busy';
 import { BUSY_RETRY_MS, RELOAD_GRACE_MS, watchServiceWorker } from '../shell/serviceWorker';
 import type { ServiceWorkerEnv } from '../shell/serviceWorker';
 import { memoryStorage } from '../testing/renderWithSession';
+import { REST_NOW_GUARD_MS } from '@mise/shared/kiosk-model';
 import { ACTIVE_HOLD_AFTER_MS, RELOAD_STALL_MS, TICK_MS, WAKE_OWNER, createKioskController } from './kioskController';
 import type { KioskController, KioskEnv } from './kioskController';
 
@@ -490,5 +491,32 @@ describe('the focus', () => {
     input.blur();
     controller?.wakeTap(false);
     expect(document.activeElement, 'a touch must not pop the keyboard up').not.toBe(input);
+  });
+});
+
+describe('«Rest» on the Home (staff slice 6)', () => {
+  test('covers at once and holds the waking tap back for the guard', () => {
+    start(ON);
+    controller?.restNow();
+    expect(controller?.getSnapshot()).toMatchObject({ state: 'rest', armAt: Date.now() + REST_NOW_GUARD_MS });
+    expect(isBusy()).toBe(true);
+    controller?.wakeTap(false);
+    expect(controller?.getSnapshot()).toMatchObject({ state: 'active', armAt: 0 });
+  });
+
+  test('only with kiosk mode on, a person signed in, and not already resting', async () => {
+    start({ ...ON, enabled: false });
+    controller?.restNow();
+    expect(state()).toBe('active');
+    controller?.stop();
+    start(ON, {}, { status: 'signed-out', signedIn: false });
+    controller?.restNow();
+    expect(state()).toBe('active');
+    controller?.stop();
+    start(ON);
+    await vi.advanceTimersByTimeAsync(5 * MIN + HOUR);
+    expect(state()).toBe('night');
+    controller?.restNow();
+    expect(state(), 'never back from night to rest').toBe('night');
   });
 });

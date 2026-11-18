@@ -7,8 +7,12 @@ import { act, fireEvent, screen } from '@testing-library/react';
 import { KIOSK_STORAGE_KEY } from '@mise/shared/kiosk-model';
 import { isBusy, isBusyApartFrom, markBusy } from '../session/busy';
 import { memoryStorage, renderWithSession } from '../testing/renderWithSession';
+import { fakeKioskOrdersSource } from '../testing/fakeKioskOrdersSource';
+import { REST_NOW_GUARD_MS } from '@mise/shared/kiosk-model';
 import { Kiosk } from './Kiosk';
 import { TICK_MS } from './kioskController';
+import { provideKioskLines } from './liveOrdersLines';
+import { requestRestNow } from './restNow';
 import type { KioskEnv } from './kioskController';
 import { LIFT_WAIT_MS } from './wakeTap';
 
@@ -196,5 +200,100 @@ describe('the waking tap presses nothing', () => {
     expect(cover()).not.toBeInTheDocument();
     expect(confirm).toHaveFocus();
     expect(pressed).not.toHaveBeenCalled();
+  });
+});
+
+// 2026-10-05 is a Monday.
+const SUPPLIERS = [
+  { id: 'm', name: 'Molino', orderDays: ['Monday'], deliveryDays: ['Monday'], active: true },
+  { id: 'b', name: 'Brava Foods', shortName: 'Brava', orderDays: ['Monday'], active: true },
+];
+const HISTORY = [{ id: '2026-10-04_m', date: '2026-10-04', supplierId: 'm' }];
+
+describe('the Orders lines (staff slice 6)', () => {
+  test('somebody the venue shows Orders to sees what to order and what arrives today, large in the centre', async () => {
+    const source = fakeKioskOrdersSource({ suppliers: SUPPLIERS, history: HISTORY });
+    const orders = () => source;
+    renderWithSession(<Kiosk env={env()} orders={orders} />);
+    await idle(5 * MIN);
+    const rest = cover() as HTMLElement;
+    expect(rest).toHaveTextContent('To order today');
+    expect(rest).toHaveTextContent('Brava');
+    expect(rest).toHaveTextContent('Arriving today');
+    expect(rest).toHaveTextContent('Molino');
+    expect(source.readSuppliers).toHaveBeenCalledTimes(1);
+  });
+
+  test('read only while resting: nothing before, and nothing again on waking', async () => {
+    const source = fakeKioskOrdersSource({ suppliers: SUPPLIERS, history: HISTORY });
+    const orders = () => source;
+    renderWithSession(<Kiosk env={env()} orders={orders} />);
+    await idle(5 * MIN - TICK_MS);
+    expect(source.readSuppliers).not.toHaveBeenCalled();
+    await idle(TICK_MS);
+    fireEvent.keyDown(cover() as HTMLElement, { key: 'a' });
+    await idle(4 * MIN);
+    expect(cover()).not.toBeInTheDocument();
+    expect(source.readSuppliers, 'nothing while in use').toHaveBeenCalledTimes(1);
+  });
+
+  test('in Italian', async () => {
+    const source = fakeKioskOrdersSource({ suppliers: SUPPLIERS, history: HISTORY });
+    const orders = () => source;
+    renderWithSession(<Kiosk env={env()} orders={orders} />, { lang: 'it', session: { language: 'it' } });
+    await idle(5 * MIN);
+    expect(cover()).toHaveTextContent('Da ordinare oggi');
+    expect(cover()).toHaveTextContent('In arrivo oggi');
+  });
+
+  test('nobody else: no line and no read (the venue without Orders, or an employee it hides Orders from)', async () => {
+    for (const session of [
+      { location: { sections: { orders: false } } },
+      { role: 'staff', canManage: false, canManageVenue: false, isOwner: false, location: { staffHiddenCards: { orders: true } } },
+    ] as const) {
+      const source = fakeKioskOrdersSource({ suppliers: SUPPLIERS, history: HISTORY });
+      const orders = () => source;
+      const { unmount } = renderWithSession(<Kiosk env={env()} orders={orders} />, { session });
+      await idle(5 * MIN);
+      expect(cover()).not.toHaveTextContent('To order today');
+      expect(source.readSuppliers).not.toHaveBeenCalled();
+      unmount();
+    }
+  });
+
+  test('while the Orders section is open its live answer is drawn and nothing is read', async () => {
+    const source = fakeKioskOrdersSource({ suppliers: SUPPLIERS, history: HISTORY });
+    const orders = () => source;
+    const stop = provideKioskLines(() => [{ titleKey: 'kiosk.rest.toOrderTitle', names: ['Live supplier'], more: 2 }]);
+    try {
+      renderWithSession(<Kiosk env={env()} orders={orders} />);
+      await idle(5 * MIN);
+      expect(cover()).toHaveTextContent('Live supplier');
+      expect(cover()).toHaveTextContent('+2');
+      expect(source.readSuppliers).not.toHaveBeenCalled();
+    } finally { stop(); }
+  });
+});
+
+describe('«Rest» on the Home (staff slice 6)', () => {
+  test('covers the screen at once, and the tap that pressed it cannot wake it', async () => {
+    renderWithSession(<Kiosk env={env()} />);
+    act(() => { requestRestNow(); });
+    const rest = cover() as HTMLElement;
+    expect(rest).toBeInTheDocument();
+    // The same gesture's late events land on the new cover: not armed yet, nothing wakes it.
+    fireEvent.click(rest);
+    fireEvent.keyDown(rest, { key: 'Enter' });
+    expect(cover()).toBeInTheDocument();
+    await idle(REST_NOW_GUARD_MS);
+    fireEvent.keyDown(cover() as HTMLElement, { key: 'Enter' });
+    expect(cover()).not.toBeInTheDocument();
+  });
+
+  test('does nothing with kiosk mode off', () => {
+    localStorage.setItem(KIOSK_STORAGE_KEY, '{"enabled":false,"restMinutes":5,"nightHours":1}');
+    renderWithSession(<Kiosk env={env()} />);
+    act(() => { requestRestNow(); });
+    expect(cover()).not.toBeInTheDocument();
   });
 });

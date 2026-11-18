@@ -12,6 +12,8 @@ import { createFirestoreSettingsSource } from '../settings/settingsSource';
 import type { SettingsSource } from '../settings/settingsSource';
 import { createFirestoreOrdersDueSource } from '../home/ordersDueSource';
 import type { OrdersDueSource } from '../home/ordersDueSource';
+import { createFirestoreKioskOrdersSource } from '../kiosk/kioskOrdersSource';
+import type { KioskOrdersSource } from '../kiosk/kioskOrdersSource';
 import { createFirestoreTodosSource } from '../home/todosSource';
 import type { TodosSource } from '../home/todosSource';
 import { createFirestorePastriesSource } from '../pastries/pastriesSource';
@@ -65,6 +67,8 @@ export interface DataServices {
   todos(locationId: string): TodosSource;
   // The Home's «Ordini da fare» card (16 Nov 2026): suppliers, today's order records and the draft's closes, read-only.
   ordersDue(locationId: string): OrdersDueSource;
+  // The kiosk rest screen's Orders lines (staff slice 6): one-time reads of config/orders, suppliers, this week's records, the draft.
+  kioskOrders(locationId: string): KioskOrdersSource;
   // Settings (step 3g-2): this person's holiday (read once), the venue's app language and the sections shown to employees.
   settings(locationId: string): SettingsSource;
 }
@@ -107,6 +111,7 @@ export function createDataServices(
     orders: locationId => createFirestoreOrdersSource(firestore, locationId),
     todos: locationId => createFirestoreTodosSource(firestore, locationId),
     ordersDue: locationId => createFirestoreOrdersDueSource(firestore, locationId),
+    kioskOrders: locationId => createFirestoreKioskOrdersSource(firestore, locationId),
     settings: locationId => createFirestoreSettingsSource(firestore,
       (name, data, timeoutMs) => auth.callFunction(name, data, timeoutMs), locationId),
   };
@@ -118,6 +123,11 @@ const DataContext = createContext<DataServices | null>(null);
 
 export function DataProvider({ services, children }: { services: DataServices; children: ReactNode }) {
   return <DataContext.Provider value={services}>{children}</DataContext.Provider>;
+}
+
+// The same, or null outside the provider: for the kiosk, mounted beside the session gate, whose specs draw it without data.
+export function useOptionalDataServices(): DataServices | null {
+  return useContext(DataContext);
 }
 
 export function useDataServices(): DataServices {

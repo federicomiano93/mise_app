@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { workDayDate } from '@mise/shared/kiosk-model';
+import type { KioskSection } from '@mise/shared/kiosk-lines';
+import { wakeArmDelay, workDayDate } from '@mise/shared/kiosk-model';
+import type { MessageKey } from '../i18n/en';
 import { useT } from '../i18n/useT';
 import { useOnline } from '../shell/useOnline';
 import { armWakeTap } from './wakeTap';
@@ -13,22 +15,27 @@ type Props = {
   reloading: boolean;
   // The moment painted: the clock shown. Moves on every tick of the kiosk.
   now: number;
+  // What to order and what arrives today (staff slice 6), only for somebody who may see Orders: a title key and supplier names each.
+  sections: readonly KioskSection[];
+  // Not before this moment is the waking tap armed (the Home's «Rest» raised it: its own tap must not wake it). 0: at once.
+  armAt: number;
   onWake: (viaKey: boolean) => void;
 };
 
 function pad(n: number): string { return String(n).padStart(2, '0'); }
 function dayString(d: Date): string { return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }
 
-// The kiosk's black rest screen (staff slice 5): what the current app's js/kiosk.js draws, exactly (D9) — top left the time, the
-// venue, the date, the work day while it is not today's date (before 04:00), and «No connection» when there is none. The order lines
-// in the centre come with slice 6; until then the centre holds only «reloading» after the waking tap.
+// The kiosk's black rest screen (staff slices 5 and 6): what the current app's js/kiosk.js draws, exactly (D9) — top left the time, the
+// venue, the date, the work day while it is not today's date (before 04:00), and «No connection» when there is none; in the centre,
+// large, «To order today» and «Arriving today» with up to four supplier names each and «+N» for the rest (Kiosk.tsx decides who sees
+// them), or the one «reloading» line after the waking tap.
 //
 // ⚠️ A SCREEN COVER, NOT A DIALOG: a button that wakes the screen («Tap to continue» is its name), focused as it appears, reachable by
 // keyboard. Any key wakes it, any tap wakes it, and neither reaches the page under it (wakeTap.ts, armed while it is up).
 // ⚠️ DRAWN ON <body> ABOVE EVERY LAYER OF THE PAGE, dialogs and status messages included (RestScreen.module.css): it is the one black
 // screen of the app, and nothing may shine through it in a dark lab.
 // Burn-in: the block moves a few pixels when the MINUTE changes, by transform only (a jump, never an animation).
-export function RestScreen({ venue, reloading, now, onWake }: Props) {
+export function RestScreen({ venue, reloading, now, sections, armAt, onWake }: Props) {
   const { t, locale } = useT();
   const online = useOnline();
   const cover = useRef<HTMLDivElement>(null);
@@ -37,8 +44,13 @@ export function RestScreen({ venue, reloading, now, onWake }: Props) {
     const node = cover.current;
     if (node === null) return undefined;
     try { node.focus({ preventScroll: true }); } catch { /* ignore */ }
-    return armWakeTap(window, node, onWake);
-  }, [onWake]);
+    // Raised by the Home's «Rest»: the tap (or the key's repeat) that did it must not wake the cover (REST_NOW_GUARD_MS).
+    const delay = wakeArmDelay(armAt, Date.now());
+    if (delay === 0) return armWakeTap(window, node, onWake);
+    let disarm: (() => void) | null = null;
+    const timer = setTimeout(() => { disarm = armWakeTap(window, node, onWake); }, delay);
+    return () => { clearTimeout(timer); disarm?.(); };
+  }, [onWake, armAt]);
 
   const date = new Date(now);
   const long = new Intl.DateTimeFormat(locale, { weekday: 'long', day: 'numeric', month: 'long' });
@@ -67,7 +79,15 @@ export function RestScreen({ venue, reloading, now, onWake }: Props) {
           {online ? null : <p className={styles.line}>{t('kiosk.rest.offline')}</p>}
         </div>
         <div className={styles.centre}>
-          {reloading ? <p className={styles.sectionTitle}>{t('kiosk.rest.reloading')}</p> : null}
+          {reloading ? <p className={styles.sectionTitle}>{t('kiosk.rest.reloading')}</p> : sections.map(section => (
+            <section key={section.titleKey} className={styles.section}>
+              <p className={styles.sectionTitle}>{t(section.titleKey as MessageKey)}</p>
+              <ul className={styles.names}>
+                {section.names.map((name, index) => <li key={index}>{name}</li>)}
+                {section.more > 0 ? <li>{`+${section.more}`}</li> : null}
+              </ul>
+            </section>
+          ))}
         </div>
       </div>
     </div>,
