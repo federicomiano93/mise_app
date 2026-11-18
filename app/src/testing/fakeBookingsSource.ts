@@ -1,5 +1,7 @@
 import { vi } from 'vitest';
-import type { Booking, BookingData, RecipeName } from '../bookings/bookingModel';
+import { readPriceList } from '@mise/shared/price-list';
+import type { PriceList } from '@mise/shared/price-list';
+import type { Booking, BookingData } from '../bookings/bookingModel';
 import type { BookingsSource } from '../bookings/bookingsSource';
 
 // A bookings source for the specs, in memory: the bookings are in one map, every write lands at once (as Firestore's local
@@ -9,12 +11,13 @@ type Watcher = { from: string; onChange: (items: Booking[], fromCache: boolean) 
 
 export type FakeBookingsSource = BookingsSource & {
   items: Map<string, Booking>;
-  recipes: RecipeName[];
+  // The published price list (an empty list: never published). Setting it tells every live watcher.
+  priceList: PriceList;
   refuseWith: unknown;
   push(): void;
   breakStreams(): void;
   watching(): number;
-  recipeWatchers(): number;
+  priceListWatchers(): number;
 };
 
 export const permissionDenied = () => Object.assign(new Error('permission-denied'), { code: 'permission-denied' });
@@ -28,7 +31,7 @@ export function bookingFixture(partial: Partial<Booking> & { id: string }): Book
     address: '',
     date: '2026-11-18',
     time: '10:00',
-    lines: [{ recipeId: null, name: 'Panettone', qty: 2, unit: 'pcs', note: '' }],
+    lines: [{ recipeId: null, productId: null, unitPrice: null, name: 'Panettone', qty: 2, unit: 'pcs', note: '' }],
     deposit: null,
     total: null,
     notes: '',
@@ -44,13 +47,16 @@ const fromData = (id: string, data: BookingData): Booking => ({
   lines: data.lines.map(line => ({ ...line, note: line.note ?? '' })),
 });
 
-export function fakeBookingsSource(seed: readonly Booking[] = [], recipes: RecipeName[] = []): FakeBookingsSource {
+// A price list for a spec, from stored-shape items.
+export const priceListOf = (items: ReadonlyArray<Record<string, unknown>>): PriceList => readPriceList({ items });
+
+export function fakeBookingsSource(seed: readonly Booking[] = [], priceList: PriceList = { items: [], publishedAtMs: null }): FakeBookingsSource {
   const items = new Map(seed.map(item => [item.id, item] as const));
   const watchers = new Set<Watcher>();
-  const recipeWatchers = new Set<(recipes: RecipeName[]) => void>();
+  const listWatchers = new Set<(list: PriceList) => void>();
   let counter = 0;
   let refuseWith: unknown = null;
-  const source = { recipes };
+  const source = { priceList };
 
   function push(): void {
     for (const w of watchers) w.onChange([...items.values()].filter(b => b.date >= w.from), false);
@@ -59,10 +65,10 @@ export function fakeBookingsSource(seed: readonly Booking[] = [], recipes: Recip
 
   return {
     items,
-    get recipes() { return source.recipes; },
-    set recipes(value: RecipeName[]) {
-      source.recipes = value;
-      for (const w of recipeWatchers) w(value);
+    get priceList() { return source.priceList; },
+    set priceList(value: PriceList) {
+      source.priceList = value;
+      for (const w of listWatchers) w(value);
     },
     get refuseWith() { return refuseWith; },
     set refuseWith(value: unknown) { refuseWith = value; },
@@ -72,7 +78,7 @@ export function fakeBookingsSource(seed: readonly Booking[] = [], recipes: Recip
       watchers.clear();
     },
     watching: () => watchers.size,
-    recipeWatchers: () => recipeWatchers.size,
+    priceListWatchers: () => listWatchers.size,
     watch: vi.fn((from: string, onChange, onError) => {
       const watcher: Watcher = { from, onChange, onError };
       watchers.add(watcher);
@@ -85,10 +91,10 @@ export function fakeBookingsSource(seed: readonly Booking[] = [], recipes: Recip
       queueMicrotask(() => { if (watchers.has(watcher)) onChange([...items.values()].filter(b => b.date === date), false); });
       return () => { watchers.delete(watcher); };
     }),
-    watchRecipes: vi.fn(onChange => {
-      recipeWatchers.add(onChange);
-      queueMicrotask(() => { if (recipeWatchers.has(onChange)) onChange(source.recipes); });
-      return () => { recipeWatchers.delete(onChange); };
+    watchPriceList: vi.fn(onChange => {
+      listWatchers.add(onChange);
+      queueMicrotask(() => { if (listWatchers.has(onChange)) onChange(source.priceList); });
+      return () => { listWatchers.delete(onChange); };
     }),
     create: vi.fn((data: BookingData) => {
       counter += 1;

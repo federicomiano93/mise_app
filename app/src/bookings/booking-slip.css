@@ -101,7 +101,16 @@
 }
 
 .bk-slip-name {
+  display: flex;
+  justify-content: space-between;
+  gap: 2mm;
   font-weight: 600;
+}
+
+/* What a priced line comes to, on the customer's slip (bookings step 2). */
+.bk-slip-amount {
+  flex: none;
+  font-variant-numeric: tabular-nums;
 }
 
 .bk-slip-notes {

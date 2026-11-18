@@ -19,11 +19,13 @@
 import { buildPath } from '@mise/shared/location-id';
 import type { Query } from 'firebase/firestore';
 import type { FirestoreKit } from '../session/firebaseBackend';
+import { PRICE_LIST_DOC, readPriceList } from '@mise/shared/price-list';
+import type { PriceList } from '@mise/shared/price-list';
 import { readBooking } from './bookingModel';
-import type { Booking, BookingData, BookingStatus, RecipeName } from './bookingModel';
+import type { Booking, BookingData, BookingStatus } from './bookingModel';
 
 const BOOKINGS = 'bookings';
-const RECIPES = 'recipes';
+const PRICE_LIST = 'price-list';
 
 // How many bookings the list reads at most: about two a day for a year would still fit, and the retention keeps
 // 30 days of past ones only.
@@ -37,8 +39,9 @@ export interface BookingsSource {
   watch(fromDate: string, onChange: (items: Booking[], fromCache: boolean) => void, onError: (err: unknown) => void): () => void;
   // The bookings of ONE day, live (the Home's «Prenotazioni di oggi»: today only, never the days after).
   watchDay(date: string, onChange: (items: Booking[], fromCache: boolean) => void, onError: (err: unknown) => void): () => void;
-  // The venue's recipe names, for the editor's suggestions (archived ones left out). Read only while an editor is open.
-  watchRecipes(onChange: (recipes: RecipeName[]) => void, onError: (err: unknown) => void): () => void;
+  // The price list Food cost published (bookings step 2): the products the counter books, with their prices. An empty list when
+  // nothing has been published. Read only while an editor is open.
+  watchPriceList(onChange: (list: PriceList) => void, onError: (err: unknown) => void): () => void;
   // A new booking. The id is made here, synchronously, so the caller knows it at once.
   create(data: BookingData): { readonly id: string; readonly written: Promise<void> };
   // Every key of an existing booking again (the editor's Save); `createdAt` is left as stored.
@@ -59,7 +62,7 @@ export function newBookingId(): string {
 export function createFirestoreBookingsSource(firestore: () => Promise<FirestoreKit>, locationId: string): BookingsSource {
   // Throws on a venue id that could point a write anywhere else (@mise/shared/location-id).
   const path = buildPath(locationId, BOOKINGS);
-  const recipesPath = buildPath(locationId, RECIPES);
+  const priceListPath = buildPath(locationId, PRICE_LIST);
 
   // A live query whose Firestore may not be loaded yet; the returned stop works at any moment.
   // ⚠️ onSnapshot does NOT resubscribe after an error: onError lets the screen say so instead of looking like a venue with no
@@ -70,8 +73,6 @@ export function createFirestoreBookingsSource(firestore: () => Promise<Firestore
     read: (docs: ReadonlyArray<{ id: string; data: () => Record<string, unknown> }>) => T,
     onChange: (value: T, fromCache: boolean) => void,
     onError: (err: unknown) => void,
-    // Whether a failure is worth an error report: a broken bookings stream is; a recipe book the venue cannot read is expected.
-    report: boolean,
   ): () => void {
     let stopped = false;
     let unsubscribe: (() => void) | null = null;
@@ -82,7 +83,7 @@ export function createFirestoreBookingsSource(firestore: () => Promise<Firestore
         { includeMetadataChanges: true },
         snap => { onChange(read(snap.docs.map(d => ({ id: d.id, data: () => d.data() }))), snap.metadata.fromCache); },
         err => {
-          if (report) console.error('watch(bookings) failed:', err);
+          console.error('watch(bookings) failed:', err);
           onError(err);
         },
       );
@@ -106,7 +107,6 @@ export function createFirestoreBookingsSource(firestore: () => Promise<Firestore
         docs => docs.map(d => readBooking(d.id, d.data())).filter((b): b is Booking => b !== null),
         onChange,
         onError,
-        true,
       );
     },
 
@@ -116,21 +116,29 @@ export function createFirestoreBookingsSource(firestore: () => Promise<Firestore
         docs => docs.map(d => readBooking(d.id, d.data())).filter((b): b is Booking => b !== null),
         onChange,
         onError,
-        true,
       );
     },
 
-    watchRecipes(onChange, onError) {
-      return listen(
-        ({ fs, db }) => fs.query(fs.collection(db, recipesPath)),
-        docs => docs
-          .map(d => ({ id: d.id, data: d.data() }))
-          .filter(({ data }) => typeof data.name === 'string' && data.name.trim() !== '' && data.archived !== true)
-          .map(({ id, data }) => ({ id, name: String(data.name).trim() })),
-        recipes => { onChange(recipes); },
-        onError,
-        false,
-      );
+    // ⚠️ A REFUSAL IS NOT REPORTED AS AN ERROR: a venue whose bookings are switched off, or a moment offline with no copy, leaves
+    // the editor with free text only, which it says.
+    watchPriceList(onChange, onError) {
+      let stopped = false;
+      let unsubscribe: (() => void) | null = null;
+      firestore().then(({ fs, db }) => {
+        if (stopped) return;
+        unsubscribe = fs.onSnapshot(
+          fs.doc(db, priceListPath, PRICE_LIST_DOC),
+          snap => { onChange(readPriceList(snap.exists() ? snap.data({ serverTimestamps: 'estimate' }) : null)); },
+          err => { onError(err); },
+        );
+      }).catch(err => {
+        if (!stopped) onError(err);
+      });
+      return () => {
+        stopped = true;
+        unsubscribe?.();
+        unsubscribe = null;
+      };
     },
 
     // setDoc on a made id rather than addDoc, so the id is known before Firestore has loaded.

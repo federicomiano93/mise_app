@@ -1,5 +1,6 @@
 import { formatMoney } from '@mise/shared/price-model';
 import type { Money } from '@mise/shared/currency';
+import { lineAmount } from '@mise/shared/price-list';
 import { toPay } from './bookingModel';
 import type { Booking, BookingUnit } from './bookingModel';
 import { qtyText, shortDate, spellDate } from './bookingWords';
@@ -32,13 +33,19 @@ type SlipProps = {
   readonly unitWord: (unit: BookingUnit) => string;
 };
 
-function Lines({ booking, locale, unitWord }: Omit<SlipProps, 'words'>) {
+// `money`: given on the customer's slip only, which shows what each priced line comes to (bookings step 2); the lab's has no prices.
+function Lines({ booking, locale, unitWord, money }: Omit<SlipProps, 'words'> & { money?: Money }) {
   return (
     <ul className="bk-slip-lines">
       {booking.lines.map((line, index) => (
         <li key={index} className="bk-slip-line">
           <span className="bk-slip-qty">{qtyText(line.qty, line.unit, locale, unitWord)}</span>
-          <span className="bk-slip-name">{line.name}</span>
+          <span className="bk-slip-name">
+            {line.name}
+            {money !== undefined && line.unitPrice !== null
+              ? <span className="bk-slip-amount">{formatMoney(lineAmount(line.qty, line.unitPrice), money)}</span>
+              : null}
+          </span>
           {line.note !== '' ? <span className="bk-slip-linenote">{line.note}</span> : null}
         </li>
       ))}
@@ -79,7 +86,7 @@ export function CustomerSlip({ booking, words, locale, unitWord, venueName, mone
       <p className="bk-slip-customer">{booking.customerName}</p>
       <p className="bk-slip-when">{words.mode}: {shortDate(booking.date, locale)} {booking.time}</p>
       <hr className="bk-slip-rule" />
-      <Lines booking={booking} locale={locale} unitWord={unitWord} />
+      <Lines booking={booking} locale={locale} unitWord={unitWord} money={money} />
       {booking.total !== null || booking.deposit !== null ? (
         <>
           <hr className="bk-slip-rule" />

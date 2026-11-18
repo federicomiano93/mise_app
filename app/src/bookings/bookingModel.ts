@@ -10,6 +10,8 @@
 
 import { typedDecimal } from '@mise/shared/currency';
 import { addDays, parseISODate, toISODate } from '@mise/shared/day';
+import { bookingUnitOf, itemNamed, lineAmount } from '@mise/shared/price-list';
+import type { PriceItem } from '@mise/shared/price-list';
 
 export type BookingMode = 'pickup' | 'delivery';
 export type BookingStatus = 'todo' | 'ready' | 'collected' | 'cancelled';
@@ -38,7 +40,12 @@ export const LIMITS = Object.freeze({
 export const KEEP_DAYS = 30;
 
 export type BookingLine = {
+  // A line written before the price list (step 1) may name a recipe; a line from the price list names its product.
   readonly recipeId: string | null;
+  readonly productId: string | null;
+  // The price of ONE unit (a piece, a kilo, a pack) when the line was saved, VAT included — FROZEN: a later price list does
+  // not change a booking already taken (the owner's choice, 18 Nov 2026). null for a line with no price (free text).
+  readonly unitPrice: number | null;
   readonly name: string;
   readonly qty: number;
   readonly unit: BookingUnit;
@@ -63,8 +70,18 @@ export type Booking = {
 };
 
 // What is written: every key the rules require but the two server stamps (the source adds them).
+export type StoredLine = {
+  recipeId: string | null;
+  productId: string | null;
+  unitPrice: number | null;
+  name: string;
+  qty: number;
+  unit: BookingUnit;
+  note?: string;
+};
+
 export type BookingData = Omit<Booking, 'id' | 'lines'> & {
-  readonly lines: ReadonlyArray<{ recipeId: string | null; name: string; qty: number; unit: BookingUnit; note?: string }>;
+  readonly lines: ReadonlyArray<StoredLine>;
 };
 
 export const DATE_RE = /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/;
@@ -87,6 +104,8 @@ function readLine(raw: unknown): BookingLine | null {
   if (name === '' || qty === null) return null;
   return {
     recipeId: typeof line.recipeId === 'string' && line.recipeId !== '' ? line.recipeId : null,
+    productId: typeof line.productId === 'string' && line.productId !== '' ? line.productId : null,
+    unitPrice: moneyOrNull(line.unitPrice) || null,
     name,
     qty,
     unit: line.unit === 'kg' ? 'kg' : 'pcs',
@@ -128,6 +147,17 @@ export type DraftLine = {
   readonly qty: string;
   readonly unit: BookingUnit;
   readonly note: string;
+  // What the stored line was, for a line opened from a saved booking: its price stays FROZEN while its name and unit do not
+  // change. null for a new line.
+  readonly kept: KeptLine | null;
+};
+
+export type KeptLine = {
+  readonly name: string;
+  readonly unit: BookingUnit;
+  readonly recipeId: string | null;
+  readonly productId: string | null;
+  readonly unitPrice: number | null;
 };
 
 export type Draft = {
@@ -145,7 +175,7 @@ export type Draft = {
 };
 
 export function blankLine(key: number): DraftLine {
-  return { key, name: '', qty: '', unit: 'pcs', note: '' };
+  return { key, name: '', qty: '', unit: 'pcs', note: '', kept: null };
 }
 
 export function emptyDraft(nextKey: () => number): Draft {
@@ -171,10 +201,15 @@ export function draftFrom(booking: Booking, nextKey: () => number, decimal: stri
     date: booking.date,
     time: booking.time,
     lines: booking.lines.length > 0
-      ? booking.lines.map(line => ({ key: nextKey(), name: line.name, qty: boxNumber(line.qty, decimal), unit: line.unit, note: line.note }))
+      ? booking.lines.map(line => ({
+        key: nextKey(), name: line.name, qty: boxNumber(line.qty, decimal), unit: line.unit, note: line.note,
+        kept: { name: line.name, unit: line.unit, recipeId: line.recipeId, productId: line.productId, unitPrice: line.unitPrice },
+      }))
       : [blankLine(nextKey())],
     deposit: boxNumber(booking.deposit, decimal),
-    total: boxNumber(booking.total, decimal),
+    // ⚠️ A TOTAL THAT IS THE SUM OF THE LINES' OWN PRICES WAS NOT TYPED: the box stays empty, so the total keeps following the
+    // lines when they are edited. A total that differs (a discount typed at the counter) is shown, and stays the typed one.
+    total: booking.total !== null && booking.total === storedLinesTotal(booking.lines) ? '' : boxNumber(booking.total, decimal),
     notes: booking.notes,
   };
 }
@@ -261,20 +296,76 @@ export function firstProblem(draft: Draft, { today, isNew }: { today: string; is
   return null;
 }
 
-// The recipe a line names: an exact match of a recipe's name (case and spaces aside), else free text (null).
-export type RecipeName = { readonly id: string; readonly name: string };
 const fold = (text: string): string => text.trim().replace(/\s+/g, ' ').toLocaleLowerCase();
 
-export function recipeIdFor(name: string, recipes: readonly RecipeName[]): string | null {
-  const wanted = fold(name);
-  return recipes.find(recipe => fold(recipe.name) === wanted)?.id ?? null;
+// ── Prices (bookings step 2) ─────────────────────────────────────────────────
+
+// What a line is priced at, and why:
+//   frozen  — a saved line whose name and unit have not changed: its own stored price, whatever the list says now;
+//   listed  — a name on the published price list: that price, and the list's unit (a piece and a pack in pieces, a kilo in kg);
+//   none    — free text, or a saved line that had no price and is left as it was: no price, so it adds nothing to the total.
+export type LinePrice =
+  | { readonly kind: 'frozen'; readonly productId: string | null; readonly unitPrice: number }
+  | { readonly kind: 'listed'; readonly item: PriceItem; readonly unit: BookingUnit }
+  | { readonly kind: 'none' };
+
+export function linePrice(line: DraftLine, items: readonly PriceItem[]): LinePrice {
+  const kept = line.kept;
+  // ⚠️ A SAVED LINE LEFT AS IT WAS KEEPS EXACTLY WHAT IT HAD — its price, or no price at all: a free-text line saved before its
+  // name was put on the list must not be priced (nor its unit changed) by a Save that touched something else.
+  if (kept !== null && fold(kept.name) === fold(line.name) && kept.unit === line.unit) {
+    return kept.unitPrice === null ? { kind: 'none' } : { kind: 'frozen', productId: kept.productId, unitPrice: kept.unitPrice };
+  }
+  const item = itemNamed(line.name, items);
+  return item === null ? { kind: 'none' } : { kind: 'listed', item, unit: bookingUnitOf(item.per) };
+}
+
+const unitPriceOf = (price: LinePrice): number | null =>
+  price.kind === 'frozen' ? price.unitPrice : price.kind === 'listed' ? price.item.price : null;
+
+// What a line of the working copy costs, or null when it has no price or no readable quantity.
+export function draftLineAmount(line: DraftLine, items: readonly PriceItem[]): number | null {
+  const price = linePrice(line, items);
+  const unitPrice = unitPriceOf(price);
+  if (unitPrice === null) return null;
+  const qty = parseQty(line.qty, price.kind === 'listed' ? price.unit : line.unit);
+  return typeof qty === 'number' ? lineAmount(qty, unitPrice) : null;
+}
+
+// The total the price list gives the working copy: the sum of its priced lines, and how many used lines have no price (they are
+// not in it, and the editor says so). `total` is null when no line is priced.
+export function listTotal(draft: Draft, items: readonly PriceItem[]): { readonly total: number | null; readonly unpriced: number } {
+  let total = 0;
+  let priced = 0;
+  let unpriced = 0;
+  for (const line of draft.lines) {
+    if (untouchedLine(line)) continue;
+    const amount = draftLineAmount(line, items);
+    if (amount === null) unpriced += 1;
+    else { total += amount; priced += 1; }
+  }
+  return { total: priced > 0 ? Math.round(total * 100) / 100 : null, unpriced };
+}
+
+// The sum of a stored booking's priced lines (null when none is priced).
+export function storedLinesTotal(lines: readonly BookingLine[]): number | null {
+  const priced = lines.filter(line => line.unitPrice !== null);
+  if (priced.length === 0) return null;
+  return Math.round(priced.reduce((sum, line) => sum + lineAmount(line.qty, line.unitPrice), 0) * 100) / 100;
+}
+
+// The total a booking will carry: what was typed in the box, else the price list's sum (null when neither).
+export function effectiveTotal(draft: Draft, items: readonly PriceItem[]): number | null {
+  const typed = parseMoney(draft.total);
+  if (typeof typed === 'number') return typed;
+  return listTotal(draft, items).total;
 }
 
 // The booking as it is written. Call only when firstProblem() is null: it clamps rather than throws, so a bad call still
 // writes nothing the rules would refuse.
 export function toBookingData(
   draft: Draft,
-  { status, number, recipes }: { status: BookingStatus; number: number; recipes: readonly RecipeName[] },
+  { status, number, items }: { status: BookingStatus; number: number; items: readonly PriceItem[] },
 ): BookingData {
   const cut = (text: string, max: number) => text.trim().slice(0, max);
   const mode: BookingMode = draft.mode ?? 'pickup';
@@ -282,14 +373,21 @@ export function toBookingData(
     .filter(line => !untouchedLine(line))
     .slice(0, LIMITS.lines)
     .map(line => {
-      const qty = parseQty(line.qty, line.unit);
+      const price = linePrice(line, items);
+      // A listed product is counted in the list's unit; a frozen or free line in its own.
+      const unit: BookingUnit = price.kind === 'listed' ? price.unit : line.unit;
+      const qty = parseQty(line.qty, unit);
       const name = cut(line.name, LIMITS.lineName);
       const note = cut(line.note, LIMITS.lineNote);
-      const out: { recipeId: string | null; name: string; qty: number; unit: BookingUnit; note?: string } = {
-        recipeId: recipeIdFor(name, recipes),
+      const sameName = line.kept !== null && fold(line.kept.name) === fold(line.name);
+      const out: StoredLine = {
+        // A recipe named in step 1 stays with its line while the name does not change.
+        recipeId: sameName ? line.kept?.recipeId ?? null : null,
+        productId: price.kind === 'frozen' ? price.productId : price.kind === 'listed' ? price.item.productId : null,
+        unitPrice: unitPriceOf(price),
         name,
         qty: typeof qty === 'number' ? qty : 1,
-        unit: line.unit,
+        unit,
       };
       if (note !== '') out.note = note;
       return out;
@@ -308,7 +406,8 @@ export function toBookingData(
     time: draft.time,
     lines,
     deposit: money(draft.deposit),
-    total: money(draft.total),
+    // Typed, else the price list's sum (bookings step 2: computed, and the counter may type over it).
+    total: money(draft.total) ?? listTotal(draft, items).total,
     notes: cut(draft.notes, LIMITS.notes),
     status,
     number: Math.min(Math.max(1, Math.trunc(number) || 1), LIMITS.number),

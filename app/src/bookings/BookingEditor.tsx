@@ -16,9 +16,10 @@ import { useStatusMessage } from '../ui/StatusMessage';
 import { useConfirm } from '../ui/useConfirm';
 import {
   BOOKING_MODES, LIMITS, blankLine, draftFrom, emptyDraft, fieldId, firstProblem, nextNumber, parseMoney, sameDraft,
-  toBookingData, toPay,
+  draftLineAmount, effectiveTotal, linePrice, listTotal, toBookingData, toPay,
 } from './bookingModel';
-import type { Booking, BookingMode, BookingStatus, BookingUnit, Draft, DraftField, DraftLine, DraftProblem, RecipeName } from './bookingModel';
+import type { Booking, BookingMode, BookingStatus, BookingUnit, Draft, DraftField, DraftLine, DraftProblem } from './bookingModel';
+import type { PriceItem, PriceList } from '@mise/shared/price-list';
 import { spellDate } from './bookingWords';
 import { useBookings, useBookingsStore } from './BookingsContext';
 import { afterSave, cameFromBooking, cameFromList, restoresRefused } from './bookingsNav';
@@ -130,15 +131,29 @@ function EditorForm({ id, booking, refused }: FormProps) {
     return () => { mounted.current = false; };
   }, []);
 
-  // The recipe book's names, for the product suggestions: read only while the editor is open (P14). A venue without the recipe
-  // book, or a refusal, leaves free text only, and says so.
-  const { recipes, unavailable } = useRecipeNames();
+  // The published price list (bookings step 2), for the product suggestions and the prices: read only while the editor is open
+  // (P14). Nothing published, or a refusal, leaves free text only, and says so.
+  const { list: priceList, unavailable } = usePriceList();
+  const items = priceList.items;
 
   const update = (patch: Partial<Draft>) => {
     setDraft(current => ({ ...current, ...patch }));
   };
+  // ⚠️ A NAME THAT IS ON THE PRICE LIST SETS THE LINE'S UNIT to the list's (a kilo price is counted in kilos), so the quantity
+  // typed next is read the way it will be priced.
   const updateLine = (key: number, patch: Partial<DraftLine>) => {
-    setDraft(current => ({ ...current, lines: current.lines.map(line => (line.key === key ? { ...line, ...patch } : line)) }));
+    setDraft(current => ({
+      ...current,
+      lines: current.lines.map(line => {
+        if (line.key !== key) return line;
+        const next = { ...line, ...patch };
+        if (patch.name !== undefined) {
+          const price = linePrice(next, items);
+          if (price.kind === 'listed') return { ...next, unit: price.unit };
+        }
+        return next;
+      }),
+    }));
   };
 
   // Focus requests after the rows are redrawn (a new line, a removed one).
@@ -227,15 +242,15 @@ function EditorForm({ id, booking, refused }: FormProps) {
         cancelLabel: t('common.cancel'),
       });
       if (!ok || !mounted.current) return;
-      const { items } = store.getSnapshot();
+      const { items: stocked } = store.getSnapshot();
       // ⚠️ THE STATUS AS IT IS NOW, never as it was when the editor opened: the editor does not show it, and a status set on another
       // device meanwhile (Cancelled, Collected) must not be quietly put back by a Save that only fixed a phone number.
-      const stored = id === null ? undefined : items.find(item => item.id === id);
+      const stored = id === null ? undefined : stocked.find(item => item.id === id);
       const statusNow: BookingStatus = stored?.status ?? refused?.status ?? booking?.status ?? 'todo';
       // ⚠️ A RESTORED SAVE OF A BOOKING DELETED ON ANOTHER DEVICE IS MADE AGAIN AS A NEW ONE: written to its old id it would be a
       // create without `createdAt`, refused by the rules every time.
       const saveId = id !== null && stored === undefined && refused !== null ? null : id;
-      const data = toBookingData(draft, { status: statusNow, number: number ?? nextNumber(items), recipes });
+      const data = toBookingData(draft, { status: statusNow, number: number ?? nextNumber(stocked), items });
       const savedId = store.save(saveId, data, draft);
       leaving.current = true;
       say(t('bookings.saved'));
@@ -272,8 +287,9 @@ function EditorForm({ id, booking, refused }: FormProps) {
   };
 
   const depositValue = parseMoney(draft.deposit);
-  const totalValue = parseMoney(draft.total);
-  const due = toPay(typeof totalValue === 'number' ? totalValue : null, typeof depositValue === 'number' ? depositValue : null);
+  // The total is the one typed, else the price list's sum of the priced lines (the counter may type over it: a discount).
+  const fromList = listTotal(draft, items);
+  const due = toPay(effectiveTotal(draft, items), typeof depositValue === 'number' ? depositValue : null);
   const title = isNew ? t('bookings.form.newTitle') : t('bookings.form.editTitle', { number: t('bookings.number', { n: number ?? 0 }) });
 
   return (
@@ -357,9 +373,9 @@ function EditorForm({ id, booking, refused }: FormProps) {
 
         <fieldset className={styles.group}>
           <legend className={styles.legend}>{t('bookings.form.items')}</legend>
-          {unavailable ? <p className={styles.hint}>{t('bookings.form.recipesUnavailable')}</p> : null}
-          <datalist id={`${ids}-recipes`}>
-            {recipes.map(recipe => <option key={recipe.id} value={recipe.name} />)}
+          {unavailable || items.length === 0 ? <p className={styles.hint}>{t('bookings.form.noPriceList')}</p> : null}
+          <datalist id={`${ids}-prices`}>
+            {items.map(item => <option key={item.productId} value={item.name} label={priceWords(t, item, money)} />)}
           </datalist>
           <ol className={styles.lines}>
             {draft.lines.map((line, index) => (
@@ -367,8 +383,9 @@ function EditorForm({ id, booking, refused }: FormProps) {
                 <LineFields
                   index={index}
                   line={line}
-                  listId={`${ids}-recipes`}
-                  fromBook={recipes.some(recipe => recipe.name.toLocaleLowerCase() === line.name.trim().toLocaleLowerCase())}
+                  listId={`${ids}-prices`}
+                  price={linePrice(line, items)}
+                  amount={draftLineAmount(line, items)}
                   nameId={domId({ line: index, part: 'name' })}
                   qtyId={domId({ line: index, part: 'qty' })}
                   nameError={errorOn({ line: index, part: 'name' })}
@@ -398,6 +415,11 @@ function EditorForm({ id, booking, refused }: FormProps) {
               inputMode="decimal"
               autoComplete="off"
               error={errorOn('total')}
+              hint={fromList.total !== null
+                ? (draft.total.trim() === ''
+                  ? t('bookings.form.totalFromList', { total: formatMoney(fromList.total, money) })
+                  : t('bookings.form.totalTyped', { total: formatMoney(fromList.total, money) }))
+                : null}
               onChange={value => { update({ total: value }); }}
             />
             <TextField
@@ -410,6 +432,9 @@ function EditorForm({ id, booking, refused }: FormProps) {
               onChange={value => { update({ deposit: value }); }}
             />
           </div>
+          {fromList.total !== null && fromList.unpriced > 0
+            ? <p className={styles.warnHint}>{t('bookings.form.unpricedLines', { n: fromList.unpriced })}</p>
+            : null}
           <p className={styles.toPay} aria-live="polite">
             {due !== null ? <><span>{t('bookings.form.toPay')}</span> <strong>{formatMoney(due, money)}</strong></> : ''}
           </p>
@@ -460,20 +485,27 @@ function fieldName(t: ReturnType<typeof useT>['t'], field: DraftField): string {
   return t(words[field]);
 }
 
-// The recipe names, live while the editor is open. `unavailable`: refused or broken (the hint says so; free text still works).
-function useRecipeNames(): { readonly recipes: readonly RecipeName[]; readonly unavailable: boolean } {
+// The published price list, live while the editor is open. `unavailable`: refused or broken (free text still works).
+function usePriceList(): { readonly list: PriceList; readonly unavailable: boolean } {
   const services = useDataServices();
   const { locationId } = useSession();
-  const [state, setState] = useState<{ recipes: readonly RecipeName[]; unavailable: boolean }>({ recipes: [], unavailable: false });
+  const [state, setState] = useState<{ list: PriceList; unavailable: boolean }>({ list: { items: [], publishedAtMs: null }, unavailable: false });
   useEffect(() => {
     if (!locationId) return undefined;
-    const source = services.bookings(locationId);
-    return source.watchRecipes(
-      list => { setState({ recipes: [...list].sort((a, b) => a.name.localeCompare(b.name)), unavailable: false }); },
-      () => { setState({ recipes: [], unavailable: true }); },
+    return services.bookings(locationId).watchPriceList(
+      list => { setState({ list, unavailable: false }); },
+      () => { setState({ list: { items: [], publishedAtMs: null }, unavailable: true }); },
     );
   }, [services, locationId]);
   return state;
+}
+
+// «12,00 € al kg», «2,50 € al pezzo», «3,50 € a confezione»: what an item costs, in the interface's words and the venue's money.
+function priceWords(t: ReturnType<typeof useT>['t'], item: PriceItem, money: ReturnType<typeof useMoney>): string {
+  const price = formatMoney(item.price, money);
+  if (item.per === 'kg') return t('bookings.price.perKg', { price });
+  if (item.per === 'piece') return t('bookings.price.perPiece', { price });
+  return t('bookings.price.perPack', { price });
 }
 
 type TextFieldProps = {
@@ -489,9 +521,12 @@ type TextFieldProps = {
   autoComplete?: string;
   min?: string;
   list?: string;
+  // A sentence under the box, read with it.
+  hint?: string | null;
 };
 
-function TextField({ id, label, value, onChange, error, placeholder, maxLength, type = 'text', inputMode, autoComplete, min, list }: TextFieldProps) {
+function TextField({ id, label, value, onChange, error, placeholder, maxLength, type = 'text', inputMode, autoComplete, min, list, hint = null }: TextFieldProps) {
+  const described = [error !== null ? `${id}-error` : null, hint !== null ? `${id}-hint` : null].filter(Boolean).join(' ');
   return (
     <div className={styles.field}>
       <label className={styles.label} htmlFor={id}>{label}</label>
@@ -507,10 +542,11 @@ function TextField({ id, label, value, onChange, error, placeholder, maxLength, 
         min={min}
         list={list}
         aria-invalid={error !== null ? true : undefined}
-        aria-describedby={error !== null ? `${id}-error` : undefined}
+        aria-describedby={described === '' ? undefined : described}
         onChange={event => { onChange(event.currentTarget.value); }}
       />
       {error !== null ? <p id={`${id}-error`} className={styles.error}>{error}</p> : null}
+      {hint !== null ? <p id={`${id}-hint`} className={styles.hint}>{hint}</p> : null}
     </div>
   );
 }
@@ -552,7 +588,8 @@ type LineProps = {
   index: number;
   line: DraftLine;
   listId: string;
-  fromBook: boolean;
+  price: ReturnType<typeof linePrice>;
+  amount: number | null;
   nameId: string;
   qtyId: string;
   nameError: string | null;
@@ -562,15 +599,22 @@ type LineProps = {
   onRemove: () => void;
 };
 
-// One product: the name (the recipe book's names suggested, or free text), the quantity and its unit, an optional note.
-function LineFields({ index, line, listId, fromBook, nameId, qtyId, nameError, qtyError, canRemove, onChange, onRemove }: LineProps) {
+// One product: the name (the price list's names suggested, or free text), the quantity and its unit, an optional note; its price
+// and what the line comes to, when it has one.
+function LineFields({ index, line, listId, price, amount, nameId, qtyId, nameError, qtyError, canRemove, onChange, onRemove }: LineProps) {
   const { t } = useT();
+  const money = useMoney();
   const n = index + 1;
+  const tag = price.kind === 'listed'
+    ? t('bookings.form.fromList', { price: priceWords(t, price.item, money) })
+    : price.kind === 'frozen'
+      ? t('bookings.form.keptPrice', { price: formatMoney(price.unitPrice, money) })
+      : null;
   return (
     <div className={styles.line} role="group" aria-label={t('bookings.form.item', { n })}>
       <div className={styles.lineHead}>
         <span className={styles.lineTitle}>{t('bookings.form.item', { n })}</span>
-        {fromBook ? <span className={styles.fromBook}>{t('bookings.form.itemFromBook')}</span> : null}
+        {tag !== null ? <span className={styles.fromBook}>{tag}</span> : null}
         {canRemove ? (
           <Button variant="bare" className={styles.removeLine} aria-label={t('bookings.form.removeItem', { n })} onPress={onRemove}>
             <X aria-hidden="true" />
@@ -600,10 +644,12 @@ function LineFields({ index, line, listId, fromBook, nameId, qtyId, nameError, q
         />
         <div className={styles.field}>
           <label className={styles.label} htmlFor={`${qtyId}-unit`}>{t('bookings.form.unit')}</label>
+          {/* ⚠️ LOCKED for a product on the price list: its price is for a piece (or a pack) or for a kilo, never both. */}
           <select
             id={`${qtyId}-unit`}
             className={styles.input}
-            value={line.unit}
+            value={price.kind === 'listed' ? price.unit : line.unit}
+            disabled={price.kind === 'listed'}
             onChange={event => { onChange({ unit: event.currentTarget.value === 'kg' ? 'kg' : 'pcs' as BookingUnit }); }}
           >
             <option value="pcs">{t('bookings.form.unitPcs')}</option>
@@ -611,6 +657,7 @@ function LineFields({ index, line, listId, fromBook, nameId, qtyId, nameError, q
           </select>
         </div>
       </div>
+      {amount !== null ? <p className={styles.amount}>{t('bookings.form.lineAmount', { amount: formatMoney(amount, money) })}</p> : null}
       <TextField
         id={`${nameId}-note`}
         label={t('bookings.form.itemNote')}

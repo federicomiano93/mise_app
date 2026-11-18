@@ -9,6 +9,7 @@ import { Button } from '../ui/Button';
 import { FormBar } from '../ui/FormBar';
 import { useStatusMessage } from '../ui/StatusMessage';
 import { useConfirm } from '../ui/useConfirm';
+import { lineAmount } from '@mise/shared/price-list';
 import { BOOKING_STATUSES, toPay } from './bookingModel';
 import type { Booking, BookingStatus } from './bookingModel';
 import { CustomerSlip, LabSlip } from './BookingSlips';
@@ -185,6 +186,7 @@ function Shown({ booking, onBack }: { booking: Booking; onBack: () => void }) {
                       <span className={styles.strong}>{line.name}</span>
                       {line.note !== '' ? <span className={styles.lineNote}>{line.note}</span> : null}
                     </span>
+                    {line.unitPrice !== null ? <span className={styles.amount}>{formatMoney(lineAmount(line.qty, line.unitPrice), money)}</span> : null}
                   </li>
                 ))}
               </ul>

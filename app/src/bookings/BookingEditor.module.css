@@ -322,3 +322,15 @@
     background: var(--sunken);
   }
 }
+
+/* What a priced line comes to (bookings step 2). */
+.amount {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.input:disabled {
+  background: var(--sunken);
+  color: var(--ink-2);
+}

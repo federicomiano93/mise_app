@@ -20,9 +20,9 @@ let key = 0;
 const draft: Draft = {
   ...emptyDraft(() => { key += 1; return key; }),
   customerName: 'Mario Prova', phone: '+39 333 000 0000', mode: 'pickup', date: '2026-12-24', time: '09:30',
-  lines: [{ key: 1, name: 'Panettone', qty: '2', unit: 'pcs', note: '' }],
+  lines: [{ key: 1, name: 'Panettone', qty: '2', unit: 'pcs', note: '', kept: null }],
 };
-const data = toBookingData(draft, { status: 'todo', number: 1, recipes: [] });
+const data = toBookingData(draft, { status: 'todo', number: 1, items: [] });
 
 afterEach(() => { vi.restoreAllMocks(); });
 

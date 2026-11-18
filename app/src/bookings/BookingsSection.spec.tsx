@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { todayISO } from '@mise/shared/day';
 import { isBusy } from '../session/busy';
-import { bookingFixture, fakeBookingsSource, permissionDenied } from '../testing/fakeBookingsSource';
+import { bookingFixture, fakeBookingsSource, permissionDenied, priceListOf } from '../testing/fakeBookingsSource';
 import type { FakeBookingsSource } from '../testing/fakeBookingsSource';
 import { renderApp } from '../testing/renderApp';
 import { dayAfter } from './bookingModel';
@@ -21,9 +21,9 @@ const seed = () => [
   bookingFixture({ id: 'A1', date: TODAY, time: '11:00', customerName: 'Mario Prova', number: 3 }),
   bookingFixture({ id: 'A2', date: TODAY, time: '09:00', customerName: 'Anna Finta', mode: 'delivery', address: 'Via Finta 1, Roma', number: 4,
     lines: [
-      { recipeId: 'R1', name: 'Focaccia', qty: 1.5, unit: 'kg', note: 'sliced' },
-      { recipeId: null, name: 'Panettone', qty: 2, unit: 'pcs', note: '' },
-      { recipeId: null, name: 'Grissini', qty: 1, unit: 'kg', note: '' },
+      { recipeId: null, productId: 'pF', unitPrice: 12, name: 'Focaccia', qty: 1.5, unit: 'kg', note: 'sliced' },
+      { recipeId: null, productId: 'pP', unitPrice: 10, name: 'Panettone', qty: 2, unit: 'pcs', note: '' },
+      { recipeId: null, productId: null, unitPrice: null, name: 'Grissini', qty: 1, unit: 'kg', note: '' },
     ],
     total: 42.5, deposit: 10, notes: 'Ring twice' }),
   bookingFixture({ id: 'B1', date: TOMORROW, customerName: 'Luca Tomorrow', number: 5 }),
@@ -31,7 +31,14 @@ const seed = () => [
   bookingFixture({ id: 'P1', date: PAST, customerName: 'Pia Past', status: 'collected', number: 2 }),
 ];
 
-function show(path: string, source: FakeBookingsSource = fakeBookingsSource(seed(), [{ id: 'R1', name: 'Focaccia' }]), options: Parameters<typeof renderApp>[1] = {}) {
+// The price list Food cost published (bookings step 2): Focaccia by the kilo, Panettone by the piece, Grissini by the pack.
+const PRICES = () => priceListOf([
+  { productId: 'pF', name: 'Focaccia', price: 12, per: 'kg' },
+  { productId: 'pP', name: 'Panettone', price: 25, per: 'piece' },
+  { productId: 'pG', name: 'Grissini', price: 3.5, per: 'pack', packSize: 250, packUnit: 'g' },
+]);
+
+function show(path: string, source: FakeBookingsSource = fakeBookingsSource(seed(), PRICES()), options: Parameters<typeof renderApp>[1] = {}) {
   const view = renderApp(path, { ...options, data: { bookings: () => source, ...options.data } });
   return { ...view, source };
 }
@@ -179,7 +186,8 @@ describe('the two slips', () => {
     const card = await screen.findByRole('region', { name: 'Booking No. 4' }, LOAD);
     await user.click(within(card).getByRole('button', { name: 'Customer slip' }));
     const host = document.getElementById(SLIP_HOST_ID) as HTMLElement;
-    for (const text of ['Panificio Prova', 'No. 4', 'Anna Finta', 'Focaccia', 'Delivery', '09:00', '42,50 €', '10,00 €', '32,50 €',
+    // What each priced line comes to (18,00 € and 20,00 €; Grissini has no price).
+    for (const text of ['Panificio Prova', 'No. 4', 'Anna Finta', 'Focaccia', 'Delivery', '09:00', '42,50 €', '10,00 €', '32,50 €', '18,00 €', '20,00 €',
       'deleted 30 days after pickup']) {
       expect(host, text).toHaveTextContent(text);
     }
@@ -215,7 +223,9 @@ describe('the editor', () => {
     fireEvent.change(screen.getByLabelText('Time'), { target: { value: '08:15' } });
     await user.type(screen.getByLabelText('Product'), 'Focaccia');
     await user.type(screen.getByLabelText('Quantity'), '1.5');
-    await user.selectOptions(screen.getByLabelText('Unit'), 'kg');
+    // On the price list Focaccia is sold by the kilo, so the unit is set and locked; with no list it is chosen by hand.
+    const unit = screen.getByLabelText('Unit');
+    if (!(unit as HTMLSelectElement).disabled) await user.selectOptions(unit, 'kg');
   };
 
   it('starts empty, with placeholders, and a hint not to write allergies in the notes', async () => {
@@ -267,7 +277,7 @@ describe('the editor', () => {
     await waitFor(() => { expect(router.state.location.pathname).toBe('/bookings'); });
     expect(source.create).toHaveBeenCalledWith({
       customerName: 'Gino Prova', phone: '+39 333 111 2222', mode: 'pickup', address: '', date: TOMORROW, time: '08:15',
-      lines: [{ recipeId: 'R1', name: 'Focaccia', qty: 1.5, unit: 'kg' }],
+      lines: [{ recipeId: null, productId: 'pF', unitPrice: 12, name: 'Focaccia', qty: 1.5, unit: 'kg' }],
       deposit: 5, total: 30, notes: '', status: 'todo', number: 7,
     });
     await waitFor(() => { expect(rowNames()).toEqual(['Gino Prova', 'Luca Tomorrow']); });
@@ -297,17 +307,62 @@ describe('the editor', () => {
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
   });
 
-  it('products: add and remove a row, the recipe book suggested, a free text accepted', async () => {
+  it('products: the price list suggested with its prices, the unit set and locked, what the line comes to', async () => {
+    const { user } = await openNew();
+    expect([...document.querySelectorAll('datalist option')].map(o => [o.getAttribute('value'), o.getAttribute('label')])).toEqual([
+      ['Focaccia', '£12.00 per kg'], ['Grissini', '£3.50 per pack'], ['Panettone', '£25.00 each'],
+    ]);
+    await user.type(screen.getByLabelText('Product'), 'Focaccia');
+    expect(await screen.findByText('From the price list · £12.00 per kg')).toBeInTheDocument();
+    expect(screen.getByLabelText('Unit')).toBeDisabled();
+    expect(screen.getByLabelText('Unit')).toHaveValue('kg');
+    await user.type(screen.getByLabelText('Quantity'), '1.5');
+    expect(screen.getByText('Comes to £18.00')).toBeInTheDocument();
+    expect(screen.getByLabelText('Total (£, optional)')).toHaveAccessibleDescription('Leave empty to use the price list’s total: £18.00.');
+  });
+
+  it('products: add and remove a row, a free text accepted with no price, said under the total', async () => {
     const { user } = await openNew();
     await user.type(screen.getByLabelText('Product'), 'Focaccia');
-    expect(await screen.findByText('From the recipe book')).toBeInTheDocument();
+    await user.type(screen.getByLabelText('Quantity'), '2');
     await user.click(screen.getByRole('button', { name: 'Add a product' }));
     const names = screen.getAllByLabelText('Product');
     expect(names).toHaveLength(2);
     expect(names[1]).toHaveFocus();
+    await user.type(names[1] as HTMLElement, 'Torta su misura');
+    await user.type(screen.getAllByLabelText('Quantity')[1] as HTMLElement, '1');
+    expect(screen.getByText('1 product has no price: it is not in the total.')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Remove product 2' }));
     expect(screen.getAllByLabelText('Product')).toHaveLength(1);
-    expect(document.querySelector('datalist option')).toHaveAttribute('value', 'Focaccia');
+    expect(screen.queryByText(/has no price/)).toBeNull();
+  });
+
+  it('an empty total box saves the price list\'s total; a typed one wins (a discount)', async () => {
+    const { user, source } = await openNew();
+    await fill(user);
+    expect(screen.getByLabelText('Total (£, optional)')).toHaveAccessibleDescription('Leave empty to use the price list’s total: £18.00.');
+    await user.type(screen.getByLabelText('Deposit (£, optional)'), '5');
+    expect(screen.getByText('To pay').parentElement).toHaveTextContent('£13.00');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await user.click(within(await dialog('Save this booking?')).getByRole('button', { name: 'Save' }));
+    await waitFor(() => { expect(source.create).toHaveBeenCalledWith(expect.objectContaining({ total: 18, deposit: 5 })); });
+  });
+
+  it('⚠️ a booking opened again keeps the prices it was saved with, even after a new price list', async () => {
+    const { user, source } = show('/bookings/A2/edit');
+    await screen.findByRole('region', { name: 'Edit booking No. 4' }, LOAD);
+    // Panettone was booked at £10.00; the list now says £25.00.
+    expect(screen.getByText('Price when booked · £10.00 each unit')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await user.click(within(await dialog('Save this booking?')).getByRole('button', { name: 'Save' }));
+    await waitFor(() => { expect(source.update).toHaveBeenCalled(); });
+    const lines = vi.mocked(source.update).mock.calls[0]?.[1].lines;
+    expect(lines?.map(line => [line.name, line.unitPrice])).toEqual([['Focaccia', 12], ['Panettone', 10], ['Grissini', null]]);
+  });
+
+  it('no price list published: free text only, and it says so', async () => {
+    show('/bookings/new', fakeBookingsSource(seed()));
+    expect(await screen.findByText('No price list published yet: type the product, and the total by hand.', {}, LOAD)).toBeInTheDocument();
   });
 
   it('edits an existing booking on a copy, keeps its number and status, and writes on Save', async () => {
