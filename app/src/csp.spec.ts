@@ -94,7 +94,7 @@ describe('the CSP of Mise 2\'s page', () => {
     expect(withPrinter.replace(' https://192.168.1.50', '')).toBe(POLICY);
     expect(directive(policyOn(site, { 'bookings-printer-host': '10.0.0.7:8443' }), 'connect-src')).toContain(' https://10.0.0.7:8443');
     // Anything else leaves the policy exactly as it is: a public address, a name, an attempt to write into the policy.
-    for (const bad of ['8.8.8.8', 'evil.test', '192.168.1.50; script-src *', '192.168.1.50 https://evil.test', '172.32.0.1', '', ' 192.168.1.5']) {
+    for (const bad of ['8.8.8.8', 'evil.test', '192.168.1.50; script-src *', '192.168.1.50 https://evil.test', '172.32.0.1', '', ' 192.168.1.5', '192.168.001.050', '192.168.1.256', '192.168.1.50:0']) {
       expect(policyOn(site, { 'bookings-printer-host': bad }), bad).toBe(POLICY);
     }
     expect(policyOn(site, {})).toBe(POLICY);

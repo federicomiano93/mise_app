@@ -170,7 +170,8 @@ Text only, 42 columns, bold through the printer's font 2. `bookings/receiptPrint
 address or price), `bookings/printWords.ts` (the outcome in words).
 
 **Why HTTPS and a certificate**: the app is a secure page, and a secure page may not call an `http://` address. The printer answers
-on `https://` with its own certificate, which each device has to accept ONCE (open the printer's address, Advanced → Proceed).
+on `https://` with its own certificate, which each device has to accept the first time (open the printer's address, Advanced →
+Proceed) — and again if the browser forgets that choice after some days.
 The app's security policy (`csp-plugin.ts`) lets the page reach the printer: its `connect-src` gains `https://<address>` of the
 address saved on THIS device, read by the bootstrap at load, and only when it is a private network address (10.x, 172.16–31.x,
 192.168.x, optional port; `bookings/printerHost.ts`). So the page loads again after the address is saved.
@@ -191,9 +192,18 @@ set, the browser's dialog as before.
 **Step 0 — the test on the real printer (the owner, on the tablet)**: Prenotazioni → «Stampante scontrini» → the printer's address
 (the same as the till's; on the printer's own setup slip, or in the router) → Salva → «Apri la stampante» and accept the
 certificate → back, «Stampa una prova». Check on paper: accents and €, the bold line, the row of 42 digits whole. Wrong letters:
-tick «Solo lettere semplici». A digit row cut or wrapped: the width is not 42 (tell me the count). «Non raggiungibile» with the
-certificate accepted: this printer does not answer a page on `https://`, or the browser blocks it — then the route is the computer of
+tick «Solo lettere semplici». A digit row cut or wrapped: the width is not 42 (tell me the count). «Non è stato possibile
+raggiungere la stampante» with the certificate accepted: this printer does not answer a page on `https://`, or the browser blocks it — then the route is the computer of
 the management software (`print-agent/`), to be built only then.
+
+**Review fixes (18 Nov 2026)**: a send still running when the person opens another booking says its outcome on the section's
+status line («Lab slip, booking No. 4: not printed. … Open the booking again to print it.»), since the dialog went with the
+booking; the other slip's button waits while one is sending, and «Sending to the printer…» stays up for the whole 15 s. An address
+with a leading zero (192.168.001.050) is refused: a browser reads it as octal, another machine. «Plain letters only» is applied to
+each piece BEFORE the line is laid out, so «EUR» never pushes a price onto a line of its own; «£» becomes «GBP», other accented
+letters lose the accent («ç» → «c», «ß» → «ss»). Control characters in a note are dropped (XML refuses them). The address box opens
+the keyboard with dots (an iPhone's decimal pad in Italian has only a comma). A timeout says the slip may have printed anyway. The
+certificate may have to be accepted again after some days (the browser's choice): the hint says so.
 
 **Tests**: `bookings/receiptPrinter.spec.ts`, `bookings/slipText.spec.ts`, `bookings/PrinterScreen.spec.tsx` (the screen and the
 direct print from a booking, with a fake printer), the printer case of `src/csp.spec.ts`.

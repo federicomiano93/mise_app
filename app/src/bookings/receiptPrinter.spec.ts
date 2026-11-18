@@ -19,7 +19,7 @@ const memory = () => {
 describe('the printer\'s address', () => {
   it('is a private network address, each part 0–255, with an optional port', () => {
     for (const ok of ['192.168.1.50', '10.0.0.7', '172.16.0.1', '172.31.255.254', '192.168.1.50:8443']) expect(isPrinterHost(ok), ok).toBe(true);
-    for (const bad of ['8.8.8.8', '172.32.0.1', '192.168.1.256', 'printer.local', '192.168.1', '192.168.1.50:0', '192.168.1.50:70000', 'https://192.168.1.50', '']) {
+    for (const bad of ['8.8.8.8', '172.32.0.1', '192.168.1.256', 'printer.local', '192.168.1', '192.168.1.50:0', '192.168.1.50:70000', 'https://192.168.1.50', '', '192.168.001.050', '010.0.0.7', '192.168.1.50:08443']) {
       expect(isPrinterHost(bad), bad).toBe(false);
     }
   });
@@ -63,8 +63,13 @@ describe('the document sent', () => {
     expect(nonFiscalXml([{ text: '3,50\u00a0€', style: 'normal' }], { plain: true })).toContain('data="3,50 EUR"');
   });
 
+  it('drops the control characters a pasted note can carry, which XML does not allow', () => {
+    expect(nonFiscalXml([{ text: 'Torta\u0007 al\u001b cioccolato', style: 'normal' }])).toContain('data="Torta al cioccolato"');
+  });
+
   it('writes plain letters when asked, for a printer that prints accents and € wrong', () => {
     expect(plainText('Città, perché, più — 3,50 € «Sì»')).toBe('Citta\', perche\', piu\' - 3,50 EUR "Si\'"');
+    expect(plainText('£3.50 Façade Niño Straße')).toBe('GBP3.50 Facade Nino Strasse');
     const xml = nonFiscalXml([{ text: 'Caffè 1,20 €', style: 'normal' }], { plain: true });
     expect(xml).toContain('data="Caffe&apos; 1,20 EUR"');
   });

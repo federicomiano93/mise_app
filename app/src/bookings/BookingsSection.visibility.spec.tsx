@@ -85,7 +85,8 @@ describe('addresses and the usage names', () => {
     expect(parseBookingsPath('new')).toEqual({ kind: 'new' });
     expect(parseBookingsPath('Abc123')).toEqual({ kind: 'booking', id: 'Abc123' });
     expect(parseBookingsPath('Abc123/edit')).toEqual({ kind: 'edit', id: 'Abc123' });
-    for (const junk of ['new/edit', 'a/b', 'Abc123/edit/x', 'a-b', '%20']) expect(parseBookingsPath(junk), junk).toEqual({ kind: 'unknown' });
+    expect(parseBookingsPath('printer')).toEqual({ kind: 'printer' });
+    for (const junk of ['new/edit', 'printer/edit', 'a/b', 'Abc123/edit/x', 'a-b', '%20']) expect(parseBookingsPath(junk), junk).toEqual({ kind: 'unknown' });
   });
 
   it('⚠️ names its screens m2:bookings…, never with an id (nothing personal reaches the usage record)', () => {
@@ -93,6 +94,7 @@ describe('addresses and the usage names', () => {
     expect(screenNameFor('/bookings/Abc123')).toBe('bookings-detail');
     expect(screenNameFor('/bookings/new')).toBe('bookings-editor');
     expect(screenNameFor('/bookings/Abc123/edit')).toBe('bookings-editor');
+    expect(screenNameFor('/bookings/printer')).toBe('bookings-printer');
     expect(bookingsScreenName('/junk/x/y')).toBe('bookings');
   });
 });

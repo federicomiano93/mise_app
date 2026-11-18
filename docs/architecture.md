@@ -49,6 +49,9 @@ both, and the switch keeps the address) and it has consequences that every chang
   `orders-draft-claims` (the current app's key and shape; `shared/src/draft-journal.ts`, F-15) is NOT kept either, for the same
   reason: one venue's typed Orders quantities that have not reached Firestore's queue yet, wiped by sign-out and a venue switch
   with Firestore's own queue of unsent writes (`draft-journal.spec.ts` pins it through both files' `keysToClear`).
+  `bookings-printer-host` and `bookings-printer-plain` (Mise 2 only, `app/src/bookings/printerHost.ts`, bookings step 3: the
+  receipt printer's address on the shop's network and «plain letters only», a setting of THIS device) are NOT kept either: the
+  printer belongs to a venue's network, so sign-out and a venue switch forget it and the device asks again.
   `orders-draft-refused` (Mise 2 only, `app/src/orders/refusedNote.ts`: a draft write the server refused after the person had left
   Orders, said at the next opening; stamped with the venue and the person) is NOT kept either, for the same reason
   (`shared/src/local-data.spec.ts` pins it through both files' `keysToClear`).
@@ -67,7 +70,9 @@ both, and the switch keeps the address) and it has consequences that every chang
 - **No App Check, no reCAPTCHA** (his decision, PR #212) — in either app.
 - **The same kind of Content-Security-Policy** (`app/csp-plugin.ts`): a classic script right after `<meta charset>`
   writes the `<meta>` policy, byte-identical on every host but localhost, where the emulators (9099, 8080, 5001) are
-  added — as the current app's pages do. `script-src 'self'` (the SDK is bundled, no gstatic), `connect-src` Firestore,
+  added — as the current app's pages do — with ONE exception since bookings step 3: a device that saved a receipt printer
+  (`bookings-printer-host`) adds `https://<that address>` to `connect-src`, only when it matches the strict pattern of a private
+  network address (`app/src/bookings/printerHost.ts`, the same pattern the screen checks). `script-src 'self'` (the SDK is bundled, no gstatic), `connect-src` Firestore,
   Auth, the production functions host and `https://www.gov.uk` (bank holidays), `img-src 'self' data:`, and `style-src
   'self'` plus the hashes of the two rules React Aria injects (`touch-action` on pressables; on iOS, `overscroll-behavior`
   while a modal is open; `csp.spec.ts` finds every such rule in the installed library). No `www.google.com`. Built only

@@ -135,7 +135,10 @@ export function PrinterScreen() {
             id={`${ids}-host`}
             className={styles.input}
             value={host}
-            inputMode="decimal"
+            inputMode="url"
+            autoCapitalize="off"
+            autoCorrect="off"
+            spellCheck={false}
             autoComplete="off"
             placeholder="192.168.1.50"
             aria-invalid={wrong ? true : undefined}

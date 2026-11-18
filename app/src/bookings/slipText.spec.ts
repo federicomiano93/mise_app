@@ -54,6 +54,17 @@ describe('the slips for the receipt printer', () => {
     expect(lines.filter(l => / {2,}\S/.test(l.text)).every(l => l.text.length <= COLUMNS)).toBe(true);
   });
 
+  it('⚠️ «plain letters only» is applied before the layout: every price still sits on its line, against the right edge', () => {
+    const lines = customerSlipLines({ ...common, venueName: 'Panificio Città', money, plain: true });
+    const customer = lines.map(l => l.text).join('\n');
+    expect(customer).toMatch(/^1,5 kg Focaccia +18,00 EUR$/m);
+    expect(customer).toMatch(/^Da pagare +32,50 EUR$/m);
+    expect(customer).toContain("Panificio Citta'");
+    expect(customer).not.toMatch(/[^\x20-\x7e\n]/);
+    expect(lines.filter(l => /\S {2,}\S/.test(l.text)).every(l => l.text.length === COLUMNS)).toBe(true);
+    expect(text(labSlipLines({ ...common, plain: true }))).toContain("giovedi' 24 dicembre - 09:30");
+  });
+
   it('puts a figure against the right edge, on its own line when the words are too long', () => {
     expect(twoColumns('Totale', '42,50 €')[0]?.text).toHaveLength(COLUMNS);
     const long = twoColumns('x'.repeat(40), '42,50 €');

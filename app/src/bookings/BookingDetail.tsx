@@ -21,7 +21,7 @@ import { STATUS_WORD } from './BookingsList';
 import { FROM_BOOKING, cameFromList } from './bookingsNav';
 import { BOOKINGS_PATH, editBookingPath } from './bookingsPath';
 import { printSlip } from './slipHost';
-import { readPrinterSetting, sendToPrinter } from './receiptPrinter';
+import { PRINT_TIMEOUT_MS, readPrinterSetting, sendToPrinter } from './receiptPrinter';
 import { printOutcomeText } from './printWords';
 import { customerSlipLines, labSlipLines } from './slipText';
 import styles from './BookingDetail.module.css';
@@ -119,6 +119,13 @@ function Shown({ booking, onBack }: { booking: Booking; onBack: () => void }) {
   // in between): «Sending to the printer…», then «Printed ✓» — or, when it did not print, the reason and an offer to print through
   // the browser's dialog instead. With no printer set, the browser's dialog as before.
   const [sending, setSending] = useState<'lab' | 'customer' | null>(null);
+  // ⚠️ A SEND OUTLIVES THE SCREEN: a person may open the next booking while the printer still has 15 s to answer. Its dialog is
+  // drawn here, so once this booking is closed the outcome is SAID instead (the section's status line outlives the screen).
+  const shown = useRef(true);
+  useEffect(() => {
+    shown.current = true;
+    return () => { shown.current = false; };
+  }, []);
   async function print(kind: 'lab' | 'customer') {
     if (sending !== null) return;
     const words: SlipWords = {
@@ -143,11 +150,19 @@ function Shown({ booking, onBack }: { booking: Booking; onBack: () => void }) {
       throughBrowser();
       return;
     }
-    const common = { booking, words, locale: paperLocale, units: paperUnit };
+    const common = { booking, words, locale: paperLocale, units: paperUnit, plain: printer.plain };
     const lines = kind === 'lab' ? labSlipLines(common) : customerSlipLines({ ...common, venueName: venueName ?? '', money });
+    const slipName = t(kind === 'lab' ? 'bookings.print.lab' : 'bookings.print.customer');
     setSending(kind);
-    say(t('bookings.print.sending'));
+    // Shown for as long as the printer may take to answer, not the default few seconds.
+    say(t('bookings.print.sending'), PRINT_TIMEOUT_MS + 1000);
     const outcome = await sendToPrinter(printer, lines);
+    if (!shown.current) {
+      say(outcome.ok
+        ? t('bookings.print.doneAway', { slip: slipName, number })
+        : t('bookings.print.failedAway', { slip: slipName, number, reason: printOutcomeText(t, outcome) }), outcome.ok ? undefined : 12000);
+      return;
+    }
     setSending(null);
     if (outcome.ok) {
       say(t('bookings.print.done'));
@@ -250,11 +265,11 @@ function Shown({ booking, onBack }: { booking: Booking; onBack: () => void }) {
         </dl>
 
         <div className={styles.prints} role="group" aria-label={t('bookings.detail.print')}>
-          <Button variant="secondary" className={styles.print} isPending={sending === 'lab'} onPress={() => { void print('lab'); }}>
+          <Button variant="secondary" className={styles.print} isPending={sending === 'lab'} isDisabled={sending === 'customer'} onPress={() => { void print('lab'); }}>
             <Printer aria-hidden="true" />
             <span>{t('bookings.print.lab')}</span>
           </Button>
-          <Button variant="secondary" className={styles.print} isPending={sending === 'customer'} onPress={() => { void print('customer'); }}>
+          <Button variant="secondary" className={styles.print} isPending={sending === 'customer'} isDisabled={sending === 'lab'} onPress={() => { void print('customer'); }}>
             <Printer aria-hidden="true" />
             <span>{t('bookings.print.customer')}</span>
           </Button>

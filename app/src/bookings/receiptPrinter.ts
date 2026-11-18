@@ -75,13 +75,15 @@ function safeStorage(): Storage | null {
 export function plainText(text: string): string {
   return text
     .replace(/[\u00a0\u202f]/g, ' ')
-    .replace(/€/g, 'EUR')
+    .replace(/€/g, 'EUR').replace(/£/g, 'GBP')
     .replace(/[àáâä]/g, "a'").replace(/[ÀÁÂÄ]/g, "A'")
     .replace(/[èéêë]/g, "e'").replace(/[ÈÉÊË]/g, "E'")
     .replace(/[ìíîï]/g, "i'").replace(/[ÌÍÎÏ]/g, "I'")
     .replace(/[òóôö]/g, "o'").replace(/[ÒÓÔÖ]/g, "O'")
     .replace(/[ùúûü]/g, "u'").replace(/[ÙÚÛÜ]/g, "U'")
     .replace(/[«»“”]/g, '"').replace(/[‘’]/g, "'").replace(/[–—]/g, '-').replace(/·/g, '-')
+    // Any other accented letter loses its accent («ç» → «c», «ñ» → «n»), «ß» becomes «ss».
+    .replace(/ß/g, 'ss').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     // Anything still outside plain ASCII is dropped rather than printed as rubbish.
     .replace(/[^\x20-\x7E]/g, '');
 }
@@ -93,7 +95,10 @@ export function wrapLines(lines: readonly SlipLine[], columns: number = COLUMNS)
     // ⚠️ RUNS OF SPACES ARE KEPT: they are what puts a price against the right edge (slipText's twoColumns). Only the spaces a
     // paper cannot show as such become plain ones — a tab, a line break, and the NO-BREAK space the money is written with
     // («18,00 €»), which is not ASCII and would be dropped, or printed as rubbish, by the printer.
-    const text = line.text.replace(/[\t\n\r\f\v\u00a0\u202f]/g, ' ').trimEnd();
+    const text = line.text.replace(/[\t\n\r\f\v\u00a0\u202f]/g, ' ')
+      // Other control characters (a pasted note can carry them) are not allowed in XML: the printer would refuse the document.
+      .replace(/[\u0000-\u001f\u007f]/g, '')
+      .trimEnd();
     if (text === '') { out.push({ text: '', style: line.style }); continue; }
     let rest = text;
     while (rest.length > columns) {

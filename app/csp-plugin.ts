@@ -3,7 +3,7 @@
 // ⚠️ THE SAME APPROACH AS THE CURRENT APP'S PAGES (index.html, «CSP bootstrap»): a <meta> policy cannot be loosened at
 // runtime (two policies combine by intersection), so to let the LOCAL emulators in on localhost without touching the live
 // policy, a tiny classic script — the first thing in <head>, before any request — writes the <meta>. On every other host
-// the policy is byte-identical (POLICY below); on localhost only, connect-src also allows the Auth (9099), Firestore (8080)
+// the policy is byte-identical (POLICY below) — except for the receipt printer of THIS device, the paragraph further down; on localhost only, connect-src also allows the Auth (9099), Firestore (8080)
 // and Functions (5001) emulators. GitHub Pages sends no CSP header, so this meta is the whole policy.
 //
 // What the page may reach, and why:

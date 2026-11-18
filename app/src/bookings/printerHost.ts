@@ -13,8 +13,11 @@ export const PRINTER_HOST_KEY = 'bookings-printer-host';
 export const PRINTER_PLAIN_KEY = 'bookings-printer-plain';
 
 // ES5-compatible on purpose: the same source text runs in the CSP bootstrap, before anything else, on any browser.
+// ⚠️ NO LEADING ZEROS: a browser reads «192.168.000.010» as OCTAL — 192.168.0.8, another machine — so a part is 0 or starts
+// with 1–9, and is at most 255 (checked by the pattern itself, which the page's bootstrap applies too: csp-plugin.ts).
+const OCTET = '(?:25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)';
 export const PRINTER_HOST_PATTERN =
-  '^(?:10\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}|172\\.(?:1[6-9]|2\\d|3[01])\\.\\d{1,3}\\.\\d{1,3}|192\\.168\\.\\d{1,3}\\.\\d{1,3})(?::\\d{1,5})?$';
+  `^(?:10\\.${OCTET}\\.${OCTET}\\.${OCTET}|172\\.(?:1[6-9]|2\\d|3[01])\\.${OCTET}\\.${OCTET}|192\\.168\\.${OCTET}\\.${OCTET})(?::[1-9]\\d{0,4})?$`;
 
 const PRINTER_HOST_RE = new RegExp(PRINTER_HOST_PATTERN);
 
@@ -22,7 +25,6 @@ const PRINTER_HOST_RE = new RegExp(PRINTER_HOST_PATTERN);
 export function isPrinterHost(text: string): boolean {
   const host = text.trim();
   if (!PRINTER_HOST_RE.test(host)) return false;
-  const [address, port] = host.split(':');
-  if ((address ?? '').split('.').some(part => Number(part) > 255)) return false;
-  return port === undefined || (Number(port) >= 1 && Number(port) <= 65535);
+  const port = host.split(':')[1];
+  return port === undefined || Number(port) <= 65535;
 }

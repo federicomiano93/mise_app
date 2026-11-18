@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { screen, waitFor, within } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import { todayISO } from '@mise/shared/day';
 import { isBusy } from '../session/busy';
 import { bookingFixture, fakeBookingsSource } from '../testing/fakeBookingsSource';
@@ -87,7 +87,7 @@ describe('the receipt printer screen', () => {
     await user.type(await screen.findByLabelText('Printer address', undefined, LOAD), '192.168.1.50');
     await user.click(screen.getByRole('button', { name: 'Back' }));
     const question = await screen.findByRole('alertdialog');
-    expect(question).toHaveTextContent('The address you typed is not saved');
+    expect(question).toHaveTextContent('The printer setting you changed is not saved');
     await user.click(within(question).getByRole('button', { name: 'Cancel' }));
     expect(screen.getByLabelText('Printer address')).toHaveValue('192.168.1.50');
   });
@@ -159,6 +159,20 @@ describe('a slip straight to the receipt printer', () => {
     await user.click(within(question).getByRole('button', { name: 'Print through the browser' }));
     expect(print).toHaveBeenCalledTimes(1);
     expect(document.getElementById(SLIP_HOST_ID)).toHaveTextContent('Focaccia');
+  });
+
+  it('⚠️ a failure that comes after the person opened another booking is SAID, with the slip and the booking', async () => {
+    localStorage.setItem(PRINTER_HOST_KEY, '192.168.1.50');
+    let answer: (response: Response) => void = () => undefined;
+    vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(resolve => { answer = resolve; })));
+    const { user, router } = show('/bookings/A2');
+    const card = await screen.findByRole('region', { name: 'Booking No. 4' }, LOAD);
+    await user.click(within(card).getByRole('button', { name: 'Lab slip' }));
+    expect(within(card).getByRole('button', { name: 'Customer slip' })).toBeDisabled();
+    await act(async () => { await router.navigate('/bookings'); });
+    await act(async () => { answer(new Response('<response success="false" code="EPTR_REC_EMPTY" status="0" />')); });
+    expect(await screen.findByText(/Lab slip, booking No\. 4: not printed\. .*EPTR_REC_EMPTY/)).toBeInTheDocument();
+    expect(screen.queryByRole('alertdialog')).toBeNull();
   });
 
   it('no printer set: the browser\'s dialog, as before, and nothing sent on the network', async () => {
