@@ -209,6 +209,8 @@ function foodcostScreenName(pathname: string, base: string): string {
   const rest = pathname.slice(base.length).split('/').filter(part => part !== '');
   if (rest.length === 1 && rest[0] === 'new') return 'foodcost-product';
   if (rest.length === 1 && rest[0] === 'settings') return 'foodcost-settings';
+  // The bookings price list (bookings step 2).
+  if (rest.length === 1 && rest[0] === 'price-list') return 'foodcost-price-list';
   if (rest.length === 2 && rest[0] === 'product') return 'foodcost-product';
   if (rest.length === 3 && rest[0] === 'product' && rest[2] === 'history') return 'foodcost-history';
   return 'foodcost';

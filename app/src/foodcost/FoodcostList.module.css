@@ -100,3 +100,8 @@
   color: var(--ink-2);
   overflow-wrap: anywhere;
 }
+
+/* «Listino prenotazioni» (bookings step 2): a whole line of its own under «New product» and Settings. */
+.priceList {
+  flex: 1 1 100%;
+}

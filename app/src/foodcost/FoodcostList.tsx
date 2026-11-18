@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigationType } from 'react-router';
-import { Plus, Search, Settings } from 'lucide-react';
+import { ListChecks, Plus, Search, Settings } from 'lucide-react';
 import { nameMatches, productsUsingRecipe, sortByMargin } from '@mise/shared/foodcost-model';
 import { recipesWithoutProducts } from '@mise/shared/from-recipes';
 import { useT } from '../i18n/useT';
@@ -9,7 +9,7 @@ import { useMoney } from '../session/useMoney';
 import { Button } from '../ui/Button';
 import { FormBar } from '../ui/FormBar';
 import { wantsTitleFocus } from './foodcostNav';
-import { FROM_BOOK_OPENER, NEW_OPENER, SETTINGS_OPENER, useHandBack } from './handBack';
+import { FROM_BOOK_OPENER, NEW_OPENER, PRICE_LIST_OPENER, SETTINGS_OPENER, useHandBack } from './handBack';
 import { useFoodcost } from './FoodcostContext';
 import { FromBookBox } from './FromBookBox';
 import { FromBookDialog } from './FromBookDialog';
@@ -21,6 +21,8 @@ type Props = {
   onOpenProduct: (id: string) => void;
   onOpenNew: () => void;
   onOpenSettings: () => void;
+  // The bookings price list (bookings step 2): whoever runs the place.
+  onOpenPriceList: () => void;
   // The recipe whose products the list is narrowed to (`/food-cost?using=`), or null for the whole list.
   using: string | null;
   // «Show all» (the page stops being the recipe's) and Back (to the recipe), for the bar of a narrowed list.
@@ -34,7 +36,7 @@ type Props = {
 // ⚠️ SETTINGS IS DRAWN ONLY FOR WHOEVER RUNS THE PLACE (`canManage`): it holds a wage figure. The
 // session is known before this screen exists (SectionRoute), so the button is never drawn and then
 // taken away.
-export function FoodcostList({ openProductId, onOpenProduct, onOpenNew, onOpenSettings, using, onShowAll, onBackToRecipe }: Props) {
+export function FoodcostList({ openProductId, onOpenProduct, onOpenNew, onOpenSettings, onOpenPriceList, using, onShowAll, onBackToRecipe }: Props) {
   const { t } = useT();
   const { canManage } = useSession();
   const money = useMoney();
@@ -98,6 +100,7 @@ export function FoodcostList({ openProductId, onOpenProduct, onOpenNew, onOpenSe
   const newRef = useCallback((node: HTMLButtonElement | null) => { handBack.register(NEW_OPENER, node); }, [handBack]);
   const fromBookRef = useCallback((node: HTMLButtonElement | null) => { handBack.register(FROM_BOOK_OPENER, node); }, [handBack]);
   const settingsRef = useCallback((node: HTMLButtonElement | null) => { handBack.register(SETTINGS_OPENER, node); }, [handBack]);
+  const priceListRef = useCallback((node: HTMLButtonElement | null) => { handBack.register(PRICE_LIST_OPENER, node); }, [handBack]);
 
   return (
     <div className={styles.column}>
@@ -119,6 +122,13 @@ export function FoodcostList({ openProductId, onOpenProduct, onOpenNew, onOpenSe
           <Button ref={settingsRef} variant="secondary" className={styles.settings} onPress={onOpenSettings}>
             <Settings aria-hidden="true" />
             {t('section.settings')}
+          </Button>
+        ) : null}
+        {/* The bookings price list (bookings step 2): a line of its own, under the two, for whoever runs the place. */}
+        {canManage ? (
+          <Button ref={priceListRef} variant="secondary" className={styles.priceList} onPress={onOpenPriceList}>
+            <ListChecks aria-hidden="true" />
+            {t('fc.priceList.door')}
           </Button>
         ) : null}
       </div>

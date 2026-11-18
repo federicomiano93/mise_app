@@ -25,6 +25,7 @@
 // settings are fixed by its first use (src/firestore-access.spec.ts).
 
 import { buildPath } from '@mise/shared/location-id';
+import { PRICE_LIST_DOC } from '@mise/shared/price-list';
 import { withPrices } from '@mise/shared/price-model';
 import type { DocumentReference, Query } from 'firebase/firestore';
 import type { FirestoreKit } from '../session/firebaseBackend';
@@ -85,6 +86,12 @@ export interface FoodcostSource {
   getProductHistory(productId: string, max?: number): Promise<StoredDoc[]>;
   // The hourly labour cost (null clears it), merged with its stamp.
   saveLabourCostPerHour(rate: number | null, updatedAt: string): Promise<void>;
+  // The bookings price list (bookings step 2, `price-list/bookings`), live: its fields, or null when it does not exist yet.
+  // Read only by the price-list screen, for whoever runs Food cost.
+  watchPriceList(onChange: (data: Record<string, unknown> | null) => void, onError: (err: unknown) => void): () => void;
+  // Publishes the list WHOLE (names and selling prices only: shared/src/price-list.ts), stamped by the server. Firestore applies it
+  // to its offline copy at once; the promise settles when the server answers (offline: later), and the screen never awaits it.
+  publishPriceList(items: ReadonlyArray<Record<string, unknown>>): Promise<void>;
 }
 
 const PRODUCTS = 'products';
@@ -97,6 +104,7 @@ const INGREDIENT_PRICES = 'ingredient-prices';
 const SUPPLIERS = 'suppliers';
 const SETTINGS = 'foodcost-settings';
 const SETTINGS_DOC = 'main';
+const PRICE_LIST = 'price-list';
 // How many margin points the history reads: the current app's `max = 30`.
 export const HISTORY_LIMIT = 30;
 
@@ -138,6 +146,7 @@ export function createFirestoreFoodcostSource(
   const pricesPath = buildPath(locationId, INGREDIENT_PRICES);
   const suppliersPath = buildPath(locationId, SUPPLIERS);
   const settingsPath = buildPath(locationId, SETTINGS);
+  const priceListPath = buildPath(locationId, PRICE_LIST);
 
   // The venue stamp is applied HERE, never by a caller: the rules require `bakery` to name the
   // folder written to (stampedFor).
@@ -325,6 +334,20 @@ export function createFirestoreFoodcostSource(
 
     // A MERGE with the stamp, so a field added to this document later is never wiped by a screen
     // that only knows the rate. Never deleted: clearing is a write of null.
+    watchPriceList: (onChange, onError) => listen(kit => kit.fs.onSnapshot(
+      kit.fs.doc(kit.db, priceListPath, PRICE_LIST_DOC),
+      snap => onChange(snap.exists() ? snap.data({ serverTimestamps: 'estimate' }) : null),
+      err => {
+        console.error('watch(price list) failed:', err);
+        onError(err);
+      },
+    ), onError),
+
+    async publishPriceList(items) {
+      const { fs, db } = await firestore();
+      await fs.setDoc(fs.doc(db, priceListPath, PRICE_LIST_DOC), withBakery({ items, publishedAt: fs.serverTimestamp() }));
+    },
+
     async saveLabourCostPerHour(rate, updatedAt) {
       const { fs, db } = await firestore();
       await fs.setDoc(fs.doc(db, settingsPath, SETTINGS_DOC), withBakery({

@@ -2,6 +2,7 @@ import { useT } from '../i18n/useT';
 import { useFoodcost } from './FoodcostContext';
 import { FoodcostSettings } from './FoodcostSettings';
 import { MarginHistory } from './MarginHistory';
+import { PriceListScreen } from './PriceListScreen';
 import { ProductEditor } from './ProductEditor';
 import { RecipeEntry } from './RecipeEntry';
 import type { Origin, ShownView } from './foodcostPath';
@@ -26,6 +27,8 @@ export function FoodcostDetail({ view, origin }: { view: ShownView; origin: Orig
       return <MarginHistory id={view.id} origin={origin} />;
     case 'settings':
       return <FoodcostSettings />;
+    case 'priceList':
+      return <PriceListScreen />;
   }
 }
 
