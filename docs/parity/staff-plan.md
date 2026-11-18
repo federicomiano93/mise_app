@@ -379,3 +379,52 @@ Branch `feature/mise2-next-staff-3`, one PR into `feature/mise2-next`. No server
 - **Changed after the code review**: the update hold also ends a staff code's whole life after the answer arrived, on this phone's clock (a phone set hours behind held updates off for 24 hours plus its error); the time left is read from the moment the result arrives; the six digits are read to a screen reader one by one.
 - **Left as built**: a phone set more than a day ahead shows «expired» while the code still works (the owner makes another); while the invitation is made the pressed button is switched off, so the keyboard focus falls to the page until the answer (as on the sibling screens); an expected refusal is reported as an error, as on the sibling screens.
 - **Still owed**: the send sheet and a person joining, on the real phone and tablet (Federico).
+
+---
+
+## Staff slice 4 as built (18 Nov 2026)
+
+Branch `feature/mise2-staff-4-people`, one PR into `main` (Mise 2 is live since 15 Nov). No server, rules or current-app change: Mise 2 reads the roster `locations/{lid}/members` live and calls the live `setMemberRole` (a role, or `null` to remove) and `setMemberName`.
+
+**What a person sees**
+
+- **Under the invite card** of «Who can get in» (`/settings/people`, the full owner only, as in slice 3), after a thin line: **«People with access · 5»** (the count once the list has answered), then one row per person.
+- **The order**: the owner(s) first, then the sales and kitchen owners, then managers and head chefs, then employees — by name inside each level, in the screen language's alphabetical order. A row with no name yet comes after the named ones of its level, by its email.
+- **Each row**: the name (or «(no name yet)»), the role's word, the email (or «(no email)»). **Your own row** says «· you» and has **no buttons**.
+- **Every other row**: **«Change role»**, **«Rename»** and a small grey **remove icon** (a person with a minus). Each button's name for a screen reader includes the person: «Change role of Anna Rossi», «Rename Anna Rossi», «Remove Anna Rossi» (the email when there is no name).
+- **Change role** opens «Role of Anna Rossi»: the six choices as a list, each with the sentence of what it can do (the invite card's), the role held now tinted and marked **«Current»** with the keyboard on it. Tapping the current one, Cancel or Escape changes nothing. Tapping another asks first: «Make Anna Rossi the head chef?», the sentence of what that role can do, **«Make head chef»** / Cancel (Employee in the danger style, as in the current app). Only then is the server asked.
+- **Rename** opens «Rename Anna Rossi» with First name and Surname filled in. Nothing changes until **Save** (or Enter). An empty box is outlined, says «Enter the first name.» / «Enter the surname.» under it, and gets the cursor; nothing is sent. Save with nothing changed just closes. Cancel or Escape with typing asks «Discard changes?»; so does leaving the screen by any other way (the browser's Back, the rail).
+- **Remove** asks first, in the danger style: «Remove this person?» — «Anna Rossi (anna@…) will lose access to this location immediately, and their phones stop getting its notifications. Everything they have entered stays. If they knew your clients’ ordering links, give those clients a new one (“Replace with a new link”).»
+- **While a change is with the server**: «Saving…» under the heading, and every other button of the list does nothing until it answers. The list shows the change only when the roster itself changes (the server's own write), never before.
+- **After**: the keyboard goes back to the button pressed (after a removal, to the list's heading, the row being gone).
+- **Refusals, in the app's own words** (`settings/inviteRefusal.ts` `memberRefusal`, read from the error's code — each code is thrown by the functions for one case only): not the owner → «Only the owner can do that.»; the last owner → «This is the only owner. Make somebody else an owner first.»; removed meanwhile on another phone → «That person is no longer in this location.»; no connection or a timeout (or a phone that knows it is offline) → the current app's «Could not change that / save that name / remove them. Check your connection…»; anything else → «That did not go through. Try again in a moment.» A role or removal refusal is a notice; a rename refusal is said inside the form, the typing kept.
+- **The roster cannot be read** → «Could not read who works here. Check your connection.», what was shown stays.
+- **Only you in the venue** → «Nobody else yet.»
+
+**Security, as built**
+
+- **The server is the lock.** Nothing here writes Firestore: the roster is read (`watchMembers`, `onSnapshot` through `backend.firestore()`), changes go only through the two callables (`settingsSource.ts`); a spec pins that no `setDoc`/`updateDoc`/`deleteDoc` is ever made.
+- **Non-owners never see the list**: the address is replaced by the Settings page for the four other roles (slice 3's gate), and no listener starts for them (spec).
+- **One call per tap, one change at a time** (a ref read at once): a double tap on «Make …», «Remove» or Save is one call (specs).
+- **The busy marker** (`markBusy`) is held while a change is with the server and while the rename form holds typing.
+- **The listener lives with the screen** (`peopleStore.ts`), and an answer or an error after it stopped is dropped. A sign-out, a change of venue and another person signing in take the screen off before Firestore is terminated (`session.ts` `leaving`): `settings/peopleLeave.spec.tsx` runs the real session and gate against a Firestore that errors live listeners on terminate, and nothing reaches the console.
+- **No email or uid in any console line or usage event**: a failure logs the error's code only; the usage line counts `member-role-changed`, `member-renamed`, `member-removed` by name only (spec watches every console method and the usage events through changes and refusals).
+- **No storage at all**: nothing is written to localStorage or sessionStorage.
+- **The server's weak points of §5 are left as they are**: an owner can remove another owner (not the last); the last-owner check counts the display roster, not the account records; every member can read colleagues' emails on the roster; six-digit codes can be paused for everybody. A roster row whose role this app does not know is drawn as an employee (as in the current app) — the real role is in `users/{uid}`, which the screen cannot read.
+
+**Choices made (not fixed by the plan)**
+
+- **The order has four levels**, as the current app's code does (owner, partial owners, manager level, everybody else), not just «owner first»: the plan's words describe the current app.
+- **Change role is a button that opens the list of six**, not a drop-down per row (the current app's): D2's reasoning (no stray key picks a role) carried over to the roster. In the list a choice is a BUTTON, not a radio: arrow keys move, only a press chooses, and even then it only asks.
+- **Rename is a small dialog**, not two boxes inside the row (the current app's): it waits for the server and keeps the typing on a refusal. Both names are required (as in the current app; the server would accept one).
+- **The rename checks say «Enter the first name.» / «Enter the surname.»**, not the join form's «Enter your first name.»: the owner is naming somebody else.
+- **«Nobody else yet.» shows when nobody but you is in the list** (the current app showed it only for an empty list, which cannot happen with the owner in it).
+- **A nameless row sorts after the named ones**, by email (the current app sorted «(no name yet)» by its bracket, first).
+- **The remove sentence gains «and their phones stop getting its notifications»** (the plan says so; the current app's sentence did not).
+- **One change at a time**: while one is with the server, every other button of the list does nothing (no queue).
+
+**New texts (EN / IT)** — reused key for key from the current app: `people.section.members(Plain)`, `people.you`, `people.noNameYet`, `people.noEmail(Paren)`, `people.empty`, `people.rename`, `people.remove`, `people.firstName`, `people.surname`, `people.roleOf`, `people.make`, the six `people.confirm.*`, `people.remove.title`, `people.err.read`, `people.err.name`, `people.err.change`, `people.err.remove`. Changed: `people.remove.message` (the phones). New: `people.changeRole` «Change role» / «Cambia ruolo»; `people.changeRoleOf` «Change role of {name}» / «Cambia ruolo di {name}»; `people.renameOf` «Rename {name}» / «Rinomina {name}»; `people.removeOf` «Remove {name}» / «Rimuovi {name}»; `people.role.current` «Current» / «Attuale»; `people.name.firstMissing` «Enter the first name.» / «Inserisci il nome.»; `people.name.lastMissing` «Enter the surname.» / «Inserisci il cognome.»; `people.saving` «Saving…» / «Salvataggio…»; `people.discard` «Discard changes?» / «Vuoi scartare le modifiche?»; `people.err.ownerOnly` «Only the owner can do that.» / «Solo il titolare può farlo.»; `people.err.lastOwner` «This is the only owner. Make somebody else an owner first.» / «È l’unico titolare. Prima rendi titolare qualcun altro.»; `people.err.gone` «That person is no longer in this location.» / «Questa persona non è più in questo locale.»; `people.err.tryAgain` «That did not go through. Try again in a moment.» / «Non è andato a buon fine. Riprova tra un momento.».
+
+**Checked here (cloud session, no emulator)**: types, specs and build of both packages, the root suite. The screen drawn in Chromium with in-memory data at 1024, 360 and 296 in Italian and English: no sideways scroll, every button at least 44 px, nothing clipped, and axe-core (WCAG 2.2 AA + best practice) with no violation on the list, the role list, the question and the rename form showing an error.
+
+**Not done here**: driving it on the emulator with the real Functions emulator (a real role change, rename and removal; the last-owner refusal from the real function; a removed person's phone losing access), on the lab tablet (Chrome 101) and on the phone, in Italian and English — Federico's PC, before calling the slice done. Then items 41-42 (joining) are complete; 43 (kiosk) is slices 5-6.
