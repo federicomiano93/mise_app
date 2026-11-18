@@ -327,3 +327,11 @@ with 12:00–12:30), never run past closing; the sales side's owner may change t
 **Tests**: `bookingSettings.spec.ts`, `settingsProducts.spec.ts`, `bookingModel.spec.ts` (phone optional, slots, full slot,
 counted once, kept time), `BookingSettingsScreen.spec.tsx`, `BookingsSection.settings.spec.tsx`, `shared/src/price-list.spec.ts`,
 and the rules suite (`bookingSettings`, the bookings cases for phone '' and `slotEnd`).
+
+**Review fixes (PR #578, 18 Nov 2026).** The slot is shown wherever a booking's time is (`bookingTimeLabel`: «10:00–12:00», or the
+time alone without `slotEnd`) — slips, receipt text, WhatsApp reminder («tra le 10:00 e le 12:00»), booking page, list, Home. The
+settings screen keeps its header bar (title + Back to the list) while waiting or failed. Text left in an add box (weights, left-out
+ingredient, «Da aggiungere») is never silently lost: «Fatto» adds it first or stays open with the error; in the extras box it is an
+unsaved change and Save adds it or blocks with the error. A refused save (`permission-denied`) says the permission is gone instead
+of «controlla la connessione». A Save that changed one of `slotFirst` / `slotLast` / `slotMinutes` writes all three. The line-name
+limit is 200 (`LIMITS.lineName`), not 120. Specs: `BookingSettingsScreen.review.spec.tsx` and the model, slip and reminder specs.

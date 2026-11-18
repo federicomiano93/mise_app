@@ -189,7 +189,7 @@ TTL, so the app also hides a ticked item older than 30 days. An item never ticke
 **Customer bookings («Prenotazioni», Mise 2 only, 18 Nov 2026):** `bookings/{autoId}` — `{ bakery, customerName (1–80),
 phone (≤30, digits/spaces/+ only, at least one digit — or '' where the venue does not ask for it, bookings settings), mode ('pickup'|'delivery'), address (≤200; '' for a pickup, required for a
 delivery), date (YYYY-MM-DD), time (HH:MM; a slot's start), slotEnd? (HH:MM, after time — the ONE optional key, only on a booking taken in a
-time slot; the editor's merge deletes it when the booking moves to an exact time), lines (list 1–50 of { recipeId|null, name ≤120, qty > 0 ≤100000, unit 'pcs'|'kg',
+time slot; the editor's merge deletes it when the booking moves to an exact time), lines (list 1–50 of { recipeId|null, name ≤200, qty > 0 ≤100000, unit 'pcs'|'kg',
 note? ≤120 } — ⚠️ the rules judge only the list's SIZE, the app checks each line, `app/src/bookings/bookingModel.ts`), deposit
 (number 0–100000 or null), total (same), notes (≤500), status ('todo'|'ready'|'collected'|'cancelled'), number (int 1–9999, the
 short number on both slips, given once at creation and never changed), createdAt (server time, once), updatedAt (server time,
