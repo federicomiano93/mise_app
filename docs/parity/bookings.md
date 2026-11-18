@@ -4,6 +4,18 @@ NEW IN MISE 2, no original in the current app. The owner's plan of 18 Nov 2026 (
 Panificio Miano, with two printable slips), in five steps: 0 the printer test on the Epson FP-81 II RT, **1 this section**, 2 prices
 from Food cost through a published price list, 3 direct printing to a receipt printer, 4 a WhatsApp reminder button.
 
+**Where it stands (18 Nov 2026, end of session)** — every step is built; nothing past step 1 is live.
+- Step 1 — merged into `main` (#572).
+- Step 2 — PR #573 (`feature/mise2-bookings-2`), base `main`, CI green, mergeable. ⚠️ Deploy the rules first (the `price-list`
+  block), then merge.
+- Step 3 — PR #576 (`feature/mise2-bookings-3`), base step 2, CI green. Waits on **step 0**: the owner's test page on the real
+  Epson (preview link on the PR works for it; «Step 3 as built» below). If the printer cannot be reached from the tablet, the
+  fallback is the computer of the management software (`print-agent/`), not built yet.
+- Step 4 — PR #577 (`feature/mise2-bookings-4`), base step 3, review fixes pushed; GitHub's CI on its last commit not yet seen.
+- Open for the owner: the language of the WhatsApp message and of the slips in a mixed-language venue; whether to record that a
+  reminder was sent (a new field + rules); clearing the counter tablet's browser history (the wa.me address keeps the message).
+- Merge order: 2 → 3 → 4, each retargeted to `main` once the one below is merged.
+
 ## Step 1 as built (18 Nov 2026)
 
 Branch `feature/mise2-bookings-1`, one PR into `main`. Nothing deployed. ⚠️ Merging into `main` IS going live for the server half:
