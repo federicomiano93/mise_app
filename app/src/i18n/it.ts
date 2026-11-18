@@ -3014,6 +3014,7 @@ export const it: Messages = {
   'bookings.reminder.delivery': 'ti ricordiamo la consegna della tua prenotazione {number} da {venue}:',
   'bookings.reminder.us': 'noi',
   'bookings.reminder.when': '{date} alle {time}',
+  'bookings.reminder.whenSlot': '{date} tra le {time} e le {end}',
   'bookings.reminder.address': 'Indirizzo: {address}',
   'bookings.reminder.toPay': 'Da pagare: {amount}',
   'bookings.reminder.bye': 'A presto!',

@@ -12,7 +12,7 @@ const money = moneyOf('€', { decimal: ',', group: '.', symbolAfter: true });
 const words: ReminderWords = {
   hello: 'Ciao Anna,',
   intro: 'ti ricordiamo il ritiro della tua prenotazione N. 4 da Panificio Prova:',
-  when: (date, time) => `${date} alle ${time}`,
+  when: (date, time, slotEnd) => (slotEnd === null ? `${date} alle ${time}` : `${date} tra le ${time} e le ${slotEnd}`),
   address: address => `Indirizzo: ${address}`,
   toPay: amount => `Da pagare: ${amount}`,
   bye: 'A presto!',
@@ -93,5 +93,15 @@ describe('the reminder', () => {
     expect(wantsReminder({ status: 'collected', date: today }, today)).toBe(false);
     expect(wantsReminder({ status: 'cancelled', date: today }, today)).toBe(false);
     expect(wantsReminder({ status: 'todo', date: '2026-11-17' }, today)).toBe(false);
+  });
+});
+
+describe('the reminder of a booking with a slot', () => {
+  it('says the range when the booking has one, and «alle» when it has not', () => {
+    const when = (slotEnd: string | null) => reminderMessage({
+      booking: bookingFixture({ id: 'S', date: '2026-12-24', time: '10:00', slotEnd }), words, locale: 'it-IT', units, money,
+    }).split('\n')[2];
+    expect(when('12:00')).toBe('giovedì 24 dicembre tra le 10:00 e le 12:00');
+    expect(when(null)).toBe('giovedì 24 dicembre alle 10:00');
   });
 });

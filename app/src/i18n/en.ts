@@ -3257,6 +3257,7 @@ export const en = {
   'bookings.reminder.delivery': 'a reminder of your booking {number} with {venue}, to be delivered on:',
   'bookings.reminder.us': 'us',
   'bookings.reminder.when': '{date} at {time}',
+  'bookings.reminder.whenSlot': '{date} between {time} and {end}',
   'bookings.reminder.address': 'Address: {address}',
   'bookings.reminder.toPay': 'To pay: {amount}',
   'bookings.reminder.bye': 'See you soon!',

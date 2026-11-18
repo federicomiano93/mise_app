@@ -11,7 +11,7 @@ import { FormBar } from '../ui/FormBar';
 import { useStatusMessage } from '../ui/StatusMessage';
 import { useConfirm } from '../ui/useConfirm';
 import { lineAmount } from '@mise/shared/price-list';
-import { BOOKING_STATUSES, toPay } from './bookingModel';
+import { BOOKING_STATUSES, bookingTimeLabel, toPay } from './bookingModel';
 import type { Booking, BookingStatus } from './bookingModel';
 import { CustomerSlip, LabSlip } from './BookingSlips';
 import type { SlipWords } from './BookingSlips';
@@ -104,7 +104,9 @@ function Shown({ booking, onBack }: { booking: Booking; onBack: () => void }) {
       intro: t(booking.mode === 'delivery' ? 'bookings.reminder.delivery' : 'bookings.reminder.pickup', {
         number, venue: venueName !== null && venueName !== undefined && venueName !== '' ? venueName : t('bookings.reminder.us'),
       }),
-      when: (date, time) => t('bookings.reminder.when', { date, time }),
+      when: (date, time, slotEnd) => (slotEnd === null
+        ? t('bookings.reminder.when', { date, time })
+        : t('bookings.reminder.whenSlot', { date, time, end: slotEnd })),
       address: address => t('bookings.reminder.address', { address }),
       toPay: amount => t('bookings.reminder.toPay', { amount }),
       bye: t('bookings.reminder.bye'),
@@ -240,7 +242,7 @@ function Shown({ booking, onBack }: { booking: Booking; onBack: () => void }) {
           <div className={styles.fact}>
             <dt>{t('bookings.detail.when')}</dt>
             <dd>
-              <span className={styles.when}>{spellDate(booking.date, locale)} · {booking.time}</span>
+              <span className={styles.when}>{spellDate(booking.date, locale)} · {bookingTimeLabel(booking)}</span>
               <span className={styles.mode} data-mode={booking.mode}>{modeWord}</span>
             </dd>
           </div>

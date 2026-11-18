@@ -1,7 +1,7 @@
 import { formatMoney } from '@mise/shared/price-model';
 import type { Money } from '@mise/shared/currency';
 import { lineAmount } from '@mise/shared/price-list';
-import { toPay } from './bookingModel';
+import { bookingTimeLabel, toPay } from './bookingModel';
 import type { Booking } from './bookingModel';
 import { lineQtyText, shortDate, spellDate } from './bookingWords';
 import type { UnitWords } from './bookingWords';
@@ -63,7 +63,7 @@ export function LabSlip({ booking, words, locale, unitWord }: SlipProps) {
         <span className="bk-slip-title">{words.labTitle}</span>
         <span className="bk-slip-number">{words.number}</span>
       </div>
-      <p className="bk-slip-when">{spellDate(booking.date, locale)} · {booking.time}</p>
+      <p className="bk-slip-when">{spellDate(booking.date, locale)} · {bookingTimeLabel(booking)}</p>
       <p className="bk-slip-mode">{words.mode}</p>
       <hr className="bk-slip-rule" />
       <Lines booking={booking} locale={locale} unitWord={unitWord} />
@@ -85,7 +85,7 @@ export function CustomerSlip({ booking, words, locale, unitWord, venueName, mone
       {venueName !== '' ? <p className="bk-slip-venue">{venueName}</p> : null}
       <p className="bk-slip-number bk-slip-number--big">{words.number}</p>
       <p className="bk-slip-customer">{booking.customerName}</p>
-      <p className="bk-slip-when">{words.mode}: {shortDate(booking.date, locale)} {booking.time}</p>
+      <p className="bk-slip-when">{words.mode}: {shortDate(booking.date, locale)} {bookingTimeLabel(booking)}</p>
       <hr className="bk-slip-rule" />
       <Lines booking={booking} locale={locale} unitWord={unitWord} money={money} />
       {booking.total !== null || booking.deposit !== null ? (

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   LIMITS, blankLine, boxNumber, choiceForDate, dayAfter, draftFrom, emptyDraft, firstProblem, groupsFor, nextNumber, oldestKeptDay,
   effectiveTotal, linePrice, listTotal, parseMoney, parseQty, readBooking, sameDraft, sortForDay, stillToHandOver, toBookingData, toPay,
-  NO_FORM_RULES, phoneStorable,
+  NO_FORM_RULES, phoneStorable, bookingTimeLabel,
 } from './bookingModel';
 import type { Booking, Draft, FormRules } from './bookingModel';
 import { bookingFixture, priceListOf } from '../testing/fakeBookingsSource';
@@ -371,5 +371,12 @@ describe('the kept exact time belongs to its own day', () => {
     expect(firstProblem({ ...good, date: '2026-12-24', time: '09:40', slotEnd: '' }, { ...ctx, isNew: false, rules })).toBeNull();
     expect(firstProblem({ ...good, date: '2026-12-23', time: '09:40', slotEnd: '' }, { ...ctx, isNew: false, rules }))
       .toEqual({ field: 'time', reason: 'required' });
+  });
+});
+
+describe('bookingTimeLabel', () => {
+  it('a slot reads start–end, a booking with only a time reads the time', () => {
+    expect(bookingTimeLabel({ time: '10:00', slotEnd: '12:00' })).toBe('10:00–12:00');
+    expect(bookingTimeLabel({ time: '10:00', slotEnd: null })).toBe('10:00');
   });
 });

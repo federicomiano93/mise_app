@@ -5,7 +5,7 @@ import { useT } from '../i18n/useT';
 import { useSession } from '../session/SessionContext';
 import type { MessageKey } from '../i18n/en';
 import { Button } from '../ui/Button';
-import { dayAfter, groupsFor, oldestKeptDay } from './bookingModel';
+import { bookingTimeLabel, dayAfter, groupsFor, oldestKeptDay } from './bookingModel';
 import type { Booking, BookingStatus, ListChoice } from './bookingModel';
 import { linesSummary, spellDate } from './bookingWords';
 import type { UnitWords } from './bookingWords';
@@ -198,7 +198,7 @@ function Row({ booking, current, locale, words }: {
       data-booking={booking.id}
       aria-current={current ? 'page' : undefined}
     >
-      <span className={styles.time}>{booking.time}</span>
+      <span className={styles.time}>{bookingTimeLabel(booking)}</span>
       <span className={styles.main}>
         <span className={styles.name}>{booking.customerName}</span>
         <span className={styles.summary}>

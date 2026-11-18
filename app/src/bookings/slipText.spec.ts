@@ -73,3 +73,16 @@ describe('the slips for the receipt printer', () => {
     expect(twoColumns('Solo', '')).toEqual([{ text: 'Solo', style: 'normal' }]);
   });
 });
+
+describe('a booking with a slot', () => {
+  const slotted = { ...common, booking: { ...booking, time: '10:00', slotEnd: '12:00' } };
+
+  it('both slips show the slot, not only its start', () => {
+    expect(text(labSlipLines(slotted))).toContain('giovedì 24 dicembre · 10:00–12:00');
+    expect(text(customerSlipLines({ ...slotted, venueName: 'Panificio Prova', money }))).toContain('Consegna: 24/12/2026 10:00–12:00');
+  });
+
+  it('without slotEnd they show the time alone', () => {
+    expect(text(labSlipLines(common))).not.toContain('09:30–');
+  });
+});

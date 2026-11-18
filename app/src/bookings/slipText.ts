@@ -8,7 +8,7 @@
 import { formatMoney } from '@mise/shared/price-model';
 import type { Money } from '@mise/shared/currency';
 import { lineAmount } from '@mise/shared/price-list';
-import { toPay } from './bookingModel';
+import { bookingTimeLabel, toPay } from './bookingModel';
 import type { Booking } from './bookingModel';
 import type { SlipWords } from './BookingSlips';
 import { lineQtyText, shortDate, spellDate } from './bookingWords';
@@ -57,7 +57,7 @@ export function labSlipLines(input: Common): SlipLine[] {
   const p = lettersOf(input.plain);
   const out: SlipLine[] = [
     ...twoColumns(p(words.labTitle), p(words.number), 'bold'),
-    line(p(`${spellDate(booking.date, locale)} · ${booking.time}`), 'bold'),
+    line(p(`${spellDate(booking.date, locale)} · ${bookingTimeLabel(booking)}`), 'bold'),
     line(p(words.mode.toLocaleUpperCase(locale)), 'bold'),
     line(RULE),
     ...items(input, null),
@@ -75,7 +75,7 @@ export function customerSlipLines(input: Common & { readonly venueName: string; 
   out.push(
     line(p(words.number), 'bold'),
     line(p(booking.customerName), 'bold'),
-    line(p(`${words.mode}: ${shortDate(booking.date, locale)} ${booking.time}`)),
+    line(p(`${words.mode}: ${shortDate(booking.date, locale)} ${bookingTimeLabel(booking)}`)),
     line(RULE),
     ...items(input, money),
   );

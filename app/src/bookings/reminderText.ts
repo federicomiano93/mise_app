@@ -55,7 +55,8 @@ export type ReminderWords = {
   // are in another language than its customers' would send a mixed message. Left for the owner (docs/parity/bookings.md).
   readonly intro: string;
   // «{date} alle {time}» → a function, because the date is spelled here in the venue's locale.
-  readonly when: (date: string, time: string) => string;
+  // slotEnd is null for a booking with no slot («alle 09:30»); with one, «tra le 10:00 e le 12:00».
+  readonly when: (date: string, time: string, slotEnd: string | null) => string;
   // «Indirizzo: {address}» — a delivery only.
   readonly address: (address: string) => string;
   // «Da pagare: {amount}».
@@ -81,7 +82,7 @@ export function reminderMessage({ booking, words, locale, units, money }: {
   readonly units: UnitWords;
   readonly money: Money;
 }): string {
-  const out: string[] = [words.hello, words.intro, words.when(spellDate(booking.date, locale), booking.time)];
+  const out: string[] = [words.hello, words.intro, words.when(spellDate(booking.date, locale), booking.time, booking.slotEnd)];
   if (booking.mode === 'delivery' && booking.address !== '') out.push(words.address(booking.address));
   if (booking.lines.length > 0) {
     out.push('');

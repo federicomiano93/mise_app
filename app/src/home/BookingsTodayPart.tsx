@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { Link } from 'react-router';
+import { bookingTimeLabel } from '../bookings/bookingModel';
 import type { Booking } from '../bookings/bookingModel';
 import { useDataServices } from '../data/DataContext';
 import { useT } from '../i18n/useT';
@@ -82,7 +83,7 @@ export function BookingsTodayPart({ onShownChange }: { onShownChange: (shown: bo
               onBlur={event => { if (event.currentTarget.isConnected) focusedId.current = null; }}
             >
               <span className={styles.name}>
-                {booking.time} · {booking.customerName}
+                {bookingTimeLabel(booking)} · {booking.customerName}
                 {' — '}
                 {t(booking.status === 'ready' ? 'bookings.status.ready' : 'bookings.status.todo')}
               </span>

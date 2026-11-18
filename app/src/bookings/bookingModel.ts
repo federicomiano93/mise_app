@@ -283,6 +283,11 @@ export function parseQty(text: string, unit: BookingUnit): number | null | 'inva
 }
 
 // What is left to pay: the total less the deposit, never below zero, only when both are known.
+// When a booking is, as people read it: «10:00–12:00» for a slot, «10:00» when only the start is known.
+export function bookingTimeLabel(booking: Pick<Booking, 'time' | 'slotEnd'>): string {
+  return booking.slotEnd === null || booking.slotEnd === '' ? booking.time : `${booking.time}–${booking.slotEnd}`;
+}
+
 export function toPay(total: number | null, deposit: number | null): number | null {
   if (total === null || deposit === null) return null;
   return Math.max(0, Math.round((total - deposit) * 100) / 100);
