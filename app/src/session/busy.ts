@@ -27,14 +27,29 @@
 // way back after a revert. (Not the sign-in form for that reason: a browser's autofill or a half-typed address left on
 // a shared tablet would block it for days, for a box that takes seconds to retype.) Each new editor adds itself here.
 
-const holders = new Set<symbol>();
+// The kiosk's rest screen holds it too, and is the one holder that means «nobody is looking», not «somebody is typing»
+// (kiosk/kioskController.ts, staff slice 5, #406): while the tablet rests, a reload would drop the screen lock and Android would
+// switch the screen off at once. It lets go only at the rest→night step, the one moment the current app let an update in by itself,
+// and asks isBusyApartFrom() whether anybody ELSE holds the marker.
+
+// Each hold is its own release function, so a holder can ask about everybody but itself.
+const holders = new Set<() => void>();
 
 export function markBusy(): () => void {
-  const token = Symbol('busy');
-  holders.add(token);
-  return () => { holders.delete(token); };
+  const release = () => { holders.delete(release); };
+  holders.add(release);
+  return release;
 }
 
 export function isBusy(): boolean {
   return holders.size > 0;
+}
+
+// «Is somebody else in the middle of something?» — for a holder that must not count its own hold (the kiosk's rest screen).
+// `mine` is the release function markBusy() gave it, or null when it holds nothing.
+export function isBusyApartFrom(mine: (() => void) | null): boolean {
+  for (const holder of holders) {
+    if (holder !== mine) return true;
+  }
+  return false;
 }

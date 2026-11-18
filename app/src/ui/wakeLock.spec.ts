@@ -115,4 +115,45 @@ describe('the screen wake lock', () => {
     installWakeLock();
     expect(wake.canKeepScreenAwake()).toBe(true);
   });
+
+  // #406 (js/wake-lock.js, tests/wake-lock.test.mjs): a lock the browser let go of, or a request it refused, is asked for again
+  // by the next refresh — the kiosk calls it on every tick.
+  it('refreshWakeLock asks again after the sentinel was released, and after a refused request', async () => {
+    let fail = false;
+    const sentinels: { listeners: (() => void)[] }[] = [];
+    const request = vi.fn(async () => {
+      if (fail) throw new Error('refused');
+      const sentinel = { listeners: [] as (() => void)[], release: async () => {}, addEventListener: (_t: string, fn: () => void) => { sentinel.listeners.push(fn); } };
+      sentinels.push(sentinel);
+      return sentinel;
+    });
+    vi.stubGlobal('navigator', { ...navigator, wakeLock: { request } });
+    setVisibility('visible');
+
+    wake.refreshWakeLock(); await settle();
+    expect(request, 'no owner: nothing to ask for').toHaveBeenCalledTimes(0);
+
+    wake.acquireWakeLock('kiosk'); await settle();
+    expect(request).toHaveBeenCalledTimes(1);
+    wake.refreshWakeLock(); await settle();
+    expect(request, 'a live sentinel is not asked for twice').toHaveBeenCalledTimes(1);
+
+    sentinels[0]?.listeners.forEach(fn => { fn(); });   // released by the browser, the page never hidden
+    wake.refreshWakeLock(); await settle();
+    expect(request, 'asked again after the release').toHaveBeenCalledTimes(2);
+
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' });
+    sentinels[1]?.listeners.forEach(fn => { fn(); });
+    wake.refreshWakeLock(); await settle();
+    expect(request, 'not while the page is hidden').toHaveBeenCalledTimes(2);
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'visible' });
+
+    fail = true;
+    wake.refreshWakeLock(); await settle();
+    expect(request, 'a request that is refused…').toHaveBeenCalledTimes(3);
+    fail = false;
+    wake.refreshWakeLock(); await settle();
+    expect(request, '…is retried by the next refresh').toHaveBeenCalledTimes(4);
+    wake.releaseWakeLock('kiosk');
+  });
 });
