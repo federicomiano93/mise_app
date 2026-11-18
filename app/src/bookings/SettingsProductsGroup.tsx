@@ -8,7 +8,7 @@ import { useMoney } from '../session/useMoney';
 import { Button } from '../ui/Button';
 import { Dialog } from '../ui/Dialog';
 import { SettingSwitch } from '../ui/SettingSwitch';
-import { MAX_EXTRAS, MAX_EXTRA_LENGTH, cleanExtras } from './bookingSettings';
+import { MAX_EXTRA_LENGTH, addExtra } from './bookingSettings';
 import { useHelp } from './SettingHelp';
 import { choiceOf, removableOf, tickChoice } from './settingsProducts';
 import type { ProductChoice, ProductDoc, ProductRow } from './settingsProducts';
@@ -38,9 +38,15 @@ type Props = {
   readonly gone: number;
   readonly extras: readonly string[];
   readonly onExtras: (extras: string[]) => void;
+  // The text typed in the extras box and not added yet, kept by the screen: it counts as an unsaved change, and Save adds it.
+  readonly extraText: string;
+  readonly onExtraText: (text: string) => void;
+  readonly extraError: string | null;
+  readonly onExtraError: (error: string | null) => void;
+  readonly extraInputId: string;
 };
 
-export function ProductsGroup({ data, rows, unpriced, choices, onChoices, perPieceShown, stale, gone, extras, onExtras }: Props) {
+export function ProductsGroup({ data, rows, unpriced, choices, onChoices, perPieceShown, stale, gone, extras, onExtras, extraText, onExtraText, extraError, onExtraError, extraInputId }: Props) {
   const { t } = useT();
   const productsName = t('bookings.settings.products');
   const head = useHelp(productsName, t('bookings.settings.productsHelp'));
@@ -109,7 +115,7 @@ export function ProductsGroup({ data, rows, unpriced, choices, onChoices, perPie
         </>
       ) : null}
 
-      <ExtrasEditor extras={extras} onExtras={onExtras} />
+      <ExtrasEditor extras={extras} onExtras={onExtras} text={extraText} onText={onExtraText} error={extraError} onError={onExtraError} inputId={extraInputId} />
 
       {dialog?.kind === 'weights' ? (
         <WeightsDialog
@@ -279,13 +285,30 @@ function WeightsDialog({ name, weights, onDone, onCancel }: {
   const [list, setList] = useState<number[]>(() => cleanWeights(weights));
   const [text, setText] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const add = () => {
+  // The list with the typed weight in it, or null (with the box's error shown and the focus put back in it).
+  const attempt = (): number[] | null => {
     const kg = parseWeight(text);
-    if (kg === null) { setError(t('bookings.settings.weightBad')); return; }
-    if (!list.includes(kg) && list.length >= MAX_WEIGHTS) { setError(t('bookings.settings.weightsFull')); return; }
-    setList(cleanWeights([...list, kg]));
+    const problem = kg === null ? 'bookings.settings.weightBad'
+      : !list.includes(kg) && list.length >= MAX_WEIGHTS ? 'bookings.settings.weightsFull' : null;
+    if (kg === null || problem !== null) {
+      setError(t(problem ?? 'bookings.settings.weightBad'));
+      document.getElementById(`${ids}-weight`)?.focus();
+      return null;
+    }
+    return cleanWeights([...list, kg]);
+  };
+  const add = () => {
+    const next = attempt();
+    if (next === null) return;
+    setList(next);
     setText('');
     setError(null);
+  };
+  // «Done» with a weight still in the box adds it first (never lost), unless it is not valid: then the dialog stays open.
+  const done = () => {
+    if (text.trim() === '') { onDone(list); return; }
+    const next = attempt();
+    if (next !== null) onDone(next);
   };
   return (
     <Dialog
@@ -295,7 +318,7 @@ function WeightsDialog({ name, weights, onDone, onCancel }: {
       actions={(
         <>
           <Button variant="secondary" onPress={onCancel}>{t('common.cancel')}</Button>
-          <Button variant="primary" onPress={() => { onDone(list); }}>{t('bookings.settings.done')}</Button>
+          <Button variant="primary" onPress={done}>{t('bookings.settings.done')}</Button>
         </>
       )}
     >
@@ -331,15 +354,31 @@ function RemovableDialog({ name, prefill, chosen, onDone, onCancel }: {
   const [ticked, setTicked] = useState<ReadonlySet<string>>(() => new Set(cleanRemovable(chosen)));
   const [text, setText] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const add = () => {
+  // The candidates and ticks with the typed ingredient in them, or null when the list is full (error shown, focus in the box).
+  const attempt = (): { candidates: string[]; ticked: ReadonlySet<string> } | null => {
     const [word] = cleanRemovable([text]);
-    if (word === undefined) return;
+    if (word === undefined) return { candidates, ticked };
     const known = candidates.find(c => c.toLocaleLowerCase() === word.toLocaleLowerCase());
-    if (known === undefined && candidates.length >= MAX_REMOVABLE) { setError(t('bookings.settings.removableFull')); return; }
-    if (known === undefined) setCandidates([...candidates, word]);
-    setTicked(new Set([...ticked, known ?? word]));
+    if (known === undefined && candidates.length >= MAX_REMOVABLE) {
+      setError(t('bookings.settings.removableFull'));
+      document.getElementById(`${ids}-ingredient`)?.focus();
+      return null;
+    }
+    return { candidates: known === undefined ? [...candidates, word] : candidates, ticked: new Set([...ticked, known ?? word]) };
+  };
+  const add = () => {
+    if (cleanRemovable([text]).length === 0) return;
+    const next = attempt();
+    if (next === null) return;
+    setCandidates(next.candidates);
+    setTicked(next.ticked);
     setText('');
     setError(null);
+  };
+  // «Done» with an ingredient still in the box adds it (ticked) first; if it cannot be added the dialog stays open.
+  const done = () => {
+    const next = attempt();
+    if (next !== null) onDone(next.candidates.filter(c => next.ticked.has(c)));
   };
   const toggle = (word: string, on: boolean) => {
     const next = new Set(ticked);
@@ -355,7 +394,7 @@ function RemovableDialog({ name, prefill, chosen, onDone, onCancel }: {
       actions={(
         <>
           <Button variant="secondary" onPress={onCancel}>{t('common.cancel')}</Button>
-          <Button variant="primary" onPress={() => { onDone(candidates.filter(c => ticked.has(c))); }}>{t('bookings.settings.done')}</Button>
+          <Button variant="primary" onPress={done}>{t('bookings.settings.done')}</Button>
         </>
       )}
     >
@@ -385,21 +424,21 @@ function RemovableDialog({ name, prefill, chosen, onDone, onCancel }: {
 }
 
 // «Da aggiungere»: the extras as chips, and a field to add one.
-function ExtrasEditor({ extras, onExtras }: { extras: readonly string[]; onExtras: (extras: string[]) => void }) {
+function ExtrasEditor({ extras, onExtras, text, onText, error, onError, inputId }: {
+  extras: readonly string[]; onExtras: (extras: string[]) => void;
+  text: string; onText: (text: string) => void; error: string | null; onError: (error: string | null) => void; inputId: string;
+}) {
   const { t } = useT();
   const ids = useId();
   const name = t('bookings.settings.extras');
   const help = useHelp(name, t('bookings.settings.extrasHelp'));
-  const [text, setText] = useState('');
-  const [error, setError] = useState<string | null>(null);
   const add = () => {
-    const [word] = cleanExtras([text]);
-    if (word === undefined) return;
-    const known = extras.some(e => e.toLocaleLowerCase() === word.toLocaleLowerCase());
-    if (!known && extras.length >= MAX_EXTRAS) { setError(t('bookings.settings.extrasFull')); return; }
-    if (!known) onExtras([...extras, word]);
-    setText('');
-    setError(null);
+    const result = addExtra(extras, text);
+    if (result.full) { onError(t('bookings.settings.extrasFull')); return; }
+    if (!result.added) return;
+    onExtras(result.extras);
+    onText('');
+    onError(null);
   };
   return (
     <div className={styles.extras}>
@@ -411,17 +450,17 @@ function ExtrasEditor({ extras, onExtras }: { extras: readonly string[]; onExtra
       {extras.length > 0 ? (
         <ul className={styles.chips} aria-labelledby={`${ids}-title`}>
           {extras.map(word => (
-            <Chip key={word} text={word} removeLabel={t('bookings.settings.removeChip', { name: word })} onRemove={() => { document.getElementById(`${ids}-extra`)?.focus(); onExtras(extras.filter(e => e !== word)); }} />
+            <Chip key={word} text={word} removeLabel={t('bookings.settings.removeChip', { name: word })} onRemove={() => { document.getElementById(inputId)?.focus(); onExtras(extras.filter(e => e !== word)); }} />
           ))}
         </ul>
       ) : null}
       <AddField
-        id={`${ids}-extra`}
+        id={inputId}
         label={t('bookings.settings.extraNew')}
         value={text}
         maxLength={MAX_EXTRA_LENGTH}
         error={error}
-        onChange={value => { setText(value); setError(null); }}
+        onChange={value => { onText(value); onError(null); }}
         onAdd={add}
       />
     </div>

@@ -205,3 +205,13 @@ export function slotFromValue(value: string): Slot | null {
 
 // The half hours of a day, for the settings' «Prima fascia dalle» / «Ultima fascia fino alle».
 export const HALF_HOURS: readonly string[] = Array.from({ length: 48 }, (_, i) => toTime(i * 30));
+
+// One more extra typed in the add box: the list with it (unchanged when it is already there or the box is blank), or `full` when
+// the list is at its limit. The box's «Add» and the screen's Save both use it, so text left in the box is never silently lost.
+export function addExtra(extras: readonly string[], text: string): { extras: string[]; added: boolean; full: boolean } {
+  const [word] = cleanExtras([text]);
+  if (word === undefined) return { extras: [...extras], added: false, full: false };
+  if (extras.some(e => e.toLocaleLowerCase() === word.toLocaleLowerCase())) return { extras: [...extras], added: true, full: false };
+  if (extras.length >= MAX_EXTRAS) return { extras: [...extras], added: false, full: true };
+  return { extras: [...extras, word], added: true, full: false };
+}

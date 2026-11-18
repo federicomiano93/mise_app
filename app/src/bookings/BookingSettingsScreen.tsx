@@ -16,7 +16,7 @@ import { SettingSwitch } from '../ui/SettingSwitch';
 import { useStatusMessage } from '../ui/StatusMessage';
 import { useConfirm } from '../ui/useConfirm';
 import {
-  HALF_HOURS, MAX_SLOT_LIMIT, SLOT_MINUTES, generateSlots, sameSettings,
+  HALF_HOURS, MAX_SLOT_LIMIT, SLOT_MINUTES, addExtra, generateSlots, sameSettings,
 } from './bookingSettings';
 import type { BookingModes, BookingSettings, SlotMinutes } from './bookingSettings';
 import { cameFromList } from './bookingsNav';
@@ -42,12 +42,19 @@ import styles from './BookingSettingsScreen.module.css';
 // real ones. So it waits for the server, and without it says so.
 // ⚠️ P20: a working copy; nothing is written until Save is pressed and confirmed; leaving with changes asks first.
 
+// The rules refused the write (the person's role changed while the screen was open), as opposed to a connection that failed.
+function isRefused(err: unknown): boolean {
+  const code = typeof err === 'object' && err !== null && 'code' in err ? String((err as { code: unknown }).code) : '';
+  return code === 'permission-denied' || code === 'firestore/permission-denied';
+}
+
 type Loaded<T> = { readonly status: 'waiting' } | { readonly status: 'ready'; readonly value: T } | { readonly status: 'failed' };
 
 export function BookingSettingsScreen() {
   const { t } = useT();
   const { canManage, role, location, locationId } = useSession();
   const services = useDataServices();
+  const navigate = useNavigate();
   // The products can be changed only by whoever runs Food cost (the rules: cardAccess 'manage' publishes the list).
   const managesFoodcost = canManage && role !== 'owner-kitchen' && venueHasSection(location, 'foodcost');
   const [settings, setSettings] = useState<Loaded<BookingSettings>>({ status: 'waiting' });
@@ -95,6 +102,11 @@ export function BookingSettingsScreen() {
     const failed = settings.status === 'failed';
     return (
       <section className={styles.screen} aria-busy={!failed}>
+        <FormBar
+          backLabel={t('ui.back')}
+          onBack={() => { void navigate(BOOKINGS_PATH, { replace: true }); }}
+          title={t('bookings.settings.title')}
+        />
         <p className={styles.loading}>{failed ? t('bookings.settings.readFailed') : t('bookings.settings.waiting')}</p>
       </section>
     );
@@ -122,6 +134,9 @@ function SettingsForm({ initial, data }: { initial: BookingSettings; data: Produ
   const [draft, setDraft] = useState<BookingSettings>(initial);
   const [limitText, setLimitText] = useState(initial.slotLimit === null ? '' : String(initial.slotLimit));
   const [problem, setProblem] = useState<'slotOrder' | 'slotLimit' | null>(null);
+  // Text typed in the «Da aggiungere» box and not added: an unsaved change, and Save adds it (or says why it cannot).
+  const [extraText, setExtraText] = useState('');
+  const [extraError, setExtraError] = useState<string | null>(null);
   const editable = data.kind === 'editable';
   const [startChoices] = useState<ReadonlyMap<string, ProductChoice>>(() => (data.kind === 'editable' ? choicesFrom(data.published) : new Map()));
   const [choices, setChoices] = useState<ReadonlyMap<string, ProductChoice>>(startChoices);
@@ -138,7 +153,7 @@ function SettingsForm({ initial, data }: { initial: BookingSettings; data: Produ
 
   const limit = parseLimit(limitText);
   const effective: BookingSettings = { ...draft, slotLimit: typeof limit === 'number' ? limit : null };
-  const dirty = !sameSettings(initial, effective) || (typeof limit !== 'number' && limit !== null) || !sameChoices(startChoices, choices);
+  const dirty = !sameSettings(initial, effective) || extraText.trim() !== '' || (typeof limit !== 'number' && limit !== null) || !sameChoices(startChoices, choices);
   const dirtyRef = useRef(dirty);
   dirtyRef.current = dirty;
   const leaving = useRef(false);
@@ -207,6 +222,20 @@ function SettingsForm({ initial, data }: { initial: BookingSettings; data: Produ
       return;
     }
     setProblem(null);
+    // Text still in the «Da aggiungere» box is added first, so it is never silently lost; one that cannot be added blocks the Save.
+    let toSave = effective;
+    if (extraText.trim() !== '') {
+      const result = addExtra(draft.extras, extraText);
+      if (result.full) {
+        setExtraError(t('bookings.settings.extrasFull'));
+        document.getElementById(`${ids}-extra`)?.focus();
+        return;
+      }
+      toSave = { ...effective, extras: result.extras };
+      update({ extras: result.extras });
+      setExtraText('');
+      setExtraError(null);
+    }
     const publish = editable && publishDiffers(toPublish, data.published);
     const clashes = publish ? sharedNames(toPublish) : [];
     if (clashes.length > 0) {
@@ -226,16 +255,16 @@ function SettingsForm({ initial, data }: { initial: BookingSettings; data: Produ
       asking.current = false;
     }
     // Never awaited (local-first): Firestore shows the new settings at once and sends them when it can; only a refusal is said.
-    if (!sameSettings(initial, effective)) {
-      services.bookings(locationId).saveSettings(effective, initial).catch((err: unknown) => {
+    if (!sameSettings(initial, toSave)) {
+      services.bookings(locationId).saveSettings(toSave, initial).catch((err: unknown) => {
         console.error('Saving the bookings settings failed:', err);
-        say(t('bookings.settings.notSaved'), 5000);
+        say(t(isRefused(err) ? 'bookings.settings.noPermission' : 'bookings.settings.notSaved'), 5000);
       });
     }
     if (publish) {
       services.foodcost(locationId).publishPriceList(itemsToStore(toPublish)).catch((err: unknown) => {
         console.error('Publishing the price list failed:', err);
-        say(t('bookings.settings.notPublished'), 5000);
+        say(t(isRefused(err) ? 'bookings.settings.noPermission' : 'bookings.settings.notPublished'), 5000);
       });
     }
     leaving.current = true;
@@ -394,6 +423,11 @@ function SettingsForm({ initial, data }: { initial: BookingSettings; data: Produ
             gone={since.gone}
             extras={draft.extras}
             onExtras={extras => { update({ extras }); }}
+            extraText={extraText}
+            onExtraText={setExtraText}
+            extraError={extraError}
+            onExtraError={setExtraError}
+            extraInputId={`${ids}-extra`}
           />
         </Group>
       </div>

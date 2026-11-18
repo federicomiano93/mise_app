@@ -3438,6 +3438,7 @@ export const en = {
   'bookings.settings.saved': 'Settings saved ✓',
   'bookings.settings.notSaved': 'The settings were not saved — check your connection.',
   'bookings.settings.notPublished': 'The product list was not published — check your connection.',
+  'bookings.settings.noPermission': 'You no longer have permission to change these settings.',
   'bookings.settings.discardBody': 'The settings you changed are not saved and will be lost.',
   'bookings.printer.title': 'Receipt printer',
   'bookings.printer.intro': 'The booking slips print straight from this device on the receipt printer of the shop (the Epson FP-81 II RT), with no computer in between. Set it on every tablet or phone that prints. Without it, the slips print through the browser.',

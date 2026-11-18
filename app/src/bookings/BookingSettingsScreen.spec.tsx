@@ -182,6 +182,7 @@ describe('the products', () => {
     await user.type(within(weights).getByRole('textbox', { name: 'Weight' }), 'heavy');
     await user.click(within(weights).getByRole('button', { name: 'Add' }));
     expect(within(weights).getByText('A weight from 1 g to 50 kg, like 800 g or 1.5 kg.')).toBeInTheDocument();
+    await user.clear(within(weights).getByRole('textbox', { name: 'Weight' }));
     await user.click(within(weights).getByRole('button', { name: 'Done' }));
     expect(screen.getByRole('button', { name: 'Weights: 800 g · 1.5 kg' })).toBeInTheDocument();
     // Removable: pre-filled from the recipe when it was ticked; the basic one unticked.

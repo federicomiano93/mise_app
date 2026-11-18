@@ -3195,6 +3195,7 @@ export const it: Messages = {
   'bookings.settings.saved': 'Impostazioni salvate ✓',
   'bookings.settings.notSaved': 'Impostazioni non salvate: controlla la connessione.',
   'bookings.settings.notPublished': 'L’elenco dei prodotti non è arrivato al banco: controlla la connessione.',
+  'bookings.settings.noPermission': 'Non hai più il permesso di cambiare queste impostazioni.',
   'bookings.settings.discardBody': 'Le impostazioni cambiate non sono salvate e andranno perse.',
   'bookings.printer.title': 'Stampante scontrini',
   'bookings.printer.intro': 'I fogli delle prenotazioni escono direttamente da questo dispositivo sulla stampante scontrini del negozio (la Epson FP-81 II RT), senza computer in mezzo. Va impostata su ogni tablet o telefono che stampa. Senza, i fogli si stampano dal browser.',
