@@ -1,7 +1,7 @@
 import { vi } from 'vitest';
 import { buildAwayDoc } from '@mise/shared/away-model';
 import type { DocData } from '../session/backend';
-import type { Invitation, MyAway, SettingsSource } from '../settings/settingsSource';
+import type { Invitation, Member, MyAway, SettingsSource } from '../settings/settingsSource';
 
 // What the fake «server» mints: six digits for an employee, a link token for anybody, both living a day (functions/onboarding.js).
 export const FAKE_DIGITS = '482913';
@@ -27,11 +27,24 @@ export type FakeSettingsSource = SettingsSource & {
   // Answers the OLDEST held write: confirmed (the «server» now holds it) or refused (the «server» keeps what it had).
   confirmHeld(): void;
   refuseHeld(err: Error): void;
+  // The roster the «server» holds. Setting it tells every live listener, as a snapshot would.
+  members: readonly Member[];
+  // How many roster listeners are live right now.
+  readonly liveMembers: number;
+  // Fails every live roster listener with this error (the stream breaking), as Firestore does.
+  breakMembers(error: unknown): void;
+  // While set, setMemberRole and setMemberName reject with this error (and the roster is left as it was).
+  memberFailWith: unknown;
 };
+
+// A roster row for the specs.
+export function member(uid: string, fields: Partial<Omit<Member, 'uid'>> = {}): Member {
+  return { uid, email: `${uid}@club.test`, firstName: '', lastName: '', role: 'staff', title: null, ...fields };
+}
 
 // `now` is the clock the holiday is judged against (a date in the past is refused, as in the real source).
 export function fakeSettingsSource(
-  seed: { away?: MyAway | null; venue?: DocData | null; now?: () => number } = {},
+  seed: { away?: MyAway | null; venue?: DocData | null; now?: () => number; members?: readonly Member[] } = {},
 ): FakeSettingsSource {
   const now = seed.now ?? Date.now;
   const state = {
@@ -41,7 +54,11 @@ export function fakeSettingsSource(
     venue: seed.venue === undefined ? {} : seed.venue,
     offline: false,
     holdWrites: false,
+    members: seed.members ?? [] as readonly Member[],
+    memberFailWith: null as unknown,
   };
+  const rosterListeners = new Set<{ onChange: (members: readonly Member[]) => void; onError: (error: unknown) => void }>();
+  const tellRoster = () => { for (const listener of [...rosterListeners]) listener.onChange(state.members); };
   const held: { until: string; confirm: () => void; refuse: (err: Error) => void }[] = [];
 
   return {
@@ -57,6 +74,16 @@ export function fakeSettingsSource(
     set offline(value) { state.offline = value; },
     get holdWrites() { return state.holdWrites; },
     set holdWrites(value) { state.holdWrites = value; },
+    get members() { return state.members; },
+    set members(value) { state.members = value; tellRoster(); },
+    get liveMembers() { return rosterListeners.size; },
+    breakMembers(error) {
+      const live = [...rosterListeners];
+      rosterListeners.clear();
+      for (const listener of live) listener.onError(error);
+    },
+    get memberFailWith() { return state.memberFailWith; },
+    set memberFailWith(value) { state.memberFailWith = value; },
     confirmHeld() { held.shift()?.confirm(); },
     refuseHeld(err) { held.shift()?.refuse(err); },
 
@@ -109,6 +136,35 @@ export function fakeSettingsSource(
         title: role === 'manager' ? (title ?? 'manager') : null,
         expiresAt: now() + DAY_MS,
       };
+    }),
+    // Answers at once from what it holds, as a listener does from the phone's copy.
+    watchMembers: vi.fn((onChange, onError) => {
+      const listener = { onChange, onError };
+      rosterListeners.add(listener);
+      onChange(state.members);
+      return () => { rosterListeners.delete(listener); };
+    }),
+    // Answers as the function does: the last owner is never demoted or removed (failed-precondition), somebody not on the roster is
+    // not-found, and a change is written to the roster, which every listener then hears.
+    setMemberRole: vi.fn(async (uid, role, title) => {
+      if (state.memberFailWith !== null) throw state.memberFailWith as Error;
+      const target = state.members.find(m => m.uid === uid);
+      if (!target) throw Object.assign(new Error('That person is not in this location.'), { code: 'functions/not-found' });
+      if (role !== 'owner' && !state.members.some(m => m.uid !== uid && m.role === 'owner')) {
+        throw Object.assign(new Error('This is the only owner. Make somebody else an owner first.'), { code: 'functions/failed-precondition' });
+      }
+      state.members = role === null
+        ? state.members.filter(m => m.uid !== uid)
+        : state.members.map(m => (m.uid === uid ? { ...m, role, title: role === 'manager' ? (title ?? 'manager') : null } : m));
+      tellRoster();
+    }),
+    setMemberName: vi.fn(async (uid, firstName, lastName) => {
+      if (state.memberFailWith !== null) throw state.memberFailWith as Error;
+      if (!state.members.some(m => m.uid === uid)) {
+        throw Object.assign(new Error('That person is not in this location.'), { code: 'functions/not-found' });
+      }
+      state.members = state.members.map(m => (m.uid === uid ? { ...m, firstName: firstName.trim(), lastName: lastName.trim() } : m));
+      tellRoster();
     }),
   };
 }

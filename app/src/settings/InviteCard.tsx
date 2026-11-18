@@ -4,8 +4,7 @@ import { expiresIn, TTL_MS } from '@mise/shared/join-code';
 import type { JoinCodeKind } from '@mise/shared/join-code';
 import { joinLinkFor } from '@mise/shared/join-link';
 import { ROLE_CHOICES } from '@mise/shared/membership';
-import type { ManagerTitle, Role, RoleChoice, RoleChoiceKey } from '@mise/shared/membership';
-import type { MessageKey } from '../i18n/en';
+import type { RoleChoice } from '@mise/shared/membership';
 import { useT } from '../i18n/useT';
 import { markBusy } from '../session/busy';
 import { useSession } from '../session/SessionContext';
@@ -15,45 +14,10 @@ import { copyToClipboard } from '../ui/clipboard';
 import { useSendSheet } from '../ui/SendSheet';
 import { useAlert } from '../ui/useAlert';
 import { inviteRefusal } from './inviteRefusal';
+import { ROLE_IN_SENTENCE, ROLE_LABEL, ROLE_MEANS, choiceKeyOf } from './roleWords';
 import type { Invitation } from './settingsSource';
 import { useSettingsSource } from './useSettingsSource';
 import styles from './InviteCard.module.css';
-
-// Each choice's word, and the sentence saying what it can do: the current app's (js/roles.js, js/staff/people.js ROLE_MEANS).
-const LABEL: Readonly<Record<RoleChoiceKey, MessageKey>> = {
-  owner: 'role.owner',
-  'owner-sales': 'role.ownerSales',
-  'owner-kitchen': 'role.ownerKitchen',
-  manager: 'role.manager',
-  'head-chef': 'role.headChef',
-  staff: 'role.staff',
-};
-
-const MEANS: Readonly<Record<RoleChoiceKey, MessageKey>> = {
-  owner: 'role.means.owner',
-  'owner-sales': 'role.means.ownerSales',
-  'owner-kitchen': 'role.means.ownerKitchen',
-  manager: 'role.means.manager',
-  'head-chef': 'role.means.headChef',
-  staff: 'role.means.staff',
-};
-
-// ⚠️ THE FORM THAT GOES INSIDE A SENTENCE IS ASKED FOR, NEVER COMPUTED: lowercasing somebody else's language is the translator's
-// business (js/roles.js personLabelInSentence).
-const IN_SENTENCE: Readonly<Record<RoleChoiceKey, MessageKey>> = {
-  owner: 'role.owner.inSentence',
-  'owner-sales': 'role.ownerSales.inSentence',
-  'owner-kitchen': 'role.ownerKitchen.inSentence',
-  manager: 'role.manager.inSentence',
-  'head-chef': 'role.headChef.inSentence',
-  staff: 'role.staff.inSentence',
-};
-
-// The choice a role and title read as: the title matters on the manager level only.
-function choiceKeyOf(role: Role, title: ManagerTitle | null): RoleChoiceKey {
-  if (role === 'manager') return title === 'head-chef' ? 'head-chef' : 'manager';
-  return role;
-}
 
 // The invite card of «Who can get in» (the full owner only — SettingsSection keeps everybody else out, and the Cloud Function refuses
 // them too). A port of the role-first invitation of js/staff/people.js (#475).
@@ -196,7 +160,7 @@ export function InviteCard() {
   }
 
   if (invitation !== null) {
-    const role = t(IN_SENTENCE[choiceKeyOf(invitation.role, invitation.title)]);
+    const role = t(ROLE_IN_SENTENCE[choiceKeyOf(invitation.role, invitation.title)]);
     const left = expiresIn(invitation, now);
     const expires = t(`join.expires.${left.unit}`, { n: left.n });
 
@@ -280,8 +244,8 @@ export function InviteCard() {
                 onChange={() => { choose(choice); }}
               />
               <span className={styles.roleText}>
-                <span id={nameId} className={styles.roleName}>{t(LABEL[choice.key])}</span>
-                <span id={meansId} className={styles.means}>{t(MEANS[choice.key])}</span>
+                <span id={nameId} className={styles.roleName}>{t(ROLE_LABEL[choice.key])}</span>
+                <span id={meansId} className={styles.means}>{t(ROLE_MEANS[choice.key])}</span>
               </span>
             </label>
           );
