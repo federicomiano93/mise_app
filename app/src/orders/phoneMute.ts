@@ -7,12 +7,24 @@
 // Not under KEEP_PREFIXES, as in the current app: a sign-out wipes them, and js/push.js registers the phone again.
 
 export const PUSH_TOKEN_KEY = 'push-token';
+// WHOSE registration the token above is: the uid js/push.js wrote it for (its TOKEN_UID_KEY). A shared phone can still
+// carry the registration of the person before.
+export const PUSH_TOKEN_OWNER_KEY = 'push-token-uid';
 export const MUTE_KEY = 'push-mute-order-requests';
 
 // This phone's alert token, or '' when it has none (never registered, or the storage is unavailable).
 export function phoneToken(): string {
   try {
     return localStorage.getItem(PUSH_TOKEN_KEY) ?? '';
+  } catch {
+    return '';
+  }
+}
+
+// The uid this phone's token was registered for, or '' (none, or the storage is unavailable).
+export function phoneTokenOwner(): string {
+  try {
+    return localStorage.getItem(PUSH_TOKEN_OWNER_KEY) ?? '';
   } catch {
     return '';
   }
