@@ -119,7 +119,12 @@ describe('the waking tap (the current app’s cases)', () => {
 });
 
 describe('the waking tap on a real page', () => {
-  afterEach(() => { document.body.innerHTML = ''; vi.useRealTimers(); });
+  const cleanups: (() => void)[] = [];
+  afterEach(() => {
+    cleanups.splice(0).forEach(cleanup => { cleanup(); });
+    document.body.innerHTML = '';
+    vi.useRealTimers();
+  });
 
   // The button the baker's finger lands on is UNDER the cover; React's and React Aria's listeners sit on the root and the document.
   function page() {
@@ -128,14 +133,14 @@ describe('the waking tap on a real page', () => {
     const pressed = vi.fn();
     button.addEventListener('click', pressed);
     const documentHeard = vi.fn();
-    for (const type of ['pointerdown', 'pointerup', 'mousedown', 'mouseup', 'touchstart', 'touchend', 'click', 'keydown']) {
-      document.addEventListener(type, documentHeard, true);
-    }
+    const types = ['pointerdown', 'pointerup', 'mousedown', 'mouseup', 'touchstart', 'touchend', 'click', 'keydown'];
+    types.forEach(type => { document.addEventListener(type, documentHeard, true); });
     const cover = document.createElement('div');
     document.body.append(button, cover);
     const woke = vi.fn();
     const disarm = armWakeTap(window, cover, woke);
-    return { button, pressed, documentHeard, cover, woke, disarm };
+    cleanups.push(disarm, () => { types.forEach(type => { document.removeEventListener(type, documentHeard, true); }); });
+    return { button, pressed, documentHeard, cover, woke };
   }
 
   test('a tap on the cover (touch, then the lift) never reaches the page, and wakes it after the lift', () => {
