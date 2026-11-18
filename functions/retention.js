@@ -11,7 +11,9 @@
 //   • a record whose date cannot be read is never deleted (the model says 'skip');
 //   • at most CAP deletions per kind per night, then that kind stops and logs an error;
 //   • a delete carries the record's last update time as a precondition, so a record that changed
-//     between the read and the delete (a phone refreshing its token at 3:30) is left alone;
+//     between the read and the delete (a phone refreshing its token at 3:30) is left alone — and,
+//     a batch being all-or-nothing, so is the rest of its batch: that venue is reported as failed
+//     for the kind and the next night tries again;
 //   • one kind (or one venue) failing never stops the others;
 //   • the logs carry counts, kind names and venue ids — never a name, an email, a uid, a token
 //     or anything else from inside a record. Error lines carry the error CODE only: a Firestore
@@ -46,8 +48,9 @@ function errorCode(err) {
 
 // One kind in one venue, page by page, oldest first. `state` is shared across the kind's venues
 // so the cap and the read budget count the whole night, not each venue.
-async function sweepVenue(db, lid, spec, now, enabled, cap, state) {
-  const counts = { wouldDelete: 0, deleted: 0, kept: 0, skipped: 0 };
+// `counts` is the caller's, filled in place, so a venue that fails half-way still reports the
+// pages (and the deletions) it got through.
+async function sweepVenue(db, lid, spec, now, enabled, cap, state, counts) {
   const base = db.collection(`locations/${lid}/${spec.collection}`)
     .where(spec.field, '<', queryValue(spec, now))
     .orderBy(spec.field);
@@ -84,7 +87,6 @@ async function sweepVenue(db, lid, spec, now, enabled, cap, state) {
     }
     if (page.size < PAGE) break;
   }
-  return counts;
 }
 
 // One kind across every venue. Never throws: a venue that fails is logged and counted, and the
@@ -96,14 +98,15 @@ async function sweepKind(db, venues, spec, now, enabled, cap, log) {
   const failedVenues = [];
   for (const lid of venues) {
     if (state.capped || state.reads >= MAX_READS) break;
+    const counts = { wouldDelete: 0, deleted: 0, kept: 0, skipped: 0 };
     try {
-      const counts = await sweepVenue(db, lid, spec, now, enabled, cap, state);
-      for (const key of Object.keys(total)) total[key] += counts[key];
-      if (counts.wouldDelete || counts.skipped) byVenue[lid] = { wouldDelete: counts.wouldDelete, skipped: counts.skipped };
+      await sweepVenue(db, lid, spec, now, enabled, cap, state, counts);
     } catch (err) {
       failedVenues.push(lid);
       log.error('Retention: a venue failed', { kind: spec.kind, lid, code: errorCode(err) });
     }
+    for (const key of Object.keys(total)) total[key] += counts[key];
+    if (counts.wouldDelete || counts.skipped) byVenue[lid] = { wouldDelete: counts.wouldDelete, skipped: counts.skipped };
   }
   if (state.capped) {
     log.error('Retention: cap reached, this kind stops for tonight', { kind: spec.kind, cap });
@@ -133,7 +136,7 @@ export async function runRetention({
   kinds = KINDS,
   log = logger,
 } = {}) {
-  // listDocuments, not get(): the ids are all that is needed, and it costs no document read.
+  // listDocuments, not get(): the ids are all that is needed, never a venue's fields.
   const venues = (await db.collection('locations').listDocuments()).map(ref => ref.id);
   const results = [];
   for (const spec of kinds) {

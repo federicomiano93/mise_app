@@ -5,7 +5,9 @@
 // finished label prints 30 days, push tokens of phones silent for 60 days. Device lines (90
 // days), error reports (30 days) and usage lines (400 days) join them with the SAME periods the
 // owner's manual prunes already use (scripts/read-devices.mjs, read-errors.mjs --prune,
-// read-usage.mjs), so moving them here changes nothing but who presses the button.
+// read-usage.mjs). Two differences, both towards keeping: an unreadable date is never deleted here
+// (the scripts delete it), and usage is aged by `updatedAt` (the script reads the line's dayKey,
+// which can only make a line look the same age or older).
 //
 // ⚠️ PURE ON PURPOSE: no Firebase import, and `now` is always handed in. Every decision that can
 // delete somebody's record lives here, where the root suite (tests/retention-model.test.mjs)
@@ -18,9 +20,10 @@
 // so it takes the opposite side: a record kept by mistake costs a few bytes, a record deleted by
 // mistake is gone.
 //
-// ⚠️ A NEW KIND (step 3 will add the Auth accounts of people who left) is ONE MORE ENTRY in KINDS
-// and one more switch in ENABLED, shipped off. Nothing else in this file or in the handler should
-// need to change.
+// ⚠️ A NEW FIRESTORE KIND under locations/{lid}/ is ONE MORE ENTRY in KINDS and one more switch in
+// ENABLED, shipped off. Step 3 (the Auth accounts of people who left) is not a Firestore collection:
+// it will join the same list and switch, the cap and the report-only logging, with a sweep of its
+// own in the handler.
 
 export const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -57,8 +60,9 @@ export const KINDS = Object.freeze([
     kind: 'printJobs', collection: 'print-jobs', field: 'createdAt', type: 'iso', keepDays: 30,
     statuses: Object.freeze(['done', 'failed']),
   }),
-  // A phone not heard from in 60 days. Mise 2 refreshes `updatedAt` at most weekly while the
-  // phone is used (app/src/orders/pushTokenRefresh.ts), so a working phone never gets near this.
+  // A phone not heard from in 60 days. Mise 2 refreshes `updatedAt` weekly while the phone is used
+  // (app/src/orders/pushTokenRefresh.ts) — but only from the day this ships, and only for a phone
+  // whose token records its owner. See the warning on ENABLED.fcmTokens before switching it on.
   Object.freeze({ kind: 'fcmTokens', collection: 'fcm-tokens', field: 'updatedAt', type: 'millis', keepDays: 60 }),
   Object.freeze({ kind: 'devices', collection: 'devices', field: 'lastSeen', type: 'timestamp', keepDays: 90 }),
   Object.freeze({ kind: 'errors', collection: 'errors', field: 'createdAt', type: 'timestamp', keepDays: 30 }),
@@ -74,6 +78,12 @@ export const ENABLED = Object.freeze({
   orderRequests: false,
   pushTimers: false,
   printJobs: false,
+  // ⚠️⚠️ NOT BEFORE 60 DAYS OF THE TOKEN REFRESH IN PRODUCTION. Until this branch, nothing wrote
+  // `updatedAt` after the tap that turned notifications on (js/push.js rememberToken; a timer
+  // re-writes it only when the stored owner differs), so on day one the report counts phones used
+  // every day as «would delete». Switched on early, they lose their order alerts while their switch
+  // still says «on». A phone with no `push-token-uid` (registered before 23 Sep 2026 and never
+  // since) is never refreshed at all: read its count in the report before switching this on.
   fcmTokens: false,
   devices: false,
   errors: false,
