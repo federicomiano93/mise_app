@@ -9,6 +9,8 @@
     "build": "node scripts/build-bundles.mjs",
     "test:rules": "node tests/rules/firestore-rules-check.mjs",
     "test:rules:emulated": "firebase emulators:exec --only auth,firestore --project demo-theitalianclub \"npm run test:rules\"",
+    "test:retention": "node tests/rules/retention-check.mjs",
+    "test:retention:emulated": "firebase emulators:exec --only auth,firestore --project demo-theitalianclub \"npm run test:retention\"",
     "seed:emulator": "node tests/rules/seed-emulator.mjs"
   },
   "devDependencies": {

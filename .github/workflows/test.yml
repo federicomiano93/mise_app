@@ -149,6 +149,16 @@ jobs:
       # defaults to the same id (tests/rules/seed-emulator.mjs).
       - run: firebase emulators:exec --only auth,firestore --project demo-theitalianclub "npm run test:rules"
 
+      # The nightly clean-up (functions/retention.js) against the same kind of emulator: its test
+      # (tests/rules/retention-check.mjs) runs the real handler with the real Admin SDK, so it needs
+      # the server's own packages — installed exactly as deploy-functions installs them (the
+      # lockfile, no install scripts). This job holds no credential, and the `demo-` project id
+      # keeps the SDK off every real project.
+      - name: Install the server's packages (no install scripts)
+        run: npm ci --ignore-scripts
+        working-directory: functions
+      - run: firebase emulators:exec --only auth,firestore --project demo-theitalianclub "npm run test:retention"
+
   # ── Mise 2: the rewrite (app/ + shared/) ─────────────────────────────────────
   #
   # ITS OWN JOB, so the two checks above stay exactly what they were: `test` installs
