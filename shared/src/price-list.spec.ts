@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  sharedNames, MAX_PRICE_ITEMS, bookingUnitOf, itemIsStale, itemNamed, itemsToStore, lineAmount, priceItemOf, readPriceList,
+  sharedNames, MAX_PRICE_ITEMS, MAX_REMOVABLE, MAX_WEIGHTS, bookingUnitOf, cleanWeights, formatWeight, itemIsStale, itemNamed,
+  itemsToStore, lineAmount, parseWeight, priceItemOf, readPriceList, recipeIngredientNames,
 } from './price-list';
 
 // NEW IN MISE 2 (bookings step 2): no js/ original, so not paired. The price list the counter books from.
@@ -11,14 +12,17 @@ const product = (over: Record<string, unknown> = {}) => ({
 
 describe('priceItemOf', () => {
   it('takes only the name, the price and what it is for', () => {
-    expect(priceItemOf(product())).toEqual({ productId: 'p1', name: 'Focaccia', price: 12, per: 'kg', packSize: null, packUnit: null });
+    expect(priceItemOf(product())).toEqual({
+      productId: 'p1', name: 'Focaccia', price: 12, per: 'kg', packSize: null, packUnit: null,
+      favourite: false, perPiece: false, weights: [], removable: null,
+    });
     expect(priceItemOf(product({ sellingMode: 'piece', sellingPrice: 2.505 }))).toMatchObject({ per: 'piece', price: 2.51 });
     expect(priceItemOf(product({ sellingMode: 'pack', packSize: 250, packUnit: 'g' }))).toMatchObject({ per: 'pack', packSize: 250, packUnit: 'g' });
   });
 
   it('⚠️ never copies a cost, a margin or a VAT rate', () => {
     const item = priceItemOf({ ...product(), vatRate: 10, foodCostTarget: 30, components: [{ qty: 1 }] } as never);
-    expect(Object.keys(item ?? {}).sort()).toEqual(['name', 'packSize', 'packUnit', 'per', 'price', 'productId']);
+    expect(Object.keys(item ?? {}).sort()).toEqual(['favourite', 'name', 'packSize', 'packUnit', 'per', 'perPiece', 'price', 'productId', 'removable', 'weights']);
   });
 
   it('refuses a product that cannot be priced', () => {
@@ -55,7 +59,10 @@ describe('readPriceList', () => {
       { productId: 'b', name: 'B', price: 1, per: 'pack' }, { productId: 'c', name: 'C', price: 2, per: 'piece' },
       { productId: 'c', name: 'C again', price: 3, per: 'piece' },
     ] });
-    expect(list.items).toEqual([{ productId: 'c', name: 'C', price: 2, per: 'piece', packSize: null, packUnit: null }]);
+    expect(list.items).toEqual([{
+      productId: 'c', name: 'C', price: 2, per: 'piece', packSize: null, packUnit: null,
+      favourite: false, perPiece: false, weights: [], removable: null,
+    }]);
   });
 
   it('never reads past the bound', () => {
@@ -113,5 +120,104 @@ describe('the rest', () => {
     const both = [priceItemOf(product({ id: 'a', name: 'Focaccia', sellingMode: 'piece' }))!, priceItemOf(product({ id: 'b', name: 'focaccia ' }))!];
     expect(sharedNames(both)).toEqual(['Focaccia']);
     expect(sharedNames([both[0]!])).toEqual([]);
+  });
+});
+
+// Bookings settings (18 Nov 2026): what the owner chooses per product in Bookings' «Impostazioni».
+describe('the settings\' choices on an item', () => {
+  const base = { productId: 'p1', name: 'Focaccia', price: 16, per: 'kg' };
+
+  it('reads favourite, per piece, weights and removable ingredients', () => {
+    const [item] = readPriceList({ items: [{ ...base, favourite: true, perPiece: true, weights: [1, 0.5, 1.5], removable: ['Cipolla', 'Acciughe'] }] }).items;
+    expect(item).toMatchObject({ favourite: true, perPiece: true, weights: [0.5, 1, 1.5], removable: ['Cipolla', 'Acciughe'] });
+  });
+
+  it('an item without them (published before) reads as nothing chosen, removable never chosen', () => {
+    const [item] = readPriceList({ items: [base] }).items;
+    expect(item).toMatchObject({ favourite: false, perPiece: false, weights: [], removable: null });
+  });
+
+  it('⚠️ a wrong choice is as if unset, never the end of the product', () => {
+    const [item] = readPriceList({ items: [{ ...base, favourite: 'yes', perPiece: 1, weights: 'heavy', removable: 'Cipolla' }] }).items;
+    expect(item).toMatchObject({ productId: 'p1', favourite: false, perPiece: false, weights: [], removable: null });
+  });
+
+  it('weights: in (0, 50] kg, to the gram, each once, smallest first, at most twelve', () => {
+    expect(cleanWeights([0, -1, 51, Number.NaN, '1', 50, 0.0004, 0.5, 0.5004, 1])).toEqual([0.5, 1, 50]);
+    expect(cleanWeights(Array.from({ length: 20 }, (_, i) => i + 1))).toHaveLength(MAX_WEIGHTS);
+  });
+
+  it('removable: trimmed, each once whatever its case, at most thirty, an empty list kept as chosen', () => {
+    const [item] = readPriceList({ items: [{ ...base, removable: [' Cipolla ', 'cipolla', '', 3, 'Acciughe'] }] }).items;
+    expect(item?.removable).toEqual(['Cipolla', 'Acciughe']);
+    const [none] = readPriceList({ items: [{ ...base, removable: [] }] }).items;
+    expect(none?.removable).toEqual([]);
+    const [many] = readPriceList({ items: [{ ...base, removable: Array.from({ length: 40 }, (_, i) => `i${i}`) }] }).items;
+    expect(many?.removable).toHaveLength(MAX_REMOVABLE);
+  });
+
+  it('stores only what was chosen, and reads it back the same', () => {
+    const plain = priceItemOf(product())!;
+    expect(itemsToStore([plain])[0]).toEqual({ productId: 'p1', name: 'Focaccia', price: 12, per: 'kg' });
+    const chosen = { ...plain, favourite: true, perPiece: true, weights: [1, 0.5], removable: [] };
+    expect(itemsToStore([chosen])[0]).toEqual({
+      productId: 'p1', name: 'Focaccia', price: 12, per: 'kg', favourite: true, perPiece: true, weights: [0.5, 1], removable: [],
+    });
+    expect(readPriceList({ items: itemsToStore([chosen]) }).items[0]).toEqual({ ...chosen, weights: [0.5, 1] });
+  });
+
+  it('a stale check looks at the name and the price only, never at the choices', () => {
+    const published = { ...priceItemOf(product())!, favourite: true, weights: [1] };
+    expect(itemIsStale(published, priceItemOf(product()))).toBe(false);
+  });
+});
+
+describe('parseWeight / formatWeight', () => {
+  it('reads kilos and grams, with either decimal mark', () => {
+    expect(parseWeight('3 kg')).toBe(3);
+    expect(parseWeight('800 g')).toBe(0.8);
+    expect(parseWeight('1,5')).toBe(1.5);
+    expect(parseWeight(' 1.25KG ')).toBe(1.25);
+    expect(parseWeight('750G')).toBe(0.75);
+  });
+
+  it('a bare number is kilos up to 50 and grams above', () => {
+    expect(parseWeight('3')).toBe(3);
+    expect(parseWeight('50')).toBe(50);
+    expect(parseWeight('500')).toBe(0.5);
+  });
+
+  it('refuses what the list cannot hold', () => {
+    for (const text of ['', 'kg', 'tre kg', '0', '0 g', '51 kg', '60000', '-1', '0.0001 kg', '1 l']) expect(parseWeight(text), text).toBeNull();
+  });
+
+  it('writes grams under a kilo, kilos from one', () => {
+    expect(formatWeight(0.5, 'it')).toBe('500 g');
+    expect(formatWeight(1, 'it')).toBe('1 kg');
+    expect(formatWeight(1.5, 'it')).toBe('1,5 kg');
+    expect(formatWeight(1.5, 'en')).toBe('1.5 kg');
+  });
+});
+
+describe('recipeIngredientNames', () => {
+  const recipes: Record<string, unknown> = {
+    r1: { ingredients: [{ label: 'Farina' }, { label: 'Acqua' }, { label: 'Cipolla' }, { label: '' }, null] },
+    r2: { ingredients: [{ label: 'acqua' }, { label: 'Acciughe' }] },
+  };
+  const lookup = (id: string) => recipes[id];
+
+  it('the rows of every recipe on its lines, each once, in recipe order', () => {
+    expect(recipeIngredientNames({ id: 'p1', components: [{ recipeId: 'r1', qtyKg: 1 }, { kind: 'ingredient', ingredientId: 'i1' }, { recipeId: 'r2' }] }, lookup))
+      .toEqual(['Farina', 'Acqua', 'Cipolla', 'Acciughe']);
+  });
+
+  it('and of the recipe the product was made from', () => {
+    expect(recipeIngredientNames({ id: 'recipe-r2' }, lookup)).toEqual(['acqua', 'Acciughe']);
+  });
+
+  it('nothing for a product with no recipe, or a recipe that cannot be read', () => {
+    expect(recipeIngredientNames({ id: 'p1', components: [{ kind: 'ingredient', ingredientId: 'i1' }] }, lookup)).toEqual([]);
+    expect(recipeIngredientNames({ id: 'p1', components: [{ recipeId: 'gone' }] }, lookup)).toEqual([]);
+    expect(recipeIngredientNames({ id: 'p1', components: 'x' }, lookup)).toEqual([]);
   });
 });
