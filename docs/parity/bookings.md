@@ -394,3 +394,13 @@ weighed line: picked, priced, written, read back frozen, old lines unchanged, wr
 each window step and the cards, axe-core, sideways scroll, targets, clipped text, focus kept in the window — 186/186. With ANY modal
 open axe flags the shell's scrolling `main` (`scrollable-region-focusable`); the app's existing «Scartare le modifiche?» dialog does
 the same, so it is app-wide and not this step's. Not done: the real SM-T550 tablet.
+
+**Review fixes (19 Nov 2026).** The note the window writes is printed on both slips, so its words follow the venue's COUNTRY
+(`changeWords` in `bookingWords.ts`: «senza cipolla» in Italy whatever the screen's language), as the slips' units do. The card's
+bin and the window's back arrow are 48px (`--hit`); the round − / + stay the approved 44px. Adding the 50th product (the limit)
+gives the focus to the new card, as «Aggiungi» disappears. Enter in the search takes only the product whose name is exactly the one
+typed (or the typed name when nothing matches), never the only partial match. A weighed price that rounds to 0,00 is no price
+(stored as 0 it would read back as none). On the split, a scroll event caused by the form opening (the reset to the top, the area
+clamped as the list hides) is no longer taken for the list's place: checked in Chromium, list scrolled to 900px → form → Back →
+900px. Still for the owner: the step counter stays «x di 3» when a step is skipped (1 → 3); a product's name is not edited on its
+card (remove and add again, at today's price).

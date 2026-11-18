@@ -81,10 +81,14 @@ function BookingsScreen() {
   const formOpen = kind === 'new' || kind === 'edit';
   // Where the list is on screen: alone on a phone; on the split beside everything but the form.
   const listShown = split ? !formOpen : kind === 'list';
+  // ⚠️ SET IN THE LAYOUT EFFECT BELOW, before any scroll the move causes: the reset to the top, and the browser clamping the area
+  // when the list is hidden, fire `scroll` events that may land before the listener is removed (a slow tablet), and must not be
+  // taken for the list's place (review).
+  const listShownNow = useRef(listShown);
   useEffect(() => {
     const area = scrollArea();
     if (area === null || !listShown) return undefined;
-    const note = () => { listTop.current = area.scrollTop; };
+    const note = () => { if (listShownNow.current) listTop.current = area.scrollTop; };
     area.addEventListener('scroll', note, { passive: true });
     return () => { area.removeEventListener('scroll', note); };
   }, [scrollArea, listShown]);
@@ -93,6 +97,7 @@ function BookingsScreen() {
   useLayoutEffect(() => {
     const before = shown.current;
     shown.current = { pathname, kind };
+    listShownNow.current = listShown;
     if (detail.current) detail.current.scrollTop = 0;
     const area = scrollArea();
     // The first render (the shell reset the area as the section opened) and StrictMode's second run are not moves.

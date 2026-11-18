@@ -58,13 +58,13 @@
   font-weight: 600;
 }
 
-/* The bin: a small red icon, 44px to the touch, pulled into the card's corner. */
+/* The bin: a small red icon, 48px to the touch (--hit), pulled into the card's corner. */
 .remove {
   display: grid;
   flex: none;
   place-items: center;
-  width: 44px;
-  height: 44px;
+  width: var(--hit);
+  height: var(--hit);
   margin: calc(-1 * var(--s2)) calc(-1 * var(--s2)) 0 0;
   border: 0;
   border-radius: var(--r-md);

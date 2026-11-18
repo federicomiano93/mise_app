@@ -3145,8 +3145,6 @@ export const it: Messages = {
   'bookings.picker.titleWeight': '{name} · {weight}',
   'bookings.picker.inRecipe': 'Nella ricetta',
   'bookings.picker.toAdd': 'Da aggiungere',
-  'bookings.picker.without': 'senza {name}',
-  'bookings.picker.extra': '+ {name}',
   'bookings.picker.lessOf': 'Senza {name}',
   'bookings.picker.moreOf': 'Più {name}',
   'bookings.picker.noChanges': 'Nessuna modifica',

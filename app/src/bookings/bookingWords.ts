@@ -77,6 +77,17 @@ export function slipUnitWords(location: unknown): UnitWords {
   };
 }
 
+// The words of a product's changes, written into the line's note by the product window and PRINTED on both slips (bookings
+// rebuild step 2): «senza cipolla, + provola» in Italy, «without onion, + provola» elsewhere — the venue's country, like the units,
+// never the language of whoever took the booking. The ingredient names are the venue's own, as stored.
+export function changeWords(location: unknown): { readonly without: (name: string) => string; readonly extra: (name: string) => string } {
+  const it = outputLanguage(location) === 'it';
+  return {
+    without: name => (it ? `senza ${name}` : `without ${name}`),
+    extra: name => `+ ${name}`,
+  };
+}
+
 // The locale the slip's numbers and dates are printed in: the venue's country's language, like its words.
 export function slipLocale(location: unknown, fallback: string): string {
   const lang = outputLanguage(location);

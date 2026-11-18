@@ -156,21 +156,9 @@ function EditorForm({ id, booking, refused, settings }: FormProps) {
   const update = (patch: Partial<Draft>) => {
     setDraft(current => ({ ...current, ...patch }));
   };
-  // ⚠️ A NAME THAT IS ON THE PRICE LIST SETS THE LINE'S UNIT to the list's (a kilo price is counted in kilos), so the quantity
-  // typed next is read the way it will be priced.
+  // A card changes only its quantity and its note (the product, its unit and weight come from the window).
   const updateLine = (key: number, patch: Partial<DraftLine>) => {
-    setDraft(current => ({
-      ...current,
-      lines: current.lines.map(line => {
-        if (line.key !== key) return line;
-        const next = { ...line, ...patch };
-        if (patch.name !== undefined) {
-          const price = linePrice(next, items);
-          if (price.kind === 'listed') return { ...next, unit: price.unit };
-        }
-        return next;
-      }),
-    }));
+    setDraft(current => ({ ...current, lines: current.lines.map(line => (line.key === key ? { ...line, ...patch } : line)) }));
   };
 
   // Focus requests after the rows are redrawn (a new line, a removed one).
@@ -190,8 +178,15 @@ function EditorForm({ id, booking, refused, settings }: FormProps) {
   const addPicked = (picked: Picked) => {
     setPicking(false);
     if (draft.lines.length >= LIMITS.lines) return;
-    update({ lines: [...draft.lines, pickedLine(nextKey(), picked)] });
+    const lines = [...draft.lines, pickedLine(nextKey(), picked)];
+    update({ lines });
     say(t('bookings.picker.added', { name: picked.name }));
+    // ⚠️ THE LAST PLACE TAKEN: «Aggiungi», where the window gives the focus back, is gone with it (review); the new card takes it,
+    // after the window's own hand-back (a frame later).
+    if (lines.length >= LIMITS.lines) {
+      const target = domId({ line: lines.length - 1, part: 'name' });
+      requestAnimationFrame(() => { requestAnimationFrame(() => { document.getElementById(target)?.focus(); }); });
+    }
   };
   // A card taken away: the focus goes to the card now in its place (the one after, else the one before), or to «Aggiungi».
   const removeLine = (index: number) => {

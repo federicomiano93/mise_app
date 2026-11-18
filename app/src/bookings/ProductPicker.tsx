@@ -5,9 +5,11 @@ import { formatMoney } from '@mise/shared/price-model';
 import { formatWeight, parseWeight } from '@mise/shared/price-list';
 import type { PriceItem } from '@mise/shared/price-list';
 import { useT } from '../i18n/useT';
+import { useSession } from '../session/SessionContext';
 import { useMoney } from '../session/useMoney';
 import { Button } from '../ui/Button';
 import { weightPrice } from './bookingModel';
+import { changeWords } from './bookingWords';
 import {
   NO_CHANGES, asksChanges, asksWeight, changesNote, favouritesOf, freeNameOf, removableOf, searchItems, toggleExtra, toggleMark,
 } from './productPicker';
@@ -48,6 +50,7 @@ const STEP_NUMBER: Readonly<Record<Step, number>> = { product: 1, weight: 2, cha
 export function ProductPicker({ items, extras, unavailable, loaded, onClose, onAdd }: Props) {
   const { t, locale } = useT();
   const money = useMoney();
+  const { location } = useSession();
   const ids = useId();
   const favourites = favouritesOf(items);
   const [step, setStep] = useState<Step>('product');
@@ -137,10 +140,8 @@ export function ProductPicker({ items, extras, unavailable, loaded, onClose, onA
   const canGoBack = step !== 'product' || (searching && favourites.length > 0);
 
   const removable = removableOf(chosen?.item ?? null);
-  const note = changesNote(removable, extras, changes, {
-    without: name => t('bookings.picker.without', { name }),
-    extra: name => t('bookings.picker.extra', { name }),
-  });
+  // ⚠️ THE NOTE IS PRINTED ON THE SLIPS: its words follow the venue's COUNTRY (changeWords), never the interface (review).
+  const note = changesNote(removable, extras, changes, changeWords(location));
 
   const title = step === 'product'
     ? t('bookings.picker.product')
@@ -201,11 +202,12 @@ export function ProductPicker({ items, extras, unavailable, loaded, onClose, onA
                       maxLength={200}
                       onChange={event => { setQuery(event.currentTarget.value); }}
                       onKeyDown={event => {
-                        // Enter takes the only match, or the name as typed when nothing on the list matches.
+                        // Enter takes the product whose name is exactly the one typed, or the name as typed when nothing on the list
+                        // matches; anything else stays a choice for a tap (review: «Torta» must not become «Torta della nonna»).
                         if (event.key !== 'Enter') return;
                         event.preventDefault();
-                        const only = results.length === 1 ? results[0] : undefined;
-                        if (only !== undefined && query.trim() !== '') pick(only, only.name);
+                        const exact = freeName === null ? results.find(item => item.name.trim().toLocaleLowerCase() === query.trim().replace(/\s+/g, ' ').toLocaleLowerCase()) : undefined;
+                        if (exact !== undefined) pick(exact, exact.name);
                         else if (results.length === 0 && freeName !== null) pick(null, freeName);
                       }}
                     />

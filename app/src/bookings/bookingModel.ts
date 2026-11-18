@@ -458,7 +458,11 @@ export function linePrice(line: DraftLine, items: readonly PriceItem[]): LinePri
   }
   const item = itemNamed(line.name, items);
   if (item === null) return { kind: 'none' };
-  if (line.weightKg !== null && item.per === 'kg') return { kind: 'listed', item, unit: 'pcs', unitPrice: weightPrice(item.price, line.weightKg) };
+  if (line.weightKg !== null && item.per === 'kg') {
+    // A price that rounds to nothing (a gram of something cheap) is no price: stored as 0 it would read back as none (review).
+    const unitPrice = weightPrice(item.price, line.weightKg);
+    return unitPrice > 0 ? { kind: 'listed', item, unit: 'pcs', unitPrice } : { kind: 'none' };
+  }
   return { kind: 'listed', item, unit: bookingUnitOf(item.per), unitPrice: item.price };
 }
 

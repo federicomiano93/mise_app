@@ -5098,6 +5098,8 @@ async function bookings() {
   await expectDenied('a slot end that is not HH:MM', () => create('X', { ...booking, time: '09:00', slotEnd: '10' }, SAM));
   await expectDenied('a slot end that is a number', () => create('X', { ...booking, time: '09:00', slotEnd: 1000 }, SAM));
   await expectAllowed('the editor moves a slot booking to another slot', () => save('T', { ...booking, time: '10:00', slotEnd: '11:00' }, SAM));
+  await expectAllowed('…and back to an exact time, slotEnd deleted (merge with deleteField)',
+    () => commit('T', { ...booking, time: '10:15' }, asAccount(SAM), { server: ['updatedAt'], mask: [...Object.keys(booking), 'slotEnd'] }));
   // ── A piece of a chosen weight (bookings rebuild step 2, 19 Nov 2026): a line may carry weightKg ──
   const weighed = { recipeId: null, productId: 'pS', unitPrice: 24, name: 'Scacciata broccoli', qty: 3, unit: 'pcs', weightKg: 1.5, note: 'senza cipolla' };
   await expectAllowed('a line with the weight of one piece (weightKg)', () => create('W', { ...booking, lines: [weighed] }, SAM));
@@ -5111,9 +5113,6 @@ async function bookings() {
   for (const [what, bad] of [['0', 0], ['negative', -1], ['over 50 kg', 50.5], ['text', '1.5']]) {
     await expectAllowed(`a weightKg of ${what} is not judged by the rules (the app refuses it)`, () => create(`WX${what.length}`, { ...booking, lines: [{ ...weighed, weightKg: bad }] }, SAM));
   }
-
-  await expectAllowed('…and back to an exact time, slotEnd deleted (merge with deleteField)',
-    () => commit('T', { ...booking, time: '10:15' }, asAccount(SAM), { server: ['updatedAt'], mask: [...Object.keys(booking), 'slotEnd'] }));
   await expectAllowed('a status change keeps the slot', () => status('T', 'ready', SAM));
 
   // ── Changing one ──

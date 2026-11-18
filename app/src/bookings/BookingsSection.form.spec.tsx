@@ -234,6 +234,30 @@ describe('the product window', () => {
     });
   });
 
+  it('⚠️ the note is printed on the slips: its words follow the venue\'s COUNTRY, not the screen\'s language', async () => {
+    // An Italian venue, the screen in English: the screen speaks English, the note says «senza».
+    const { user } = show('/bookings/new', DEFAULT_SETTINGS, { session: { location: { country: 'IT' } } });
+    const win = await openWindow(user);
+    await user.click(within(win).getByRole('button', { name: /^Scacciata broccoli/ }));
+    await user.click(within(win).getByRole('button', { name: /^1 kg/ }));
+    await user.click(within(win).getByRole('button', { name: 'Without cipolla' }));
+    expect(within(win).getByText('senza cipolla')).toBeInTheDocument();
+  });
+
+  it('Enter in the search takes only the exact name, or the name typed when nothing matches', async () => {
+    const { user } = show('/bookings/new');
+    const win = await openWindow(user);
+    await user.click(within(win).getByRole('button', { name: 'Search all products' }));
+    const search = within(win).getByLabelText('Search the price list');
+    // «Griss» matches one product but is not its name: Enter does nothing, the choice stays a tap.
+    await user.type(search, 'Griss{Enter}');
+    expect(screen.getByRole('dialog', { name: 'Add a product' })).toBeInTheDocument();
+    await user.clear(search);
+    await user.type(search, 'grissini{Enter}');
+    await waitFor(() => { expect(screen.queryByRole('dialog')).toBeNull(); });
+    expect(screen.getByRole('group', { name: '1. Grissini · 250 g' })).toBeInTheDocument();
+  });
+
   it('Escape and Cancel close it and add nothing', async () => {
     const { user } = show('/bookings/new');
     let win = await openWindow(user);

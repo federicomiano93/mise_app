@@ -43,8 +43,8 @@
   display: grid;
   flex: none;
   place-items: center;
-  width: 44px;
-  height: 44px;
+  width: var(--hit);
+  height: var(--hit);
   margin-left: calc(-1 * var(--s2));
   border: 0;
   border-radius: var(--r-pill);

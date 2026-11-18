@@ -3388,8 +3388,6 @@ export const en = {
   'bookings.picker.titleWeight': '{name} · {weight}',
   'bookings.picker.inRecipe': 'In the recipe',
   'bookings.picker.toAdd': 'To add',
-  'bookings.picker.without': 'without {name}',
-  'bookings.picker.extra': '+ {name}',
   'bookings.picker.lessOf': 'Without {name}',
   'bookings.picker.moreOf': 'More {name}',
   'bookings.picker.noChanges': 'No changes',
