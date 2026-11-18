@@ -49,9 +49,9 @@ export default function HomeSection() {
               <PartBoundary>
                 <TodoCard />
               </PartBoundary>
-              {/* The right-hand column: «Ordini da fare», then «Prenotazioni di oggi», each in a part of its own. Not drawn at all
-                  while neither card is, so the one-column page keeps no empty cell. */}
-              <div className={styles.side} data-empty={two ? undefined : 'true'}>
+              {/* The right-hand column: «Ordini da fare», then «Prenotazioni di oggi», each in a part of its own. Never hidden by a flag:
+                  a part that failed must still show its box. */}
+              <div className={styles.side}>
                 <PartBoundary>
                   <OrdersDuePart onShownChange={setOrdersShown} />
                 </PartBoundary>

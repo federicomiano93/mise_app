@@ -32,7 +32,7 @@ describe('the «Prenotazioni di oggi» card', () => {
     show(source);
     await waitFor(() => { expect(card()).not.toBeNull(); }, LOAD);
     expect(rows()).toEqual(['09:00 · Anna Finta — Ready', '11:00 · Mario Prova — To do']);
-    expect(source.watch).toHaveBeenCalledWith(TODAY, expect.any(Function), expect.any(Function));
+    expect(source.watchDay).toHaveBeenCalledWith(TODAY, expect.any(Function), expect.any(Function));
   });
 
   it('opens the booking', async () => {
@@ -57,11 +57,11 @@ describe('the «Prenotazioni di oggi» card', () => {
     const source = fakeBookingsSource([bookingFixture({ id: 'a', date: TODAY })]);
     show(source, { session: { canManage: false, isOwner: false, role: 'staff', location: { staffHiddenCards: { bookings: true } } } });
     expect(await screen.findByRole('heading', { level: 2, name: 'To do' }, LOAD)).toBeInTheDocument();
-    expect(source.watch).not.toHaveBeenCalled();
+    expect(source.watchDay).not.toHaveBeenCalled();
     expect(card()).toBeNull();
   });
 
-  it('two columns from 1000px while it is drawn, the right-hand column hidden while nothing is in it', () => {
-    expect(homeCss).toMatch(/\.side\[data-empty="true"\]\s*\{\s*display:\s*none;/);
+  it('⚠️ the right-hand column is never hidden: a part that FAILED draws its «didn\'t load» box there, and it must be seen', () => {
+    expect(homeCss).not.toMatch(/\.side[^{]*\{[^}]*display:\s*none/);
   });
 });

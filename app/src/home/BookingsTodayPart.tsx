@@ -23,7 +23,7 @@ function stillToday(bookings: readonly Booking[], today: string): Booking[] {
 
 // «Prenotazioni di oggi» on the Home (18 Nov 2026): today's bookings still to hand over, one row each (time, name, ready or not);
 // a tap opens the booking. With none left the card is not drawn, and it is never drawn for somebody the venue does not show
-// Bookings to (nothing is read for them). Its one listener (today's bookings and later ones, bounded) lives while the Home is on
+// Bookings to (nothing is read for them). Its one listener (today's bookings only, bounded) lives while the Home is on
 // screen and moves to the new day at midnight. It tells the Home only WHETHER it is drawn (the Home lays out its columns by it).
 export function BookingsTodayPart({ onShownChange }: { onShownChange: (shown: boolean) => void }) {
   const { t } = useT();
@@ -37,7 +37,7 @@ export function BookingsTodayPart({ onShownChange }: { onShownChange: (shown: bo
   useEffect(() => {
     if (!seesBookings || !locationId) return undefined;
     // A dead stream hides the card: it is a shortcut, never the only way to the bookings.
-    const stop = services.bookings(locationId).watch(today, list => { setItems(stillToday(list, today)); }, () => { setItems([]); });
+    const stop = services.bookings(locationId).watchDay(today, list => { setItems(stillToday(list, today)); }, () => { setItems([]); });
     return () => {
       stop();
       setItems([]);

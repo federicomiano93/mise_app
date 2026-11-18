@@ -13,16 +13,16 @@
   align-items: start;
 }
 
-/* The right-hand column (16 and 18 Nov 2026): «Ordini da fare» and «Prenotazioni di oggi», one under the other. While neither is
-   drawn it takes no room, so «Da fare» keeps no gap under it. */
+/* The right-hand column (16 and 18 Nov 2026): «Ordini da fare» and «Prenotazioni di oggi», one under the other. ⚠️ NEVER HIDDEN
+   BY A FLAG FROM THE CARDS: a card whose part failed reports nothing, and its «didn't load» box must still be seen (review,
+   18 Nov 2026). Its parts' boundaries are always in it, so it is always a cell of the grid, as «Ordini da fare»'s part alone was. */
 .side {
-  display: grid;
-  gap: var(--s4);
   min-width: 0;
 }
 
-.side[data-empty="true"] {
-  display: none;
+/* Space between the two cards only when both are drawn: a part whose card is not drawn is an empty box of no height. */
+.side > :not(:empty) + :not(:empty) {
+  margin-top: var(--s4);
 }
 
 /* ⚠️ ONLY WHILE «Ordini da fare» IS DRAWN (`data-two`): without it «Da fare» keeps its one readable column, never half a page beside an
