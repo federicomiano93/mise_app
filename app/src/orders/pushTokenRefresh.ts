@@ -2,7 +2,8 @@
 //
 // WHY: the nightly clean-up (functions/retention.js, the owner's decision of 18 Nov 2026) deletes
 // locations/{lid}/fcm-tokens/{token} once its `updatedAt` is 60 days old. The current app writes `updatedAt` only when
-// somebody taps «turn notifications on» or sets a timer (js/push.js rememberToken), and Mise 2 registers no phone yet
+// somebody taps «turn notifications on», or sets a timer on a phone whose stored owner is somebody else (js/push.js
+// rememberToken, scheduleAlarm), and Mise 2 registers no phone yet
 // (phoneMute.ts), so a phone that works perfectly would be silenced after two quiet months. Mise 2 therefore re-writes
 // the stamp while the phone is in use.
 //

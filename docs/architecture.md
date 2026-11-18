@@ -546,7 +546,7 @@ queue and the other roads arrive in 3d-4. The usage record names the screen `rec
   the parity doc, «Tablet redesign (16 Nov 2026) — as built».
   **This phone's push token, kept fresh** (18 Nov 2026): `pushTokenRefresh.ts`, started once in `main.tsx` beside the telemetry.
   The nightly retention function (`functions/retention.js`) deletes an `fcm-tokens` document whose `updatedAt` is 60 days old,
-  and only the current app's tap or timer writes it (Mise 2 registers no phone yet), so once a venue is open, at most every 7
+  and only the current app's tap writes it (a timer only when the stored owner differs; Mise 2 registers no phone yet), so once a venue is open, at most every 7
   days, never offline and never visibly, it merges `{ bakery, uid, updatedAt }` onto this phone's token when `push-token-uid`
   (the current app's owner key, read through `phoneMute.ts`) is the person signed in. Its stamp `push-token-refreshed` is NOT
   kept by `KEEP_PREFIXES`: it belongs to one registration, which a sign-out or a venue switch wipes with it.

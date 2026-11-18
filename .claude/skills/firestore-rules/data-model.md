@@ -192,7 +192,7 @@ appVersion (≤12 chars or null), installed, lastSeen (server time) }`, written 
 CREATE or overwrite its own line; `uid` must equal the writer's own (the signed-in account's uid,
 never a name or email) and `lastSeen` must be server time. No client reads or deletes one. At most
 one write per device per person per venue per day (localStorage `device-ping-<lid>-<uid>`, stamped
-when the write is handed over). Read, and pruned after 90 days, only by `scripts/read-devices.mjs`
+when the write is handed over). Read, and pruned after 90 days (also by the retention function once its kind is on), only by `scripts/read-devices.mjs`
 with the owner's gcloud login.
 
 **Error reports:** `errors/{autoId}` — `{ bakery, uid, source (error|rejection|console), screen? (≤60),
@@ -295,7 +295,7 @@ the Auth accounts of people who left) is one more `KINDS` entry and one more swi
 | `orderRequests` | `order-requests` | `date` 'YYYY-MM-DD' | before today − 13 months (London calendar day) |
 | `pushTimers` | `push-timers` | `fireAt` number ms | before now − 7 days, active or cancelled |
 | `printJobs` | `print-jobs` | `createdAt` ISO + `status` | `done`/`failed` AND before now − 30 days; `queued`/`claimed` never |
-| `fcmTokens` | `fcm-tokens` | `updatedAt` number ms | before now − 60 days (Mise 2 refreshes it weekly: `app/src/orders/pushTokenRefresh.ts`) |
+| `fcmTokens` | `fcm-tokens` | `updatedAt` number ms | before now − 60 days (Mise 2 refreshes it weekly: `app/src/orders/pushTokenRefresh.ts`; ⚠️ not to be switched on before that refresh has run 60 days in production) |
 | `devices` | `devices` | `lastSeen` Timestamp | older than 90 days |
 | `errors` | `errors` | `createdAt` Timestamp | older than 30 days |
 | `usage` | `usage` | `updatedAt` Timestamp | older than 400 days |
