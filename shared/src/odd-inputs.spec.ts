@@ -15,6 +15,7 @@ import * as pushModel from './push-model';
 import * as homeCards from './home-cards';
 import * as awayModel from './away-model';
 import * as awayReminder from './away-reminder';
+import * as kioskModel from './kiosk-model';
 import * as allergenModel from './allergen-model';
 import * as sections from './sections';
 import * as firebaseTarget from './firebase-target';
@@ -94,6 +95,7 @@ import * as legacyPushModelJs from '../../js/push-model.js';
 import * as legacyHomeCardsJs from '../../js/home-cards.js';
 import * as legacyAwayModelJs from '../../js/away-model.js';
 import * as legacyAwayReminderJs from '../../js/away-reminder.js';
+import * as legacyKioskModelJs from '../../js/kiosk-model.js';
 import * as legacyAllergenModelJs from '../../js/allergen-model.js';
 import * as legacySectionsJs from '../../js/sections.js';
 import * as legacyFirebaseTargetJs from '../../js/firebase-target.js';
@@ -176,6 +178,7 @@ const legacyPushModel = legacyPushModelJs as unknown as typeof pushModel;
 const legacyHomeCards = legacyHomeCardsJs as unknown as typeof homeCards;
 const legacyAwayModel = legacyAwayModelJs as unknown as typeof awayModel;
 const legacyAwayReminder = legacyAwayReminderJs as unknown as typeof awayReminder;
+const legacyKioskModel = legacyKioskModelJs as unknown as typeof kioskModel;
 const legacyAllergenModel = legacyAllergenModelJs as unknown as typeof allergenModel;
 const legacySections = legacySectionsJs as unknown as typeof sections;
 const legacyFirebaseTarget = legacyFirebaseTargetJs as unknown as typeof firebaseTarget;
@@ -543,6 +546,73 @@ describe('away-reminder: odd inputs', () => {
   agree('reminderDue', awayReminder.reminderDue, legacyAwayReminder.reminderDue,
     product([true, false, 'true', 1, ...ODD], DAYS, DAYS));
   agree('dayFromISO', awayReminder.dayFromISO, legacyAwayReminder.dayFromISO, product(DAYS));
+});
+
+// ── kiosk-model ──────────────────────────────────────────────────────────────
+
+describe('kiosk-model: odd inputs', () => {
+  const m = kioskModel;
+  const l = legacyKioskModel;
+  const HOUR = 3_600_000;
+
+  const RAW = [...ODD, 'not json', '42', 'null', '[]', '{}', '{"enabled":true}', '{"enabled":"true","restMinutes":"5"}',
+    '{"enabled":true,"restMinutes":20,"nightHours":0}', '{"restMinutes":3,"nightHours":9}', '{"restMinutes":null,"nightHours":""}',
+    '{"restMinutes":5.0,"nightHours":1e0}', '{"restMinutes":-0}', { enabled: true, restMinutes: 2, nightHours: 4 },
+    { enabled: 1, restMinutes: '2', nightHours: [1] }, { restMinutes: NaN }, { nightHours: Infinity }];
+  const CHANGES = [...ODD, { enabled: true }, { enabled: 'yes' }, { restMinutes: 10 }, { restMinutes: 7 }, { nightHours: 0 },
+    { nightHours: '0' }, 'ab', { enabled: false, restMinutes: 20, nightHours: 4, extra: 1 }];
+  agree('readKioskSettings', m.readKioskSettings, l.readKioskSettings, product(RAW));
+  agree('kioskBandVisible', m.kioskBandVisible, l.kioskBandVisible, product(RAW));
+  agree('serializeKioskSettings', m.serializeKioskSettings, l.serializeKioskSettings, product(RAW, CHANGES));
+
+  const STATES = [...ODD, 'active', 'rest', 'night', 'Rest', 'asleep'];
+  const SETTINGS = [undefined, null, {}, { restMinutes: 5, nightHours: 1 }, { restMinutes: 2, nightHours: 0 }, { restMinutes: '5', nightHours: '1' },
+    { restMinutes: NaN, nightHours: -1 }, 'settings', 42];
+  const TIMES = [undefined, null, NaN, 0, NOW, NOW - 5 * 60_000, NOW - 2 * HOUR, '1700000000000', 'soon', Infinity];
+  const STATE_INPUTS: unknown[] = [...ODD, 'input'];
+  for (const state of STATES) {
+    for (const settings of SETTINGS) {
+      for (const lastInputAt of TIMES) {
+        STATE_INPUTS.push({ state, now: NOW, lastInputAt, restSince: lastInputAt, busy: false, signedIn: true, settings });
+      }
+      for (const busy of [true, false, 1, 0, '', 'yes', null]) {
+        for (const signedIn of [true, false, 1, 0, '', 'yes', null]) {
+          STATE_INPUTS.push({ state, now: NOW, lastInputAt: NOW - 3 * HOUR, restSince: NOW - 3 * HOUR, busy, signedIn, settings });
+        }
+      }
+    }
+  }
+  agree('nextKioskState', m.nextKioskState, l.nextKioskState, STATE_INPUTS.map(input => [input]));
+
+  const FLAGS = [true, false, 1, 0, '', 'yes', null, undefined];
+  const PAIRS: unknown[] = [...ODD, 'input'];
+  for (const prevState of STATES) {
+    for (const state of STATES) {
+      for (const flag of FLAGS) {
+        PAIRS.push({ prevState, state, busy: flag, updateWaiting: !flag, signedIn: flag, visible: !flag, enabled: flag,
+          now: NOW, restSince: NOW - 2 * HOUR, nightHours: flag ? 0 : 1, lastReloadDay: flag ? '2026-08-14' : null,
+          visibilityState: flag ? 'visible' : 'hidden', closed: flag });
+      }
+    }
+  }
+  for (const now of TIMES) {
+    for (const restSince of TIMES) {
+      for (const nightHours of [0, '0', 1, null, undefined, NaN, false, '']) {
+        PAIRS.push({ prevState: 'rest', state: 'rest', now, restSince, busy: false, signedIn: true, visible: true, nightHours,
+          lastReloadDay: '2026-08-13' });
+        PAIRS.push({ prevState: 'rest', state: 'night', now, restSince, busy: false, signedIn: true, visible: true, nightHours,
+          lastReloadDay: now });
+      }
+    }
+  }
+  const ONE = PAIRS.map(input => [input]);
+  agree('shouldAutoUpdate', m.shouldAutoUpdate, l.shouldAutoUpdate, ONE);
+  agree('shouldDailyReload', m.shouldDailyReload, l.shouldDailyReload, ONE);
+  agree('shouldReloadOnWake', m.shouldReloadOnWake, l.shouldReloadOnWake, ONE);
+  agree('shouldRestNow', m.shouldRestNow, l.shouldRestNow, ONE);
+  agree('exitRefused', m.exitRefused, l.exitRefused, ONE);
+  agree('workDayDate', m.workDayDate, l.workDayDate, product([...NOWS, ...TIMES, ...ODD, new Date(NOW), 8.64e15, 8.64e15 + 1]));
+  agree('wakeArmDelay', m.wakeArmDelay, l.wakeArmDelay, product([...TIMES, ...ODD], [...TIMES, ...ODD]));
 });
 
 // ── away-model ───────────────────────────────────────────────────────────────
