@@ -8,7 +8,7 @@
 // Minimum Chrome version of each token:
 //   CSS   :has( 105 · @container / container-type 105 · color-mix( 111 · subgrid 117 · @starting-style 117
 //         field-sizing 123 · light-dark( 123 · @scope 118 · :user-invalid / :user-valid 119
-//         translate: / scale: / rotate: as properties 104
+//         translate: / scale: / rotate: as properties 104 · safe / unsafe alignment in flexbox 115
 //   JS    .toSorted( / .toReversed( / .toSpliced( 110 · Object.groupBy / Map.groupBy 117 · Promise.withResolvers 119
 //         AbortSignal.timeout 103 · AbortSignal.any 116 · URL.canParse 120 · Array.fromAsync 121
 //         Set .union( / .intersection( / .symmetricDifference( / .isSubsetOf( / .isSupersetOf( / .isDisjointFrom( 122
@@ -33,6 +33,7 @@ export const CSS_TOKENS: Tokens = [
   ['translate:', /(?:^|[;{])\s*translate\s*:/],
   ['scale:', /(?:^|[;{])\s*scale\s*:/],
   ['rotate:', /(?:^|[;{])\s*rotate\s*:/],
+  ['safe / unsafe alignment', /(?:justify|align)-(?:content|items|self)\s*:[^;}]*\b(?:safe|unsafe)\b/],
 ];
 
 export const JS_TOKENS: Tokens = [
@@ -101,5 +102,6 @@ export function scannerSeesWhatItForbids(): string[] {
     ...findings({ 'c.ts': 'a.difference(b); a.with(0, 1);' }, JS_TOKENS, codeWithoutComments),
     ...findings({ 'a.tsx': 'return <div inert={open} />;' }, JS_TOKENS, codeWithoutComments),
     ...findings({ 'f.ts': '/* one\n two */\nx.toSorted();' }, JS_TOKENS, codeWithoutComments),
+    ...findings({ 'g.css': '.a { justify-content: safe center; }\n.b { justify-content: center; }' }, CSS_TOKENS, cssWithoutComments),
   ];
 }
