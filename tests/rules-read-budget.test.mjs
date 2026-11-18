@@ -187,6 +187,8 @@ for (const [helper, inner, section] of [
   ['writesCalculatorConfig', 'writesCalculatorConfigAs', true],
   // Mise 2's customer bookings (18 Nov 2026): canUseAs() plus the kitchen owner's refusal, on the value already read.
   ['usesBookings', 'usesBookingsAs', false],
+  // Bookings settings (18 Nov 2026): usesBookingsAs() plus runsThePlace(), on the same value.
+  ['managesBookings', 'managesBookingsAs', false],
 ]) {
   test(`⚠️ ${helper}() costs 2 reads: users/{uid} once and locations/{lid} once`, () => {
     const outer = bodyOf(helper);

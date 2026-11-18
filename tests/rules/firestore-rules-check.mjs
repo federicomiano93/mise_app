@@ -5088,6 +5088,20 @@ async function bookings() {
   await expectDenied('a number with decimals', () => create('X', { ...booking, number: 1.5 }, SAM));
   await expectDenied('dated by the phone, not the server', () => create('X', booking, SAM, { server: ['updatedAt'], stamps: { createdAt: phoneClock() } }));
 
+  // ── Bookings settings (18 Nov 2026): no phone, and time slots ──
+  await expectAllowed('no phone (the venue does not ask for it)', () => create('P', { ...booking, phone: '' }, SAM));
+  await expectAllowed('a booking in a slot: time is its start, slotEnd its end', () => create('T', { ...booking, time: '09:00', slotEnd: '10:00' }, SAM));
+  await expectAllowed('an old booking without slotEnd still saves as before', () => create('U', booking, SAM));
+  await expectDenied('a phone of spaces only is still refused', () => create('X', { ...booking, phone: '  ' }, SAM));
+  await expectDenied('a slot that ends when it starts', () => create('X', { ...booking, time: '09:00', slotEnd: '09:00' }, SAM));
+  await expectDenied('a slot that ends before it starts', () => create('X', { ...booking, time: '10:00', slotEnd: '09:00' }, SAM));
+  await expectDenied('a slot end that is not HH:MM', () => create('X', { ...booking, time: '09:00', slotEnd: '10' }, SAM));
+  await expectDenied('a slot end that is a number', () => create('X', { ...booking, time: '09:00', slotEnd: 1000 }, SAM));
+  await expectAllowed('the editor moves a slot booking to another slot', () => save('T', { ...booking, time: '10:00', slotEnd: '11:00' }, SAM));
+  await expectAllowed('…and back to an exact time, slotEnd deleted (merge with deleteField)',
+    () => commit('T', { ...booking, time: '10:15' }, asAccount(SAM), { server: ['updatedAt'], mask: [...Object.keys(booking), 'slotEnd'] }));
+  await expectAllowed('a status change keeps the slot', () => status('T', 'ready', SAM));
+
   // ── Changing one ──
   await expectAllowed('an employee marks it ready', () => status('A', 'ready', SAM));
   await expectAllowed('…collected', () => status('A', 'collected', SAM));
@@ -5123,6 +5137,73 @@ async function bookings() {
   await seedDoc('locations/main', { name: 'The Italian Club Bakery', staffHiddenCards: { bookings: true } });
   await expectAllowed('hidden from employees, an employee still reads (display switch only)', () => fetch(`${FS}/${B}/C`, { headers: asAccount(SAM) }));
   await seedDoc('locations/main', { name: 'The Italian Club Bakery' });
+}
+
+// ── The bookings settings (Mise 2, bookings settings: config/bookings) ─────────────
+// Read by whoever takes bookings, written by whoever manages them (owner, manager, the sales side's owner);
+// every field optional; a closed key list; the general config block must not leak it.
+async function bookingSettings() {
+  await wipe();
+  await seedAccess();
+  const C = 'locations/main/config/bookings';
+  const full = {
+    bakery: 'main', askPhone: false, whatsappReminder: false, modes: 'pickup',
+    slotFirst: '08:00', slotLast: '13:00', slotMinutes: 60, slotLimit: 12,
+    perPieceSlips: true, extras: ['Cipolla', 'Acciughe'],
+  };
+  const readAs = who => () => fetch(`${FS}/${C}`, { headers: asAccount(who) });
+
+  await expectAllowed('the owner saves every setting', () => mergeWrite(C, full, asAccount(ALICE)));
+  await expectAllowed('…the manager too', () => mergeWrite(C, { ...full, modes: 'both' }, asAccount(MAYA)));
+  await expectAllowed('…and the owner of the sales side (bookings are their side)', () => mergeWrite(C, { ...full, modes: 'delivery' }, asAccount(SALES)));
+  await expectDenied('an employee changes no setting', () => mergeWrite(C, full, asAccount(SAM)));
+  await expectDenied('…nor the owner of the kitchen', () => mergeWrite(C, full, asAccount(KITCHEN)));
+  await expectDenied('…nor another venue', () => mergeWrite(C, full, asAccount(BOB)));
+  await expectDenied('…nor an account with no access', () => mergeWrite(C, full, asAccount(NOBODY)));
+  await expectDenied('signed out, nothing', () => mergeWrite(C, full, noAuth()));
+
+  // Every field optional: the stamp alone, and each field alone.
+  await expectAllowed('the stamp alone (every field optional)', () => wholeWrite(C, { bakery: 'main' }, asAccount(ALICE)));
+  for (const [key, value] of Object.entries(full)) {
+    if (key === 'bakery') continue;
+    await expectAllowed(`only ${key}`, () => wholeWrite(C, { bakery: 'main', [key]: value }, asAccount(ALICE)));
+  }
+  await expectAllowed('a cleared slot limit and slots (fields deleted by the merge)',
+    () => clearWrite(C, { bakery: 'main', askPhone: true }, ['slotFirst', 'slotLast', 'slotLimit'], asAccount(ALICE)));
+
+  await expectDenied('an unknown key', () => mergeWrite(C, { bakery: 'main', phoneRequired: true }, asAccount(ALICE)));
+  await expectDenied('stamped for another venue', () => mergeWrite(C, { ...full, bakery: 'trattoria-x' }, asAccount(ALICE)));
+  await expectDenied('no stamp', () => wholeWrite(C, { askPhone: true }, asAccount(ALICE)));
+  await expectDenied('askPhone as text', () => mergeWrite(C, { bakery: 'main', askPhone: 'no' }, asAccount(ALICE)));
+  await expectDenied('whatsappReminder as a number', () => mergeWrite(C, { bakery: 'main', whatsappReminder: 1 }, asAccount(ALICE)));
+  await expectDenied('a mode that is not one of the three', () => mergeWrite(C, { bakery: 'main', modes: 'post' }, asAccount(ALICE)));
+  await expectDenied('a first slot that is not HH:MM', () => mergeWrite(C, { bakery: 'main', slotFirst: '8:00' }, asAccount(ALICE)));
+  await expectDenied('a last slot past 23:59', () => mergeWrite(C, { bakery: 'main', slotLast: '24:00' }, asAccount(ALICE)));
+  await expectDenied('slots that end before they start', () => mergeWrite(C, { ...full, slotFirst: '13:00', slotLast: '08:00' }, asAccount(ALICE)));
+  await expectDenied('slots that end when they start', () => mergeWrite(C, { ...full, slotFirst: '08:00', slotLast: '08:00' }, asAccount(ALICE)));
+  await expectDenied('a slot of 45 minutes', () => mergeWrite(C, { bakery: 'main', slotMinutes: 45 }, asAccount(ALICE)));
+  await expectDenied('a limit of 0', () => mergeWrite(C, { bakery: 'main', slotLimit: 0 }, asAccount(ALICE)));
+  await expectDenied('a limit of 1000', () => mergeWrite(C, { bakery: 'main', slotLimit: 1000 }, asAccount(ALICE)));
+  await expectDenied('a limit with decimals', () => mergeWrite(C, { bakery: 'main', slotLimit: 2.5 }, asAccount(ALICE)));
+  await expectDenied('perPieceSlips as text', () => mergeWrite(C, { bakery: 'main', perPieceSlips: 'yes' }, asAccount(ALICE)));
+  await expectDenied('extras that are not a list', () => mergeWrite(C, { bakery: 'main', extras: 'Cipolla' }, asAccount(ALICE)));
+  await expectAllowed('forty extras', () => mergeWrite(C, { bakery: 'main', extras: Array.from({ length: 40 }, (_, i) => `x${i}`) }, asAccount(ALICE)));
+  await expectDenied('forty-one extras', () => mergeWrite(C, { bakery: 'main', extras: Array.from({ length: 41 }, (_, i) => `x${i}`) }, asAccount(ALICE)));
+  await expectDenied('nobody deletes it', () => deleteWrite(C, asAccount(ALICE)));
+
+  await expectAllowed('an employee at the counter reads it (the form obeys it)', readAs(SAM));
+  await expectAllowed('the owner reads it', readAs(ALICE));
+  await expectAllowed('the owner of the sales side reads it', readAs(SALES));
+  await expectDenied('the owner of the kitchen reads it not (not through the general config block either)', readAs(KITCHEN));
+  await expectDenied('another venue reads it not', readAs(BOB));
+  await expectDenied('signed out, nothing', () => fetch(`${FS}/${C}`, { headers: noAuth() }));
+  await seedDoc('locations/main', { name: 'The Italian Club Bakery', sections: { bookings: false } });
+  await expectDenied('bookings switched off: an employee with the Calculator reads it not', readAs(SAM));
+  await expectDenied('…and the owner saves no setting', () => mergeWrite(C, full, asAccount(ALICE)));
+  await seedDoc('locations/main', { name: 'The Italian Club Bakery' });
+  // The general block still answers for the Calculator's own document.
+  await seedDoc('locations/main/config/calculator', { bakery: 'main' });
+  await expectAllowed('the general config block still reads config/calculator', () => fetch(`${FS}/locations/main/config/calculator`, { headers: asAccount(SAM) }));
 }
 
 // ── The bookings price list (Mise 2, bookings step 2: published from Food cost, read by the counter) ──
@@ -5177,7 +5258,7 @@ async function priceList() {
 for (const scenario of [suppliers, ingredients, ingredientPrices, drafts, history, neighbours,
                         locationTree, isolation, configAndLogs, pastries, pastryLogs,
                         products, stocktake, staffCards, clientOrders, orderRequests, awayDays,
-                        pushNotifications, feedbackNotes, todos, bookings, priceList, deviceCount, errorReports, usageStats,
+                        pushNotifications, feedbackNotes, todos, bookings, bookingSettings, priceList, deviceCount, errorReports, usageStats,
                         roles, partialOwners, onboardingCollections]) {
   await scenario();
 }
