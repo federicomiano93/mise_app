@@ -3080,7 +3080,7 @@ export const en = {
   'people.confirm.ownerKitchen': 'Make {name} the kitchen owner?',
   'people.remove.title': 'Remove this person?',
   // The current app's sentence, plus what the server does as well: their phones stop getting the venue's notifications.
-  'people.remove.message': '{name} ({email}) will lose access to this location immediately, and their phones stop getting its notifications. Everything they have entered stays. If they knew your clients’ ordering links, give those clients a new one (“Replace with a new link”).',
+  'people.remove.message': '{name} ({email}) will lose access to this location immediately, and their phones will stop getting its notifications. Everything they have entered stays. If they knew your clients’ ordering links, give those clients a new one (“Replace with a new link”).',
   'people.err.read': 'Could not read who works here. Check your connection.',
   'people.err.name': 'Could not save that name. Check your connection.',
   'people.err.change': 'Could not change that. Check your connection and try again.',

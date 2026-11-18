@@ -1,6 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { UserMinus } from 'lucide-react';
-import type { RoleChoice } from '@mise/shared/membership';
+import type { Role, RoleChoice } from '@mise/shared/membership';
 import { useT } from '../i18n/useT';
 import { markBusy } from '../session/busy';
 import { useSession } from '../session/SessionContext';
@@ -57,8 +57,11 @@ export function PeopleList() {
   const headingId = useId();
   const [confirm, confirmDialog] = useConfirm();
   const [alert, alertDialog] = useAlert();
+  // The person a dialog is about, as tapped; drawn and acted on as the LIVE roster now holds them (`live`), so a change made meanwhile on
+  // another phone is what the dialog marks and compares against (code review).
   const [picking, setPicking] = useState<Member | null>(null);
   const [renaming, setRenaming] = useState<Member | null>(null);
+  const live = (person: Member) => members.find(m => m.uid === person.uid) ?? person;
   const [saving, setSaving] = useState(false);
   const inFlight = useRef(false);
   const alive = useRef(true);
@@ -108,8 +111,9 @@ export function PeopleList() {
     setPicking(person);
   }
 
-  async function pick(person: Member, choice: RoleChoice): Promise<void> {
+  async function pick(tapped: Member, choice: RoleChoice): Promise<void> {
     setPicking(null);
+    const person = live(tapped);
     const back = controlKey(person.uid, 'role');
     const current = person.role === null ? null : choiceKeyOf(person.role, person.title);
     if (choice.key === current || inFlight.current) {
@@ -126,10 +130,9 @@ export function PeopleList() {
       danger: choice.role === 'staff',
     });
     if (!alive.current) return;
-    if (!ok) {
-      setFocusNext(back);
-      return;
-    }
+    // The keyboard goes back to the row at once, not when the server answers (up to a minute away).
+    setFocusNext(back);
+    if (!ok) return;
     const sent = await send('role', () => source.setMemberRole(person.uid, choice.role, choice.title), 'member-role-changed');
     if (!alive.current) return;
     if (typeof sent === 'object') await alert({ message: sent.refused, okLabel: t('common.ok') });
@@ -164,10 +167,8 @@ export function PeopleList() {
     });
     if (!alive.current) return;
     const back = controlKey(person.uid, 'remove');
-    if (!ok) {
-      setFocusNext(back);
-      return;
-    }
+    setFocusNext(back);
+    if (!ok) return;
     const sent = await send('remove', () => source.setMemberRole(person.uid, null, null), 'member-removed');
     if (!alive.current) return;
     if (sent === 'saved') {
@@ -185,6 +186,9 @@ export function PeopleList() {
   };
 
   const others = sorted.filter(person => person.uid !== myUid);
+  // ⚠️ A ROSTER THAT STOPPED LISTENING CANNOT SHOW A CHANGE (each change shows only when the roster does): its buttons are off rather than
+  // let the owner change somebody, see nothing happen, and change them again (code review).
+  const broken = status === 'error';
 
   return (
     <section aria-labelledby={headingId} className={styles.section}>
@@ -216,6 +220,7 @@ export function PeopleList() {
                       ref={bind(person.uid, 'role')}
                       className={styles.action}
                       aria-label={t('people.changeRoleOf', { name })}
+                      isDisabled={broken}
                       onPress={() => { openPicker(person); }}
                     >
                       {t('people.changeRole')}
@@ -224,6 +229,7 @@ export function PeopleList() {
                       ref={bind(person.uid, 'rename')}
                       className={styles.action}
                       aria-label={t('people.renameOf', { name })}
+                      isDisabled={broken}
                       onPress={() => { openRename(person); }}
                     >
                       {t('people.rename')}
@@ -234,6 +240,7 @@ export function PeopleList() {
                       variant="bare"
                       className={styles.remove}
                       aria-label={t('people.removeOf', { name })}
+                      isDisabled={broken}
                       onPress={() => { void remove(person); }}
                     >
                       <UserMinus aria-hidden="true" className={styles.icon} />
@@ -249,8 +256,8 @@ export function PeopleList() {
 
       {picking === null ? null : (
         <RolePicker
-          name={nameOf(picking)}
-          current={picking.role === null ? null : choiceKeyOf(picking.role, picking.title)}
+          name={nameOf(live(picking))}
+          current={live(picking).role === null ? null : choiceKeyOf(live(picking).role as Role, live(picking).title)}
           onPick={choice => { void pick(picking, choice); }}
           onClose={() => {
             const back = controlKey(picking.uid, 'role');

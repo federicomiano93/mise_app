@@ -131,6 +131,12 @@ describe('the rows', () => {
     expect(written).not.toMatch(/@club\.test|anna1|bruno1|carla1/);
   });
 
+  it('turns every row’s buttons off while the roster cannot be read (a change could not be seen)', async () => {
+    const { region, source } = await open();
+    act(() => { source.breakMembers(refused('unavailable')); });
+    for (const button of within(rowOf(region, 'Anna Rossi')).getAllByRole('button')) expect(button).toBeDisabled();
+  });
+
   it('holds ONE listener while on screen, and none once the screen is left', async () => {
     const { source, user } = await open();
     expect(source.liveMembers).toBe(1);
@@ -155,6 +161,34 @@ describe('change role', () => {
     expect(current).toHaveFocus();
     expect(within(picker).getByText(/The same as Manager/)).toBeInTheDocument();
     expect(within(picker).getAllByText('Current')).toHaveLength(1);
+  });
+
+  it('marks and compares against the role the roster holds NOW, when another phone changed it meanwhile', async () => {
+    const { region, user, source } = await open();
+    await user.click(within(rowOf(region, 'Bruno Verdi')).getByRole('button', { name: 'Change role of Bruno Verdi' }));
+    const picker = await screen.findByRole('dialog', { name: 'Role of Bruno Verdi' });
+    expect(within(picker).getByRole('button', { name: /^Employee/ })).toHaveAttribute('aria-current', 'true');
+    act(() => { source.members = source.members.map(m => (m.uid === 'bruno1' ? { ...m, role: 'manager', title: 'manager' } : m)); });
+    expect(within(picker).getByRole('button', { name: /^Manager/ })).toHaveAttribute('aria-current', 'true');
+    expect(within(picker).getByRole('button', { name: /^Employee/ })).not.toHaveAttribute('aria-current');
+    await user.click(within(picker).getByRole('button', { name: /^Employee/ }));
+    await user.click(within(await alertdialog()).getByRole('button', { name: 'Make employee' }));
+    await waitFor(() => { expect(source.setMemberRole).toHaveBeenCalledWith('bruno1', 'staff', null); });
+  });
+
+  it('the keyboard is back on the row while the change is with the server, not only once it answers', async () => {
+    const source = fakeSettingsSource({ members: TEAM });
+    let answer: () => void = () => undefined;
+    source.setMemberRole = vi.fn(() => new Promise<void>(done => { answer = done; }));
+    const { region, user } = await open({ source });
+    const button = within(rowOf(region, 'Bruno Verdi')).getByRole('button', { name: 'Change role of Bruno Verdi' });
+    await user.click(button);
+    await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: /^Manager/ }));
+    await user.click(within(await alertdialog()).getByRole('button', { name: 'Make manager' }));
+    await waitFor(() => { expect(button).toHaveFocus(); });
+    expect(isBusy()).toBe(true);
+    await act(async () => { answer(); });
+    await waitFor(() => { expect(isBusy()).toBe(false); });
   });
 
   it('a stray arrow key in the list chooses nothing', async () => {
@@ -389,14 +423,43 @@ describe('rename', () => {
     expect(source.setMemberName).not.toHaveBeenCalled();
   });
 
-  it('leaving the screen with typing asks first', async () => {
+  it('leaving the screen with typing asks first: «Cancel» stays, «Discard» leaves', async () => {
     const { region, user, router } = await open();
     await user.click(within(rowOf(region, 'Anna Rossi')).getByRole('button', { name: 'Rename Anna Rossi' }));
     const form = await screen.findByRole('dialog', { name: 'Rename Anna Rossi' });
     await user.type(within(form).getByLabelText('First name'), 'x');
     await act(async () => { await router.navigate('/home'); });
-    expect(await screen.findByRole('alertdialog', { name: 'Discard changes?' })).toBeInTheDocument();
+    await user.click(within(await screen.findByRole('alertdialog', { name: 'Discard changes?' })).getByRole('button', { name: 'Cancel' }));
     expect(router.state.location.pathname).toBe('/settings/people');
+    expect(within(form).getByLabelText('First name')).toHaveValue('Annax');
+    await act(async () => { await router.navigate('/home'); });
+    await user.click(within(await screen.findByRole('alertdialog', { name: 'Discard changes?' })).getByRole('button', { name: 'Discard' }));
+    await waitFor(() => { expect(router.state.location.pathname).toBe('/home'); });
+  });
+
+  it('a way out while the name is with the server is refused without a question, and the answer still lands', async () => {
+    const source = fakeSettingsSource({ members: TEAM });
+    let answer: () => void = () => undefined;
+    source.setMemberName = vi.fn(() => new Promise<void>(done => { answer = done; }));
+    const { region, user, router } = await open({ source });
+    await user.click(within(rowOf(region, 'Anna Rossi')).getByRole('button', { name: 'Rename Anna Rossi' }));
+    const form = await screen.findByRole('dialog', { name: 'Rename Anna Rossi' });
+    await user.type(within(form).getByLabelText('First name'), 'x');
+    await user.click(within(form).getByRole('button', { name: 'Save' }));
+    await waitFor(() => { expect(within(form).getByRole('status')).toHaveTextContent('Saving…'); });
+    expect(within(form).getByRole('button', { name: 'Cancel' })).toBeDisabled();
+    await act(async () => { await router.navigate('/home'); });
+    expect(router.state.location.pathname).toBe('/settings/people');
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    await act(async () => { answer(); });
+    await waitFor(() => { expect(screen.queryByRole('dialog')).not.toBeInTheDocument(); });
+    expect(source.setMemberName).toHaveBeenCalledTimes(1);
+  });
+
+  it('a row with no name or email opens a form named «Rename (no name yet)»', async () => {
+    const { region, user } = await open();
+    await user.click(within(rowOf(region, '(no name yet)')).getByRole('button', { name: 'Rename (no name yet)' }));
+    expect(await screen.findByRole('dialog', { name: 'Rename (no name yet)' })).toBeInTheDocument();
   });
 });
 
@@ -407,7 +470,7 @@ describe('remove', () => {
     await user.click(button);
     const question = await alertdialog();
     expect(question).toHaveAccessibleName('Remove this person?');
-    expect(question).toHaveAccessibleDescription(/^Anna Rossi \(anna@club\.test\) will lose access to this location immediately, and their phones stop getting its notifications\./);
+    expect(question).toHaveAccessibleDescription(/^Anna Rossi \(anna@club\.test\) will lose access to this location immediately, and their phones will stop getting its notifications\./);
     expect(within(question).getByRole('button', { name: 'Remove' }).className).toMatch(/danger/);
     await user.click(within(question).getByRole('button', { name: 'Cancel' }));
     await waitFor(() => { expect(button).toHaveFocus(); });

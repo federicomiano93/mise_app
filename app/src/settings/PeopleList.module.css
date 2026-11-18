@@ -99,6 +99,13 @@
   color: var(--danger-ink);
 }
 
+/* Off while the roster cannot be read: dimmed as every disabled button is. */
+.remove[data-disabled] {
+  background: none;
+  color: var(--ink-3);
+  cursor: default;
+}
+
 .icon {
   flex: none;
   width: 20px;

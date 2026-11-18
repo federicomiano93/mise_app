@@ -58,6 +58,8 @@ export function RenameDialog({ person, saving, onSave, onClose }: {
   const dirty = cleanName(first) !== person.firstName || cleanName(last) !== person.lastName;
   const dirtyRef = useRef(dirty);
   useEffect(() => { dirtyRef.current = dirty; }, [dirty]);
+  const savingRef = useRef(saving);
+  useEffect(() => { savingRef.current = saving; }, [saving]);
   useEffect(() => {
     mounted.current = true;
     return () => { mounted.current = false; };
@@ -71,13 +73,19 @@ export function RenameDialog({ person, saving, onSave, onClose }: {
     danger: true,
   }), [confirm, t]);
 
-  // A way out the dialog did not offer, with typing in it, asks the same question as Cancel.
-  const blocker = useBlocker(useCallback(() => dirtyRef.current && !leaving.current, []));
+  // A way out the dialog did not offer, with typing in it, asks the same question as Cancel. ⚠️ WHILE THE NAME IS WITH THE SERVER it is
+  // refused without a question (code review): «Discard changes?» would offer to throw away a change that lands anyway, and a refusal
+  // arriving after the screen had gone would be said to nobody. Cancel and Escape are off meanwhile for the same reason.
+  const blocker = useBlocker(useCallback(() => (dirtyRef.current || savingRef.current) && !leaving.current, []));
   const latestBlocker = useRef(blocker);
   useEffect(() => {
     latestBlocker.current = blocker;
     if (blocker.state !== 'blocked') {
       asking.current = false;
+      return;
+    }
+    if (savingRef.current) {
+      blocker.reset();
       return;
     }
     if (asking.current) return;
@@ -143,11 +151,12 @@ export function RenameDialog({ person, saving, onSave, onClose }: {
     <Dialog
       isOpen
       onClose={() => { void cancel(); }}
-      title={t('people.renameOf', { name: nameForButtons(person) })}
+      title={t('people.renameOf', { name: nameForButtons(person) || t('people.noNameYet') })}
       actions={
         <>
           <Button isDisabled={saving} onPress={() => { void cancel(); }}>{t('common.cancel')}</Button>
-          <Button variant="primary" type="submit" form={formId} isDisabled={saving}>{t('ui.save')}</Button>
+          {/* Pending, not disabled: the button keeps the keyboard while the server answers (a disabled one drops it to the page). */}
+          <Button variant="primary" type="submit" form={formId} isPending={saving}>{t('ui.save')}</Button>
         </>
       }
     >
