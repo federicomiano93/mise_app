@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   LIMITS, blankLine, boxNumber, choiceForDate, dayAfter, draftFrom, emptyDraft, firstProblem, groupsFor, nextNumber, oldestKeptDay,
   effectiveTotal, linePrice, listTotal, parseMoney, parseQty, readBooking, sameDraft, sortForDay, stillToHandOver, toBookingData, toPay,
-  NO_FORM_RULES, phoneStorable, bookingTimeLabel,
+  NO_FORM_RULES, phoneStorable, bookingTimeLabel, pickedLine, weightPrice, weightStorable,
 } from './bookingModel';
 import type { Booking, Draft, FormRules } from './bookingModel';
 import { bookingFixture, priceListOf } from '../testing/fakeBookingsSource';
@@ -14,7 +14,7 @@ const nextKey = () => { key += 1; return key; };
 const good: Draft = {
   customerName: ' Mario Prova ', phone: '+39 333 000 0000', mode: 'pickup', address: 'kept only for a delivery',
   date: '2026-12-24', time: '09:30', slotEnd: '',
-  lines: [{ key: 1, name: 'Panettone', qty: '2', unit: 'pcs', note: '' , kept: null }, { key: 2, name: 'focaccia ', qty: '1,5', unit: 'kg', note: ' sliced ' , kept: null }],
+  lines: [{ key: 1, name: 'Panettone', qty: '2', unit: 'pcs', weightKg: null, note: '' , kept: null }, { key: 2, name: 'focaccia ', qty: '1,5', unit: 'kg', weightKg: null, note: ' sliced ' , kept: null }],
   deposit: '10', total: '42,50', notes: '',
 };
 const ctx = { today: '2026-11-18', isNew: true };
@@ -29,8 +29,8 @@ describe('readBooking', () => {
     expect(b).toEqual({
       id: 'A', customerName: 'Mario Prova', phone: '+39 1', mode: 'delivery', address: 'Via Finta 1', date: '2026-12-24', time: '09:30', slotEnd: null,
       lines: [
-        { recipeId: 'R1', productId: null, unitPrice: null, packSize: null, packUnit: null, name: 'Focaccia', qty: 1.5, unit: 'kg', note: 'sliced' },
-        { recipeId: null, productId: 'p9', unitPrice: 2.5, packSize: null, packUnit: null, name: 'Pane', qty: 2, unit: 'pcs', note: '' },
+        { recipeId: 'R1', productId: null, unitPrice: null, packSize: null, packUnit: null, weightKg: null, name: 'Focaccia', qty: 1.5, unit: 'kg', note: 'sliced' },
+        { recipeId: null, productId: 'p9', unitPrice: 2.5, packSize: null, packUnit: null, weightKg: null, name: 'Pane', qty: 2, unit: 'pcs', note: '' },
       ],
       deposit: 10, total: 42.5, notes: 'x', status: 'ready', number: 7,
     });
@@ -87,7 +87,8 @@ describe('firstProblem: the first field to put right, in the order of the form',
   it('a new booking starts empty, and the name is the first thing asked', () => {
     const empty = emptyDraft(nextKey);
     expect(empty.mode).toBeNull();
-    expect(empty.lines).toHaveLength(1);
+    // No card yet: the product window adds them one by one (bookings rebuild step 2).
+    expect(empty.lines).toHaveLength(0);
     expect(firstProblem(empty, ctx)).toEqual({ field: 'customerName', reason: 'required' });
   });
 
@@ -111,11 +112,11 @@ describe('firstProblem: the first field to put right, in the order of the form',
   it('needs at least one product, ignores blank rows and checks each used row', () => {
     expect(firstProblem({ ...good, lines: [blankLine(9)] }, ctx)).toEqual({ field: { line: 0, part: 'name' }, reason: 'noLines' });
     expect(firstProblem({ ...good, lines: [...good.lines, blankLine(9)] }, ctx)).toBeNull();
-    expect(firstProblem({ ...good, lines: [good.lines[0]!, { key: 3, name: '', qty: '2', unit: 'pcs', note: '' , kept: null }] }, ctx))
+    expect(firstProblem({ ...good, lines: [good.lines[0]!, { key: 3, name: '', qty: '2', unit: 'pcs', weightKg: null, note: '' , kept: null }] }, ctx))
       .toEqual({ field: { line: 1, part: 'name' }, reason: 'required' });
-    expect(firstProblem({ ...good, lines: [{ key: 3, name: 'Pane', qty: '', unit: 'pcs', note: '' , kept: null }] }, ctx))
+    expect(firstProblem({ ...good, lines: [{ key: 3, name: 'Pane', qty: '', unit: 'pcs', weightKg: null, note: '' , kept: null }] }, ctx))
       .toEqual({ field: { line: 0, part: 'qty' }, reason: 'required' });
-    expect(firstProblem({ ...good, lines: [{ key: 3, name: 'Pane', qty: '0', unit: 'pcs', note: '' , kept: null }] }, ctx))
+    expect(firstProblem({ ...good, lines: [{ key: 3, name: 'Pane', qty: '0', unit: 'pcs', weightKg: null, note: '' , kept: null }] }, ctx))
       .toEqual({ field: { line: 0, part: 'qty' }, reason: 'qty' });
   });
 });
@@ -140,7 +141,7 @@ describe('toBookingData: what is written', () => {
   });
 
   it('an empty total box takes the price list\'s sum; free text adds nothing and is counted', () => {
-    const draft = { ...good, total: '', lines: [...good.lines, { key: 5, name: 'Torta su misura', qty: '1', unit: 'pcs' as const, note: '', kept: null }] };
+    const draft = { ...good, total: '', lines: [...good.lines, { key: 5, name: 'Torta su misura', qty: '1', unit: 'pcs' as const, weightKg: null, note: '', kept: null }] };
     expect(listTotal(draft, items)).toEqual({ total: 68, unpriced: 1 });
     expect(effectiveTotal(draft, items)).toBe(68);
     expect(toBookingData(draft, { status: 'todo', number: 1, items }).total).toBe(68);
@@ -149,7 +150,7 @@ describe('toBookingData: what is written', () => {
   });
 
   it('a listed product is counted in the list\'s unit, whatever the row said', () => {
-    const line = { key: 1, name: 'Focaccia', qty: '2', unit: 'pcs' as const, note: '', kept: null };
+    const line = { key: 1, name: 'Focaccia', qty: '2', unit: 'pcs' as const, weightKg: null, note: '', kept: null };
     expect(linePrice(line, items)).toMatchObject({ kind: 'listed', unit: 'kg' });
     expect(toBookingData({ ...good, lines: [line] }, { status: 'todo', number: 1, items }).lines[0]).toMatchObject({ unit: 'kg', unitPrice: 12 });
   });
@@ -157,7 +158,7 @@ describe('toBookingData: what is written', () => {
   it('keeps a delivery\'s address and clamps everything to the rules\' bounds', () => {
     const data = toBookingData({
       ...good, mode: 'delivery', address: 'a'.repeat(300), customerName: 'n'.repeat(100), notes: 'x'.repeat(900),
-      lines: Array.from({ length: 60 }, (_, i) => ({ key: i, name: 'p'.repeat(200), qty: '1', unit: 'pcs' as const, note: '', kept: null })),
+      lines: Array.from({ length: 60 }, (_, i) => ({ key: i, name: 'p'.repeat(200), qty: '1', unit: 'pcs' as const, weightKg: null, note: '', kept: null })),
     }, { status: 'ready', number: 99999, items: [] });
     expect(data.address).toHaveLength(LIMITS.address);
     expect(data.customerName).toHaveLength(LIMITS.customerName);
@@ -168,7 +169,7 @@ describe('toBookingData: what is written', () => {
   });
 
   it('round-trips: a stored booking opened and saved unchanged writes the same, a step-1 recipe link kept', () => {
-    const stored: Booking = bookingFixture({ id: 'A', lines: [{ recipeId: 'R1', productId: null, unitPrice: null, packSize: null, packUnit: null, name: 'Focaccia alta', qty: 1.5, unit: 'kg', note: 'sliced' }], deposit: 5, total: 20 });
+    const stored: Booking = bookingFixture({ id: 'A', lines: [{ recipeId: 'R1', productId: null, unitPrice: null, packSize: null, packUnit: null, weightKg: null, name: 'Focaccia alta', qty: 1.5, unit: 'kg', note: 'sliced' }], deposit: 5, total: 20 });
     const draft = draftFrom(stored, nextKey, ',');
     expect(sameDraft(draft, draftFrom(stored, nextKey, ','))).toBe(true);
     const data = toBookingData(draft, { status: stored.status, number: stored.number, items });
@@ -178,7 +179,7 @@ describe('toBookingData: what is written', () => {
   });
 
   it('⚠️ a saved line keeps its price while its name and unit stay — a new price list does not change it', () => {
-    const stored = bookingFixture({ id: 'A', total: 20, lines: [{ recipeId: null, productId: 'pF', unitPrice: 10, packSize: null, packUnit: null, name: 'Focaccia', qty: 2, unit: 'kg', note: '' }] });
+    const stored = bookingFixture({ id: 'A', total: 20, lines: [{ recipeId: null, productId: 'pF', unitPrice: 10, packSize: null, packUnit: null, weightKg: null, name: 'Focaccia', qty: 2, unit: 'kg', note: '' }] });
     const draft = draftFrom(stored, nextKey, ',');
     // The total is the lines' own sum: the box starts empty, so it keeps following the lines.
     expect(draft.total).toBe('');
@@ -191,30 +192,30 @@ describe('toBookingData: what is written', () => {
   });
 
   it('⚠️ a saved line with no price stays without one, even once its name is on the list, while it is left as it was', () => {
-    const stored = bookingFixture({ id: 'A', lines: [{ recipeId: null, productId: null, unitPrice: null, packSize: null, packUnit: null, name: 'Panettone', qty: 1, unit: 'kg', note: '' }] });
+    const stored = bookingFixture({ id: 'A', lines: [{ recipeId: null, productId: null, unitPrice: null, packSize: null, packUnit: null, weightKg: null, name: 'Panettone', qty: 1, unit: 'kg', note: '' }] });
     const draft = draftFrom(stored, nextKey, ',');
     expect(linePrice(draft.lines[0]!, items)).toEqual({ kind: 'none' });
     expect(toBookingData(draft, { status: 'todo', number: 1, items }).lines[0]).toMatchObject({ unitPrice: null, unit: 'kg' });
   });
 
   it('checks a listed product\'s quantity in the list\'s unit', () => {
-    const line = { key: 1, name: 'Panettone', qty: '1,5', unit: 'kg' as const, note: '', kept: null };
+    const line = { key: 1, name: 'Panettone', qty: '1,5', unit: 'kg' as const, weightKg: null, note: '', kept: null };
     expect(firstProblem({ ...good, lines: [line] }, { ...ctx, items })).toEqual({ field: { line: 0, part: 'qty' }, reason: 'qty' });
     expect(firstProblem({ ...good, lines: [line] }, ctx)).toBeNull();
   });
 
   it('stops a total over the bound, typed or from the list', () => {
-    const line = { key: 1, name: 'Panettone', qty: '5000', unit: 'pcs' as const, note: '', kept: null };
+    const line = { key: 1, name: 'Panettone', qty: '5000', unit: 'pcs' as const, weightKg: null, note: '', kept: null };
     expect(firstProblem({ ...good, total: '', lines: [line] }, { ...ctx, items })).toEqual({ field: 'total', reason: 'tooHigh' });
   });
 
   it('a product sold by the pack keeps what one pack holds, from the list and once saved', () => {
     const packs = priceListOf([{ productId: 'pG', name: 'Grissini', price: 3.5, per: 'pack', packSize: 250, packUnit: 'g' }]).items;
-    const line = { key: 1, name: 'Grissini', qty: '3', unit: 'pcs' as const, note: '', kept: null };
+    const line = { key: 1, name: 'Grissini', qty: '3', unit: 'pcs' as const, weightKg: null, note: '', kept: null };
     const data = toBookingData({ ...good, lines: [line] }, { status: 'todo', number: 1, items: packs });
     expect(data.lines[0]).toEqual({ recipeId: null, productId: 'pG', unitPrice: 3.5, name: 'Grissini', qty: 3, unit: 'pcs', packSize: 250, packUnit: 'g' });
     // Saved and opened again with a price list that no longer has it: the pack's size stays with the frozen price.
-    const stored = bookingFixture({ id: 'A', lines: [{ ...data.lines[0]!, note: '', recipeId: null, packSize: 250, packUnit: 'g' }] });
+    const stored = bookingFixture({ id: 'A', lines: [{ ...data.lines[0]!, note: '', recipeId: null, packSize: 250, packUnit: 'g', weightKg: null }] });
     const again = toBookingData(draftFrom(stored, nextKey, ','), { status: 'todo', number: 1, items: [] });
     expect(again.lines[0]).toMatchObject({ unitPrice: 3.5, packSize: 250, packUnit: 'g' });
     expect(readBooking('A', { customerName: 'x', date: '2026-12-24', time: '09:30', lines: [{ name: 'G', qty: 2, unit: 'pcs', packSize: -1, packUnit: 'g' }] })?.lines[0])
@@ -222,7 +223,7 @@ describe('toBookingData: what is written', () => {
   });
 
   it('a total typed at the counter (a discount) is shown in the box when the booking is opened again', () => {
-    const stored = bookingFixture({ id: 'A', total: 18, lines: [{ recipeId: null, productId: 'pF', unitPrice: 10, packSize: null, packUnit: null, name: 'Focaccia', qty: 2, unit: 'kg', note: '' }] });
+    const stored = bookingFixture({ id: 'A', total: 18, lines: [{ recipeId: null, productId: 'pF', unitPrice: 10, packSize: null, packUnit: null, weightKg: null, name: 'Focaccia', qty: 2, unit: 'kg', note: '' }] });
     expect(draftFrom(stored, nextKey, ',').total).toBe('18');
   });
 });
@@ -378,5 +379,77 @@ describe('bookingTimeLabel', () => {
   it('a slot reads start–end, a booking with only a time reads the time', () => {
     expect(bookingTimeLabel({ time: '10:00', slotEnd: '12:00' })).toBe('10:00–12:00');
     expect(bookingTimeLabel({ time: '10:00', slotEnd: null })).toBe('10:00');
+  });
+});
+
+describe('a piece of a chosen weight (bookings rebuild step 2)', () => {
+  const items = priceListOf([
+    { productId: 'pS', name: 'Scacciata broccoli', price: 16, per: 'kg', weights: [1, 1.5] },
+    { productId: 'pP', name: 'Panettone', price: 25, per: 'piece' },
+  ]).items;
+  const scacciata = items[1]!;
+
+  it('a picked line is one piece of that weight, counted in pieces, its note the window\'s', () => {
+    const line = pickedLine(7, { name: 'Scacciata broccoli', item: scacciata, weightKg: 1.5, note: 'senza cipolla, + provola' });
+    expect(line).toEqual({ key: 7, name: 'Scacciata broccoli', qty: '1', unit: 'pcs', weightKg: 1.5, note: 'senza cipolla, + provola', kept: null });
+    // A piece without a weight; a name typed freely; a note cut to the line's bound.
+    expect(pickedLine(8, { name: 'Panettone', item: items[0]!, weightKg: null, note: '' })).toMatchObject({ unit: 'pcs', weightKg: null });
+    expect(pickedLine(9, { name: ' Torta ', item: null, weightKg: 2, note: 'x'.repeat(200) })).toMatchObject({ name: 'Torta', weightKg: 2 });
+    expect(pickedLine(9, { name: 'Torta', item: null, weightKg: null, note: 'x'.repeat(200) }).note).toHaveLength(LIMITS.lineNote);
+  });
+
+  it('its price is the price per kilo × the weight, to the cent, and the line is that × the pieces', () => {
+    expect(weightPrice(16, 1.5)).toBe(24);
+    expect(weightPrice(12.99, 0.333)).toBe(4.33);
+    const line = { ...pickedLine(1, { name: 'Scacciata broccoli', item: scacciata, weightKg: 1.5, note: '' }), qty: '3' };
+    expect(linePrice(line, items)).toMatchObject({ kind: 'listed', unit: 'pcs', unitPrice: 24 });
+    expect(listTotal({ ...good, lines: [line] }, items)).toEqual({ total: 72, unpriced: 0 });
+  });
+
+  it('is written with weightKg, unit pcs, the pieces as qty and the price of one piece', () => {
+    const line = { ...pickedLine(1, { name: 'Scacciata broccoli', item: scacciata, weightKg: 1.5, note: 'senza cipolla' }), qty: '3' };
+    const data = toBookingData({ ...good, total: '', lines: [line] }, { status: 'todo', number: 1, items });
+    expect(data.lines).toEqual([
+      { recipeId: null, productId: 'pS', unitPrice: 24, name: 'Scacciata broccoli', qty: 3, unit: 'pcs', weightKg: 1.5, note: 'senza cipolla' },
+    ]);
+    expect(data.total).toBe(72);
+  });
+
+  it('read back, it keeps its weight and its frozen price, and saves unchanged even after the list changed', () => {
+    const stored = readBooking('A', {
+      customerName: 'Mario Prova', date: '2026-12-24', time: '09:30',
+      lines: [{ recipeId: null, productId: 'pS', unitPrice: 24, name: 'Scacciata broccoli', qty: 3, unit: 'pcs', weightKg: 1.5 }],
+    })!;
+    expect(stored.lines[0]).toMatchObject({ weightKg: 1.5, unitPrice: 24, qty: 3, unit: 'pcs' });
+    const dearer = priceListOf([{ productId: 'pS', name: 'Scacciata broccoli', price: 20, per: 'kg' }]).items;
+    const draft = draftFrom(stored, nextKey, ',');
+    expect(linePrice(draft.lines[0]!, dearer)).toMatchObject({ kind: 'frozen', unitPrice: 24 });
+    const again = toBookingData(draft, { status: 'todo', number: 1, items: dearer });
+    expect(again.lines[0]).toEqual({ recipeId: null, productId: 'pS', unitPrice: 24, name: 'Scacciata broccoli', qty: 3, unit: 'pcs', weightKg: 1.5 });
+  });
+
+  it('a line from before the weights has none and is written without the key', () => {
+    const stored = bookingFixture({ id: 'B' });
+    expect(stored.lines[0]?.weightKg).toBeNull();
+    const data = toBookingData(draftFrom(stored, nextKey, ','), { status: 'todo', number: 1, items: [] });
+    expect(data.lines[0]).not.toHaveProperty('weightKg');
+  });
+
+  it('a weight the rules\' bound refuses is read as none, refused by the check, and never written', () => {
+    for (const bad of [0, -1, 50.001, '1.5', Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(weightStorable(bad)).toBe(false);
+      const read = readBooking('A', { customerName: 'x', date: '2026-12-24', time: '09:30', lines: [{ name: 'S', qty: 1, unit: 'pcs', weightKg: bad }] });
+      expect(read?.lines[0]?.weightKg).toBeNull();
+    }
+    expect(weightStorable(50)).toBe(true);
+    expect(weightStorable(0.001)).toBe(true);
+    const wrong = { key: 1, name: 'Torta', qty: '1', unit: 'pcs' as const, weightKg: 60, note: '', kept: null };
+    expect(firstProblem({ ...good, lines: [wrong] }, ctx)).toEqual({ field: { line: 0, part: 'qty' }, reason: 'qty' });
+    expect(toBookingData({ ...good, lines: [wrong] }, { status: 'todo', number: 1, items: [] }).lines[0]).not.toHaveProperty('weightKg');
+  });
+
+  it('a change of weight is an unsaved change', () => {
+    const line = pickedLine(1, { name: 'Torta', item: null, weightKg: 1, note: '' });
+    expect(sameDraft({ ...good, lines: [line] }, { ...good, lines: [{ ...line, weightKg: 1.5 }] })).toBe(false);
   });
 });

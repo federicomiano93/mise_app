@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
-import { Plus, Trash2, X } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
 import { useBlocker, useLocation, useNavigate } from 'react-router';
 import type { BlockerFunction } from 'react-router';
 import { formatMoney } from '@mise/shared/price-model';
@@ -15,18 +15,21 @@ import { FormBar } from '../ui/FormBar';
 import { useStatusMessage } from '../ui/StatusMessage';
 import { useConfirm } from '../ui/useConfirm';
 import {
-  BOOKING_MODES, LIMITS, blankLine, draftFrom, emptyDraft, fieldId, firstProblem, nextNumber, parseMoney, sameDraft,
-  chosenSlot, draftLineAmount, effectiveTotal, keepsStoredTime, linePack, linePrice, listTotal, toBookingData, toPay,
+  BOOKING_MODES, LIMITS, draftFrom, emptyDraft, fieldId, firstProblem, nextNumber, parseMoney, pickedLine, sameDraft,
+  chosenSlot, draftLineAmount, effectiveTotal, keepsStoredTime, linePrice, listTotal, toBookingData, toPay,
 } from './bookingModel';
-import type { Booking, BookingMode, BookingStatus, BookingUnit, Draft, DraftField, DraftLine, DraftProblem, FormRules } from './bookingModel';
+import type { Booking, BookingMode, BookingStatus, Draft, DraftField, DraftLine, DraftProblem, FormRules } from './bookingModel';
 import { onlyMode, placesLeft, slotFromValue, slotValue, slotsOf } from './bookingSettings';
 import type { BookingSettings, Slot } from './bookingSettings';
-import type { PriceItem, PriceList } from '@mise/shared/price-list';
+import type { PriceList } from '@mise/shared/price-list';
 import { spellDate } from './bookingWords';
 import { useBookingSettings, useBookings, useBookingsStore } from './BookingsContext';
 import { afterSave, cameFromBooking, cameFromList, newBookingDateOf, restoresRefused } from './bookingsNav';
 import { BOOKINGS_PATH, bookingPath } from './bookingsPath';
 import type { RefusedSave } from './bookingsStore';
+import { ProductCard } from './ProductCard';
+import { ProductPicker } from './ProductPicker';
+import type { Picked } from './ProductPicker';
 import styles from './BookingEditor.module.css';
 
 const PROBLEM_TEXT: Readonly<Record<DraftProblem['reason'], MessageKey>> = {
@@ -181,15 +184,20 @@ function EditorForm({ id, booking, refused, settings }: FormProps) {
 
   const domId = (field: DraftField) => `${ids}-${fieldId(field)}`;
 
-  const addLine = () => {
+  // «+ Aggiungi un prodotto» opens the product window (bookings rebuild step 2): one product per opening, one card per «Aggiungi».
+  const addId = `${ids}-add`;
+  const [picking, setPicking] = useState(false);
+  const addPicked = (picked: Picked) => {
+    setPicking(false);
     if (draft.lines.length >= LIMITS.lines) return;
-    pendingFocus.current = domId({ line: draft.lines.length, part: 'name' });
-    update({ lines: [...draft.lines, blankLine(nextKey())] });
+    update({ lines: [...draft.lines, pickedLine(nextKey(), picked)] });
+    say(t('bookings.picker.added', { name: picked.name }));
   };
+  // A card taken away: the focus goes to the card now in its place (the one after, else the one before), or to «Aggiungi».
   const removeLine = (index: number) => {
     const lines = draft.lines.filter((_, i) => i !== index);
-    pendingFocus.current = domId({ line: Math.max(0, Math.min(index, lines.length - 1)), part: 'name' });
-    update({ lines: lines.length > 0 ? lines : [blankLine(nextKey())] });
+    pendingFocus.current = lines.length === 0 ? addId : domId({ line: Math.max(0, Math.min(index, lines.length - 1)), part: 'name' });
+    update({ lines });
   };
 
   // ── Leaving ──
@@ -249,8 +257,8 @@ function EditorForm({ id, booking, refused, settings }: FormProps) {
     const found = firstProblem(draft, { today, isNew, items, rules });
     if (found !== null) {
       setProblem(found);
-      // Block, jump to the first problem and say it; the box is marked until it is put right.
-      document.getElementById(domId(found.field))?.focus();
+      // Block, jump to the first problem and say it; the box is marked until it is put right. No product at all: «Aggiungi».
+      document.getElementById(found.reason === 'noLines' ? addId : domId(found.field))?.focus();
       say(t('bookings.err.check', { field: fieldName(t, found.field, slots !== null) }));
       return;
     }
@@ -328,11 +336,15 @@ function EditorForm({ id, booking, refused, settings }: FormProps) {
         action={<Button variant="primary" className={styles.save} onPress={() => { void save(); }}>{t('ui.save')}</Button>}
       />
       <form className={styles.body} noValidate onSubmit={event => { event.preventDefault(); void save(); }}>
+        {/* The owner's order (bookings rebuild step 2): the customer's name, the most visible words of the form; the day and the
+            slot side by side; how it is handed over; the products; the money; the notes. The two group headings are for screen
+            readers only: the big labels say it on screen. */}
         <fieldset className={styles.group}>
-          <legend className={styles.legend}>{t('bookings.form.customer')}</legend>
+          <legend className="visually-hidden">{t('bookings.form.customer')}</legend>
           <TextField
             id={domId('customerName')}
             label={t('bookings.form.name')}
+            big
             value={draft.customerName}
             placeholder={t('bookings.form.namePlaceholder')}
             maxLength={LIMITS.customerName}
@@ -355,37 +367,15 @@ function EditorForm({ id, booking, refused, settings }: FormProps) {
               onChange={value => { update({ phone: value }); }}
             />
           ) : null}
-          {/* A venue that takes one mode only has nothing to choose: the line under the day and time says which. An old booking in the
-              other mode keeps the choice, so it is seen and can be put right. */}
-          {/* ⚠️ DECIDED ON THE COPY AS IT OPENED, never on the typing: a tap on the venue's mode must not take the choice away. */}
-          {only === null || initial.mode !== only ? (
-            <ModeChoice
-              id={domId('mode')}
-              value={draft.mode}
-              error={errorOn('mode')}
-              onChange={mode => { update({ mode }); }}
-            />
-          ) : null}
-          {draft.mode === 'delivery' ? (
-            <TextField
-              id={domId('address')}
-              label={t('bookings.form.address')}
-              value={draft.address}
-              placeholder={t('bookings.form.addressPlaceholder')}
-              maxLength={LIMITS.address}
-              autoComplete="off"
-              error={errorOn('address')}
-              onChange={value => { update({ address: value }); }}
-            />
-          ) : null}
         </fieldset>
 
         <fieldset className={styles.group}>
-          <legend className={styles.legend}>{t('bookings.form.when')}</legend>
-          <div className={styles.pair}>
+          <legend className="visually-hidden">{t('bookings.form.when')}</legend>
+          <div className={styles.when}>
             <TextField
               id={domId('date')}
               label={t('bookings.form.date')}
+              big
               value={draft.date}
               type="date"
               min={isNew ? today : undefined}
@@ -396,6 +386,7 @@ function EditorForm({ id, booking, refused, settings }: FormProps) {
               <TextField
                 id={domId('time')}
                 label={t('bookings.form.time')}
+                big
                 value={draft.time}
                 type="time"
                 error={errorOn('time')}
@@ -413,41 +404,66 @@ function EditorForm({ id, booking, refused, settings }: FormProps) {
               />
             )}
           </div>
+          {/* A venue that takes one mode only has nothing to choose: a quiet grey line says which. An old booking in the other mode
+              keeps the choice, so it is seen and can be put right. */}
+          {/* ⚠️ DECIDED ON THE COPY AS IT OPENED, never on the typing: a tap on the venue's mode must not take the choice away. */}
           {only !== null && initial.mode === only ? (
             <p className={styles.onlyMode}>{t(only === 'delivery' ? 'bookings.form.onlyDelivery' : 'bookings.form.onlyPickup')}</p>
+          ) : (
+            <ModeChoice
+              id={domId('mode')}
+              value={draft.mode}
+              error={errorOn('mode')}
+              onChange={mode => { update({ mode }); }}
+            />
+          )}
+          {draft.mode === 'delivery' ? (
+            <TextField
+              id={domId('address')}
+              label={t('bookings.form.address')}
+              value={draft.address}
+              placeholder={t('bookings.form.addressPlaceholder')}
+              maxLength={LIMITS.address}
+              autoComplete="off"
+              error={errorOn('address')}
+              onChange={value => { update({ address: value }); }}
+            />
           ) : null}
         </fieldset>
 
         <fieldset className={styles.group}>
           <legend className={styles.legend}>{t('bookings.form.items')}</legend>
-          {/* Said only once the list has answered: nothing is said while it is on its way. */}
-          {unavailable ? <p className={styles.hint}>{t('bookings.form.priceListUnreadable')}</p>
-            : loaded && items.length === 0 ? <p className={styles.hint}>{t('bookings.form.noPriceList')}</p> : null}
-          <datalist id={`${ids}-prices`}>
-            {items.map(item => <option key={item.productId} value={item.name} label={priceWords(t, item, money)} />)}
-          </datalist>
-          <ol className={styles.lines}>
-            {draft.lines.map((line, index) => (
-              <li key={line.key} className={styles.lineItem}>
-                <LineFields
-                  index={index}
-                  line={line}
-                  listId={`${ids}-prices`}
-                  price={linePrice(line, items)}
-                  amount={draftLineAmount(line, items)}
-                  nameId={domId({ line: index, part: 'name' })}
-                  qtyId={domId({ line: index, part: 'qty' })}
-                  nameError={errorOn({ line: index, part: 'name' })}
-                  qtyError={errorOn({ line: index, part: 'qty' })}
-                  canRemove={draft.lines.length > 1}
-                  onChange={patch => { updateLine(line.key, patch); }}
-                  onRemove={() => { removeLine(index); }}
-                />
-              </li>
-            ))}
-          </ol>
+          {draft.lines.length === 0 ? <p className={styles.hint}>{t('bookings.form.noProducts')}</p> : (
+            <ol className={styles.cards}>
+              {draft.lines.map((line, index) => (
+                <li key={line.key} className={styles.cardItem}>
+                  <ProductCard
+                    index={index}
+                    line={line}
+                    price={linePrice(line, items)}
+                    amount={draftLineAmount(line, items)}
+                    cardId={domId({ line: index, part: 'name' })}
+                    qtyId={domId({ line: index, part: 'qty' })}
+                    nameError={errorOn({ line: index, part: 'name' })}
+                    qtyError={errorOn({ line: index, part: 'qty' })}
+                    onChange={patch => { updateLine(line.key, patch); }}
+                    onRemove={() => { removeLine(index); }}
+                  />
+                </li>
+              ))}
+            </ol>
+          )}
+          {errorOn({ line: 0, part: 'name' }) !== null && draft.lines.length === 0
+            ? <p id={`${addId}-error`} className={styles.error}>{errorOn({ line: 0, part: 'name' })}</p>
+            : null}
           {draft.lines.length < LIMITS.lines ? (
-            <Button variant="secondary" className={styles.addLine} onPress={addLine}>
+            <Button
+              id={addId}
+              variant="secondary"
+              className={styles.addLine}
+              aria-describedby={draft.lines.length === 0 && errorOn({ line: 0, part: 'name' }) !== null ? `${addId}-error` : undefined}
+              onPress={() => { setPicking(true); }}
+            >
               <Plus aria-hidden="true" />
               <span>{t('bookings.form.addItem')}</span>
             </Button>
@@ -511,6 +527,16 @@ function EditorForm({ id, booking, refused, settings }: FormProps) {
           </div>
         ) : null}
       </form>
+      {picking ? (
+        <ProductPicker
+          items={items}
+          extras={settings.extras}
+          unavailable={unavailable}
+          loaded={loaded}
+          onClose={() => { setPicking(false); }}
+          onAdd={addPicked}
+        />
+      ) : null}
       {confirmDialog}
     </section>
   );
@@ -551,14 +577,6 @@ function usePriceList(): { readonly list: PriceList; readonly unavailable: boole
   return state;
 }
 
-// «12,00 € al kg», «2,50 € al pezzo», «3,50 € a confezione»: what an item costs, in the interface's words and the venue's money.
-function priceWords(t: ReturnType<typeof useT>['t'], item: PriceItem, money: ReturnType<typeof useMoney>): string {
-  const price = formatMoney(item.price, money);
-  if (item.per === 'kg') return t('bookings.price.perKg', { price });
-  if (item.per === 'piece') return t('bookings.price.perPiece', { price });
-  return t('bookings.price.perPack', { price });
-}
-
 type TextFieldProps = {
   id: string;
   label: string;
@@ -574,13 +592,15 @@ type TextFieldProps = {
   list?: string;
   // A sentence under the box, read with it.
   hint?: string | null;
+  // The form's main fields (the name, the day, the slot): their label in the big type of the owner's design.
+  big?: boolean;
 };
 
-function TextField({ id, label, value, onChange, error, placeholder, maxLength, type = 'text', inputMode, autoComplete, min, list, hint = null }: TextFieldProps) {
+function TextField({ id, label, value, onChange, error, placeholder, maxLength, type = 'text', inputMode, autoComplete, min, list, hint = null, big = false }: TextFieldProps) {
   const described = [error !== null ? `${id}-error` : null, hint !== null ? `${id}-hint` : null].filter(Boolean).join(' ');
   return (
     <div className={styles.field}>
-      <label className={styles.label} htmlFor={id}>{label}</label>
+      <label className={big ? `${styles.label} ${styles.bigLabel}` : styles.label} htmlFor={id}>{label}</label>
       <input
         id={id}
         className={styles.input}
@@ -625,7 +645,7 @@ function SlotField({ id, draft, slots, rules, error, onChange }: {
   const editingId = rules.editing?.id ?? null;
   return (
     <div className={styles.field}>
-      <label className={styles.label} htmlFor={id}>{t('bookings.form.slot')}</label>
+      <label className={`${styles.label} ${styles.bigLabel}`} htmlFor={id}>{t('bookings.form.slot')}</label>
       <select
         id={id}
         className={styles.input}
@@ -694,106 +714,6 @@ function ModeChoice({ id, value, error, onChange }: { id: string; value: Booking
         ))}
       </div>
       {error !== null ? <p id={`${id}-error`} className={styles.error}>{error}</p> : null}
-    </div>
-  );
-}
-
-type LineProps = {
-  index: number;
-  line: DraftLine;
-  listId: string;
-  price: ReturnType<typeof linePrice>;
-  amount: number | null;
-  nameId: string;
-  qtyId: string;
-  nameError: string | null;
-  qtyError: string | null;
-  canRemove: boolean;
-  onChange: (patch: Partial<DraftLine>) => void;
-  onRemove: () => void;
-};
-
-// One product: the name (the price list's names suggested, or free text), the quantity and its unit, an optional note; its price
-// and what the line comes to, when it has one.
-function LineFields({ index, line, listId, price, amount, nameId, qtyId, nameError, qtyError, canRemove, onChange, onRemove }: LineProps) {
-  const { t, locale } = useT();
-  const money = useMoney();
-  const n = index + 1;
-  const tag = price.kind === 'listed'
-    ? t('bookings.form.fromList', { price: priceWords(t, price.item, money) })
-    : price.kind === 'frozen'
-      ? t('bookings.form.keptPrice', {
-        price: t(line.unit === 'kg' ? 'bookings.price.perKg' : 'bookings.price.perPiece', { price: formatMoney(price.unitPrice, money) }),
-      })
-      : null;
-  // ⚠️ THE UNIT IS LOCKED WHILE THE LINE HAS A PRICE (review, 18 Nov 2026): a listed product's price is for a piece (a pack) or a
-  // kilo, and a saved line's price was agreed for its unit — changing it would quietly re-price the line. The tag says why.
-  const locked = price.kind === 'listed' || price.kind === 'frozen';
-  const pack = linePack(price);
-  const packSizeText = (p: { packSize: number; packUnit: string }) =>
-    `${new Intl.NumberFormat(locale, { maximumFractionDigits: 3 }).format(p.packSize)} ${p.packUnit === 'pcs' ? t('bookings.unit.pcs') : p.packUnit}`;
-  const tagId = `${nameId}-price`;
-  return (
-    <div className={styles.line} role="group" aria-label={t('bookings.form.item', { n })}>
-      <div className={styles.lineHead}>
-        <span className={styles.lineTitle}>{t('bookings.form.item', { n })}</span>
-        {tag !== null ? <span id={tagId} className={styles.fromBook}>{tag}</span> : null}
-        {canRemove ? (
-          <Button variant="bare" className={styles.removeLine} aria-label={t('bookings.form.removeItem', { n })} onPress={onRemove}>
-            <X aria-hidden="true" />
-          </Button>
-        ) : null}
-      </div>
-      <TextField
-        id={nameId}
-        label={t('bookings.form.itemName')}
-        value={line.name}
-        placeholder={t('bookings.form.itemPlaceholder')}
-        maxLength={LIMITS.lineName}
-        autoComplete="off"
-        list={listId}
-        error={nameError}
-        onChange={value => { onChange({ name: value }); }}
-      />
-      <div className={styles.qtyRow}>
-        <TextField
-          id={qtyId}
-          label={t('bookings.form.qty')}
-          value={line.qty}
-          inputMode="decimal"
-          autoComplete="off"
-          error={qtyError}
-          onChange={value => { onChange({ qty: value }); }}
-        />
-        <div className={styles.field}>
-          <label className={styles.label} htmlFor={`${qtyId}-unit`}>{t('bookings.form.unit')}</label>
-          {/* ⚠️ LOCKED for a product on the price list: its price is for a piece, a pack or a kilo, never another. A line of packs
-              says «confezioni (250 g)» (the owner's choice, 18 Nov 2026); its quantity is a number of packs. */}
-          <select
-            id={`${qtyId}-unit`}
-            className={styles.input}
-            value={pack !== null ? 'pack' : price.kind === 'listed' ? price.unit : line.unit}
-            disabled={locked}
-            aria-describedby={locked ? tagId : undefined}
-            onChange={event => { onChange({ unit: event.currentTarget.value === 'kg' ? 'kg' : 'pcs' as BookingUnit }); }}
-          >
-            <option value="pcs">{t('bookings.form.unitPcs')}</option>
-            <option value="kg">{t('bookings.form.unitKg')}</option>
-            {pack !== null ? <option value="pack">{t('bookings.form.unitPacks', { size: packSizeText(pack) })}</option> : null}
-          </select>
-        </div>
-      </div>
-      {amount !== null ? <p className={styles.amount}>{t('bookings.form.lineAmount', { amount: formatMoney(amount, money) })}</p> : null}
-      <TextField
-        id={`${nameId}-note`}
-        label={t('bookings.form.itemNote')}
-        value={line.note}
-        placeholder={t('bookings.form.itemNotePlaceholder')}
-        maxLength={LIMITS.lineNote}
-        autoComplete="off"
-        error={null}
-        onChange={value => { onChange({ note: value }); }}
-      />
     </div>
   );
 }

@@ -7,6 +7,7 @@
 
 import { outputLanguage } from '@mise/shared/market';
 import { parseISODate } from '@mise/shared/day';
+import { formatWeight } from '@mise/shared/price-list';
 import type { BookingLine, BookingUnit } from './bookingModel';
 
 // «mercoledì 18 novembre» / «Wednesday 18 November», in the interface's locale.
@@ -35,11 +36,18 @@ const numberIn = (locale: string, n: number): string =>
 
 // A line's quantity with its unit: «2 pz», «1,5 kg», and for a product sold by the pack «3 confezioni (250 g)» (the owner's choice,
 // 18 Nov 2026: the lab must know a pack is not a piece). At most three decimals (grams). Never NaN.
+// A piece of a chosen weight (bookings rebuild step 2) says it the same way: «3 pz (1,5 kg)», the weight of ONE piece.
 export function lineQtyText(
-  line: { readonly qty: number; readonly unit: BookingUnit; readonly packSize: number | null; readonly packUnit: string | null },
+  line: {
+    readonly qty: number; readonly unit: BookingUnit; readonly packSize: number | null; readonly packUnit: string | null;
+    readonly weightKg?: number | null;
+  },
   locale: string,
   words: UnitWords,
 ): string {
+  if (line.weightKg !== undefined && line.weightKg !== null) {
+    return `${numberIn(locale, line.qty)} ${words.unit(line.unit)} (${formatWeight(line.weightKg, locale)})`;
+  }
   if (line.packSize !== null && line.packUnit !== null) {
     const size = `${numberIn(locale, line.packSize)} ${line.packUnit === 'pcs' ? words.unit('pcs') : line.packUnit}`;
     return `${numberIn(locale, line.qty)} ${words.packs(line.qty)} (${size})`;

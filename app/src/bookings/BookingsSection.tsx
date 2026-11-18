@@ -76,13 +76,18 @@ function BookingsScreen() {
   const scrollArea = useOwnScrollArea();
   const listTop = useRef(0);
   const kind = view.kind;
+  // The booking form takes the WHOLE width, on the split too (bookings rebuild step 2, the owner's design): the list is hidden while
+  // it is open, and Back brings it back.
+  const formOpen = kind === 'new' || kind === 'edit';
+  // Where the list is on screen: alone on a phone; on the split beside everything but the form.
+  const listShown = split ? !formOpen : kind === 'list';
   useEffect(() => {
     const area = scrollArea();
-    if (area === null || kind !== 'list') return undefined;
+    if (area === null || !listShown) return undefined;
     const note = () => { listTop.current = area.scrollTop; };
     area.addEventListener('scroll', note, { passive: true });
     return () => { area.removeEventListener('scroll', note); };
-  }, [scrollArea, kind]);
+  }, [scrollArea, listShown]);
   const shown = useRef<{ pathname: string; kind: string } | null>(null);
   const detail = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
@@ -91,7 +96,15 @@ function BookingsScreen() {
     if (detail.current) detail.current.scrollTop = 0;
     const area = scrollArea();
     // The first render (the shell reset the area as the section opened) and StrictMode's second run are not moves.
-    if (before === null || before.pathname === pathname || area === null || split) return;
+    if (before === null || before.pathname === pathname || area === null) return;
+    const wasForm = before.kind === 'new' || before.kind === 'edit';
+    // ⚠️ ON THE SPLIT the list keeps its place, except across the full-width form: hidden, the list let the area shrink to the
+    // form's height (its place was lost), so it is put back as the form closes, and the form opens at the top.
+    if (split) {
+      if (formOpen && !wasForm) area.scrollTop = 0;
+      else if (!formOpen && wasForm) area.scrollTop = listTop.current;
+      return;
+    }
     area.scrollTop = kind === 'list' && before.kind !== 'list' ? listTop.current : 0;
   }, [pathname]);
 
@@ -100,7 +113,7 @@ function BookingsScreen() {
 
   return (
     <Page title={t('section.bookings')}>
-      <div className={styles.layout} data-view={view.kind}>
+      <div className={formOpen ? `${styles.layout} ${styles.fullForm}` : styles.layout} data-view={view.kind}>
         <div className={styles.list}>
           <PartBoundary>
             <BookingsList choice={choice} onChoice={setChoice} today={today} selectedId={selectedId} />

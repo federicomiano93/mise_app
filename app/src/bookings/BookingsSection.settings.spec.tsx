@@ -3,6 +3,7 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { todayISO } from '@mise/shared/day';
 import { bookingFixture, fakeBookingsSource } from '../testing/fakeBookingsSource';
 import type { FakeBookingsSource } from '../testing/fakeBookingsSource';
+import { addProduct } from '../testing/bookingForm';
 import { renderApp } from '../testing/renderApp';
 import { dayAfter } from './bookingModel';
 import type { Booking } from './bookingModel';
@@ -36,12 +37,11 @@ describe('no phone asked', () => {
     const { user, source } = show('/bookings/new', NO_PHONE);
     await screen.findByRole('region', { name: 'New booking' }, LOAD);
     expect(screen.queryByLabelText('Phone')).toBeNull();
-    await user.type(screen.getByLabelText('Name'), 'Gino Prova');
+    await user.type(screen.getByLabelText('Customer name'), 'Gino Prova');
     await user.click(screen.getByRole('radio', { name: 'Pickup' }));
     fireEvent.change(screen.getByLabelText('Day'), { target: { value: TOMORROW } });
     fireEvent.change(screen.getByLabelText('Time'), { target: { value: '08:15' } });
-    await user.type(screen.getByLabelText('Product'), 'Pane');
-    await user.type(screen.getByLabelText('Quantity'), '2');
+    await addProduct(user, 'Pane');
     await user.click(screen.getByRole('button', { name: 'Save' }));
     await user.click(within(await dialog('Save this booking?')).getByRole('button', { name: 'Save' }));
     await waitFor(() => { expect(source.create).toHaveBeenCalledWith(expect.objectContaining({ phone: '', slotEnd: null })); });
@@ -68,12 +68,11 @@ describe('one mode only', () => {
     await screen.findByRole('region', { name: 'New booking' }, LOAD);
     expect(screen.queryByRole('radio', { name: 'Pickup' })).toBeNull();
     expect(screen.getByText('✓ Pickup')).toBeInTheDocument();
-    await user.type(screen.getByLabelText('Name'), 'Gino Prova');
+    await user.type(screen.getByLabelText('Customer name'), 'Gino Prova');
     await user.type(screen.getByLabelText('Phone'), '333');
     fireEvent.change(screen.getByLabelText('Day'), { target: { value: TOMORROW } });
     fireEvent.change(screen.getByLabelText('Time'), { target: { value: '08:15' } });
-    await user.type(screen.getByLabelText('Product'), 'Pane');
-    await user.type(screen.getByLabelText('Quantity'), '2');
+    await addProduct(user, 'Pane');
     await user.click(screen.getByRole('button', { name: 'Save' }));
     await user.click(within(await dialog('Save this booking?')).getByRole('button', { name: 'Save' }));
     await waitFor(() => { expect(source.create).toHaveBeenCalledWith(expect.objectContaining({ mode: 'pickup' })); });
@@ -83,7 +82,7 @@ describe('one mode only', () => {
     const { user } = show('/bookings/new', { ...DEFAULT_SETTINGS, modes: 'delivery' });
     await screen.findByRole('region', { name: 'New booking' }, LOAD);
     expect(screen.getByText('✓ Delivery')).toBeInTheDocument();
-    await user.type(screen.getByLabelText('Name'), 'Gino Prova');
+    await user.type(screen.getByLabelText('Customer name'), 'Gino Prova');
     await user.type(screen.getByLabelText('Phone'), '333');
     await user.click(screen.getByRole('button', { name: 'Save' }));
     expect(screen.getByLabelText('Delivery address')).toHaveFocus();
@@ -110,11 +109,10 @@ describe('time slots', () => {
       ['10:00–11:00 · 1 left', false],
       ['11:00–12:00 · 2 left', false],
     ]);
-    await user.type(screen.getByLabelText('Name'), 'Gino Prova');
+    await user.type(screen.getByLabelText('Customer name'), 'Gino Prova');
     await user.type(screen.getByLabelText('Phone'), '333');
     await user.click(screen.getByRole('radio', { name: 'Pickup' }));
-    await user.type(screen.getByLabelText('Product'), 'Pane');
-    await user.type(screen.getByLabelText('Quantity'), '2');
+    await addProduct(user, 'Pane');
     // No slot chosen: refused, said on the slot.
     await user.click(screen.getByRole('button', { name: 'Save' }));
     expect(screen.getByLabelText('Time slot')).toHaveFocus();

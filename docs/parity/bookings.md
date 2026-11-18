@@ -335,3 +335,62 @@ ingredient, «Da aggiungere») is never silently lost: «Fatto» adds it first o
 unsaved change and Save adds it or blocks with the error. A refused save (`permission-denied`) says the permission is gone instead
 of «controlla la connessione». A Save that changed one of `slotFirst` / `slotLast` / `slotMinutes` writes all three. The line-name
 limit is 200 (`LIMITS.lineName`), not 120. Specs: `BookingSettingsScreen.review.spec.tsx` and the model, slip and reminder specs.
+
+## Rebuild step 2 — as built (19 Nov 2026): the form's layout and the product window
+
+Branch `feature/mise2-bookings-form`, a PR stacked on step 1 (#578, `feature/mise2-bookings-settings`). Built from the mockups the
+owner approved on the tablet. The list, calendar, booking page and Home (step 3) and the per-piece slips (step 4) are not touched.
+
+**The layout** (`BookingEditor.tsx`, `BookingsSection.tsx`). On the split (from 1000px) the open form — new or edit — takes the
+WHOLE width: the list column is hidden (`fullForm` on the layout) and Back brings it back; the list's scroll place, lost while it
+was hidden, is put back as the form closes (`BookingsSection.scroll.spec.tsx`). The phone is unchanged (one pane). Order: «Nome
+cliente» (the label itself 20px bold; «Cliente» stays as a screen-reader-only legend) → the phone only where the venue asks for it →
+«Giorno» | «Fascia oraria» side by side, labels 20px bold, stacked below 520px («Quando» screen-reader only) → one mode only: the
+grey 15px line «✓ Ritiro» / «✓ Consegna», no box, not a control; both modes: the two choices → the address for a delivery →
+Prodotti → Pagamento (the total still follows the cards while nothing is typed in it) → Note.
+
+**The cards** (`ProductCard.tsx`): two per row from 700px, one on a phone. A black numbered circle (22px, renumbered on delete),
+the name bold with «· 1,5 kg» (or the pack's size), a small red bin (44px target, «Togli <name>»), − / N / + (44px, + filled blue, −
+off at 1; N can also be typed), the price of one small and grey («24,00 € l’una», «12,00 € al kg» for an old kilo line) above the
+bold line total, and the line's note. A removed card hands the focus to the card now in its place, or to «Aggiungi un prodotto».
+
+**The product window** (`ProductPicker.tsx`, pure half `productPicker.ts`): a modal, one product per opening, «x di 3» and a back
+arrow from step 2. 1 «Scegli il prodotto»: the favourites as tiles (3 a row on the tablet, 2 on a phone) with their price, then
+«Cerca tra tutti i prodotti» (every word typed, over the whole list) and «Aggiungi “…” (fuori listino)» for a name typed freely —
+the old form's free text. With no favourite the search opens at once. 2 «Scegli il peso»: the item's weights, each with price per
+kg × weight to the cent (`weightPrice`, half a cent up as `lineAmount`), and «Altro peso…» (a box read by step 1's `parseWeight`:
+«1,5», «800 g», «3 kg»; refused with step 1's own message). 3 «Modifiche», layout D: «Nella ricetta» tiles with a round − (red tint,
+struck through: «senza X») and + (blue tint: «+ X»), exclusive, pressed again to clear; a divider; «Da aggiungere» (the venue's
+extras) with only a + ; the grey line under them says the note or «Nessuna modifica». «Aggiungi» closes it and adds ONE card, qty
+1, the weight, the price, the note pre-filled and still editable. Escape and «Annulla» add nothing.
+
+**The data.** A booking line may carry `weightKg` (> 0, ≤ 50 = `MAX_WEIGHT_KG`, the price list's own bound): the weight of ONE
+piece; `unit` stays 'pcs', `qty` is the pieces, `unitPrice` the price of one such piece, frozen like every price. Read as none when
+wrong (`weightStorable`), never written when wrong, checked by `firstProblem`. A saved weighed line stays frozen while its name, unit
+and weight are unchanged. Old lines have no key and open and save exactly as stored (spec). The weight is said everywhere a line's
+quantity is (`lineQtyText`: «3 pz (1,5 kg)»), so the booking page, both slips, the receipt text and the reminder never lose it.
+A new booking starts with no card (the window adds them); Save with none says «Add at least one product» on «Aggiungi un prodotto».
+
+**The rules.** Only the comment of `match /bookings/{id}` changes (the line shape now names `weightKg`). ⚠️ Rules cannot look inside
+the `lines` list, so a wrong `weightKg` is NOT refused by the server — the app's model is the only check, as for every other key of a
+line. The rules suite pins that weighed lines are accepted and, honestly, that a 0 / negative / too big / text `weightKg` is not
+judged there. No deploy is needed for this step (a comment); deploying it is harmless.
+
+**Choices made for the owner, to hear about:**
+- A kilo product with NO weights set still gets step 2 (only «Altro peso…»): otherwise the counter could not say how much.
+- A name typed freely also gets step 2, with «Senza peso (a pezzi)» first: the old form let free text be booked in kilos.
+- «Nella ricetta» shows the product's `removable` only. When it was never chosen (null) the group is hidden: the form does not read
+  the recipes (an employee at the counter may not be allowed to), so no recipe fallback.
+- The note box is 44px tall, not the mockup's 40px: the app's touch-target floor.
+- N on the stepper can be typed as well as stepped (30 panettoni are not 30 taps).
+- An old line of kilos (before weights) keeps its card in kilos, «kg» after its number and «… al kg» as its price.
+
+**Tests**: `productPicker.spec.ts` (favourites, search, free name, which steps, −/+ exclusive, extras, the note, «3 pz (1,5 kg)»),
+`BookingsSection.form.spec.tsx` (the order, the big labels, the full-width layout, «✓ Ritiro», the window's three steps, «Altro
+peso», a free name with and without weight, Escape, no product, the stepper, renumbering, Italian), `bookingModel.spec.ts` (the
+weighed line: picked, priced, written, read back frozen, old lines unchanged, wrong weights), the editor specs moved to the window
+(`BookingsSection.spec.tsx`, `.settings.spec.tsx`, test helper `testing/bookingForm.ts`), the scroll spec, and the rules suite
+(1637 checks). Driven in Chromium on the emulator, IT (miano@club.test) and EN (manager@club.test) at 1024, 360 and 296: the form,
+each window step and the cards, axe-core, sideways scroll, targets, clipped text, focus kept in the window — 186/186. With ANY modal
+open axe flags the shell's scrolling `main` (`scrollable-region-focusable`); the app's existing «Scartare le modifiche?» dialog does
+the same, so it is app-wide and not this step's. Not done: the real SM-T550 tablet.

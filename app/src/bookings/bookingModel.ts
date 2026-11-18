@@ -10,7 +10,7 @@
 
 import { typedDecimal } from '@mise/shared/currency';
 import { addDays, parseISODate, toISODate } from '@mise/shared/day';
-import { bookingUnitOf, itemNamed, lineAmount } from '@mise/shared/price-list';
+import { MAX_WEIGHT_KG, bookingUnitOf, itemNamed, lineAmount } from '@mise/shared/price-list';
 import type { PackUnit, PriceItem } from '@mise/shared/price-list';
 import type { Slot } from './bookingSettings';
 
@@ -52,6 +52,10 @@ export type BookingLine = {
   // slips say «3 confezioni (250 g)», never «3 pz». null for anything else. The quantity is then a number of packs.
   readonly packSize: number | null;
   readonly packUnit: PackUnit | null;
+  // The weight of ONE piece, in kilos (bookings rebuild step 2, 19 Nov 2026): «Scacciata broccoli · 1,5 kg» × 3. The line is then
+  // counted in pieces (`unit` 'pcs', `qty` the number of pieces) and `unitPrice` is the price of one piece of that weight (the list's
+  // price per kilo × the weight, to the cent). null for every other line, and for every line saved before it.
+  readonly weightKg: number | null;
   readonly name: string;
   readonly qty: number;
   readonly unit: BookingUnit;
@@ -91,6 +95,8 @@ export type StoredLine = {
   // Only on a line of packs.
   packSize?: number;
   packUnit?: PackUnit;
+  // Only on a line of pieces of a chosen weight.
+  weightKg?: number;
 };
 
 export type BookingData = Omit<Booking, 'id' | 'lines'> & {
@@ -119,6 +125,10 @@ function readPack(line: Record<string, unknown>): { packSize: number | null; pac
   return size === null || unit === null ? { packSize: null, packUnit: null } : { packSize: size, packUnit: unit };
 }
 
+// A piece's weight the line may carry: kilos in (0, MAX_WEIGHT_KG], the price list's own bound for its weights.
+export const weightStorable = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isFinite(value) && value > 0 && value <= MAX_WEIGHT_KG;
+
 function readLine(raw: unknown): BookingLine | null {
   if (!raw || typeof raw !== 'object') return null;
   const line = raw as Record<string, unknown>;
@@ -130,6 +140,8 @@ function readLine(raw: unknown): BookingLine | null {
     productId: typeof line.productId === 'string' && line.productId !== '' ? line.productId : null,
     unitPrice: moneyOrNull(line.unitPrice) || null,
     ...readPack(line),
+    // A wrong weight is read as none: the line is still drawn, as the pieces it was.
+    weightKg: weightStorable(line.weightKg) ? line.weightKg : null,
     name,
     qty,
     unit: line.unit === 'kg' ? 'kg' : 'pcs',
@@ -172,9 +184,11 @@ export type DraftLine = {
   readonly name: string;
   readonly qty: string;
   readonly unit: BookingUnit;
+  // The weight of one piece, in kilos, chosen in the product window (null: none). Never typed on the card.
+  readonly weightKg: number | null;
   readonly note: string;
-  // What the stored line was, for a line opened from a saved booking: its price stays FROZEN while its name and unit do not
-  // change. null for a new line.
+  // What the stored line was, for a line opened from a saved booking: its price stays FROZEN while its name, unit and weight do
+  // not change. null for a new line.
   readonly kept: KeptLine | null;
 };
 
@@ -186,6 +200,7 @@ export type KeptLine = {
   readonly unitPrice: number | null;
   readonly packSize: number | null;
   readonly packUnit: PackUnit | null;
+  readonly weightKg: number | null;
 };
 
 export type Draft = {
@@ -205,15 +220,29 @@ export type Draft = {
 };
 
 export function blankLine(key: number): DraftLine {
-  return { key, name: '', qty: '', unit: 'pcs', note: '', kept: null };
+  return { key, name: '', qty: '', unit: 'pcs', weightKg: null, note: '', kept: null };
+}
+
+// A product chosen in the product window (bookings rebuild step 2): ONE card, one piece (one pack, one kilo for an old kilo line),
+// the chosen weight, and the window's changes as its note, still editable.
+export function pickedLine(
+  key: number,
+  { name, item, weightKg, note }: { name: string; item: PriceItem | null; weightKg: number | null; note: string },
+): DraftLine {
+  // A piece of a chosen weight is counted in pieces; otherwise the list's unit (a kilo product with no weight: in kilos).
+  const unit: BookingUnit = weightKg !== null || item === null ? 'pcs' : bookingUnitOf(item.per);
+  return {
+    key, name: name.trim().slice(0, LIMITS.lineName), qty: '1', unit, weightKg, note: note.trim().slice(0, LIMITS.lineNote), kept: null,
+  };
 }
 
 // A new booking's working copy. `date` is the day the list is showing (the form pre-fills it); `mode` the venue's only mode,
-// when it takes one only (bookings settings): there is then nothing to choose.
-export function emptyDraft(nextKey: () => number, { date = '', mode = null }: { date?: string; mode?: BookingMode | null } = {}): Draft {
+// when it takes one only (bookings settings): there is then nothing to choose. No product yet: the window adds them one by one.
+// (`_nextKey` is kept for the callers: the working copy starts with no row to key.)
+export function emptyDraft(_nextKey: () => number, { date = '', mode = null }: { date?: string; mode?: BookingMode | null } = {}): Draft {
   return {
     customerName: '', phone: '', mode, address: '', date, time: '', slotEnd: '',
-    lines: [blankLine(nextKey())], deposit: '', total: '', notes: '',
+    lines: [], deposit: '', total: '', notes: '',
   };
 }
 
@@ -233,15 +262,13 @@ export function draftFrom(booking: Booking, nextKey: () => number, decimal: stri
     date: booking.date,
     time: booking.time,
     slotEnd: booking.slotEnd ?? '',
-    lines: booking.lines.length > 0
-      ? booking.lines.map(line => ({
-        key: nextKey(), name: line.name, qty: boxNumber(line.qty, decimal), unit: line.unit, note: line.note,
-        kept: {
-          name: line.name, unit: line.unit, recipeId: line.recipeId, productId: line.productId, unitPrice: line.unitPrice,
-          packSize: line.packSize, packUnit: line.packUnit,
-        },
-      }))
-      : [blankLine(nextKey())],
+    lines: booking.lines.map(line => ({
+      key: nextKey(), name: line.name, qty: boxNumber(line.qty, decimal), unit: line.unit, weightKg: line.weightKg, note: line.note,
+      kept: {
+        name: line.name, unit: line.unit, recipeId: line.recipeId, productId: line.productId, unitPrice: line.unitPrice,
+        packSize: line.packSize, packUnit: line.packUnit, weightKg: line.weightKg,
+      },
+    })),
     deposit: boxNumber(booking.deposit, decimal),
     // ⚠️ A TOTAL THAT IS THE SUM OF THE LINES' OWN PRICES WAS NOT TYPED: the box stays empty, so the total keeps following the
     // lines when they are edited. A total that differs (a discount typed at the counter) is shown, and stays the typed one.
@@ -252,7 +279,7 @@ export function draftFrom(booking: Booking, nextKey: () => number, decimal: stri
 
 // Whether two working copies say the same thing (keys aside): what «unsaved changes» compares.
 export function sameDraft(a: Draft, b: Draft): boolean {
-  const lineText = (d: Draft) => JSON.stringify(d.lines.map(({ name, qty, unit, note }) => [name, qty, unit, note]));
+  const lineText = (d: Draft) => JSON.stringify(d.lines.map(({ name, qty, unit, weightKg, note }) => [name, qty, unit, weightKg, note]));
   return a.customerName === b.customerName && a.phone === b.phone && a.mode === b.mode && a.address === b.address
     && a.date === b.date && a.time === b.time && a.slotEnd === b.slotEnd && a.deposit === b.deposit && a.total === b.total && a.notes === b.notes
     && lineText(a) === lineText(b);
@@ -381,6 +408,8 @@ export function firstProblem(
     const qty = parseQty(line.qty, price.kind === 'listed' ? price.unit : line.unit);
     if (qty === null) return { field: { line: index, part: 'qty' }, reason: 'required' };
     if (qty === 'invalid') return { field: { line: index, part: 'qty' }, reason: 'qty' };
+    // A weight is only ever chosen in the window, from parseWeight's bounds; a restored copy is checked all the same.
+    if (line.weightKg !== null && !weightStorable(line.weightKg)) return { field: { line: index, part: 'qty' }, reason: 'qty' };
   }
   if (parseMoney(draft.deposit) === 'invalid') return { field: 'deposit', reason: 'money' };
   if (parseMoney(draft.total) === 'invalid') return { field: 'total', reason: 'money' };
@@ -411,24 +440,30 @@ export const inSlotOf = (booking: { readonly date: string; readonly time: string
 // What a line is priced at, and why:
 //   frozen  — a saved line whose name and unit have not changed: its own stored price, whatever the list says now;
 //   listed  — a name on the published price list: that price, and the list's unit (a piece and a pack in pieces, a kilo in kg);
+//             a kilo product chosen with a weight is counted in pieces, each priced at the price per kilo × the weight;
 //   none    — free text, or a saved line that had no price and is left as it was: no price, so it adds nothing to the total.
 export type LinePrice =
   | { readonly kind: 'frozen'; readonly productId: string | null; readonly unitPrice: number; readonly packSize: number | null; readonly packUnit: PackUnit | null }
-  | { readonly kind: 'listed'; readonly item: PriceItem; readonly unit: BookingUnit }
+  | { readonly kind: 'listed'; readonly item: PriceItem; readonly unit: BookingUnit; readonly unitPrice: number }
   | { readonly kind: 'none' };
 
 export function linePrice(line: DraftLine, items: readonly PriceItem[]): LinePrice {
   const kept = line.kept;
   // ⚠️ A SAVED LINE LEFT AS IT WAS KEEPS EXACTLY WHAT IT HAD — its price, or no price at all: a free-text line saved before its
   // name was put on the list must not be priced (nor its unit changed) by a Save that touched something else.
-  if (kept !== null && fold(kept.name) === fold(line.name) && kept.unit === line.unit) {
+  if (kept !== null && fold(kept.name) === fold(line.name) && kept.unit === line.unit && kept.weightKg === line.weightKg) {
     return kept.unitPrice === null
       ? { kind: 'none' }
       : { kind: 'frozen', productId: kept.productId, unitPrice: kept.unitPrice, packSize: kept.packSize, packUnit: kept.packUnit };
   }
   const item = itemNamed(line.name, items);
-  return item === null ? { kind: 'none' } : { kind: 'listed', item, unit: bookingUnitOf(item.per) };
+  if (item === null) return { kind: 'none' };
+  if (line.weightKg !== null && item.per === 'kg') return { kind: 'listed', item, unit: 'pcs', unitPrice: weightPrice(item.price, line.weightKg) };
+  return { kind: 'listed', item, unit: bookingUnitOf(item.per), unitPrice: item.price };
 }
+
+// The price of one piece of a weight: the price per kilo × the kilos, to the cent (a half cent up, as lineAmount).
+export const weightPrice = (perKg: number, weightKg: number): number => lineAmount(weightKg, perKg);
 
 // What one pack of a line holds, when the line is a line of packs.
 export function linePack(price: LinePrice): { readonly packSize: number; readonly packUnit: PackUnit } | null {
@@ -438,7 +473,7 @@ export function linePack(price: LinePrice): { readonly packSize: number; readonl
 }
 
 const unitPriceOf = (price: LinePrice): number | null =>
-  price.kind === 'frozen' ? price.unitPrice : price.kind === 'listed' ? price.item.price : null;
+  price.kind === 'frozen' ? price.unitPrice : price.kind === 'listed' ? price.unitPrice : null;
 
 // What a line of the working copy costs, or null when it has no price or no readable quantity.
 export function draftLineAmount(line: DraftLine, items: readonly PriceItem[]): number | null {
@@ -516,6 +551,8 @@ export function toBookingData(
         out.packSize = pack.packSize;
         out.packUnit = pack.packUnit;
       }
+      // A piece's weight, only one the rules' bound and the list's accept.
+      if (weightStorable(line.weightKg)) out.weightKg = line.weightKg;
       return out;
     });
   const money = (text: string) => {

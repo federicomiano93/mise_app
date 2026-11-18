@@ -41,6 +41,18 @@
   }
 }
 
+/* The booking form (new or edit) takes the whole width on the split too (bookings rebuild step 2, the owner's design): the list is
+   hidden while it is open, and Back brings it back. Below 1000px it is one pane already. */
+@media (min-width: 1000px) {
+  .layout.fullForm {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .layout.fullForm .list {
+    display: none;
+  }
+}
+
 /* The right-hand pane before a booking is picked (the split only). */
 .pick {
   padding: var(--s6);

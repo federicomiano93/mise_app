@@ -67,4 +67,22 @@ describe('the scroll inside Bookings (the split, 1000px and wider)', () => {
     await screen.findByRole('region', { name: 'Booking No. 1' });
     expect(main.scrollTop).toBe(420);
   });
+
+  it('⚠️ the full-width form opens at the top, and closing it puts the list back where it was (hidden, it lost its place)', async () => {
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: query === '(min-width: 1000px)',
+      media: query,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    }));
+    const { user, router } = show();
+    await waitFor(() => { expect(rows()).toHaveLength(2); }, LOAD);
+    const main = scrolledTo(420);
+    await user.click(screen.getByRole('button', { name: 'New booking' }));
+    await screen.findByRole('region', { name: 'New booking' }, LOAD);
+    expect(main.scrollTop).toBe(0);
+    await user.click(screen.getByRole('button', { name: 'Back' }));
+    await waitFor(() => { expect(router.state.location.pathname).toBe('/bookings'); });
+    expect(main.scrollTop).toBe(420);
+  });
 });

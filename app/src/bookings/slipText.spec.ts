@@ -16,9 +16,9 @@ const booking = bookingFixture({
   id: 'A', number: 4, customerName: 'Anna Finta', phone: '+39 333 000 0000', mode: 'delivery', address: 'Via Finta 1, Roma',
   date: '2026-12-24', time: '09:30', total: 42.5, deposit: 10, notes: 'Suonare due volte',
   lines: [
-    { recipeId: null, productId: 'pF', unitPrice: 12, packSize: null, packUnit: null, name: 'Focaccia', qty: 1.5, unit: 'kg', note: 'affettata' },
-    { recipeId: null, productId: 'pG', unitPrice: 3.5, packSize: 250, packUnit: 'g', name: 'Grissini', qty: 3, unit: 'pcs', note: '' },
-    { recipeId: null, productId: null, unitPrice: null, packSize: null, packUnit: null, name: 'Torta su misura', qty: 1, unit: 'pcs', note: '' },
+    { recipeId: null, productId: 'pF', unitPrice: 12, packSize: null, packUnit: null, weightKg: null, name: 'Focaccia', qty: 1.5, unit: 'kg', note: 'affettata' },
+    { recipeId: null, productId: 'pG', unitPrice: 3.5, packSize: 250, packUnit: 'g', weightKg: null, name: 'Grissini', qty: 3, unit: 'pcs', note: '' },
+    { recipeId: null, productId: null, unitPrice: null, packSize: null, packUnit: null, weightKg: null, name: 'Torta su misura', qty: 1, unit: 'pcs', note: '' },
   ],
 });
 const common = { booking, words, locale: 'it-IT', units: slipUnitWords({ country: 'IT' }) };

@@ -5098,6 +5098,20 @@ async function bookings() {
   await expectDenied('a slot end that is not HH:MM', () => create('X', { ...booking, time: '09:00', slotEnd: '10' }, SAM));
   await expectDenied('a slot end that is a number', () => create('X', { ...booking, time: '09:00', slotEnd: 1000 }, SAM));
   await expectAllowed('the editor moves a slot booking to another slot', () => save('T', { ...booking, time: '10:00', slotEnd: '11:00' }, SAM));
+  // ── A piece of a chosen weight (bookings rebuild step 2, 19 Nov 2026): a line may carry weightKg ──
+  const weighed = { recipeId: null, productId: 'pS', unitPrice: 24, name: 'Scacciata broccoli', qty: 3, unit: 'pcs', weightKg: 1.5, note: 'senza cipolla' };
+  await expectAllowed('a line with the weight of one piece (weightKg)', () => create('W', { ...booking, lines: [weighed] }, SAM));
+  await expectAllowed('…beside lines without it', () => create('W2', { ...booking, lines: [...booking.lines, weighed] }, SAM));
+  await expectAllowed('…at the bound of the price list\'s weights (50 kg)', () => create('W3', { ...booking, lines: [{ ...weighed, weightKg: 50 }] }, SAM));
+  await expectAllowed('the editor adds a weighed line to a booking saved before the weights', () => save('U', { ...booking, lines: [...booking.lines, weighed] }, SAM));
+  await expectAllowed('…and a booking with no weighed line saves exactly as before', () => save('U', booking, SAM));
+  // ⚠️ The rules judge only the size of `lines` (they cannot look inside a list): a wrong weightKg is NOT refused here. The app
+  // never writes one (bookingModel.ts weightStorable, pinned by bookingModel.spec.ts). Pinned so a reader does not take these
+  // for refused: if a per-line check is ever added, turn them into expectDenied.
+  for (const [what, bad] of [['0', 0], ['negative', -1], ['over 50 kg', 50.5], ['text', '1.5']]) {
+    await expectAllowed(`a weightKg of ${what} is not judged by the rules (the app refuses it)`, () => create(`WX${what.length}`, { ...booking, lines: [{ ...weighed, weightKg: bad }] }, SAM));
+  }
+
   await expectAllowed('…and back to an exact time, slotEnd deleted (merge with deleteField)',
     () => commit('T', { ...booking, time: '10:15' }, asAccount(SAM), { server: ['updatedAt'], mask: [...Object.keys(booking), 'slotEnd'] }));
   await expectAllowed('a status change keeps the slot', () => status('T', 'ready', SAM));

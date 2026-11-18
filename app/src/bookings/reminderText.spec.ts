@@ -19,8 +19,8 @@ const words: ReminderWords = {
 };
 const units = slipUnitWords({ country: 'IT' });
 const lines: BookingLine[] = [
-  { recipeId: null, productId: 'pF', unitPrice: 12, packSize: null, packUnit: null, name: 'Focaccia', qty: 1.5, unit: 'kg', note: 'affettata' },
-  { recipeId: null, productId: 'pG', unitPrice: 3.5, packSize: 250, packUnit: 'g', name: 'Grissini', qty: 3, unit: 'pcs', note: '' },
+  { recipeId: null, productId: 'pF', unitPrice: 12, packSize: null, packUnit: null, weightKg: null, name: 'Focaccia', qty: 1.5, unit: 'kg', note: 'affettata' },
+  { recipeId: null, productId: 'pG', unitPrice: 3.5, packSize: 250, packUnit: 'g', weightKg: null, name: 'Grissini', qty: 3, unit: 'pcs', note: '' },
 ];
 
 describe('the customer\'s number for WhatsApp', () => {

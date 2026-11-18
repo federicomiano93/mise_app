@@ -20,7 +20,7 @@ const OK = '<response success="true" code="" status="2"></response>';
 function show(path: string) {
   const source = fakeBookingsSource([
     bookingFixture({ id: 'A2', date: TODAY, time: '09:00', customerName: 'Anna Finta', mode: 'delivery', address: 'Via Finta 1, Roma', number: 4,
-      lines: [{ recipeId: null, productId: 'pF', unitPrice: 12, packSize: null, packUnit: null, name: 'Focaccia', qty: 1.5, unit: 'kg', note: '' }],
+      lines: [{ recipeId: null, productId: 'pF', unitPrice: 12, packSize: null, packUnit: null, weightKg: null, name: 'Focaccia', qty: 1.5, unit: 'kg', note: '' }],
       total: 18, deposit: null, notes: '' }),
   ]);
   return renderApp(path, { session: { location: { country: 'IT' }, name: 'Panificio Prova' }, data: { bookings: () => source } });
