@@ -101,3 +101,43 @@ and dates in the British way; a new booking made while the bookings stream is br
 
 **Not driven yet**: the emulator at 1024 / 360 / 296 in Italian and English with axe-core, the counter tablet (Chrome 101), a real
 print on the Epson FP-81 II RT or any receipt printer, the scheduled function on a real project.
+
+## Step 2 as built (18 Nov 2026) — prices from Food cost through a published price list
+
+Branch `feature/mise2-bookings-2`, stacked on step 1. The owner's four answers (18 Nov 2026): he ticks which products go on the
+list; the total is computed and the counter may type over it; the product box suggests the price list first (the recipe book no
+longer); a booking already taken keeps its prices.
+
+**Food cost — «Listino prenotazioni» / «Bookings price list»** (`foodcost/PriceListScreen.tsx`, `/food-cost/price-list`, usage name
+`foodcost-price-list`): a full-width button under «New product» and Settings, for whoever runs the place only (an employee shown
+Food cost has no button and is sent to the list from the address). Back · title · «Publish». A sentence (the counter sees only the
+name and the selling price, VAT included, never costs or margins; nothing changes until you publish), «Never published…» or
+«Published on 18 November at 10:30 · 12 products», then one tickable row per product that has a selling price and a way of selling it,
+A→Z: «Focaccia — £12.00 per kg», «Panettone — £25.00 each», «Grissini — £3.50 per pack (250 g)». Ticks start from the published list
+(none before the first publish). A product whose name or price changed since publishing says «Changed since publishing (the counter
+still sees £22.00)». Products with no price are counted under the list; published products that lost their price are said above it.
+«Not published yet» under the title while the ticks differ; `markBusy()` and «Discard changes?» on every way out. «Publish» asks
+«Publish the price list?» («The counter will see N products at these prices. Bookings already taken keep their prices.») and writes
+at once (local-first; a refusal is said). Figures through `fcMoney`, as everywhere in Food cost.
+
+**Data**: `locations/{lid}/price-list/bookings` — `{ bakery, items: [{ productId, name, price (gross), per: 'piece'|'kg'|'pack',
+packSize?, packUnit? }] (≤300), publishedAt (server time) }`, written WHOLE at each publish by `cardAccess(foodcost) == 'manage'`,
+read by `usesBookings(lid)` or anyone Food cost lets in, never deleted (an empty list is a publish). The shape lives in
+`shared/src/price-list.ts` (new in Mise 2, not paired), read by both sections, so neither imports the other.
+
+**Bookings**: the editor watches the price list instead of the recipe book. The product box suggests its names (each with its price
+as the suggestion's label); a name on the list tags the line «From the price list · £12.00 per kg», sets and locks the unit (a
+kilo price in kg, a piece or a pack in pieces) and says «Comes to £18.00». A saved line left as it was (same name and unit) keeps
+the price it was saved with — «Price when booked · £10.00 each unit» — or keeps having none; changing its name or unit takes
+today's price. The «Total» box is optional: empty, it uses the list's sum («Leave empty to use the price list’s total: £18.00.»);
+typed, it wins («Typed by hand. The price list’s total would be £18.00.»). Unpriced (free-text) lines are said: «1 product has no
+price: it is not in the total.» «To pay» uses whichever total applies. A booking opened again whose stored total is its lines' own
+sum shows an empty box (it keeps following the lines); a typed total (a discount) is shown. Nothing published: «No price list
+published yet: type the product, and the total by hand.» Each line now stores `productId` and `unitPrice` (null without a price);
+step 1's `recipeId` stays on a line whose name does not change. The booking screen and the customer slip show what each priced line
+comes to; the lab slip shows no price.
+
+**Tests**: `shared/src/price-list.spec.ts`, `foodcost/FoodcostSection.priceList.spec.tsx`, the priced cases of
+`bookings/bookingModel.spec.ts` and `BookingsSection.spec.tsx`, the `priceList` scenario of the rules suite, `tests/rules-read-budget.test.mjs`.
+
+**Not driven yet**: the emulator at 1024 / 360 / 296 in Italian and English, the tablet, a printed customer slip with amounts.

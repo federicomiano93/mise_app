@@ -206,6 +206,13 @@ Scheduler's free tier is 3 jobs), a collection-group query on `bookings` by `dat
 firestore:indexes`); the override keeps the collection-scope ascending/descending indexes the app's own query uses. A customer's
 «delete my data» is the bin on the booking (any member). The emulator runs no schedule: nothing is deleted locally.
 
+**The bookings price list (Mise 2 only, bookings step 2, 18 Nov 2026):** `price-list/bookings` (the one id) — `{ bakery, items
+(list ≤300 of { productId, name ≤200, price (gross, VAT included, > 0), per 'piece'|'kg'|'pack', packSize?, packUnit? }), publishedAt
+(server time) }`, published WHOLE from Food cost («Listino prenotazioni») by `cardAccess(lid,'foodcost','foodcost') == 'manage'`;
+read by `usesBookings(lid)` or `cardAccess != 'none'` (up to 4 reads); never deleted. ⚠️ No cost, margin or VAT rate on it, ever:
+employees read it. The shape is `shared/src/price-list.ts`. A booking line now also carries `productId` and `unitPrice` (the price of
+one unit when saved, FROZEN; null without a price) — inside the `lines` list, which the rules do not look into.
+
 **Device count:** `devices/{20-char id}` — `{ bakery, uid, kind (phone|tablet|computer),
 appVersion (≤12 chars or null), installed, lastSeen (server time) }`, written by
 `js/device-ping.js`. The id is random, made on the device (localStorage `device-id`). Any member may
