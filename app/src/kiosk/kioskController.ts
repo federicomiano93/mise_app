@@ -24,7 +24,8 @@
 // of its own hold (after writing the night resume): the service worker's watcher, which asks isBusy() every 2 seconds while a worker
 // waits, then lets the worker in and reloads, exactly as on every other device. If anybody else is busy, nothing happens: the
 // watcher keeps waiting. If the reload has not come RELOAD_STALL_MS later (the shell's brake on repeated reloads), the hold is taken
-// again and the resume dropped: the update then waits for the waking tap.
+// again and the resume dropped (the daily reload has the same failsafe): the update then waits for the waking tap, which lets it in
+// under the cover with «One moment, reloading Mise…», as the «Never» reload does.
 //
 // ⚠️ AND NOT EITHER WHILE THE TABLET IS IN USE BUT UNTOUCHED (Mise 2 only; staff slice 5's choice). The current app never reloaded a
 // kiosk tablet by itself in 'active': its update needed a tap on «Update now», and a tap restarts Android's timeout. Mise 2 lets an
@@ -126,13 +127,15 @@ export function createKioskController(env: KioskEnv): KioskController {
   let idleTimer: unknown = null;
   let stallTimer: unknown = null;
   let focusBeforeRest: Element | null = null;
-  let firstApply = true;
+  // A release is waiting to take over (asked on every tick while the cover is up): the waking tap then lets it in under the cover.
+  let updateKnown = false;
   let snapshot: KioskSnapshot = Object.freeze({ state: 'active', reloading: false, paintedAt: 0 });
   const listeners = new Set<() => void>();
 
   // A reload this kiosk started itself (an update or the daily reload at the night step) comes back in the state it left, so the
   // screen is not lit up in the middle of the night. Read ONCE, as the page starts, and dropped from the storage at once.
-  const resumed = safeGet(env.session(), KIOSK_RESUME_KEY);
+  // Kept until the first tick or the first wake, so a start, stop and start again (React's StrictMode replays effects) still resumes.
+  let pendingResume = safeGet(env.session(), KIOSK_RESUME_KEY);
   safeRemove(env.session(), KIOSK_RESUME_KEY);
 
   function emit(): void {
@@ -204,6 +207,7 @@ export function createKioskController(env: KioskEnv): KioskController {
   function wake(viaKey: boolean): void {
     const back = focusBeforeRest;
     focusBeforeRest = null;
+    pendingResume = null;
     lastInputAt = env.now();
     // A reload already on its way must not bring the cover back to a person who is here.
     if (updating) safeRemove(env.session(), KIOSK_RESUME_KEY);
@@ -218,19 +222,25 @@ export function createKioskController(env: KioskEnv): KioskController {
 
   // The waking tap. With nightHours 0, after a long rest, this tap does the day's reload: the cover stays up with one line, and the
   // page comes back 'active' (no resume key). The tap is already disarmed; `updating` keeps every later tick from starting anything.
+  // ⚠️ Mise 2 only: a release that waited while the cover was up is let in by this tap the same way — the cover stays up saying
+  // «reloading», the hold is let go and the shell's own update path reloads. Without it the update would land a second after the
+  // cover lifted, under the baker's next tap (code review). The touch keeps Android's screen on through the reload.
   function wakeTap(viaKey: boolean): void {
-    if (!updating && started && state === 'rest') {
+    if (!updating && started && state !== 'active') {
+      const busy = othersBusy() || typingNow();
       const verdict = shouldReloadOnWake({
-        state, restSince, now: env.now(), busy: othersBusy() || typingNow(), signedIn: session.signedIn,
+        state, restSince, now: env.now(), busy, signedIn: session.signedIn,
         nightHours: settings.nightHours, lastReloadDay: safeGet(env.local(), KIOSK_LAST_RELOAD_KEY),
       });
-      if (verdict.reload) {
+      const viaUpdate = !verdict.reload && updateKnown && !busy && session.signedIn;
+      if (verdict.reload || viaUpdate) {
         updating = true;
         reloadingOnWake = true;
         safeSet(env.local(), KIOSK_LAST_RELOAD_KEY, verdict.day);
         safeRemove(env.session(), KIOSK_RESUME_KEY);
         emit();
-        env.reload();
+        if (viaUpdate) syncHold();
+        else env.reload();
         // Failsafe: a reload that stalls must not leave the cover on screen for good — if this page is still here, give the app back.
         if (stallTimer !== null) env.clearTimeout(stallTimer);
         stallTimer = env.setTimeout(() => {
@@ -246,13 +256,9 @@ export function createKioskController(env: KioskEnv): KioskController {
     wake(viaKey);
   }
 
-  // The update at the night step: write the night resume, then let go of the hold so the shell's own update path lets the waiting
-  // worker in (see the header). If the page is still here after RELOAD_STALL_MS, hold again and forget the resume.
-  function letUpdateIn(day: string): void {
-    updating = true;
-    safeSet(env.local(), KIOSK_LAST_RELOAD_KEY, day);
-    safeSet(env.session(), KIOSK_RESUME_KEY, 'night');
-    syncHold();
+  // A reload this kiosk asked for at the night step that has not come RELOAD_STALL_MS later: hold again and forget the resume, so
+  // the cover is never left without the busy marker (`updating` lets it go).
+  function armNightStall(): void {
     if (stallTimer !== null) env.clearTimeout(stallTimer);
     stallTimer = env.setTimeout(() => {
       stallTimer = null;
@@ -261,6 +267,16 @@ export function createKioskController(env: KioskEnv): KioskController {
       safeRemove(env.session(), KIOSK_RESUME_KEY);
       syncHold();
     }, RELOAD_STALL_MS);
+  }
+
+  // The update at the night step: write the night resume, then let go of the hold so the shell's own update path lets the waiting
+  // worker in (see the header). If the page is still here after RELOAD_STALL_MS, hold again and forget the resume.
+  function letUpdateIn(day: string): void {
+    updating = true;
+    safeSet(env.local(), KIOSK_LAST_RELOAD_KEY, day);
+    safeSet(env.session(), KIOSK_RESUME_KEY, 'night');
+    syncHold();
+    armNightStall();
   }
 
   async function maybeReload(prev: KioskState, busy: boolean, signedIn: boolean): Promise<void> {
@@ -291,11 +307,13 @@ export function createKioskController(env: KioskEnv): KioskController {
       safeSet(env.local(), KIOSK_LAST_RELOAD_KEY, daily.day);
       if (daily.resume !== null) safeSet(env.session(), KIOSK_RESUME_KEY, daily.resume);
       env.reload();
+      armNightStall();
     }
   }
 
   function tick(): void {
     if (!started) return;
+    pendingResume = null;
     const signedIn = session.signedIn;
     // The sign-in, no-access and picker screens: a cover left up would be a black screen in front of them. (While the session is
     // still 'loading' — a page resumed after a reload — the cover is kept.)
@@ -313,6 +331,9 @@ export function createKioskController(env: KioskEnv): KioskController {
     if (state !== 'active') {
       emit();
       void maybeReload(prev, busy || typingNow(), signedIn);
+      env.updateWaiting().then(waiting => { updateKnown = waiting; }, () => { updateKnown = false; });
+    } else {
+      updateKnown = false;
     }
   }
 
@@ -368,10 +389,8 @@ export function createKioskController(env: KioskEnv): KioskController {
   return {
     applySettings(next) {
       settings = next;
-      const resume = firstApply ? resumed : null;
-      firstApply = false;
-      if (next.enabled) start(resume);
-      else stop();
+      if (next.enabled) start(pendingResume);
+      else { pendingResume = null; stop(); }
     },
     setSession(next) {
       session = next;

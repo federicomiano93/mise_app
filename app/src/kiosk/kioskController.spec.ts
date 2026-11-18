@@ -239,11 +239,6 @@ describe('the busy marker under the cover', () => {
     expect(isBusy()).toBe(false);
   });
 
-  test('the shell’s waiting update and the copy check both wait while it is held (they ask isBusy)', async () => {
-    start(ON);
-    await vi.advanceTimersByTimeAsync(5 * MIN);
-    expect(isBusy()).toBe(true);
-  });
 });
 
 describe('#406: no reload under the rest screen', () => {
@@ -282,12 +277,17 @@ describe('#406: no reload under the rest screen', () => {
     expect(env.reload).not.toHaveBeenCalled();
   });
 
-  test('a field focused when it went to rest holds the night reload back (somebody was typing)', async () => {
+  test('a field focused when it went to rest holds the night reload back (somebody was typing), the cover holding the focus', async () => {
     const { env } = start(ON);
     const input = document.createElement('input');
-    document.body.append(input);
+    const cover = document.createElement('div');
+    cover.tabIndex = 0;
+    document.body.append(input, cover);
     input.focus();
-    await vi.advanceTimersByTimeAsync(5 * MIN + HOUR + MIN);
+    await vi.advanceTimersByTimeAsync(5 * MIN);
+    expect(state()).toBe('rest');
+    cover.focus();   // what RestScreen does as it appears
+    await vi.advanceTimersByTimeAsync(HOUR + MIN);
     expect(state()).toBe('night');
     expect(env.reload).not.toHaveBeenCalled();
   });
@@ -298,7 +298,7 @@ describe('#406: no reload under the rest screen', () => {
     expect(isBusy()).toBe(true);
     await vi.advanceTimersByTimeAsync(TICK_MS);
     expect(state()).toBe('night');
-    expect(env.updateWaiting).toHaveBeenCalledTimes(1);
+    expect(env.updateWaiting).toHaveBeenCalled();
     expect(isBusy(), 'the shell’s update path may go in now').toBe(false);
     expect(session.getItem(KIOSK_RESUME_KEY)).toBe('night');
     expect(local.getItem(KIOSK_LAST_RELOAD_KEY)).toBe('2026-10-05');
@@ -328,6 +328,34 @@ describe('#406: no reload under the rest screen', () => {
       expect(env.reload, 'never later in night').not.toHaveBeenCalled();
       expect(isBusy(), 'the cover still holds').toBe(true);
     } finally { release(); }
+  });
+
+  test('the daily reload that never comes: the hold is taken again, the resume forgotten', async () => {
+    const { env, session } = start(ON);
+    await vi.advanceTimersByTimeAsync(5 * MIN + HOUR);
+    expect(env.reload).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(RELOAD_STALL_MS);
+    expect(isBusy(), 'never a cover without the marker').toBe(true);
+    expect(session.getItem(KIOSK_RESUME_KEY)).toBeNull();
+    await vi.advanceTimersByTimeAsync(10 * HOUR);
+    expect(env.reload).toHaveBeenCalledTimes(1);
+  });
+
+  test('a release that arrived later in night is let in by the waking tap, under the cover saying «reloading»', async () => {
+    let waiting = false;
+    const { env, local } = start(ON, { updateWaiting: vi.fn(async () => waiting) });
+    local.setItem(KIOSK_LAST_RELOAD_KEY, '2026-10-05');   // today's reload already done
+    await vi.advanceTimersByTimeAsync(5 * MIN + HOUR + MIN);
+    expect(state()).toBe('night');
+    waiting = true;
+    await vi.advanceTimersByTimeAsync(TICK_MS);
+    expect(isBusy(), 'still nothing under the cover').toBe(true);
+    controller?.wakeTap(false);
+    expect(controller?.getSnapshot()).toMatchObject({ state: 'night', reloading: true });
+    expect(isBusy(), 'the shell’s update path may go in').toBe(false);
+    expect(env.reload, 'the shell reloads, not the kiosk').not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(RELOAD_STALL_MS);
+    expect(state(), 'no reload came: the app is given back').toBe('active');
   });
 
   test('woken while the update is on its way: the page comes back lit, not dark', async () => {
@@ -420,6 +448,17 @@ describe('a page reloaded by the kiosk itself', () => {
     expect(isBusy()).toBe(true);
     expect(world.lock.held).toBe(false);
     expect(sessionStorage.getItem(KIOSK_RESUME_KEY), 'read once').toBeNull();
+  });
+
+  test('a stop and start again before the first tick (React replays effects in development) still resumes', () => {
+    sessionStorage.setItem(KIOSK_RESUME_KEY, 'night');
+    const world = makeEnv({ session: () => sessionStorage });
+    controller = createKioskController(world.env);
+    controller.setSession({ status: 'loading', signedIn: false });
+    controller.applySettings(ON);
+    controller.stop();
+    controller.applySettings(ON);
+    expect(state()).toBe('night');
   });
 
   test('a session that turns out not to be a working one drops the cover', () => {

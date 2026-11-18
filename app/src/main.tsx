@@ -11,6 +11,7 @@ import { createRoot } from 'react-dom/client';
 import { RouterProvider } from 'react-router/dom';
 import { createDataServices, DataProvider } from './data/DataContext';
 import { AppBoundary } from './errors/AppBoundary';
+import { PartBoundary } from './errors/PartBoundary';
 import { onRouteError } from './errors/routeErrors';
 import { I18nProvider } from './i18n/I18nProvider';
 import { loadLanguage, pickLanguage } from './i18n/i18n';
@@ -99,8 +100,11 @@ void loadLanguage(wanted).then(({ lang, messages }) => {
                 <SessionGate>
                   <RouterProvider router={router} onError={onRouteError} />
                 </SessionGate>
-                {/* Kiosk mode (staff slice 5): beside the gate, so it sees every state of the session; nothing with the setting off. */}
-                <Kiosk />
+                {/* Kiosk mode (staff slice 5): beside the gate, so it sees every state of the session; nothing with the setting off.
+                    Its own boundary: a failure there must not take the whole app down. */}
+                <PartBoundary>
+                  <Kiosk />
+                </PartBoundary>
               </DataProvider>
             </JoinFlowProvider>
           </SessionProvider>

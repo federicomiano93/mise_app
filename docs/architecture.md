@@ -175,7 +175,8 @@ Aria does not support Preact. The numbers are below.
   screen is held on, so does 30 seconds without a touch), so neither the service worker's update nor the session's copy check reloads
   under it; at the rest→night tick, with a release waiting and nobody else busy, it lets go of its hold after writing the night resume
   (`kiosk-resume` in sessionStorage), and the shell's ONE update path (`shell/serviceWorker.ts`, which asks `isBusy()`) lets the worker
-  in; `session/busy.ts` gained `isBusyApartFrom()` for it. The order lines and the Home's Rest / Exit are slice 6.
+  in; a release that waited under the cover is let in the same way by the waking tap, the cover saying «reloading»; `session/busy.ts`
+  gained `isBusyApartFrom()` for it. `<Kiosk />` has its own `PartBoundary`. The order lines and the Home's Rest / Exit are slice 6.
 - `pastries/` — the first real section, and the pattern for the next: a source (`pastriesSource.ts`,
   the Firestore half, a port of `js/pastries/firebase-pastries.js`), a store (`pastriesStore.ts`,
   plain TypeScript with no React: the seven days, tonight's confirmations and the lock, the
