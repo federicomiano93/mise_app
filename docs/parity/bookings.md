@@ -137,6 +137,17 @@ published yet: type the product, and the total by hand.» Each line now stores `
 step 1's `recipeId` stays on a line whose name does not change. The booking screen and the customer slip show what each priced line
 comes to; the lab slip shows no price.
 
+**Review fixes (18 Nov 2026)**: the price-list screen opens only on the SERVER's answer («Waiting for the published list from the
+server — this needs a connection.»), so a phone offline with no copy is never offered an empty list to publish over the real one;
+«unsaved» (the busy marker, «Discard changes?») is only ticks the person changed, while «Not published yet» also counts a price
+changed in Food cost since; two ticked products of the same name cannot be published together (the counter could book only one;
+the reader also keeps only the first of two names). In the booking editor a listed product's quantity is checked in the list's unit
+(the one it is written in), a saved line's unit is locked while it keeps its price (the tag, «Price when booked · £10.00 each», says
+why), a total from the list over 100,000 is stopped at Save, nothing is said about the list while it is on its way, and a product box
+takes names up to 200 characters. A line comes to quantity × price with a half cent rounded up. The day's heading in the list starts
+with a capital (Intl writes «mercoledì»).
+**Open for the owner**: a pack on the list is booked as pieces («3 pz Grissini stirati»): the slips do not say the pack's size.
+
 **Tests**: `shared/src/price-list.spec.ts`, `foodcost/FoodcostSection.priceList.spec.tsx`, the priced cases of
 `bookings/bookingModel.spec.ts` and `BookingsSection.spec.tsx`, the `priceList` scenario of the rules suite, `tests/rules-read-budget.test.mjs`.
 

@@ -3365,7 +3365,8 @@ service cloud.firestore {
       // and no other is allowed (hasOnly). The collection is new: no older shape exists.
       //
       // ⚠️ `lines` IS A LIST AND RULES CANNOT LOOK INSIDE ONE: only its size is judged here
-      // (1–50). Each line ({recipeId|null, name ≤120, qty > 0 ≤ 100000, unit pcs|kg, note? ≤120})
+      // (1–50). Each line ({recipeId|null, productId|null, unitPrice|null (the price of one unit when
+      // saved, frozen), name ≤200, qty > 0 ≤ 100000, unit pcs|kg, note? ≤120})
       // is checked by the app before it writes (app/src/bookings/bookingModel.ts).
       //
       // `number` is the short number printed on both slips (1–9999), given once when the
