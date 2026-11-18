@@ -529,3 +529,8 @@ export { readPackIngredientsFromPhotos } from './pack-photo.js';
 
 // Whether a product uses an ingredient, for the owner of the kitchen, who may not read products.
 export { productsUsingIngredient } from './product-usage.js';
+
+// The nightly clean-up of records kept no longer (UK/EU GDPR, his decision of 18 Nov 2026).
+// ⚠️ It ships deleting NOTHING: every kind is off in functions/retention-model.js ENABLED, and the
+// function only logs what it would delete until he switches kinds on.
+export { retention } from './retention.js';
