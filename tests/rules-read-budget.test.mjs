@@ -303,3 +303,17 @@ test('the usage create/update rule costs exactly 1 read — member()\'s users ge
   assert.equal(costOf('member'), 1, 'member() must cost exactly one read for this to hold');
   assert.equal(costOf('member') + accessesIn(block).length, 1, 'the usage rule must cost exactly 1 document read');
 });
+
+test('the bookings price list costs at most 4 reads: usesBookings() 2 and cardAccess() 2, each asked once (bookings step 2)', () => {
+  const MATCH = 'match /price-list/{listId}';
+  const at = CODE.indexOf(MATCH);
+  assert.ok(at > 0, 'firestore.rules has no price-list block');
+  const block = CODE.slice(at, CODE.indexOf('allow delete', at));
+  const read = block.slice(block.indexOf('allow read'), block.indexOf('allow create'));
+  assert.equal((read.match(/\busesBookings\(/g) || []).length, 1);
+  assert.equal((read.match(/\bcardAccess\(/g) || []).length, 1);
+  assert.equal(accessesIn(block).length, 0, 'it reads through the helpers, never by itself');
+  const write = block.slice(block.indexOf('allow create'));
+  assert.equal((write.match(/\bcardAccess\(/g) || []).length, 1);
+  assert.doesNotMatch(write, /\bcanManage\(|\bmember\(/);
+});

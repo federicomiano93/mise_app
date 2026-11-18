@@ -5125,10 +5125,59 @@ async function bookings() {
   await seedDoc('locations/main', { name: 'The Italian Club Bakery' });
 }
 
+// ── The bookings price list (Mise 2, bookings step 2: published from Food cost, read by the counter) ──
+async function priceList() {
+  await wipe();
+  await seedAccess();
+  const P = 'locations/main/price-list';
+  const items = [{ productId: 'p1', name: 'Focaccia', price: 12, per: 'kg' }, { productId: 'p2', name: 'Grissini', price: 3.5, per: 'pack', packSize: 250, packUnit: 'g' }];
+  const list = { bakery: 'main', items };
+  const phoneClock = () => new Date(Date.now() - 3600000).toISOString();
+  const publish = (id, data, who, { server = ['publishedAt'], stamps = {} } = {}) => fetch(
+    `${FS.replace(/\/documents$/, '')}/documents:commit`, {
+      method: 'POST', headers: asAccount(who),
+      body: JSON.stringify({ writes: [{
+        update: {
+          name: `projects/${PROJECT}/databases/(default)/documents/${P}/${id}`,
+          fields: { ...toFields(data), ...Object.fromEntries(Object.entries(stamps).map(([k, v]) => [k, { timestampValue: v }])) },
+        },
+        ...(server.length ? { updateTransforms: server.map(f => ({ fieldPath: f, setToServerValue: 'REQUEST_TIME' })) } : {}),
+      }] }),
+    });
+  const readAs = (who, id = 'bookings') => () => fetch(`${FS}/${P}/${id}`, { headers: asAccount(who) });
+
+  await expectAllowed('the owner publishes the list', () => publish('bookings', list, ALICE));
+  await expectAllowed('…the manager publishes it again', () => publish('bookings', list, MAYA));
+  await expectAllowed('…the owner of the sales side too', () => publish('bookings', list, SALES));
+  await expectAllowed('an empty list (nothing for the counter) is a publish too', () => publish('bookings', { bakery: 'main', items: [] }, ALICE));
+  await expectAllowed('three hundred items', () => publish('bookings', { bakery: 'main', items: Array.from({ length: 300 }, () => items[0]) }, ALICE));
+  await expectDenied('an employee publishes nothing', () => publish('bookings', list, SAM));
+  await expectDenied('…nor the owner of the kitchen', () => publish('bookings', list, KITCHEN));
+  await expectDenied('…nor another venue', () => publish('bookings', list, BOB));
+  await expectDenied('three hundred and one items', () => publish('bookings', { bakery: 'main', items: Array.from({ length: 301 }, () => items[0]) }, ALICE));
+  await expectDenied('an unknown key (a cost)', () => publish('bookings', { ...list, foodCost: 3 }, ALICE));
+  await expectDenied('items that are not a list', () => publish('bookings', { bakery: 'main', items: 'Focaccia' }, ALICE));
+  await expectDenied('stamped for another venue', () => publish('bookings', { ...list, bakery: 'trattoria-x' }, ALICE));
+  await expectDenied('dated by the phone', () => publish('bookings', list, ALICE, { server: [], stamps: { publishedAt: phoneClock() } }));
+  await expectDenied('a document of another name', () => publish('other', list, ALICE));
+  await expectDenied('nobody deletes it', () => deleteWrite(`${P}/bookings`, asAccount(ALICE)));
+
+  await expectAllowed('an employee at the counter reads it', readAs(SAM));
+  await expectAllowed('the owner reads it', readAs(ALICE));
+  await expectAllowed('the owner of the sales side reads it', readAs(SALES));
+  await expectDenied('the owner of the kitchen reads it not', readAs(KITCHEN));
+  await expectDenied('another venue reads it not', readAs(BOB));
+  await expectDenied('signed out, nothing', () => fetch(`${FS}/${P}/bookings`, { headers: noAuth() }));
+  await seedDoc('locations/main', { name: 'The Italian Club Bakery', sections: { bookings: false } });
+  await expectDenied('bookings switched off: an employee reads it not', readAs(SAM));
+  await expectAllowed('…while the owner, who runs Food cost, still does', readAs(ALICE));
+  await seedDoc('locations/main', { name: 'The Italian Club Bakery' });
+}
+
 for (const scenario of [suppliers, ingredients, ingredientPrices, drafts, history, neighbours,
                         locationTree, isolation, configAndLogs, pastries, pastryLogs,
                         products, stocktake, staffCards, clientOrders, orderRequests, awayDays,
-                        pushNotifications, feedbackNotes, todos, bookings, deviceCount, errorReports, usageStats,
+                        pushNotifications, feedbackNotes, todos, bookings, priceList, deviceCount, errorReports, usageStats,
                         roles, partialOwners, onboardingCollections]) {
   await scenario();
 }
