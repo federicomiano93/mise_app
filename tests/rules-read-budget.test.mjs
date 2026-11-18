@@ -185,6 +185,8 @@ for (const [helper, inner, section] of [
   ['worksOnClients', 'worksOnClientsAs', true],
   ['managesClients', 'managesClientsAs', true],
   ['writesCalculatorConfig', 'writesCalculatorConfigAs', true],
+  // Mise 2's customer bookings (18 Nov 2026): canUseAs() plus the kitchen owner's refusal, on the value already read.
+  ['usesBookings', 'usesBookingsAs', false],
 ]) {
   test(`⚠️ ${helper}() costs 2 reads: users/{uid} once and locations/{lid} once`, () => {
     const outer = bodyOf(helper);

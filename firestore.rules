@@ -501,6 +501,26 @@ service cloud.firestore {
         && sectionOn(lid, 'foodcost') && sectionOn(lid, 'catalogue');
     }
 
+    // ── Customer bookings («Prenotazioni», Mise 2, 18 Nov 2026) ─────────────
+    // Every member value of the venue, employees included (the owner's plan: the counter
+    // takes them), where the venue has not switched the section `bookings` off — the same
+    // default as sectionOn(): a venue document that never heard of it has it ON. Hiding the
+    // section from employees («Sections for employees», staffHiddenCards.bookings) is a
+    // display switch, as for every everyday card, never this.
+    // ⚠️ THE OWNER OF THE KITCHEN IS REFUSED, not merely not shown: bookings are the sales
+    // side's card (ROLE_CARDS in js/home-cards.js deals them to 'owner-sales' alone), and a
+    // partial owner's side is decided here. Not in narrowedOut(), whose list is the current
+    // app's section names (tests/partial-owner-roles.test.mjs compares them).
+    // Two reads, like canUse(): users/{uid} once through roleIn(), locations/{lid} once.
+    function usesBookings(lid) {
+      return signedIn() && usesBookingsAs(roleIn(lid), lid);
+    }
+
+    function usesBookingsAs(value, lid) {
+      return canUseAs(value, lid, 'bookings')
+        && !(value is string && value == 'owner-kitchen');
+    }
+
     // Which locations an account may open. Readable only by that account, so
     // one person cannot enumerate another's access; writable by no client at all.
     match /users/{uid} {
@@ -3329,6 +3349,68 @@ service cloud.firestore {
 
         // A whiteboard: anybody may wipe a line. The app asks first (P20).
         allow delete: if member(lid);
+      }
+
+      // ── Customer bookings («Prenotazioni», Mise 2 only, 18 Nov 2026) ──────
+      //
+      // One document per booking, an automatic id. ⚠️ PERSONAL DATA (UK/EU GDPR): the
+      // customer's name, phone and, for a delivery, address. The owner's decision: kept until
+      // 30 days after the day of the booking, then deleted by the scheduled function
+      // `deleteOldBookings` (functions/booking-cleanup-model.js), which reads the collection
+      // group by `date`; a customer's «delete my data» is the bin on the booking (any member).
+      // No health or allergy field exists, and the notes say on screen not to write one.
+      //
+      // Written WHOLE by the editor (setDoc) and partly by a status change (updateDoc): the
+      // rules judge the MERGED document, so every key is required on every write (hasAll)
+      // and no other is allowed (hasOnly). The collection is new: no older shape exists.
+      //
+      // ⚠️ `lines` IS A LIST AND RULES CANNOT LOOK INSIDE ONE: only its size is judged here
+      // (1–50). Each line ({recipeId|null, name ≤120, qty > 0 ≤ 100000, unit pcs|kg, note? ≤120})
+      // is checked by the app before it writes (app/src/bookings/bookingModel.ts).
+      //
+      // `number` is the short number printed on both slips (1–9999), given once when the
+      // booking is made. `createdAt` is the server's time of the first write and never
+      // changes; `updatedAt` is the server's time of every write.
+      // Two reads: usesBookings() above.
+      match /bookings/{id} {
+        function bookingShapeOk() {
+          let d = request.resource.data;
+          let keys = ['bakery', 'customerName', 'phone', 'mode', 'address', 'date', 'time', 'lines',
+                      'deposit', 'total', 'notes', 'status', 'number', 'createdAt', 'updatedAt'];
+          return d.keys().hasOnly(keys) && d.keys().hasAll(keys)
+            && d.customerName is string && d.customerName.size() > 0 && d.customerName.size() <= 80
+            && d.phone is string && d.phone.size() <= 30
+            && d.phone.matches('^[0-9 +]*[0-9][0-9 +]*$')
+            && d.mode in ['pickup', 'delivery']
+            && d.address is string && d.address.size() <= 200
+            && (d.mode == 'pickup' || d.address.size() > 0)
+            && d.date is string && d.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+            && d.time is string && d.time.matches('^([01][0-9]|2[0-3]):[0-5][0-9]$')
+            && d.lines is list && d.lines.size() >= 1 && d.lines.size() <= 50
+            && (d.deposit == null || (d.deposit is number && d.deposit >= 0 && d.deposit <= 100000))
+            && (d.total == null || (d.total is number && d.total >= 0 && d.total <= 100000))
+            && d.notes is string && d.notes.size() <= 500
+            && d.status in ['todo', 'ready', 'collected', 'cancelled']
+            && d.number is int && d.number >= 1 && d.number <= 9999
+            && d.updatedAt == request.time;
+        }
+
+        allow read: if usesBookings(lid);
+
+        allow create: if usesBookings(lid)
+          && stampedFor(lid)
+          && bookingShapeOk()
+          && request.resource.data.createdAt == request.time;
+
+        allow update: if usesBookings(lid)
+          && stampedFor(lid)
+          && bookingShapeOk()
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.number == resource.data.number;
+
+        // The bin on a booking, and the way a customer's «delete my data» is honoured. The
+        // app asks first (P20).
+        allow delete: if usesBookings(lid);
       }
     }
 

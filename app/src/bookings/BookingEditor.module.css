@@ -1,0 +1,324 @@
+/* A booking's editor: a card holding the form bar (Back · title · Save) and the form, in groups. On the split it is the
+   right-hand pane; below 1000px it replaces the list.
+   ⚠️ NOTHING ON THE CARD MAY CLIP (no `overflow`): the form bar sticks to the top of the shell's scrolling area. */
+
+.editor {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+.loading {
+  padding: var(--s6);
+  color: var(--ink-2);
+}
+
+/* Save: the big primary action. Two classes, so the order the stylesheets load in does not decide its height. */
+.editor .save {
+  min-height: var(--hit-lg);
+  padding: 0 var(--s4);
+  border-radius: var(--r-lg);
+  font-size: var(--fs-lg);
+}
+
+/* «Unsaved changes», under the title: always there (an empty live region), so the words are announced when they come. */
+.dirty {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: calc(var(--fs-sm) * 1.45);
+  color: var(--warn-ink);
+  font-size: var(--fs-sm);
+  font-weight: 550;
+}
+
+.dirty[data-dirty="true"]::before {
+  content: "";
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: var(--r-pill);
+  background: var(--warn);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s5);
+  padding: var(--s4);
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.legend {
+  margin-bottom: var(--s2);
+  padding: 0;
+  color: var(--ink-3);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+  min-width: 0;
+}
+
+.label {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.input {
+  width: 100%;
+  min-height: var(--hit);
+  padding: 0 var(--s3);
+  border: 1.5px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--fs-md);
+}
+
+.input::placeholder {
+  color: var(--ink-3);
+}
+
+.input:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.input[aria-invalid="true"] {
+  border-color: var(--danger);
+  background: var(--danger-tint);
+}
+
+.textarea {
+  min-height: calc(var(--hit) * 2);
+  padding: var(--s2) var(--s3);
+  resize: vertical;
+}
+
+.error {
+  color: var(--danger-ink);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.hint {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+/* The notes' warning: seen before typing, in the «to check» colour. */
+.warnHint {
+  padding: var(--s2) var(--s3);
+  border-radius: var(--r-md);
+  background: var(--warn-tint);
+  color: var(--warn-ink);
+  font-size: var(--fs-sm);
+  font-weight: 550;
+}
+
+/* Two boxes side by side when there is room (day and time, total and deposit), one under the other on a narrow phone. */
+.pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: var(--s3);
+}
+
+.modes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s2);
+}
+
+/* A radio drawn as a big choice: the whole label is the target. ⚠️ The input stays in the label, positioned, so React Aria's
+   habit of a hidden input at the page's origin is not ours (architecture, «Browser floor»). */
+.mode {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  min-height: var(--hit);
+  padding: 0 var(--s3);
+  border: 1.5px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.mode[data-checked="true"] {
+  border-color: var(--accent);
+  background: var(--accent-tint);
+  color: var(--accent-ink);
+}
+
+.mode:focus-within {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.radio {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.field[aria-invalid="true"] .mode {
+  border-color: var(--danger);
+}
+
+.lines {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lineItem {
+  min-width: 0;
+}
+
+.line {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  padding: var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--bg);
+}
+
+.lineHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+  min-height: var(--hit);
+}
+
+.lineTitle {
+  font-weight: 650;
+}
+
+.fromBook {
+  padding: 2px var(--s2);
+  border-radius: var(--r-pill);
+  background: var(--ok-tint);
+  color: var(--ok-ink);
+  font-size: var(--fs-xs);
+  font-weight: 650;
+}
+
+.removeLine {
+  display: grid;
+  place-items: center;
+  width: var(--hit);
+  height: var(--hit);
+  margin-left: auto;
+  border: 0;
+  border-radius: var(--r-md);
+  background: transparent;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+.removeLine > svg {
+  width: 20px;
+  height: 20px;
+}
+
+.removeLine[data-focus-visible] {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.qtyRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--s2);
+}
+
+.addLine {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s2);
+  min-height: var(--hit);
+}
+
+.addLine > svg {
+  flex: none;
+  width: 20px;
+  height: 20px;
+}
+
+.toPay {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s2);
+  min-height: calc(var(--fs-md) * 1.5);
+  font-size: var(--fs-md);
+}
+
+.toPay strong {
+  font-variant-numeric: tabular-nums;
+}
+
+/* The bin: small and low-key, at the foot, never beside Save. */
+.foot {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.delete {
+  display: grid;
+  place-items: center;
+  width: var(--hit);
+  height: var(--hit);
+  border: 0;
+  border-radius: var(--r-md);
+  background: transparent;
+  color: var(--danger-ink);
+  cursor: pointer;
+}
+
+.delete > svg {
+  width: 20px;
+  height: 20px;
+}
+
+.delete[data-focus-visible] {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (hover: hover) {
+  .delete[data-hovered] {
+    background: var(--danger-tint);
+  }
+
+  .removeLine[data-hovered] {
+    background: var(--sunken);
+  }
+}

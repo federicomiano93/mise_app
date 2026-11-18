@@ -186,6 +186,26 @@ once on production BEFORE Mise 2 goes live (until then nothing is deleted); the 
 TTL, so the app also hides a ticked item older than 30 days. An item never ticked has
 `expireAt: null` and is never deleted by itself. Docs: `docs/parity/home.md`.
 
+**Customer bookings («Prenotazioni», Mise 2 only, 18 Nov 2026):** `bookings/{autoId}` — `{ bakery, customerName (1–80),
+phone (≤30, digits/spaces/+ only, at least one digit), mode ('pickup'|'delivery'), address (≤200; '' for a pickup, required for a
+delivery), date (YYYY-MM-DD), time (HH:MM), lines (list 1–50 of { recipeId|null, name ≤120, qty > 0 ≤100000, unit 'pcs'|'kg',
+note? ≤120 } — ⚠️ the rules judge only the list's SIZE, the app checks each line, `app/src/bookings/bookingModel.ts`), deposit
+(number 0–100000 or null), total (same), notes (≤500), status ('todo'|'ready'|'collected'|'cancelled'), number (int 1–9999, the
+short number on both slips, given once at creation and never changed), createdAt (server time, once), updatedAt (server time,
+every write) }`. EVERY key on every write (hasAll + hasOnly): the editor writes the whole booking (setDoc; an existing one with
+merge, so `createdAt` stays), a status button an updateDoc of `status` + `updatedAt`, and the rules judge the merged document.
+Read, written and deleted by `usesBookings(lid)` = every member value but `'owner-kitchen'` where `sections.bookings` is not an
+explicit `false` (2 reads, like `canUse`). Hiding the section from employees (`staffHiddenCards.bookings`, the card `bookings`
+of `home-cards`, Mise 2 only: the current app's switch screen never lists it because `bookings` is not one of its sections) is
+display only. The list reads ONE bounded query: `date >= today − 30`, `orderBy(date desc)`, `limit 500`; the Home's card the
+same from today. ⚠️ **PERSONAL DATA (UK/EU GDPR)**: name, phone, address. No allergy or health field (the notes say on screen not
+to write one). **Deleted 30 days after the booking's day** by the scheduled function `deleteOldBookings` (`functions/index.js`
++ `functions/booking-cleanup-model.js`, once a day at 03:17 Europe/Rome, the project's FIRST scheduled function — Cloud
+Scheduler's free tier is 3 jobs), a collection-group query on `bookings` by `date < cutoff` in pages of 400, logging counts only.
+⚠️ It needs the collection-group field override on `bookings.date` in `firestore.indexes.json` (`firebase deploy --only
+firestore:indexes`); the override keeps the collection-scope ascending/descending indexes the app's own query uses. A customer's
+«delete my data» is the bin on the booking (any member). The emulator runs no schedule: nothing is deleted locally.
+
 **Device count:** `devices/{20-char id}` — `{ bakery, uid, kind (phone|tablet|computer),
 appVersion (≤12 chars or null), installed, lastSeen (server time) }`, written by
 `js/device-ping.js`. The id is random, made on the device (localStorage `device-id`). Any member may
