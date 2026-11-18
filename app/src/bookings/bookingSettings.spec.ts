@@ -185,8 +185,19 @@ describe('settingsChanges: a Save writes only what it changed', () => {
 
   it('slots set, slots cleared', () => {
     const slots = { ...DEFAULT_SETTINGS, slotFirst: '08:00', slotLast: '12:00', slotLimit: 4 };
-    expect(settingsChanges(DEFAULT_SETTINGS, slots)).toEqual({ fields: { slotFirst: '08:00', slotLast: '12:00', slotLimit: 4 }, cleared: [] });
+    expect(settingsChanges(DEFAULT_SETTINGS, slots)).toEqual({ fields: { slotFirst: '08:00', slotLast: '12:00', slotMinutes: 60, slotLimit: 4 }, cleared: [] });
     expect(settingsChanges(slots, DEFAULT_SETTINGS)).toEqual({ fields: {}, cleared: ['slotFirst', 'slotLast', 'slotLimit'] });
+  });
+
+  it('⚠️ a change to one part of the slots writes all three, so the rules check a pair this screen chose', () => {
+    const slots = { ...DEFAULT_SETTINGS, slotFirst: '08:00', slotLast: '12:00', slotMinutes: 60 as const };
+    expect(settingsChanges(slots, { ...slots, slotLast: '13:00' })).toEqual({
+      fields: { slotFirst: '08:00', slotLast: '13:00', slotMinutes: 60 }, cleared: [],
+    });
+    expect(settingsChanges(slots, { ...slots, slotMinutes: 120 })).toEqual({
+      fields: { slotFirst: '08:00', slotLast: '12:00', slotMinutes: 120 }, cleared: [],
+    });
+    expect(settingsChanges(slots, { ...slots, modes: 'pickup' })).toEqual({ fields: { modes: 'pickup' }, cleared: [] });
   });
 
   it('the phone off takes the reminder with it', () => {

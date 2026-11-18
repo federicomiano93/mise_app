@@ -130,6 +130,13 @@ export function settingsChanges(previous: BookingSettings, next: BookingSettings
   for (const [key, value] of Object.entries(after.fields)) {
     if (JSON.stringify(before.fields[key]) !== JSON.stringify(value)) fields[key] = value;
   }
+  // ⚠️ The slots go as a whole: the rules compare slotFirst with slotLast, so a Save that changed one sends the others too (the pair
+  // this screen chose), never one half checked against whatever another device saved meanwhile.
+  if ('slotFirst' in fields || 'slotLast' in fields || 'slotMinutes' in fields) {
+    for (const key of ['slotFirst', 'slotLast', 'slotMinutes']) {
+      if (key in after.fields) fields[key] = after.fields[key];
+    }
+  }
   return { fields, cleared: after.cleared.filter(key => !before.cleared.includes(key)) };
 }
 
