@@ -311,7 +311,8 @@ describe('while the invitation is made', () => {
     source.createInvitation = vi.fn(() => new Promise<Invitation>(done => { answer = done; }));
     const { user } = await open({}, source);
     await user.click(radio('Employee'));
-    const status = within(screen.getByRole('heading', { level: 2, name: 'Who can get in' }).closest('section') as HTMLElement).getByRole('status');
+    // The invite card's own status line: the first of the screen (the people list under it has its own).
+    const status = within(screen.getByRole('heading', { level: 2, name: 'Who can get in' }).closest('section') as HTMLElement).getAllByRole('status')[0] as HTMLElement;
     expect(status).toHaveTextContent('');
 
     await user.click(main().getByRole('button', { name: 'Read out a code' }));

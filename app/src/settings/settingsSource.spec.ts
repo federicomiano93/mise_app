@@ -1,6 +1,7 @@
 import { describe, expect, test, vi } from 'vitest';
 import type { FirestoreKit } from '../session/firebaseBackend';
-import { FUNCTION_TIMEOUT_MS, createFirestoreSettingsSource, invitationOf } from './settingsSource';
+import { FUNCTION_TIMEOUT_MS, createFirestoreSettingsSource, invitationOf, memberOf } from './settingsSource';
+import type { Member } from './settingsSource';
 
 // The ONLY code in Mise 2 that writes the holiday and calls the language and sections functions, against a recording fake of the
 // Firestore SDK. firestore.rules (`match /away/{uid}`) accept exactly { bakery, uid, until, updatedAt }, so a slip here — a stray key,
@@ -224,5 +225,132 @@ describe('an invitation, as functions/onboarding.js createJoinCode makes it', ()
     expect(invitationOf({ ...LINK, role: 'manager', title: 'head-chef' })?.title).toBe('head-chef');
     expect(invitationOf({ ...LINK, role: 'manager', title: 'boss' })?.title).toBe('manager');
     expect(invitationOf({ ...LINK, role: 'owner', title: 'head-chef' })?.title).toBeNull();
+  });
+});
+
+// The people list (staff slice 4): the roster is READ live, and changed ONLY through the two live functions — never a write from here to
+// `members` or `users/{uid}`, which firestore.rules refuse to every client.
+describe('the people list, as firestore.rules and functions/onboarding.js expect it', () => {
+  type Snapshot = { docs: { id: string; data: () => unknown }[] };
+  function rosterKit() {
+    let deliver: ((snap: Snapshot) => void) | null = null;
+    let fail: ((err: unknown) => void) | null = null;
+    const unsubscribe = vi.fn();
+    const fs = {
+      collection: vi.fn((_db: unknown, path: string): Ref => ({ kind: 'collection', path })),
+      onSnapshot: vi.fn((_ref: Ref, next: (snap: Snapshot) => void, error: (err: unknown) => void) => {
+        deliver = next;
+        fail = error;
+        return unsubscribe;
+      }),
+      setDoc: vi.fn(),
+      updateDoc: vi.fn(),
+      deleteDoc: vi.fn(),
+    };
+    const callFunction = vi.fn(async (..._args: unknown[]) => ({}));
+    const source = createFirestoreSettingsSource(() => Promise.resolve({ fs, db: {} } as unknown as FirestoreKit), callFunction, 'panificio-miano');
+    return {
+      fs, callFunction, source, unsubscribe,
+      deliver: (snap: Snapshot) => deliver?.(snap),
+      fail: (err: unknown) => fail?.(err),
+    };
+  }
+  const flush = () => new Promise(resolve => { setTimeout(resolve, 0); });
+
+  test('listens to this venue’s roster and hands over every row, read defensively', async () => {
+    const k = rosterKit();
+    const heard: (readonly Member[])[] = [];
+    k.source.watchMembers(list => { heard.push(list); }, () => undefined);
+    await flush();
+    expect(k.fs.collection).toHaveBeenCalledWith({}, 'locations/panificio-miano/members');
+    k.deliver({ docs: [
+      { id: 'anna1', data: () => ({ email: ' anna@club.test ', firstName: '  Anna ', lastName: 'Rossi', role: 'manager', title: 'head-chef' }) },
+      { id: 'old', data: () => ({ email: 42, role: 'boss' }) },
+    ] });
+    expect(heard).toEqual([[
+      { uid: 'anna1', email: 'anna@club.test', firstName: 'Anna', lastName: 'Rossi', role: 'manager', title: 'head-chef' },
+      { uid: 'old', email: '', firstName: '', lastName: '', role: null, title: null },
+    ]]);
+  });
+
+  test('stops listening when told, and nothing arrives afterwards', async () => {
+    const k = rosterKit();
+    const heard = vi.fn();
+    const errors = vi.fn();
+    const stop = k.source.watchMembers(heard, errors);
+    await flush();
+    stop();
+    expect(k.unsubscribe).toHaveBeenCalledTimes(1);
+    k.deliver({ docs: [] });
+    k.fail(new Error('Firestore shutting down'));
+    expect(heard).not.toHaveBeenCalled();
+    expect(errors).not.toHaveBeenCalled();
+  });
+
+  test('stopped before Firestore has loaded, it never starts a listener', async () => {
+    const k = rosterKit();
+    const stop = k.source.watchMembers(() => undefined, () => undefined);
+    stop();
+    await flush();
+    expect(k.fs.onSnapshot).not.toHaveBeenCalled();
+  });
+
+  test('a stream that fails is handed to the caller, and nothing is written to the console', async () => {
+    const k = rosterKit();
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const errors = vi.fn();
+    k.source.watchMembers(() => undefined, errors);
+    await flush();
+    const err = Object.assign(new Error('denied'), { code: 'permission-denied' });
+    k.fail(err);
+    expect(errors).toHaveBeenCalledWith(err);
+    expect(log).not.toHaveBeenCalled();
+    expect(warn).not.toHaveBeenCalled();
+    log.mockRestore();
+    warn.mockRestore();
+  });
+
+  test('a change of role is the function setMemberRole with the venue, the person, the role and the title, with the long timeout', async () => {
+    const k = rosterKit();
+    await k.source.setMemberRole('anna1', 'manager', 'head-chef');
+    await k.source.setMemberRole('bob1', 'owner', 'head-chef');
+    expect(k.callFunction.mock.calls).toEqual([
+      ['setMemberRole', { locationId: 'panificio-miano', uid: 'anna1', role: 'manager', title: 'head-chef' }, FUNCTION_TIMEOUT_MS],
+      // A title rides only on the manager level.
+      ['setMemberRole', { locationId: 'panificio-miano', uid: 'bob1', role: 'owner', title: null }, FUNCTION_TIMEOUT_MS],
+    ]);
+  });
+
+  test('a removal is setMemberRole with the role null', async () => {
+    const k = rosterKit();
+    await k.source.setMemberRole('anna1', null, null);
+    expect(k.callFunction).toHaveBeenCalledWith('setMemberRole', { locationId: 'panificio-miano', uid: 'anna1', role: null, title: null }, FUNCTION_TIMEOUT_MS);
+  });
+
+  test('a new name is the function setMemberName, the names tidied as the server tidies them', async () => {
+    const k = rosterKit();
+    await k.source.setMemberName('anna1', '  Anna  Maria ', ' Rossi ');
+    expect(k.callFunction).toHaveBeenCalledWith('setMemberName',
+      { locationId: 'panificio-miano', uid: 'anna1', firstName: 'Anna Maria', lastName: 'Rossi' }, FUNCTION_TIMEOUT_MS);
+  });
+
+  test('a refusal reaches the caller untouched, and nothing is ever written to Firestore from here', async () => {
+    const k = rosterKit();
+    const refusal = Object.assign(new Error('This is the only owner.'), { code: 'functions/failed-precondition' });
+    k.callFunction.mockRejectedValueOnce(refusal);
+    await expect(k.source.setMemberRole('u1', 'staff', null)).rejects.toBe(refusal);
+    k.callFunction.mockRejectedValueOnce(refusal);
+    await expect(k.source.setMemberName('u1', 'A', 'B')).rejects.toBe(refusal);
+    expect(k.fs.setDoc).not.toHaveBeenCalled();
+    expect(k.fs.updateDoc).not.toHaveBeenCalled();
+    expect(k.fs.deleteDoc).not.toHaveBeenCalled();
+  });
+
+  test('a roster row with a role this app does not know is read with no role and no title', () => {
+    expect(memberOf('x', { role: 'admin', title: 'head-chef' })).toMatchObject({ role: null, title: null });
+    expect(memberOf('x', { role: 'manager' })).toMatchObject({ role: 'manager', title: 'manager' });
+    expect(memberOf('x', { role: 'owner', title: 'head-chef' })).toMatchObject({ role: 'owner', title: null });
+    expect(memberOf('x', null)).toEqual({ uid: 'x', email: '', firstName: '', lastName: '', role: null, title: null });
   });
 });
