@@ -3171,6 +3171,23 @@ export const en = {
   'labels.product': 'Product label',
   'labels.product.sub': 'Ingredients and allergens, for what you sell.',
   'labels.haccp.sub': 'Date, use-by date and lot, for what the lab prepares and keeps.',
+  // «This device» and the kiosk's rest screen (staff slice 5, docs/parity/staff-plan.md). The current app's words, key for key
+  // (js/i18n.js `kiosk.settings.*`, `kiosk.rest.*`); `settings.device` is its `settings.home.device`.
+  'settings.device': 'This device',
+  'kiosk.settings.title': 'Lab tablet',
+  'kiosk.settings.sub': 'Always open on this device; it dims when nobody uses it.',
+  'kiosk.settings.dimAfter': 'Dim after',
+  'kiosk.settings.minutes': '{n} min',
+  'kiosk.settings.offAfter': 'Screen off after',
+  'kiosk.settings.offAfter.sub': 'In the morning, wake it with the power button.',
+  'kiosk.settings.never': 'Never',
+  'kiosk.settings.hours': { one: '{n} h', other: '{n} h' },
+  'kiosk.settings.note': 'To keep the tablet on Mise, install it on the home screen, set Android’s screen timeout to 1–2 minutes and use Android’s “Screen pinning”.',
+  'kiosk.settings.notSaved': 'This setting could not be saved on this device.',
+  'kiosk.rest.tap': 'Tap to continue',
+  'kiosk.rest.offline': 'No connection',
+  'kiosk.rest.reloading': 'One moment, reloading Mise…',
+  'kiosk.rest.workDay': 'Work day: {date}',
 } as const satisfies Record<string, Message>;
 
 export type MessageKey = keyof typeof en;

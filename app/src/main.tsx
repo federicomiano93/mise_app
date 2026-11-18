@@ -21,6 +21,7 @@ import { createSession } from './session/session';
 import { SessionGate } from './session/SessionGate';
 import { SessionProvider } from './session/SessionContext';
 import { JoinFlowProvider } from './session/JoinFlowContext';
+import { Kiosk } from './kiosk/Kiosk';
 import { browserServiceWorkerEnv, watchServiceWorker } from './shell/serviceWorker';
 import { installViewportHeight } from './shell/viewportHeight';
 import { createTelemetrySinks } from './telemetry/sinks';
@@ -98,6 +99,8 @@ void loadLanguage(wanted).then(({ lang, messages }) => {
                 <SessionGate>
                   <RouterProvider router={router} onError={onRouteError} />
                 </SessionGate>
+                {/* Kiosk mode (staff slice 5): beside the gate, so it sees every state of the session; nothing with the setting off. */}
+                <Kiosk />
               </DataProvider>
             </JoinFlowProvider>
           </SessionProvider>
