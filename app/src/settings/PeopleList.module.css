@@ -1,0 +1,137 @@
+/* The people list of «Who can get in»: a heading, then one row per person — name, role and email on the left, the row's buttons on the
+   right (under them on a narrow phone); your own row has none. */
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  padding-top: var(--s4);
+  border-top: 1px solid var(--line);
+}
+
+.heading {
+  margin: 0;
+  font-size: var(--fs-lg);
+  font-weight: 600;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  list-style: none;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2) var(--s3);
+  padding: var(--s3) var(--s4);
+}
+
+.row + .row {
+  border-top: 1px solid var(--line);
+}
+
+.who {
+  display: flex;
+  flex: 1 1 12rem;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.role {
+  font-size: var(--fs-sm);
+}
+
+/* ink-2 is above 4.5:1 on the surface. A long address breaks anywhere rather than pushing a phone's screen sideways. */
+.email {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  overflow-wrap: anywhere;
+}
+
+/* Side by side while they fit, wrapping under the name on a narrow phone. */
+.actions {
+  display: flex;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+  max-width: 100%;
+}
+
+.action {
+  flex: 1 1 auto;
+  padding: 0 var(--s4);
+}
+
+/* Remove: a bare 48px icon, quiet until it is pressed (TodoForm's delete). */
+.remove {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: var(--hit);
+  height: var(--hit);
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-md);
+  background: none;
+  color: var(--ink-2);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.remove[data-hovered],
+.remove[data-pressed] {
+  background: var(--danger-tint);
+  color: var(--danger-ink);
+}
+
+.icon {
+  flex: none;
+  width: 20px;
+  height: 20px;
+}
+
+.empty {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.error {
+  margin: 0;
+  color: var(--danger-ink);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.status {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+/* A sentence that is empty until it speaks stays on the page (so a screen reader announces it) but takes no room. Not `display: none`. */
+.error:empty,
+.status:empty {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  clip-path: inset(50%);
+}
