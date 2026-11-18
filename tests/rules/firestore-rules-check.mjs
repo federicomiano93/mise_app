@@ -5015,10 +5015,120 @@ async function partialOwners() {
   await expectDenied('an account with no document reads no log', readAs(NOBODY, `${L}/logs/L1`));
 }
 
+// ── Customer bookings (Mise 2, app/src/bookings/bookingsSource.ts) ─────────────
+// Every member value but the kitchen's owner; every key on every write; the server's clock
+// on createdAt (once) and updatedAt (every write); the section `bookings` switchable off.
+// Fake customers only (P13): no real name or phone anywhere in a fixture.
+async function bookings() {
+  await wipe();
+  await seedAccess();
+  const B = 'locations/main/bookings';
+  const booking = {
+    bakery: 'main', customerName: 'Mario Prova', phone: '+39 333 000 0000', mode: 'pickup', address: '',
+    date: '2026-12-24', time: '09:30',
+    lines: [{ recipeId: null, name: 'Panettone', qty: 2, unit: 'pcs' }, { recipeId: 'R1', name: 'Focaccia', qty: 1.5, unit: 'kg', note: 'sliced' }],
+    deposit: 10, total: 42.5, notes: '', status: 'todo', number: 7,
+  };
+  const phoneClock = () => new Date(Date.now() - 3600000).toISOString();
+  const commit = (id, data, headers, { server = [], stamps = {}, mask = null, exists } = {}) => fetch(
+    `${FS.replace(/\/documents$/, '')}/documents:commit`, {
+      method: 'POST', headers,
+      body: JSON.stringify({ writes: [{
+        update: {
+          name: `projects/${PROJECT}/databases/(default)/documents/${B}/${id}`,
+          fields: { ...toFields(data), ...Object.fromEntries(Object.entries(stamps).map(([k, v]) => [k, { timestampValue: v }])) },
+        },
+        ...(mask ? { updateMask: { fieldPaths: mask } } : {}),
+        ...(exists === undefined ? {} : { currentDocument: { exists } }),
+        ...(server.length ? { updateTransforms: server.map(f => ({ fieldPath: f, setToServerValue: 'REQUEST_TIME' })) } : {}),
+      }] }),
+    });
+  // The editor's save of a new booking: setDoc with both stamps from the server.
+  const create = (id, data, who, opts = {}) => commit(id, data, asAccount(who), { server: ['createdAt', 'updatedAt'], exists: false, ...opts });
+  // The editor's save of an existing booking: setDoc with merge of every key but createdAt (the app's own write).
+  const save = (id, data, who, opts = {}) => commit(id, data, asAccount(who), { server: ['updatedAt'], mask: Object.keys(data), ...opts });
+  // A status button: updateDoc of the status and the stamp.
+  const status = (id, value, who) => commit(id, { bakery: 'main', status: value }, asAccount(who), { server: ['updatedAt'], mask: ['bakery', 'status', 'updatedAt'] });
+
+  // ── Making one ──
+  await expectAllowed('an employee takes a booking', () => create('A', booking, SAM));
+  await expectAllowed('…so does the manager', () => create('B', booking, MAYA));
+  await expectAllowed('…the owner', () => create('C', booking, ALICE));
+  await expectAllowed('…and the owner of the sales side', () => create('S', booking, SALES));
+  await expectDenied('the owner of the kitchen does not (bookings are the sales side\'s)', () => create('K', booking, KITCHEN));
+  await expectAllowed('a delivery with an address', () => create('D', { ...booking, mode: 'delivery', address: 'Via Finta 1, Roma' }, SAM));
+  await expectAllowed('no deposit and no total yet', () => create('E', { ...booking, deposit: null, total: null }, SAM));
+  await expectAllowed('fifty lines', () => create('F', { ...booking, lines: Array.from({ length: 50 }, () => booking.lines[0]) }, SAM));
+  await expectAllowed('the longest name, phone, address and notes', () => create('G', {
+    ...booking, customerName: 'x'.repeat(80), phone: '1'.repeat(30), mode: 'delivery', address: 'a'.repeat(200), notes: 'n'.repeat(500),
+  }, SAM));
+  await expectAllowed('a booking in the past (kept until the cleanup)', () => create('H', { ...booking, date: '2026-01-02' }, SAM));
+  await expectDenied('stamped for another venue', () => create('X', { ...booking, bakery: 'trattoria-x' }, SAM));
+  await expectDenied('an unknown key (an allergy field)', () => create('X', { ...booking, allergies: 'nuts' }, SAM));
+  const { notes: _n, ...noNotes } = booking;
+  await expectDenied('a key missing', () => create('X', noNotes, SAM));
+  await expectDenied('an empty name', () => create('X', { ...booking, customerName: '' }, SAM));
+  await expectDenied('a name of 81 characters', () => create('X', { ...booking, customerName: 'x'.repeat(81) }, SAM));
+  await expectDenied('a phone of 31 characters', () => create('X', { ...booking, phone: '1'.repeat(31) }, SAM));
+  await expectDenied('a phone with letters', () => create('X', { ...booking, phone: '333-CALL-ME' }, SAM));
+  await expectDenied('a phone with no digit', () => create('X', { ...booking, phone: '+ ' }, SAM));
+  await expectDenied('a mode that is neither pickup nor delivery', () => create('X', { ...booking, mode: 'post' }, SAM));
+  await expectDenied('a delivery with no address', () => create('X', { ...booking, mode: 'delivery', address: '' }, SAM));
+  await expectDenied('an address of 201 characters', () => create('X', { ...booking, mode: 'delivery', address: 'a'.repeat(201) }, SAM));
+  await expectDenied('a date that is not YYYY-MM-DD', () => create('X', { ...booking, date: '24/12/2026' }, SAM));
+  await expectDenied('a time that is not HH:MM', () => create('X', { ...booking, time: '9.30' }, SAM));
+  await expectDenied('a time past 23:59', () => create('X', { ...booking, time: '24:00' }, SAM));
+  await expectDenied('no line at all', () => create('X', { ...booking, lines: [] }, SAM));
+  await expectDenied('fifty-one lines', () => create('X', { ...booking, lines: Array.from({ length: 51 }, () => booking.lines[0]) }, SAM));
+  await expectDenied('a negative deposit', () => create('X', { ...booking, deposit: -1 }, SAM));
+  await expectDenied('a total as text', () => create('X', { ...booking, total: '42' }, SAM));
+  await expectDenied('notes of 501 characters', () => create('X', { ...booking, notes: 'n'.repeat(501) }, SAM));
+  await expectDenied('a status that is not one of the four', () => create('X', { ...booking, status: 'paid' }, SAM));
+  await expectDenied('a number of 0', () => create('X', { ...booking, number: 0 }, SAM));
+  await expectDenied('a number with decimals', () => create('X', { ...booking, number: 1.5 }, SAM));
+  await expectDenied('dated by the phone, not the server', () => create('X', booking, SAM, { server: ['updatedAt'], stamps: { createdAt: phoneClock() } }));
+
+  // ── Changing one ──
+  await expectAllowed('an employee marks it ready', () => status('A', 'ready', SAM));
+  await expectAllowed('…collected', () => status('A', 'collected', SAM));
+  await expectAllowed('…or cancelled', () => status('B', 'cancelled', SAM));
+  await expectDenied('a status that is not one of the four, on an update', () => status('A', 'lost', SAM));
+  await expectAllowed('the editor saves every key again', () => save('C', { ...booking, customerName: 'Maria Prova', time: '10:00' }, SAM));
+  await expectDenied('an edit that rewrites when it was made', () => commit('C', { bakery: 'main' }, asAccount(SAM), { server: ['createdAt', 'updatedAt'], mask: ['bakery', 'createdAt', 'updatedAt'] }));
+  await expectDenied('an edit that changes the short number', () => save('C', { ...booking, number: 8 }, SAM));
+  await expectDenied('an edit that adds a key', () => save('C', { ...booking, email: 'x@y.test' }, SAM));
+  await expectDenied('an edit dated by the phone', () => commit('C', { bakery: 'main', status: 'ready' }, asAccount(SAM), { stamps: { updatedAt: phoneClock() }, mask: ['bakery', 'status', 'updatedAt'] }));
+  await expectDenied('an edit that moves it to another venue', () => status('C', 'ready', BOB));
+
+  // ── Reading and deleting ──
+  await expectAllowed('an employee reads a booking', () => fetch(`${FS}/${B}/C`, { headers: asAccount(SAM) }));
+  await expectAllowed('…and lists them', () => fetch(`${FS}/${B}`, { headers: asAccount(SAM) }));
+  await expectDenied('the owner of the kitchen reads none', () => fetch(`${FS}/${B}/C`, { headers: asAccount(KITCHEN) }));
+  await expectAllowed('an employee deletes a booking (a customer asked)', () => deleteWrite(`${B}/E`, asAccount(SAM)));
+
+  // ── Nobody outside the venue ──
+  await expectDenied('another venue\'s employee reads nothing here', () => fetch(`${FS}/${B}/C`, { headers: asAccount(BOB) }));
+  await expectDenied('…lists nothing', () => fetch(`${FS}/${B}`, { headers: asAccount(BOB) }));
+  await expectDenied('…makes nothing', () => create('Y', booking, BOB));
+  await expectDenied('…deletes nothing', () => deleteWrite(`${B}/C`, asAccount(BOB)));
+  await expectDenied('an account with no access makes nothing', () => create('Y', booking, NOBODY));
+  await expectDenied('signed out, nothing', () => fetch(`${FS}/${B}/C`, { headers: noAuth() }));
+
+  // ── The section switched off for the venue ──
+  await seedDoc('locations/main', { name: 'The Italian Club Bakery', sections: { bookings: false } });
+  await expectDenied('a venue with bookings off: no read', () => fetch(`${FS}/${B}/C`, { headers: asAccount(ALICE) }));
+  await expectDenied('…no new booking', () => create('Z', booking, ALICE));
+  await expectDenied('…no delete', () => deleteWrite(`${B}/C`, asAccount(ALICE)));
+  // ⚠️ Hiding the section from employees is a display switch, never access: the counter keeps working.
+  await seedDoc('locations/main', { name: 'The Italian Club Bakery', staffHiddenCards: { bookings: true } });
+  await expectAllowed('hidden from employees, an employee still reads (display switch only)', () => fetch(`${FS}/${B}/C`, { headers: asAccount(SAM) }));
+  await seedDoc('locations/main', { name: 'The Italian Club Bakery' });
+}
+
 for (const scenario of [suppliers, ingredients, ingredientPrices, drafts, history, neighbours,
                         locationTree, isolation, configAndLogs, pastries, pastryLogs,
                         products, stocktake, staffCards, clientOrders, orderRequests, awayDays,
-                        pushNotifications, feedbackNotes, todos, deviceCount, errorReports, usageStats,
+                        pushNotifications, feedbackNotes, todos, bookings, deviceCount, errorReports, usageStats,
                         roles, partialOwners, onboardingCollections]) {
   await scenario();
 }
