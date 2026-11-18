@@ -50,6 +50,11 @@ describe('main.tsx', () => {
     expect(main.indexOf('createRoot(container)')).toBeGreaterThan(installed);
   });
 
+  // The nightly clean-up deletes a push token silent for 60 days (functions/retention.js); this keeps a phone in use younger.
+  test('keeps this phone\'s push registration fresh, through the one backend\'s Firestore', () => {
+    expect(main).toContain('startPushTokenRefresh(store, browserRefreshDeps(tokenWriter(backend.firestore)));');
+  });
+
   // A second backend would be a second Firebase connection and a second offline cache.
   test('creates one backend and gives it to both the session and the telemetry writes', () => {
     expect(main.match(/createFirebaseBackend\(/g)).toHaveLength(1);

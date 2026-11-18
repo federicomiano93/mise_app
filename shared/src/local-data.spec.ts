@@ -43,6 +43,14 @@ describe.each([
     expect(m.keysToClear(['orders-draft-refused'])).toStrictEqual(['orders-draft-refused']);
   });
 
+  // Mise 2's weekly refresh of this phone's alert registration (app/src/orders/pushTokenRefresh.ts) stamps ONE registration:
+  // this token, this person, this venue. The token and its owner (the current app's keys) are wiped by either app's sign-out
+  // or venue switch, so the stamp must go with them, or it would hold back the refresh of the next registration.
+  test('the push token, its owner and the refresh stamp are cleared together', () => {
+    const keys = ['push-token', 'push-token-uid', 'push-token-refreshed'];
+    expect(m.keysToClear(keys)).toStrictEqual(keys);
+  });
+
   test('Firebase’s own session storage is NEVER cleared', () => {
     const keys = [
       'firebase:authUser:AIzaSyXXXX:[DEFAULT]',
