@@ -187,8 +187,9 @@ TTL, so the app also hides a ticked item older than 30 days. An item never ticke
 `expireAt: null` and is never deleted by itself. Docs: `docs/parity/home.md`.
 
 **Customer bookings («Prenotazioni», Mise 2 only, 18 Nov 2026):** `bookings/{autoId}` — `{ bakery, customerName (1–80),
-phone (≤30, digits/spaces/+ only, at least one digit), mode ('pickup'|'delivery'), address (≤200; '' for a pickup, required for a
-delivery), date (YYYY-MM-DD), time (HH:MM), lines (list 1–50 of { recipeId|null, name ≤120, qty > 0 ≤100000, unit 'pcs'|'kg',
+phone (≤30, digits/spaces/+ only, at least one digit — or '' where the venue does not ask for it, bookings settings), mode ('pickup'|'delivery'), address (≤200; '' for a pickup, required for a
+delivery), date (YYYY-MM-DD), time (HH:MM; a slot's start), slotEnd? (HH:MM, after time — the ONE optional key, only on a booking taken in a
+time slot; the editor's merge deletes it when the booking moves to an exact time), lines (list 1–50 of { recipeId|null, name ≤120, qty > 0 ≤100000, unit 'pcs'|'kg',
 note? ≤120 } — ⚠️ the rules judge only the list's SIZE, the app checks each line, `app/src/bookings/bookingModel.ts`), deposit
 (number 0–100000 or null), total (same), notes (≤500), status ('todo'|'ready'|'collected'|'cancelled'), number (int 1–9999, the
 short number on both slips, given once at creation and never changed), createdAt (server time, once), updatedAt (server time,
@@ -207,12 +208,21 @@ firestore:indexes`); the override keeps the collection-scope ascending/descendin
 «delete my data» is the bin on the booking (any member). The emulator runs no schedule: nothing is deleted locally.
 
 **The bookings price list (Mise 2 only, bookings step 2, 18 Nov 2026):** `price-list/bookings` (the one id) — `{ bakery, items
-(list ≤300 of { productId, name ≤200, price (gross, VAT included, > 0), per 'piece'|'kg'|'pack', packSize?, packUnit? }), publishedAt
-(server time) }`, published WHOLE from Food cost («Listino prenotazioni») by `cardAccess(lid,'foodcost','foodcost') == 'manage'`;
+(list ≤300 of { productId, name ≤200, price (gross, VAT included, > 0), per 'piece'|'kg'|'pack', packSize?, packUnit?, and since the
+bookings settings favourite? (true), perPiece? (true), weights? (kg, ≤12, each in (0, 50]), removable? (ingredient names ≤30; absent =
+never chosen, [] = none) }), publishedAt (server time) }`, published WHOLE — since the bookings settings from Bookings' «Impostazioni»
+on Save (Food cost's «Listino prenotazioni» is gone) — by `cardAccess(lid,'foodcost','foodcost') == 'manage'`;
 read by `usesBookings(lid)` or `cardAccess != 'none'` (up to 4 reads); never deleted. ⚠️ No cost, margin or VAT rate on it, ever:
 employees read it. The shape is `shared/src/price-list.ts`. A booking line now also carries `productId` and `unitPrice` (the price of
 one unit when saved, FROZEN; null without a price), and for a product sold by the pack `packSize` + `packUnit` (what one pack holds;
 the quantity is then a number of packs) — inside the `lines` list, which the rules do not look into.
+
+**The bookings settings (Mise 2 only, 18 Nov 2026):** `config/bookings` — `{ bakery, askPhone?, whatsappReminder?, modes? ('both' |
+'pickup' | 'delivery'), slotFirst? / slotLast? (HH:MM, first < last), slotMinutes? (30 | 60 | 120), slotLimit? (int 1–999), perPieceSlips?,
+extras? (list ≤ 40) }`, its OWN block beside `config/labels` (and the general `config/{doc}` read excludes it, so the Calculator's readers
+do not see it). Read by `usesBookings(lid)`, written by `managesBookings(lid)` (= usesBookings + runsThePlace: owner, manager, sales
+owner; 2 reads), never deleted. EVERY field optional, a missing one = today's behaviour (`app/src/bookings/bookingSettings.ts`); written
+with merge, a cleared slot pair or limit as `deleteField()`. Once production carries a key, it stays listed.
 
 **Device count:** `devices/{20-char id}` — `{ bakery, uid, kind (phone|tablet|computer),
 appVersion (≤12 chars or null), installed, lastSeen (server time) }`, written by

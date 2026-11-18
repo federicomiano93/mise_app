@@ -275,3 +275,55 @@ the venue's country — a venue whose screens are in another language than its c
 Web in the browser), a number from abroad typed without «+» (it gets the venue's code, wrongly), a landline (WhatsApp says the
 number is not on WhatsApp). Not recorded: whether a reminder was sent (it would need a new field in the booking and a rules change).
 
+
+## The rebuild, step 1 as built (18 Nov 2026) — the bookings settings
+
+Branch `feature/mise2-bookings-settings` (cut from step 4), a PR into `main`. The owner redesigned the section on his tablet for his
+real use (24 December, many bookings, fixed time slots, pickup only, no phone): four steps, each its own PR. Step 1 is the settings,
+the data, the rules and the form obeying the settings; the form's new layout (step 2), the list, calendar, booking page and Home
+(step 3) and the per-piece slips (step 4) come later.
+
+**The settings document** `locations/{lid}/config/bookings` (`bookings/bookingSettings.ts`): `askPhone`, `whatsappReminder`,
+`modes` ('both' | 'pickup' | 'delivery'), `slotFirst` / `slotLast` ('HH:MM'), `slotMinutes` (30/60/120), `slotLimit` (1–999,
+absent = no limit), `perPieceSlips`, `extras` (≤ 40 words of ≤ 40). Every field optional; a missing or wrong one is today's form
+(phone asked, reminder on, both modes, the exact time, per-piece slips on, no extras), so the other venues see no change. Read by
+everybody who takes bookings; written by whoever manages them (owner, manager, the sales side's owner — the rules'
+`managesBookings`). Written with merge; cleared slots and limit are deleted fields. With the phone off, the reminder is stored off.
+
+**The screen** «Impostazioni prenotazioni» (`/bookings/settings`, `bookings/BookingSettingsScreen.tsx`), behind «Impostazioni»
+under «Stampante scontrini» at the foot of the list, for whoever manages bookings only (anybody else typing the address is sent to
+the list). The owner's layout: groups CLIENTE, RITIRO E CONSEGNA, FASCE ORARIE, PRODOTTI, separated by a thin line, titles in the
+small uppercase legend style; names 17px semibold; every control at the same right edge, selects and inputs 160px; each
+explanation behind a round «?» that opens a tinted box under the row. It opens only on the SERVER's answer (settings, products,
+published list), works on a copy, asks before leaving with changes, and one Save (after a question) writes the settings and —
+when the products changed — publishes the list.
+
+**The products** moved here from Food cost («Listino prenotazioni» is gone from Food cost: screen, button and address). One card
+per Food cost product with a selling price (ticked = blue border, tinted), its price line, a star (favourite), «Chiedi per pezzo»
+(hidden while «Biglietti per pezzo» is off), and for a ticked product «✎ Pesi: …» (kilo products only; a dialog of chips, «es. 3
+kg o 800 g», a bare number up to 50 is kilos and above it grams) and «✎ Si può togliere: …» (a dialog of ticks, PRE-FILLED from the
+ingredient rows of the product's recipes — its recipe lines and the recipe it was made from — until the owner chooses; a product
+with no recipe gets an empty list and a field to add by hand). The products without a selling price are named under the cards,
+one line each. A published product whose name or price changed in Food cost is said («salva per aggiornare il banco»). Whoever
+manages bookings but cannot manage Food cost (a venue with Food cost off) sees the published list read only, with the line «I
+prodotti li cambia solo chi gestisce il Food cost.». The items gain `favourite`, `perPiece`, `weights` (kg), `removable`
+(`shared/src/price-list.ts`; each read on its own, a wrong one as if unset).
+
+**The form obeys** (`bookings/BookingEditor.tsx`): no phone box where the phone is not asked (and the booking page shows neither
+the phone nor the reminder); one mode only → no choice, «✓ Ritiro» / «✓ Consegna» under the day and time (a delivery always needs
+the address; an old booking in the other mode keeps the choice); slots → «Fascia oraria», «Scegli la fascia» then «09:00–10:00 ·
+ancora 3», «… · piena» disabled, no «ancora» without a limit; saving writes `time` = start, `slotEnd` = end. The places are the
+limit less the day's bookings in that slot (an old exact-time booking counts in the slot it falls in), cancelled ones aside, the
+booking being edited counted once; a booking already in a slot keeps it even when the slot shows full. ⚠️ Counted on the device
+(the owner accepted it): two tablets taking the last place at the same moment can go one over. An old booking whose exact time is
+on no slot shows that time as its own choice («09:40 (come prenotato)»). «Nuova prenotazione» starts on the day the list shows
+(today or tomorrow; a past day or «Più avanti» give no day). The list and the booking page still show the slot's start time only
+(step 3 redraws them).
+
+**Choices made for the owner**, to hear about: the last slot is CUT SHORT when the hours do not divide (08:00–12:30 in hours ends
+with 12:00–12:30), never run past closing; the sales side's owner may change the settings too (bookings are their side, as
+`canManage` gives a partial owner their own side's settings); the weights and removable lines show only on ticked products.
+
+**Tests**: `bookingSettings.spec.ts`, `settingsProducts.spec.ts`, `bookingModel.spec.ts` (phone optional, slots, full slot,
+counted once, kept time), `BookingSettingsScreen.spec.tsx`, `BookingsSection.settings.spec.tsx`, `shared/src/price-list.spec.ts`,
+and the rules suite (`bookingSettings`, the bookings cases for phone '' and `slotEnd`).
