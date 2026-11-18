@@ -6,8 +6,11 @@ from Food cost through a published price list, 3 direct printing to a receipt pr
 
 ## Step 1 as built (18 Nov 2026)
 
-Branch `feature/mise2-bookings-1`, one PR into `main`. Nothing deployed: the rules, the index and the scheduled function go live only
-on the owner's word.
+Branch `feature/mise2-bookings-1`, one PR into `main`. Nothing deployed. ⚠️ Merging into `main` IS going live for the server half:
+`deploy-functions` publishes the scheduled function and the `setStaffCard` that accepts `bookings` on that push. So, on the owner's
+word and in this order: `firebase deploy --only firestore:rules` (add-only, safe for the current app), `firebase deploy --only
+firestore:indexes` (the `bookings.date` collection-group override), check the deploy account may create Cloud Scheduler jobs (the
+project's first: the Cloud Scheduler API enabled, the `github-deploy` service account allowed to manage jobs), then the merge.
 
 **Where it is and who sees it.**
 - Section `bookings`, path `/bookings`, Lucide `CalendarCheck`, right after the Home in `SECTIONS` (rail: the second item; phone: under
@@ -32,6 +35,9 @@ day by time (cancelled last, struck through): time, name, the first two products
 Pickup/Delivery tag and the status tag (To do amber, Ready green, Collected grey, Cancelled red). From 1000px the list is on the left
 and the booking on the right («Pick a booking to see it here.» until one is picked); on a phone one at a time. The choice of day is the
 section's own state, not the address. After a save the list opens on the booking's day with the focus on its row.
+The section OWNS the scroll (architecture rule 9): on a phone a booking opens at the top and Back puts the list where it was; on the
+split the list keeps its place and the booking sticks to the top of the scroll area, scrolling on its own. A booking opened from the
+list, and the editor opened from the list or the booking, go back by the browser's Back; a save REPLACES the editor with the list.
 
 **A booking** (`BookingDetail`): Back, «Booking No. 7», Edit (primary). The four statuses as a group of buttons: a tap saves it at once
 («Ready.»); Cancelled asks first. When (spelled day · time, Pickup/Delivery), Customer (name, phone as a call link, the address for a
@@ -69,14 +75,15 @@ height prints at true size, a strip down the left. Black on white, no token.
 
 **The Home** (`home/BookingsTodayPart.tsx`): «Prenotazioni di oggi» / «Today’s bookings», today's bookings still to hand over (To do
 or Ready) by time, «09:00 · Anna — Ready», a tap opens the booking. Not drawn when there is none, nor for somebody the venue does not
-show Bookings to (nothing read). It shares the right-hand column with «Ordini da fare» (two columns from 1000px while either is drawn).
+show Bookings to (nothing read). Its listener reads today's bookings only (`date == today`, at most 200). It shares the right-hand column with «Ordini da fare» (two columns from 1000px while either is drawn).
 
 **Data** (`locations/{lid}/bookings/{autoId}`, the `firestore-rules` skill's `data-model.md`): closed whitelist, every key on every
 write, `createdAt` once and `updatedAt` every write by the server, the short number given once (max + 1, back to 1 after 9999; two
 devices offline at once can repeat a number — it is a label on paper, never a key). ONE listener while the section is open:
 `date >= today − 30`, newest first, at most 500. Local-first: every write goes into Firestore's offline queue at once and the screen
 never waits for the server; a save the server REFUSES is kept in memory and the list offers it back («A booking was not saved. Open it
-to try again»).
+to try again»); a restored save of a booking deleted on another device meanwhile is made again as a new booking. A Save writes the
+booking's status as it is NOW (a status set on another device while the editor was open is never put back).
 
 **Deletion after 30 days**: the scheduled function `deleteOldBookings` (Functions v2 `onSchedule`, `REGION`, daily at 03:17 Europe/Rome,
 pages of 400, counts only in the log), the project's FIRST scheduled function (Cloud Scheduler: 3 jobs free). It needs the
@@ -86,6 +93,11 @@ collection-group field override on `bookings.date` (`firestore.indexes.json`, no
 **Tests**: `bookings/bookingModel.spec.ts`, `bookingsStore.spec.ts`, `BookingsSection.spec.tsx` (list, booking, slips, editor),
 `BookingsSection.visibility.spec.tsx`, `home/HomeSection.bookings.spec.tsx`, `tests/booking-cleanup.test.mjs`, the `bookings`
 scenario of `tests/rules/firestore-rules-check.mjs`, `tests/rules-read-budget.test.mjs`, `tests/home-cards.test.mjs`.
+
+**Left as they are, for the owner** (review, 18 Nov 2026): Firestore's offline copy on a device keeps a booking it has read until
+the next sign-out or venue switch, even after the server deleted it at 30 days; the lab slip prints the booking's notes (free text,
+which could hold a detail like a doorbell name); a UK venue whose interface is Italian prints the slip's words in Italian with units
+and dates in the British way; a new booking made while the bookings stream is broken can repeat a short number.
 
 **Not driven yet**: the emulator at 1024 / 360 / 296 in Italian and English with axe-core, the counter tablet (Chrome 101), a real
 print on the Epson FP-81 II RT or any receipt printer, the scheduled function on a real project.
