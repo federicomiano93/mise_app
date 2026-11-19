@@ -63,10 +63,20 @@ function bringIntoView(list: HTMLElement, field: HTMLElement): void {
   const bar = field.closest('section')?.querySelector('header');
   const floor = bar ? bar.getBoundingClientRect().bottom : scroller === null ? 0 : scroller.getBoundingClientRect().top;
   const by = input.getBoundingClientRect().top - floor - GAP_UNDER_BAR;
-  if (by <= 0) return;
-  if (scroller === null) window.scrollBy({ top: by });
-  else if (typeof scroller.scrollBy === 'function') scroller.scrollBy({ top: by });
-  else scroller.scrollTop += by;
+  if (by > 0) scrollAreaBy(scroller, by);
+  // ⚠️ ONE SCROLL IS NOT ALWAYS ENOUGH (the lab tablet, landscape, keyboard up: about 290px of screen left). The tablet's detail
+  // column is itself inside the shell's scrolling area, under the page title: with the box already under the form bar, the window
+  // still ended under the keyboard. So whatever is still hidden is scrolled out of the area AROUND the column, which takes the
+  // page title away and brings the column (and its sticky bar) up.
+  if (scroller === null) return;
+  const hidden = list.getBoundingClientRect().bottom - screenBottom;
+  if (hidden > 0) scrollAreaBy(scrollerOf(scroller), hidden);
+}
+
+function scrollAreaBy(area: HTMLElement | null, by: number): void {
+  if (area === null) window.scrollBy({ top: by });
+  else if (typeof area.scrollBy === 'function') area.scrollBy({ top: by });
+  else area.scrollTop += by;
 }
 
 export function useNameSuggest({ enabled, value, maxLength, onChange }: {

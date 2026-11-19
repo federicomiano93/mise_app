@@ -222,7 +222,16 @@ describe('keeping the window in sight', () => {
     rects.set('bar', { bottom: 100 });
     rects.set('scroller', { top: 90, bottom: 5000 });
     Object.defineProperty(window, 'visualViewport', { configurable: true, value: { offsetTop: 0, height: viewportHeight } });
-    return { scroll: vi.fn(), rects };
+    // A scroll moves what is inside the area up by the same amount, as a browser would.
+    const move = ({ top }: { top: number }) => {
+      for (const key of ['list', 'input']) {
+        const at = rects.get(key) ?? {};
+        rects.set(key, { ...at, ...(at.top !== undefined ? { top: at.top - top } : {}), ...(at.bottom !== undefined ? { bottom: at.bottom - top } : {}) });
+      }
+    };
+    const page = vi.fn(move);
+    window.scrollBy = page as unknown as typeof window.scrollBy;
+    return { scroll: vi.fn(move), page, rects };
   }
 
   async function open(scroll: ReturnType<typeof vi.fn>) {
@@ -244,12 +253,23 @@ describe('keeping the window in sight', () => {
     expect(scroll).not.toHaveBeenCalled();
   });
 
-  it('a window the keyboard covers scrolls once, so the box sits just under the bar', async () => {
-    const { scroll } = stage(500, 289);
+  it('a window the keyboard covers scrolls its column once, so the box sits just under the bar', async () => {
+    const { scroll, page } = stage(480, 289);
     await open(scroll);
     expect(scroll).toHaveBeenCalledTimes(1);
     // The box top (300) minus the bar's real bottom (100) minus the small gap (8).
     expect(scroll).toHaveBeenCalledWith({ top: 192 });
+    // 480 - 192 = 288: it fits now, so the page around the column stays still.
+    expect(page).not.toHaveBeenCalled();
+  });
+
+  it('a window still covered after the column scroll scrolls the page around it by what is still hidden (the lab tablet)', async () => {
+    const { scroll, page } = stage(500, 289);
+    await open(scroll);
+    expect(scroll).toHaveBeenCalledWith({ top: 192 });
+    // 500 - 192 = 308, 19 below the keyboard's edge (289).
+    expect(page).toHaveBeenCalledTimes(1);
+    expect(page).toHaveBeenCalledWith({ top: 19 });
   });
 
   it('a window clipped by its scrolling column scrolls it, though the screen is tall', async () => {
