@@ -33,7 +33,8 @@ export const CSS_TOKENS: Tokens = [
   ['translate:', /(?:^|[;{])\s*translate\s*:/],
   ['scale:', /(?:^|[;{])\s*scale\s*:/],
   ['rotate:', /(?:^|[;{])\s*rotate\s*:/],
-  ['safe / unsafe alignment', /(?:justify|align)-(?:content|items|self)\s*:[^;}]*\b(?:safe|unsafe)\b/],
+  // `safe` / `unsafe` as a whole keyword only: `var(--safe-x)` and `safe-area` are not the alignment keyword.
+  ['safe / unsafe alignment', /(?:justify|align|place)-(?:content|items|self)\s*:[^;}]*(?<![\w-])(?:safe|unsafe)(?![\w-])/],
 ];
 
 export const JS_TOKENS: Tokens = [
@@ -103,5 +104,7 @@ export function scannerSeesWhatItForbids(): string[] {
     ...findings({ 'a.tsx': 'return <div inert={open} />;' }, JS_TOKENS, codeWithoutComments),
     ...findings({ 'f.ts': '/* one\n two */\nx.toSorted();' }, JS_TOKENS, codeWithoutComments),
     ...findings({ 'g.css': '.a { justify-content: safe center; }\n.b { justify-content: center; }' }, CSS_TOKENS, cssWithoutComments),
+    ...findings({ 'h.css': '.a { place-items: unsafe center; }\n.b { place-content: center; }' }, CSS_TOKENS, cssWithoutComments),
+    ...findings({ 'i.css': '.a { justify-content: var(--safe-x); }\n.b { align-items: safe-area; }' }, CSS_TOKENS, cssWithoutComments),
   ];
 }
