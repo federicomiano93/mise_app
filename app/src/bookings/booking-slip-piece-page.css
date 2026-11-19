@@ -1,0 +1,10 @@
+/* The page of the lab slips «Uno per pezzo» (bookings rebuild step 4, 19 Nov 2026): 80 mm receipt paper, 100 mm long.
+
+   ⚠️⚠️ SWITCHED ON ONLY WHILE THOSE SLIPS PRINT, exactly as booking-slip-page.css (slipHost.tsx links both switched off and turns
+   on the one a print asks for).
+
+   Shorter than the 297 mm of the other slips ON PURPOSE: each piece's slip holds only the name, one product and its note, and
+   every slip is a page of its own (booking-slip.css), so 297 mm each would feed a strip of paper as long as an A4 sheet per piece —
+   metres of it on 24 December. Whether the shop's printer, printing through the browser, cuts at the end of each page or feeds
+   the page's whole length is for the test on the real printer. */
+@page { size: 80mm 100mm; margin: 4mm; }

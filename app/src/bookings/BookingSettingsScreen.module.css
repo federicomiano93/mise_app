@@ -1,0 +1,181 @@
+/* «Impostazioni prenotazioni» (the owner's layout, 18 Nov 2026): a card with the form bar (Back · title · Save), then groups
+   separated by a thin line, each titled in the small uppercase legend style. Setting names are all 17px semibold; every control
+   ends at the same right edge; selects and inputs are 160px wide.
+   ⚠️ NOTHING ON THE CARD MAY CLIP (no `overflow`): the form bar sticks to the top. */
+
+.screen {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+.screen .save {
+  min-height: var(--hit-lg);
+  padding: 0 var(--s4);
+  border-radius: var(--r-lg);
+  font-size: var(--fs-lg);
+}
+
+.loading {
+  margin: 0;
+  padding: var(--s4);
+  color: var(--ink-2);
+}
+
+.dirty {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.dirty[data-dirty="true"] {
+  color: var(--warn-ink);
+  font-weight: 600;
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  padding: 0 var(--s4) var(--s4);
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  min-width: 0;
+  padding: var(--s4) 0;
+}
+
+.group + .group {
+  border-top: 1px solid var(--line);
+}
+
+.legend {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.rowWrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+  min-width: 0;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2) var(--s3);
+  min-height: var(--hit);
+}
+
+.nameBox {
+  display: flex;
+  flex: 1 1 12rem;
+  align-items: center;
+  gap: var(--s1);
+  min-width: 0;
+}
+
+/* The owner's size for a setting's name, the same on every row. */
+.name {
+  min-width: 0;
+  font-size: 17px;
+  font-weight: 600;
+  overflow-wrap: break-word;
+}
+
+.control {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: flex-end;
+  margin-left: auto;
+}
+
+.select,
+.input {
+  width: 160px;
+  min-height: var(--hit);
+  padding: 0 var(--s3);
+  border: 1.5px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--fs-md);
+}
+
+.input::placeholder {
+  color: var(--ink-3);
+}
+
+.select:focus-visible,
+.input:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.select:disabled {
+  color: var(--ink-3);
+  background: var(--sunken);
+}
+
+.select[aria-invalid="true"],
+.input[aria-invalid="true"] {
+  border-color: var(--danger);
+  background: var(--danger-tint);
+}
+
+.error {
+  margin: 0;
+  color: var(--danger-ink);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.slots {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  padding-top: var(--s2);
+}
+
+.caption {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.muted {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chip {
+  padding: var(--s1) var(--s2);
+  border-radius: var(--r-pill);
+  background: var(--sunken);
+  color: var(--ink-2);
+  font-family: var(--mono);
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+}

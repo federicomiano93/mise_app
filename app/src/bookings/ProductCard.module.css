@@ -1,0 +1,226 @@
+/* One product of the booking form, as a compact card (bookings rebuild step 2). Two per row from 700px (BookingEditor.module.css
+   lays them out), one per row on a phone. */
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  min-width: 0;
+  padding: var(--s3);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+
+/* A jump to the card (Save found it wrong) lands here: a ring, as on every control. */
+.card:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.top {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s2);
+}
+
+/* Its number: a black circle, 1-based, renumbered when a card is taken away. */
+.number {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  margin-top: 1px;
+  border-radius: var(--r-pill);
+  background: var(--ink);
+  color: var(--surface);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.name {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  font-size: var(--fs-md);
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.strong {
+  font-weight: 700;
+}
+
+.detail {
+  color: var(--ink-2);
+  font-weight: 600;
+}
+
+/* The bin: a small red icon, 48px to the touch (--hit), pulled into the card's corner. */
+.remove {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: var(--hit);
+  height: var(--hit);
+  margin: calc(-1 * var(--s2)) calc(-1 * var(--s2)) 0 0;
+  border: 0;
+  border-radius: var(--r-md);
+  background: transparent;
+  color: var(--danger-ink);
+  cursor: pointer;
+}
+
+.remove > svg {
+  width: 18px;
+  height: 18px;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+}
+
+.stepper {
+  display: flex;
+  align-items: center;
+  gap: var(--s1);
+}
+
+.round {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1.5px solid var(--line-2);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.round > svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* The + is filled blue: the press that is made most. */
+.more {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.less[data-disabled] {
+  color: var(--ink-3);
+  cursor: default;
+  opacity: 0.5;
+}
+
+.round[data-pressed] {
+  transform: scale(0.94);
+}
+
+.round[data-focus-visible],
+.remove[data-focus-visible] {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* N: a number that can also be typed. */
+.qty {
+  width: 4.25em;
+  min-height: 44px;
+  padding: 0 var(--s1);
+  border: 1.5px solid transparent;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--fs-lg);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.qty:focus-visible {
+  border-color: var(--line-2);
+  outline: 3px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.qty[aria-invalid="true"] {
+  border-color: var(--danger);
+  background: var(--danger-tint);
+}
+
+.unit {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+/* What the line comes to, bold, on the right (no price of one: the owner's choice, 19 Nov 2026). */
+.money {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  margin-left: auto;
+  text-align: right;
+}
+
+.amount {
+  font-size: var(--fs-lg);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.error {
+  margin: 0;
+  color: var(--danger-ink);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+/* The line's note: 44px tall (the mockup's 40 raised to the app's touch floor). */
+.note {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 var(--s3);
+  border: 1.5px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--fs-sm);
+}
+
+.note::placeholder {
+  color: var(--ink-3);
+}
+
+.note:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 1px;
+}
+
+@media (hover: hover) {
+  .remove[data-hovered] {
+    background: var(--danger-tint);
+  }
+
+  .less[data-hovered]:not([data-disabled]) {
+    background: var(--sunken);
+  }
+
+  .more[data-hovered] {
+    background: var(--accent-hover);
+  }
+}

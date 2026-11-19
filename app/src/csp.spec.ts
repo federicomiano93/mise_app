@@ -9,9 +9,10 @@ import { describe, expect, test } from 'vitest';
 import { readdirSync, statSync } from 'node:fs';
 import { bootstrapScript, EMULATORS, FUNCTIONS_HOST, POLICY, REACT_ARIA_STYLES, withPolicy } from '../csp-plugin';
 
-function policyOn(hostname: string): string {
+function policyOn(hostname: string, stored: Record<string, string> | null = null): string {
   const written: string[] = [];
-  vm.runInNewContext(bootstrapScript(), { location: { hostname }, document: { write: (s: string) => written.push(s) } });
+  const localStorage = stored === null ? undefined : { getItem: (key: string) => stored[key] ?? null };
+  vm.runInNewContext(bootstrapScript(), { location: { hostname }, localStorage, document: { write: (s: string) => written.push(s) } });
   expect(written).toHaveLength(1);
   const meta = written[0]!.match(/^<meta http-equiv="Content-Security-Policy" content="([^"]+)">$/);
   expect(meta, written[0]).not.toBeNull();
@@ -84,5 +85,26 @@ describe('the CSP of Mise 2\'s page', () => {
     // The charset stays within the first bytes, as the HTML standard asks (1024).
     expect(at('<meta charset')).toBeLessThan(1024);
     expect(() => withPolicy('<head></head>')).toThrow(/charset/);
+  });
+
+  test('⚠️ the receipt printer: its ONE address joins connect-src, only when it is a private network address', () => {
+    const site = 'federicomiano93.github.io';
+    const withPrinter = policyOn(site, { 'bookings-printer-host': '192.168.1.50' });
+    expect(directive(withPrinter, 'connect-src')).toBe(`${directive(POLICY, 'connect-src')} https://192.168.1.50`);
+    expect(withPrinter.replace(' https://192.168.1.50', '')).toBe(POLICY);
+    expect(directive(policyOn(site, { 'bookings-printer-host': '10.0.0.7:8443' }), 'connect-src')).toContain(' https://10.0.0.7:8443');
+    // Anything else leaves the policy exactly as it is: a public address, a name, an attempt to write into the policy.
+    for (const bad of ['8.8.8.8', 'evil.test', '192.168.1.50; script-src *', '192.168.1.50 https://evil.test', '172.32.0.1', '', ' 192.168.1.5', '192.168.001.050', '192.168.1.256', '192.168.1.50:0']) {
+      expect(policyOn(site, { 'bookings-printer-host': bad }), bad).toBe(POLICY);
+    }
+    expect(policyOn(site, {})).toBe(POLICY);
+    // A storage that throws (private mode, blocked site data) is no printer, never a broken page.
+    const written: string[] = [];
+    vm.runInNewContext(bootstrapScript(), {
+      location: { hostname: site },
+      localStorage: { getItem: () => { throw new Error('blocked'); } },
+      document: { write: (text: string) => written.push(text) },
+    });
+    expect(written[0]).toContain(POLICY.split('; ')[0]);
   });
 });

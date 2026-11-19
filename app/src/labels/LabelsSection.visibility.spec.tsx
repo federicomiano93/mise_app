@@ -52,7 +52,8 @@ describe('who is shown «Labels»', () => {
   });
 
   it('is not a card of its own: no new id in the shared list of staff cards, so no switch and no server change', () => {
-    expect(STAFF_CARDS.map(card => card.id)).toEqual(['calculator', 'catalogue', 'orders', 'suppliers', 'pastries', 'foodcost', 'inventory']);
+    // The one id added since is Bookings' own (18 Nov 2026), not a Labels switch.
+    expect(STAFF_CARDS.map(card => card.id)).toEqual(['calculator', 'catalogue', 'orders', 'suppliers', 'pastries', 'foodcost', 'inventory', 'bookings']);
   });
 
   it('an employee of a venue that hides Recipes gets «not available» at its address', async () => {
@@ -80,7 +81,7 @@ describe('where «Labels» sits', () => {
 
   it('in the rail of an employee, between Recipes and Calculator, with the same look as every other item', () => {
     renderApp('/home', { session: { ...EMPLOYEE, location: { homeCardOrder: ['pastries', 'catalogue'] } } });
-    expect(linkNames(rail())).toEqual(['Home', 'Orders', 'Suppliers', 'Recipes', 'Labels', 'Calculator', 'Pastries', 'Settings']);
+    expect(linkNames(rail())).toEqual(['Home', 'Bookings', 'Orders', 'Suppliers', 'Recipes', 'Labels', 'Calculator', 'Pastries', 'Settings']);
     const labels = rail().getByRole('link', { name: 'Labels' });
     expect(labels).toHaveAttribute('href', '/labels');
     expect(labels.className).toBe(rail().getByRole('link', { name: 'Recipes' }).className);
@@ -89,7 +90,7 @@ describe('where «Labels» sits', () => {
   it('on a phone: under «More» (the five tabs are fixed), between Suppliers and Pastries as the list orders them', () => {
     const { more, tabs } = arrangeSections(visibleSectionIds({}, true, 'owner'));
     expect(tabs.map(section => section.id)).toEqual(['home', 'orders', 'recipes', 'calculator']);
-    expect(more.map(section => section.id)).toEqual(['suppliers', 'labels', 'pastries', 'stocktake', 'foodcost', 'settings']);
+    expect(more.map(section => section.id)).toEqual(['bookings', 'suppliers', 'labels', 'pastries', 'stocktake', 'foodcost', 'settings']);
   });
 
   it('is current in the rail on its own screens', async () => {

@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { HIDDEN_FIELD, SHOWN_FIELD, STAFF_CARDS, isHiddenForStaff } from '@mise/shared/home-cards';
 import type { CardId, StaffCard } from '@mise/shared/home-cards';
-import { isSectionAllowed } from '@mise/shared/sections';
+import { venueHasSection } from '../session/visibility';
 import { useT } from '../i18n/useT';
 import type { MessageKey } from '../i18n/en';
 import type { DocData } from '../session/backend';
@@ -23,6 +23,7 @@ const NAME: Readonly<Record<CardId, MessageKey>> = {
   pastries: 'section.pastries',
   foodcost: 'section.foodcost',
   inventory: 'section.stocktake',
+  bookings: 'section.bookings',
 };
 
 // The venue document with one card changed, for the rare save that succeeded while the server could not be read straight after. Money
@@ -83,7 +84,7 @@ export function StaffSectionsScreen() {
 
   // ⚠️ EVERY SECTION THIS VENUE HAS — the money ones included — and none it does not. A switch for a part of the app the venue does not use
   // would promise something nobody can ever be shown.
-  const cards = STAFF_CARDS.filter(card => isSectionAllowed(venue, card.section));
+  const cards = STAFF_CARDS.filter(card => venueHasSection(venue, card.section));
 
   function question(card: StaffCard, hide: boolean): ConfirmOptions | null {
     const section = t(NAME[card.id]);

@@ -20,6 +20,7 @@
 
 import { onDocumentCreated } from 'firebase-functions/v2/firestore';
 import { onTaskDispatched } from 'firebase-functions/v2/tasks';
+import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { getFunctions } from 'firebase-admin/functions';
 import { initializeApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
@@ -34,6 +35,7 @@ import {
 import { isAway, receivesOrderLists, personName } from './away-model.js';
 import { isHiddenForStaff, mayBeTold } from './home-cards.js';
 import { membershipIn } from './onboarding.js';
+import { deleteOldBookings as deleteOldBookingsIn, TIME_ZONE as BOOKINGS_TIME_ZONE } from './booking-cleanup-model.js';
 
 initializeApp();
 
@@ -529,6 +531,36 @@ export { readPackIngredientsFromPhotos } from './pack-photo.js';
 
 // Whether a product uses an ingredient, for the owner of the kitchen, who may not read products.
 export { productsUsingIngredient } from './product-usage.js';
+
+// ── 5. Customer bookings: deleted 30 days after their day (18 Nov 2026) ──────
+//
+// ⚠️ THE PROJECT'S FIRST SCHEDULED FUNCTION. Cloud Scheduler runs it, one job, once a day; the free tier covers 3 jobs per
+// billing account. It deletes, across every venue, each booking whose `date` is more than 30 days in the past — the owner's
+// promise to the customer, printed on their slip (UK/EU GDPR). The decisions are in booking-cleanup-model.js, tested by
+// tests/booking-cleanup.test.mjs; this shell only reads and deletes.
+//
+// ⚠️ IT NEEDS THE COLLECTION-GROUP INDEX ON bookings.date (firestore.indexes.json): until it is deployed
+// (`firebase deploy --only firestore:indexes`) the query fails with FAILED_PRECONDITION and nothing is deleted — the run logs
+// the error, and the next day's run tries again.
+// ⚠️ ONLY COUNTS ARE LOGGED: never a name, a phone, an address or a booking id.
+export const deleteOldBookings = onSchedule(
+  { region: REGION, schedule: '17 3 * * *', timeZone: BOOKINGS_TIME_ZONE, retryCount: 1, timeoutSeconds: 300 },
+  async () => {
+    const db = getFirestore();
+    const result = await deleteOldBookingsIn({
+      async oldBookings(cutoff, limit) {
+        const snap = await db.collectionGroup('bookings').where('date', '<', cutoff).limit(limit).get();
+        return snap.docs.map(d => ({ path: d.ref.path, date: d.get('date'), ref: d.ref }));
+      },
+      async deleteAll(items) {
+        const batch = db.batch();
+        for (const item of items) batch.delete(item.ref);
+        await batch.commit();
+      },
+    });
+    logger.info('Old bookings deleted', result);
+  },
+);
 
 // The nightly clean-up of records kept no longer (UK/EU GDPR, his decision of 18 Nov 2026).
 // ⚠️ It ships deleting NOTHING: every kind is off in functions/retention-model.js ENABLED, and the
