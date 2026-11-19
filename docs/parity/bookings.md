@@ -351,7 +351,7 @@ Prodotti → Pagamento (the total still follows the cards while nothing is typed
 
 **The cards** (`ProductCard.tsx`): two per row from 700px, one on a phone. A black numbered circle (22px, renumbered on delete),
 the name bold with «· 1,5 kg» (or the pack's size), a small red bin (44px target, «Togli <name>»), − / N / + (44px, + filled blue, −
-off at 1; N can also be typed), the price of one small and grey («24,00 € l’una», «12,00 € al kg» for an old kilo line) above the
+off at 1; N can also be typed), the
 bold line total, and the line's note. A removed card hands the focus to the card now in its place, or to «Aggiungi un prodotto».
 
 **The product window** (`ProductPicker.tsx`, pure half `productPickerModel.ts`): a modal, one product per opening, «n di N» (N = the steps this product really asks) and a back
@@ -409,4 +409,4 @@ card (remove and add again, at today's price).
 with a message instead of cutting it. The card decides kg vs pieces with `effectiveUnit` (the list's unit when the product is
 listed), the same as the save. `parseWeight` also reads «gr», «hg», «etto», «etti». The counter counts only the steps this
 product asks («1 di 2»). Favourites that arrive after the window opened replace the search unless something was typed. The
-Italian unit price reads «24,00 € cad.».
+card shows only the bold line total, no price of one (the owner's choice on the tablet, 19 Nov 2026).

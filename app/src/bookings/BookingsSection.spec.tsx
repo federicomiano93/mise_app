@@ -374,7 +374,7 @@ describe('the editor', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
     await addProduct(user, 'Focaccia', { otherWeight: '1.5' });
     const card = screen.getByRole('group', { name: '1. Focaccia · 1.5 kg' });
-    expect(card).toHaveTextContent('£18.00 each');
+    expect(card).toHaveTextContent('£18.00'); expect(card).not.toHaveTextContent('each');
     expect(within(card).getByLabelText('Quantity of Focaccia · 1.5 kg')).toHaveValue('1');
     await user.click(within(card).getByRole('button', { name: 'One more: Focaccia · 1.5 kg' }));
     expect(card).toHaveTextContent('£36.00');
@@ -386,7 +386,7 @@ describe('the editor', () => {
     // Nothing to weigh, nothing to change: one tap adds the card.
     await addProduct(user, 'Grissini');
     const card = screen.getByRole('group', { name: '1. Grissini · 250 g' });
-    expect(card).toHaveTextContent('£3.50 each');
+    expect(card).toHaveTextContent('£3.50'); expect(card).not.toHaveTextContent('each');
     await user.click(within(card).getByRole('button', { name: 'One more: Grissini · 250 g' }));
     await user.click(within(card).getByRole('button', { name: 'One more: Grissini · 250 g' }));
     expect(card).toHaveTextContent('£10.50');
@@ -418,8 +418,7 @@ describe('the editor', () => {
     const { user, source } = show('/bookings/A2/edit');
     await screen.findByRole('region', { name: 'Edit booking No. 4' }, LOAD);
     // Panettone was booked at £10.00; the list now says £25.00. Focaccia is a line of kilos from before the weights: it says so.
-    expect(screen.getByRole('group', { name: '2. Panettone' })).toHaveTextContent('£10.00 each');
-    expect(screen.getByRole('group', { name: '1. Focaccia' })).toHaveTextContent('£12.00 per kg');
+    expect(screen.getByRole('group', { name: '2. Panettone' })).toHaveTextContent('£20.00'); // 2 × the £10.00 it was booked at
     expect(screen.getByRole('group', { name: '1. Focaccia' })).toHaveTextContent('£18.00');
     // Grissini was saved with no price: it stays free.
     expect(screen.getByRole('group', { name: '3. Grissini' })).not.toHaveTextContent('£');
@@ -451,7 +450,8 @@ describe('the editor', () => {
     await user.type(qty, '1.5');
     // The list arrives now: Panettone is sold by the piece.
     act(() => { source.priceList = PRICES(); });
-    expect(await screen.findByText('£25.00 each')).toBeInTheDocument();
+    // The card no longer shows a price of one to wait for, and 1.5 pieces has no total: let the list's render settle.
+    await act(async () => { await Promise.resolve(); });
     await user.click(screen.getByRole('button', { name: 'Save' }));
     expect(screen.getByLabelText('Quantity of Panettone')).toHaveFocus();
     expect(screen.getByLabelText('Quantity of Panettone')).toHaveAccessibleDescription('A number above zero (whole for pieces).');

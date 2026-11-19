@@ -129,7 +129,7 @@ describe('the product window', () => {
     await waitFor(() => { expect(screen.queryByRole('dialog')).toBeNull(); });
     const card = screen.getByRole('group', { name: '1. Panettone' });
     expect(within(card).getByLabelText('Quantity of Panettone')).toHaveValue('1');
-    expect(card).toHaveTextContent('£25.00 each');
+    expect(card).toHaveTextContent('£25.00'); expect(card).not.toHaveTextContent('each');
     expect(await screen.findByText('Added: Panettone.')).toBeInTheDocument();
     // The focus is given back to «Add a product».
     expect(screen.getByRole('button', { name: 'Add a product' })).toHaveFocus();
@@ -182,7 +182,7 @@ describe('the product window', () => {
     const card = screen.getByRole('group', { name: '1. Scacciata broccoli · 1.5 kg' });
     // The note pre-filled with the changes, still editable; the extras are free: the price is the weight's.
     expect(within(card).getByLabelText('Note for Scacciata broccoli · 1.5 kg')).toHaveValue('without cipolla, + provola');
-    expect(card).toHaveTextContent('£24.00 each');
+    expect(card).toHaveTextContent('£24.00'); expect(card).not.toHaveTextContent('each');
     await user.type(within(card).getByLabelText('Note for Scacciata broccoli · 1.5 kg'), ', well done');
     expect(within(card).getByLabelText('Note for Scacciata broccoli · 1.5 kg')).toHaveValue('without cipolla, + provola, well done');
   });
@@ -207,7 +207,7 @@ describe('the product window', () => {
     expect(within(win).getByRole('heading', { name: 'Scacciata broccoli · 800 g' })).toBeInTheDocument();
     await user.click(within(win).getByRole('button', { name: 'Add' }));
     const card = await screen.findByRole('group', { name: '1. Scacciata broccoli · 800 g' });
-    expect(card).toHaveTextContent('£12.80 each');
+    expect(card).toHaveTextContent('£12.80'); expect(card).not.toHaveTextContent('each');
   });
 
   it('a name typed freely: by the piece or by a weight, with no price', async () => {
@@ -285,7 +285,7 @@ describe('the product window', () => {
 });
 
 describe('the product cards', () => {
-  it('− / N / +: − off at 1, + adds one, the number can be typed; the price of one above what the line comes to', async () => {
+  it('− / N / +: − off at 1, + adds one, the number can be typed; only what the line comes to', async () => {
     const { user } = show('/bookings/new');
     await screen.findByRole('region', { name: 'New booking' }, LOAD);
     await addProduct(user, 'Panettone');
@@ -296,7 +296,7 @@ describe('the product cards', () => {
     await user.click(within(card).getByRole('button', { name: 'One more: Panettone' }));
     expect(within(card).getByLabelText('Quantity of Panettone')).toHaveValue('3');
     expect(less).not.toBeDisabled();
-    expect(card).toHaveTextContent('£25.00 each£75.00');
+    expect(card).toHaveTextContent('£75.00'); expect(card).not.toHaveTextContent('each');
     await user.click(less);
     expect(within(card).getByLabelText('Quantity of Panettone')).toHaveValue('2');
     const qty = within(card).getByLabelText('Quantity of Panettone');
@@ -324,7 +324,7 @@ describe('the product cards', () => {
     expect(screen.getByText('No product yet: tap “Add a product”.')).toBeInTheDocument();
   });
 
-  it('in Italian: «Togli», «cad.», «Nota (es. senza cipolla)»', async () => {
+  it('in Italian: «Togli», no «cad.», «Nota (es. senza cipolla)»', async () => {
     const { user } = show('/bookings/new', DEFAULT_SETTINGS, { lang: 'it' });
     await screen.findByRole('region', { name: 'Nuova prenotazione' }, LOAD);
     await user.click(screen.getByRole('button', { name: 'Aggiungi un prodotto' }));
@@ -334,7 +334,7 @@ describe('the product cards', () => {
     expect(within(win).getByRole('button', { name: 'Cerca tra tutti i prodotti' })).toBeInTheDocument();
     await user.click(within(win).getByRole('button', { name: /^Panettone .* al pezzo$/ }));
     const card = await screen.findByRole('group', { name: '1. Panettone' });
-    expect(card).toHaveTextContent('cad.');
+    expect(card).not.toHaveTextContent('cad.'); // the card shows the line total only
     expect(within(card).getByRole('button', { name: 'Togli Panettone' })).toBeInTheDocument();
     expect(within(card).getByLabelText('Nota per Panettone')).toHaveAttribute('placeholder', 'Nota (es. senza cipolla)');
   });

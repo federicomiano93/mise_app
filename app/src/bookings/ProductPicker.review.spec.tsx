@@ -109,6 +109,6 @@ describe('the card counts in the unit that will be saved', () => {
     );
     const card = screen.getByRole('group');
     expect(card).toHaveTextContent('kg');
-    expect(card).toHaveTextContent('per kg');
+    expect(card).toHaveTextContent('£32.00');
   });
 });

@@ -3126,7 +3126,6 @@ export const it: Messages = {
   'bookings.card.qty': 'Quantità di {name}',
   'bookings.card.note': 'Nota per {name}',
   'bookings.card.notePlaceholder': 'Nota (es. senza cipolla)',
-  'bookings.card.each': '{price} cad.',
   'bookings.card.label': '{n}. {name}',
   'bookings.picker.step': '{n} di {total}',
   'bookings.picker.noteTooLong': 'Troppe modifiche: la nota supera {max} caratteri',

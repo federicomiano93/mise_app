@@ -46,7 +46,6 @@ export function ProductCard({ index, line, price, amount, cardId, qtyId, nameErr
       ? `${new Intl.NumberFormat(locale, { maximumFractionDigits: 3 }).format(pack.packSize)} ${pack.packUnit === 'pcs' ? t('bookings.unit.pcs') : pack.packUnit}`
       : null;
   const fullName = detail === null ? line.name : `${line.name} · ${detail}`;
-  const unitPrice = price.kind === 'none' ? null : price.unitPrice;
   const errors = [nameError, qtyError].filter((text): text is string => text !== null);
   const errorId = `${qtyId}-error`;
   return (
@@ -94,14 +93,10 @@ export function ProductCard({ index, line, price, amount, cardId, qtyId, nameErr
           </Button>
           {unit === 'kg' ? <span className={styles.unit}>{t('bookings.unit.kg')}</span> : null}
         </div>
-        {unitPrice !== null ? (
+        {/* The line total only: the owner asked (19 Nov 2026) for no price of one piece on the card. */}
+        {amount !== null ? (
           <div className={styles.money}>
-            <span className={styles.each}>
-              {unit === 'kg'
-                ? t('bookings.price.perKg', { price: formatMoney(unitPrice, money) })
-                : t('bookings.card.each', { price: formatMoney(unitPrice, money) })}
-            </span>
-            {amount !== null ? <span className={styles.amount}>{formatMoney(amount, money)}</span> : null}
+            <span className={styles.amount}>{formatMoney(amount, money)}</span>
           </div>
         ) : null}
       </div>

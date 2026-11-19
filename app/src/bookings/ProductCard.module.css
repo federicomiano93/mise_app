@@ -167,19 +167,13 @@
   font-weight: 600;
 }
 
-/* The price of one, small and grey, ABOVE what the line comes to, bold. */
+/* What the line comes to, bold, on the right (no price of one: the owner's choice, 19 Nov 2026). */
 .money {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
   margin-left: auto;
   text-align: right;
-}
-
-.each {
-  color: var(--ink-2);
-  font-size: var(--fs-xs);
-  font-variant-numeric: tabular-nums;
 }
 
 .amount {

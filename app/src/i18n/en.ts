@@ -3369,7 +3369,6 @@ export const en = {
   'bookings.card.qty': 'Quantity of {name}',
   'bookings.card.note': 'Note for {name}',
   'bookings.card.notePlaceholder': 'Note (e.g. no onion)',
-  'bookings.card.each': '{price} each',
   'bookings.card.label': '{n}. {name}',
   'bookings.picker.step': '{n} of {total}',
   'bookings.picker.noteTooLong': 'Too many changes: the note is over {max} characters',
