@@ -56,6 +56,10 @@ export const STAFF_CARDS = Object.freeze([
   Object.freeze({ id: 'pastries', section: 'pastries', labelKey: 'section.pastries', employeePush: false, optIn: false }),
   Object.freeze({ id: 'foodcost', section: 'foodcost', labelKey: 'section.foodcost', employeePush: false, optIn: true }),
   Object.freeze({ id: 'inventory', section: 'foodcost', labelKey: 'section.inventory', employeePush: false, optIn: true }),
+  // ⚠️ MISE 2 ONLY (bookings, 18 Nov 2026): customer bookings taken at the counter. Its section `bookings` is not one of
+  // js/sections.js SECTIONS, so the current app — whose Home has no such card and whose switch screen lists only the
+  // sections it knows — never draws it; it is here so the server's setStaffCard accepts its switch.
+  Object.freeze({ id: 'bookings', section: 'bookings', labelKey: 'section.bookings', employeePush: false, optIn: false }),
 ]);
 
 export const HIDEABLE_IDS = Object.freeze(STAFF_CARDS.map(card => card.id));
@@ -63,11 +67,11 @@ export const OPT_IN_IDS = Object.freeze(STAFF_CARDS.filter(card => card.optIn).m
 
 // The Home cards each partial owner has. A role not listed here is not narrowed by this
 // table at all. ⚠️ THE KITCHEN KEEPS STOCKTAKE AND LOSES FOOD COST ALTHOUGH THE TWO SHARE
-// A SECTION, which is why this is by card and not by section. The values are the ones in
+// A SECTION, which is why this is by card and not by section. Bookings (customers at the counter) are the SALES side's. The values are the ones in
 // js/sections.js, written out because this file imports nothing
 // (tests/partial-owner-roles.test.mjs compares them).
 export const ROLE_CARDS = Object.freeze({
-  'owner-sales': Object.freeze(['foodcost', 'clients']),
+  'owner-sales': Object.freeze(['foodcost', 'clients', 'bookings']),
   'owner-kitchen': Object.freeze(['calculator', 'catalogue', 'orders', 'suppliers', 'pastries', 'inventory']),
 });
 

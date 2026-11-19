@@ -1,0 +1,288 @@
+/* One booking: a card with the form bar (Back · the customer's name and its status tag · the pencil), the facts, the two print
+   buttons, and at the foot «Cancel booking» and the bin. On the tablet (19 Nov 2026) it is opened IN the day's list, in place of its
+   row, with a 2px accent border and an X in place of Back.
+   ⚠️ NOTHING ON THE CARD MAY CLIP (no `overflow`): the form bar sticks to the top of the shell's scrolling area. */
+
+.card {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+.card[data-in-place="true"] {
+  border: 2px solid var(--accent);
+}
+
+/* The status tag beside the name: «✓ Collected» green, «Cancelled» red. Icon and text are one flex row, so the tick sits on the
+   text's middle. */
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
+  padding: 2px var(--s2);
+  border-radius: var(--r-pill);
+  font-size: var(--fs-sm);
+  font-weight: 650;
+}
+
+.tag > svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+
+.tag[data-tag="collected"] {
+  background: var(--ok-tint);
+  color: var(--ok-ink);
+}
+
+.tag[data-tag="cancelled"] {
+  background: var(--danger-tint);
+  color: var(--danger-ink);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+  padding: var(--s4);
+}
+
+/* «Booking No. 12», small and grey under the customer's name (bookings rebuild step 3). */
+.sub {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+}
+
+/* Edit is the pencil alone: a square button. Two classes, so the order the stylesheets load does not decide the padding. */
+.card .edit {
+  justify-content: center;
+  width: var(--hit);
+  padding: 0;
+}
+
+.muted {
+  color: var(--ink-2);
+}
+
+.edit,
+.print {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  min-height: var(--hit);
+}
+
+.edit > svg,
+.print > svg {
+  flex: none;
+  width: 20px;
+  height: 20px;
+}
+
+.facts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  margin: 0;
+}
+
+.fact {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+}
+
+.fact > dt {
+  color: var(--ink-3);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.fact > dd {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s1);
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.when {
+  font-size: var(--fs-xl);
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.when::first-letter {
+  text-transform: uppercase;
+}
+
+.mode {
+  padding: 2px var(--s2);
+  border-radius: var(--r-pill);
+  background: var(--sunken);
+  color: var(--ink-2);
+  font-size: var(--fs-xs);
+  font-weight: 650;
+}
+
+.mode[data-mode="delivery"] {
+  background: var(--accent-tint);
+  color: var(--accent-ink);
+}
+
+.link {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--hit);
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+
+.notes {
+  white-space: pre-wrap;
+}
+
+.money {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: var(--s1) var(--s4);
+  margin: 0;
+}
+
+.money dd {
+  margin: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.due {
+  font-weight: 700;
+}
+
+.prints {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+}
+
+.print {
+  flex: 1 1 12rem;
+  justify-content: center;
+}
+
+/* The WhatsApp reminder (bookings step 4): a link that looks like a secondary button, under the customer's phone. */
+.reminder {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: var(--s2);
+  min-height: var(--hit);
+  margin-top: var(--s2);
+  padding: 0 var(--s4);
+  border: 1.5px solid var(--line-2);
+  border-radius: var(--r-md);
+  color: var(--accent-ink);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.reminder > svg {
+  flex: none;
+  width: 20px;
+  height: 20px;
+}
+
+.reminder:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (hover: hover) {
+  .reminder:hover {
+    background: var(--sunken);
+  }
+}
+
+.reminderHint {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+/* «Cancel booking» / «Reopen booking» and the bin: small and low-key, at the foot, never beside the main actions. */
+.foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--s2);
+}
+
+.statusMove {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--hit);
+  padding: 0 var(--s3);
+  border: 0;
+  border-radius: var(--r-md);
+  background: transparent;
+  color: var(--ink-2);
+  font: inherit;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.statusMove[data-focus-visible] {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (hover: hover) {
+  .statusMove[data-hovered] {
+    background: var(--sunken);
+  }
+}
+
+.delete {
+  display: grid;
+  place-items: center;
+  width: var(--hit);
+  height: var(--hit);
+  border: 0;
+  border-radius: var(--r-md);
+  background: transparent;
+  color: var(--danger-ink);
+  cursor: pointer;
+}
+
+.delete > svg {
+  width: 20px;
+  height: 20px;
+}
+
+.delete[data-focus-visible] {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (hover: hover) {
+  .delete[data-hovered] {
+    background: var(--danger-tint);
+  }
+}
+
+/* What a priced line comes to (bookings step 2), at the end of its row. */
+.amount {
+  flex: none;
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}

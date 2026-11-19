@@ -186,13 +186,51 @@ once on production BEFORE Mise 2 goes live (until then nothing is deleted); the 
 TTL, so the app also hides a ticked item older than 30 days. An item never ticked has
 `expireAt: null` and is never deleted by itself. Docs: `docs/parity/home.md`.
 
+**Customer bookings («Prenotazioni», Mise 2 only, 18 Nov 2026):** `bookings/{autoId}` — `{ bakery, customerName (1–80),
+phone (≤30, digits/spaces/+ only, at least one digit — or '' where the venue does not ask for it, bookings settings), mode ('pickup'|'delivery'), address (≤200; '' for a pickup, required for a
+delivery), date (YYYY-MM-DD), time (HH:MM; a slot's start), slotEnd? (HH:MM, after time — the ONE optional key, only on a booking taken in a
+time slot; the editor's merge deletes it when the booking moves to an exact time), lines (list 1–50 of { recipeId|null, name ≤200, qty > 0 ≤100000, unit 'pcs'|'kg',
+note? ≤120 } — ⚠️ the rules judge only the list's SIZE, the app checks each line, `app/src/bookings/bookingModel.ts`), deposit
+(number 0–100000 or null), total (same), notes (≤500), status ('todo'|'ready'|'collected'|'cancelled'), number (int 1–9999, the
+short number on both slips, given once at creation and never changed), createdAt (server time, once), updatedAt (server time,
+every write) }`. EVERY key on every write (hasAll + hasOnly): the editor writes the whole booking (setDoc; an existing one with
+merge, so `createdAt` stays), a status button an updateDoc of `status` + `updatedAt`, and the rules judge the merged document.
+Read, written and deleted by `usesBookings(lid)` = every member value but `'owner-kitchen'` where `sections.bookings` is not an
+explicit `false` (2 reads, like `canUse`). Hiding the section from employees (`staffHiddenCards.bookings`, the card `bookings`
+of `home-cards`, Mise 2 only: the current app's switch screen never lists it because `bookings` is not one of its sections) is
+display only. The list reads ONE bounded query, one calendar month (bookings rebuild step 3): `date >= 'YYYY-MM-01'`, `date <` the next
+month's 1st, `orderBy(date)`, `limit 1500`, a new query when the month changes; the Home's card today's only (`date == today`, `limit 200`). ⚠️ **PERSONAL DATA (UK/EU GDPR)**: name, phone, address. No allergy or health field (the notes say on screen not
+to write one). **Deleted 30 days after the booking's day** by the scheduled function `deleteOldBookings` (`functions/index.js`
++ `functions/booking-cleanup-model.js`, once a day at 03:17 Europe/Rome, the project's FIRST scheduled function — Cloud
+Scheduler's free tier is 3 jobs), a collection-group query on `bookings` by `date < cutoff` in pages of 400, logging counts only.
+⚠️ It needs the collection-group field override on `bookings.date` in `firestore.indexes.json` (`firebase deploy --only
+firestore:indexes`); the override keeps the collection-scope ascending/descending indexes the app's own query uses. A customer's
+«delete my data» is the bin on the booking (any member). The emulator runs no schedule: nothing is deleted locally.
+
+**The bookings price list (Mise 2 only, bookings step 2, 18 Nov 2026):** `price-list/bookings` (the one id) — `{ bakery, items
+(list ≤300 of { productId, name ≤200, price (gross, VAT included, > 0), per 'piece'|'kg'|'pack', packSize?, packUnit?, and since the
+bookings settings favourite? (true), perPiece? (true), weights? (kg, ≤12, each in (0, 50]), removable? (ingredient names ≤30; absent =
+never chosen, [] = none) }), publishedAt (server time) }`, published WHOLE — since the bookings settings from Bookings' «Impostazioni»
+on Save (Food cost's «Listino prenotazioni» is gone) — by `cardAccess(lid,'foodcost','foodcost') == 'manage'`;
+read by `usesBookings(lid)` or `cardAccess != 'none'` (up to 4 reads); never deleted. ⚠️ No cost, margin or VAT rate on it, ever:
+employees read it. The shape is `shared/src/price-list.ts`. A booking line now also carries `productId` and `unitPrice` (the price of
+one unit when saved, FROZEN; null without a price), and for a product sold by the pack `packSize` + `packUnit` (what one pack holds;
+the quantity is then a number of packs) — inside the `lines` list, which the rules do not look into.
+
+**The bookings settings (Mise 2 only, 18 Nov 2026):** `config/bookings` — `{ bakery, askPhone?, whatsappReminder?, modes? ('both' |
+'pickup' | 'delivery'), slotFirst? / slotLast? (HH:MM, first < last), slotMinutes? (30 | 60 | 120), slotLimit? (int 1–999), perPieceSlips?,
+extras? (list ≤ 40) }`, its OWN block beside `config/labels` (and the general `config/{doc}` read excludes it, so the Calculator's readers
+do not see it). Read by `usesBookings(lid)`, written by `managesBookings(lid)` (= usesBookings + runsThePlace: owner, manager, sales
+owner; 2 reads), never deleted. EVERY field optional, a missing one = today's behaviour (`app/src/bookings/bookingSettings.ts`); written
+with merge, a cleared slot pair or limit as `deleteField()`. Once production carries a key, it stays listed.
+
 **Device count:** `devices/{20-char id}` — `{ bakery, uid, kind (phone|tablet|computer),
 appVersion (≤12 chars or null), installed, lastSeen (server time) }`, written by
 `js/device-ping.js`. The id is random, made on the device (localStorage `device-id`). Any member may
 CREATE or overwrite its own line; `uid` must equal the writer's own (the signed-in account's uid,
 never a name or email) and `lastSeen` must be server time. No client reads or deletes one. At most
 one write per device per person per venue per day (localStorage `device-ping-<lid>-<uid>`, stamped
-when the write is handed over). Read, and pruned after 90 days, only by `scripts/read-devices.mjs`
+when the write is handed over). Read, and pruned after 90 days (also by the retention function once its kind is on), only by `scripts/read-devices.mjs`
 with the owner's gcloud login.
 
 **Error reports:** `errors/{autoId}` — `{ bakery, uid, source (error|rejection|console), screen? (≤60),
@@ -283,3 +321,28 @@ A row is `{ name, qty, note? }`: `note` («9x3») is free text up to 40 characte
 rebuilds rows as `{ name, qty }` (the app before this note, Mise 2 until it is ported) deletes every note on that day.
 `pastry-logs/{YYYY-MM-DD}_{Weekday}` — nothing deletes it; the read is bounded
 (`orderBy('date','desc') + limit(120)`).
+
+**Retention (the owner's decision of 18 Nov 2026, UK/EU GDPR).** One scheduled Cloud Function, `retention`
+(`functions/retention.js`, every night at 03:30 Europe/London), deletes old records under `locations/{lid}/…`. Every
+decision is in the pure `functions/retention-model.js` (`KINDS`, the cutoffs, the strict date checks); a new kind (step 3:
+the Auth accounts of people who left) is one more `KINDS` entry and one more switch.
+
+| kind | collection | key field (type) | deleted when |
+|---|---|---|---|
+| `clientOrders` | `client-orders` | `date` 'YYYY-MM-DD' | before today − 2 years (London calendar day) |
+| `orderRequests` | `order-requests` | `date` 'YYYY-MM-DD' | before today − 13 months (London calendar day) |
+| `pushTimers` | `push-timers` | `fireAt` number ms | before now − 7 days, active or cancelled |
+| `printJobs` | `print-jobs` | `createdAt` ISO + `status` | `done`/`failed` AND before now − 30 days; `queued`/`claimed` never |
+| `fcmTokens` | `fcm-tokens` | `updatedAt` number ms | before now − 60 days (Mise 2 refreshes it weekly: `app/src/orders/pushTokenRefresh.ts`; ⚠️ not to be switched on before that refresh has run 60 days in production) |
+| `devices` | `devices` | `lastSeen` Timestamp | older than 90 days |
+| `errors` | `errors` | `createdAt` Timestamp | older than 30 days |
+| `usage` | `usage` | `updatedAt` Timestamp | older than 400 days |
+
+⚠️ **Every kind ships OFF** (`ENABLED` in the model, all `false`): the function runs, queries and logs `{ kind, wouldDelete,
+skipped, … }` per kind and deletes nothing — **report-only** — until a later one-line PR switches a kind on (its pin in
+`tests/retention-model.test.mjs` changes with it). The last three take over the owner's manual prunes with the same periods;
+`scripts/read-devices.mjs`, `read-errors.mjs --prune` and `read-usage.mjs` still work (they also delete an unreadable date,
+the function never does). One range filter per venue (`field < cutoff`, single-field index, no composite or collection-group
+index); a missing, mistyped, malformed or pre-2020 date is never deleted; at most 500 deletions per kind per night; deletes
+carry a last-update precondition; logs hold counts and venue ids only. Tests: `tests/retention-model.test.mjs` (root) and
+`tests/rules/retention-check.mjs` (`npm run test:retention:emulated`, in the `rules` CI job).

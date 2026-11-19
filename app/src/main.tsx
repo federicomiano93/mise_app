@@ -15,6 +15,7 @@ import { PartBoundary } from './errors/PartBoundary';
 import { onRouteError } from './errors/routeErrors';
 import { I18nProvider } from './i18n/I18nProvider';
 import { loadLanguage, pickLanguage } from './i18n/i18n';
+import { browserRefreshDeps, startPushTokenRefresh, tokenWriter } from './orders/pushTokenRefresh';
 import { router } from './router';
 import { createBrowserEnv } from './session/browserEnv';
 import { createFirebaseBackend } from './session/firebaseBackend';
@@ -46,6 +47,10 @@ const sinks = createTelemetrySinks(backend, () => {
 // listeners must be on before anything else runs, or an error during boot is lost: the reporter
 // keeps it in memory and sends it once a venue is open.
 startTelemetry({ store, sinks });
+
+// This phone's alert registration, kept younger than the nightly clean-up's 60 days (orders/pushTokenRefresh.ts): at most
+// one small write a week, a few seconds after a venue opens, never offline, never visible.
+startPushTokenRefresh(store, browserRefreshDeps(tokenWriter(backend.firestore)));
 
 // Every section's data, on the same backend: Firestore is loaded by the first section that reads.
 const services = createDataServices(backend.firestore, backend, () => store.getSnapshot().role);

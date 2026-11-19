@@ -23,7 +23,11 @@
 // printed (recipes/HaccpLabelBody.tsx). Food cost's lab mode holds it for as long as it is open (foodcost/lab/LabMode.tsx), with the
 // screen wake lock, like the Recipe book's mix in progress. «Who can get in» holds it while an invitation is being made and while
 // its code is on screen, shown once and never stored (settings/InviteCard.tsx); its people list while a change of role, a removal or a
-// new name is with the server (settings/PeopleList.tsx) and while the rename form holds typing (settings/RenameDialog.tsx).
+// new name is with the server (settings/PeopleList.tsx) and while the rename form holds typing (settings/RenameDialog.tsx). A
+// booking's editor holds it while it differs from the booking it opened (or holds a refused save brought back), until it is saved
+// or discarded (bookings/BookingEditor.tsx). The receipt printer's screen holds it while the address or the plain-letters choice
+// differs from the one saved on this device (bookings/PrinterScreen.tsx), and the bookings settings while they differ from the ones
+// they opened on (bookings/BookingSettingsScreen.tsx).
 // ⚠️ A HOLD MUST END: a screen left open with a hold that never lets go keeps that device off every update, and off the
 // way back after a revert. (Not the sign-in form for that reason: a browser's autofill or a half-typed address left on
 // a shared tablet would block it for days, for a box that takes seconds to retype.) Each new editor adds itself here.

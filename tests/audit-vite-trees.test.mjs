@@ -2,7 +2,8 @@
 // firebase-tools gate (tests/audit-ci-firebase-tools.test.mjs covers its rules) with its own list.
 //
 // ⚠️ WHY IT EXISTS: on 17 Nov 2026 picomatch's advisory was raised to cover every version with no fix,
-// and plain `npm audit --audit-level=high` in shared/ and app/ turned every PR and push red.
+// and plain `npm audit --audit-level=high` in shared/ and app/ turned every PR and push red. npm withdrew it
+// on 18 Nov; the list is empty since, and the gate stays (one judge for every tree).
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -16,44 +17,41 @@ const report = (vulnerabilities) => ({
   vulnerabilities,
   metadata: { vulnerabilities: {}, dependencies: { prod: 30, dev: 400, optional: 20, peer: 0, peerOptional: 0, total: 430 } },
 });
-// Today's shared/ and app/ trees: picomatch through vite, vitest and tinyglobby.
-const today = () => ({
+// Today's shared/ and app/ trees: nothing reported at all (picomatch's high, accepted on 17 Nov 2026, was
+// withdrawn by npm on 18 Nov).
+const today = () => ({});
+const picomatchHigh = () => ({
   picomatch: { severity: 'high', via: [advisory('GHSA-fc5q-39xc-vjpf', 'high', ['CWE-1333'])] },
   tinyglobby: { severity: 'high', via: ['picomatch'] },
-  fdir: { severity: 'high', via: ['picomatch'] },
 });
 const fake = (body) => () => ({ stdout: JSON.stringify(body), stderr: '' });
 const quiet = () => {};
 
-test('today\'s trees pass, accepting only picomatch', () => {
+test('today\'s trees pass with nothing to accept', () => {
   const v = judge(report(today()), ALLOWED_VITE);
   assert.equal(v.ok, true, v.problems.join('\n'));
-  assert.deepEqual(v.accepted, ['GHSA-fc5q-39xc-vjpf']);
+  assert.deepEqual(v.accepted, []);
   for (const tree of TREES) assert.equal(main(tree, fake(report(today())), quiet, quiet), 0, tree);
 });
 
-test('any other high or critical still fails, and malicious code fails at any severity', () => {
+test('any high or critical fails, picomatch\'s included should npm raise it again, and malicious code fails at any severity', () => {
   for (const extra of [
+    picomatchHigh(),
     { y: { severity: 'high', via: [advisory('GHSA-2222-3333-4444', 'high', ['CWE-400'])] } },
     { y: { severity: 'critical', via: [advisory('GHSA-2222-3333-4444', 'critical', [])] } },
     { y: { severity: 'low', via: [advisory('GHSA-aaaa-bbbb-cccc', 'low', ['CWE-506'])] } },
   ]) {
     assert.equal(main('app', fake(report({ ...today(), ...extra })), quiet, quiet), 1, JSON.stringify(extra));
   }
-  // The firebase-tools list does not leak in: its uuid entry would read «not reported» here, and it is not asked for.
-  assert.equal(judge(report(today()), ALLOWED_VITE).problems.length, 0);
+  // A plain moderate does not.
+  assert.equal(main('app', fake(report({ y: { severity: 'moderate', via: [advisory('GHSA-2222-3333-4444', 'moderate', [])] } })), quiet, quiet), 0);
 });
 
-test('when picomatch is fixed (or the audit saw nothing) the entry fails as stale, so it cannot outlive the fix', () => {
+test('⚠️ with the list empty, an audit that looked at nothing still fails: only a complete report passes', () => {
   const lines = [];
-  assert.equal(main('shared', fake(report({})), quiet, (l) => lines.push(l)), 1);
-  assert.match(lines.join('\n'), /::error::shared: GHSA-fc5q-39xc-vjpf was not reported/);
-});
-
-test('picomatch re-rated critical fails again, so somebody looks', () => {
-  const tree = today();
-  tree.picomatch.via[0].severity = 'critical';
-  assert.equal(main('app', fake(report(tree)), quiet, quiet), 1);
+  assert.equal(main('shared', fake({ auditReportVersion: 2, vulnerabilities: {}, metadata: { dependencies: { total: 0 } } }), quiet, (l) => lines.push(l)), 1);
+  assert.match(lines.join('\n'), /not a complete npm audit report/);
+  assert.equal(main('shared', fake({ error: { summary: 'registry down' } }), quiet, quiet), 1);
 });
 
 test('the script refuses to run without naming a known tree', () => {
@@ -64,10 +62,10 @@ test('the script refuses to run without naming a known tree', () => {
   }
 });
 
-test('the list is exactly the measured advisory, with its severity and its reason', () => {
-  assert.deepEqual([...ALLOWED_VITE.keys()], ['GHSA-fc5q-39xc-vjpf']);
+test('the list is empty, on purpose (the source says why)', () => {
+  assert.deepEqual([...ALLOWED_VITE.keys()], []);
   for (const [id, { upTo, why }] of ALLOWED_VITE) {
-    assert.equal(upTo, 'high', id);
+    assert.ok(['low', 'moderate', 'high', 'critical'].includes(upTo), id);
     assert.ok(why.length > 60, `${id}: say why it cannot hurt and cannot be fixed`);
   }
 });

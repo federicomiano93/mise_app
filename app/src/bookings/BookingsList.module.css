@@ -1,0 +1,413 @@
+/* The bookings list (bookings rebuild step 3): «New booking», the month calendar, then the picked day's card — its date, «Cerca per
+   nome», one row per booking. Every target is 48px (`--hit`; the calendar's own are 44px); a long name or product wraps instead of
+   widening the page (296px included). */
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+}
+
+.add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s2);
+  min-height: var(--hit);
+}
+
+.add > svg {
+  flex: none;
+  width: 20px;
+  height: 20px;
+}
+
+.refused {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2) var(--s3);
+  padding: var(--s3) var(--s4);
+  border-radius: var(--r-md);
+  background: var(--danger-tint);
+  color: var(--danger-ink);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.broken {
+  padding: var(--s3) var(--s4);
+  border-radius: var(--r-md);
+  background: var(--warn-tint);
+  color: var(--warn-ink);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+}
+
+.day {
+  padding: var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+}
+
+.dayTitle {
+  /* A block, not a flex box: ::first-letter (below) applies to a block container only. */
+  display: block;
+  padding: var(--s3) var(--s1);
+  font-size: var(--fs-md);
+  font-weight: 650;
+}
+
+/* Intl writes an Italian weekday in lower case («mercoledì 18 novembre»); a heading starts with a capital. */
+.dayTitle::first-letter {
+  text-transform: uppercase;
+}
+
+.empty {
+  padding: var(--s2) var(--s1);
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* «Cerca per nome» at the top of the day's list: one box, the magnifier inside it on the left. */
+.search {
+  position: relative;
+  margin: 0 0 var(--s2);
+}
+
+.searchIcon {
+  position: absolute;
+  top: 50%;
+  left: var(--s3);
+  width: 18px;
+  height: 18px;
+  color: var(--ink-3);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.searchBox {
+  width: 100%;
+  min-height: var(--hit);
+  padding: 0 var(--s3) 0 calc(var(--s3) + 18px + var(--s2));
+  border: 1.5px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+}
+
+.searchBox::placeholder {
+  color: var(--ink-3);
+}
+
+.searchBox:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.searchSaid {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+/* One booking (bookings rebuild step 3, the owner's design): the slot box on the left, then the name, the products one per line,
+   and the foot — Pickup / Delivery on the left, «✓ Collected» at the bottom right. The name is the link; its ::after covers the
+   whole row, so a tap anywhere but the button opens the booking. */
+.row {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s3);
+  padding: var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.row[data-current="true"] {
+  border-color: var(--accent);
+  background: var(--accent-tint);
+}
+
+@media (hover: hover) {
+  .row:hover {
+    background: var(--sunken);
+  }
+}
+
+/* The slot: its start big and blue, its end small under it. An exact time (an old booking, no end) is the start alone. */
+.slot {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: center;
+  min-width: 64px;
+  padding: var(--s1) var(--s2);
+  border-radius: var(--r-sm);
+  background: var(--accent-tint);
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.start {
+  color: var(--accent-ink);
+  font-size: var(--fs-lg);
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.end {
+  color: var(--accent-ink);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+}
+
+.main {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--s2);
+  min-width: 0;
+}
+
+.name {
+  color: var(--ink);
+  font-size: var(--fs-md);
+  font-weight: 650;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.name::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: var(--r-md);
+}
+
+.name:focus-visible {
+  outline: none;
+}
+
+.name:focus-visible::after {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Cancels base.css's link hover colour, which would stick after a tap on a touch screen. */
+@media (hover: hover) {
+  .name:hover {
+    color: var(--ink);
+  }
+}
+
+.products {
+  font-size: var(--fs-sm);
+}
+
+/* Collected or cancelled: the name and the products greyed and crossed out. */
+.row[data-status="collected"] .name,
+.row[data-status="collected"] .products,
+.row[data-status="cancelled"] .name,
+.row[data-status="cancelled"] .products {
+  /* --ink-2, not --ink-3: crossed-out words must still be read (contrast 4.5:1 on the row, its tapped grey included). */
+  color: var(--ink-2);
+  text-decoration: line-through;
+}
+
+.foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.mode,
+.cancelled {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px var(--s2);
+  border-radius: var(--r-pill);
+  font-size: var(--fs-xs);
+  font-weight: 650;
+}
+
+.mode {
+  background: var(--sunken);
+  color: var(--ink-2);
+}
+
+.mode[data-mode="delivery"] {
+  background: var(--accent-tint);
+  color: var(--accent-ink);
+}
+
+.cancelled {
+  background: var(--danger-tint);
+  color: var(--danger-ink);
+}
+
+/* «Mark collected» / «Undo collection»: at the row's bottom right, above the name's stretched link. Blue = something to
+   do; the green and the tick belong to the «✓ Collected» state beside it (the owner, 19 Nov 2026). */
+.collect {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
+  min-height: var(--hit);
+  padding: 0 var(--s4);
+  border: 1.5px solid var(--accent);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--accent-ink);
+  font: inherit;
+  font-size: var(--fs-sm);
+  font-weight: 650;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.collect svg {
+  flex: none;
+  width: 18px;
+  height: 18px;
+}
+
+.collect[data-collected="true"] {
+  border-color: var(--line-2);
+  background: var(--surface);
+  color: var(--ink);
+}
+
+/* The state and its button, kept together at the right; on a narrow row the button goes under the state, still at the right. */
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--s2);
+  margin-left: auto;
+}
+
+/* The state, not a button. */
+.done {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
+  padding: 4px var(--s3);
+  border-radius: var(--r-pill);
+  background: var(--ok-tint);
+  color: var(--ok-ink);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+}
+
+.done svg {
+  flex: none;
+  width: 18px;
+  height: 18px;
+}
+
+
+.collect:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.collect:active {
+  transform: scale(0.97);
+}
+
+/* «Stampante scontrini» at the foot of the list (bookings step 3). */
+.printer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s2);
+  min-height: var(--hit);
+  margin-top: var(--s2);
+}
+
+.printer > svg {
+  flex: none;
+  width: 20px;
+  height: 20px;
+}
+
+/* The wrappers add no box on a phone: the column is as it was, in its own order (the DOM order IS the visual order). */
+.side,
+.calendar,
+.notices {
+  display: contents;
+}
+
+/* The booking opened IN the day's card, in place of its row (the tablet, 19 Nov 2026): the card draws its own 2px accent border. */
+.expanded {
+  min-width: 0;
+}
+
+/* THE TABLET (the counter tablet held sideways is 1024 wide; the same 1000px as the section's frame). The owner's design, two
+   columns: «New booking», the calendar, the live regions and the doors to the printer and the settings on the left (`.side`), the
+   picked day's card on the right. A booking opened in the card NARROWS the left column to 300px (the calendar still fits and stays
+   usable, so the day can be changed with a booking open) and the right takes the rest.
+   ⚠️ A FLEX ROW WHOSE LEFT COLUMN ANIMATES ITS `width`, never `grid-template-columns`: Chrome 101 (the lab tablet) cannot animate
+   a grid's tracks (107 and later can) but has always animated a width, calc() to px included. */
+@media (min-width: 1000px) {
+  .list {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    gap: var(--s6);
+  }
+
+  .side {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    gap: var(--s3);
+    width: calc(50% - var(--s6) / 2);
+    min-width: 0;
+    transition: width 350ms ease;
+  }
+
+  .list[data-open="true"] > .side {
+    width: 300px;
+  }
+
+  .calendar {
+    display: block;
+    min-width: 0;
+  }
+
+  .notices {
+    display: flex;
+    flex-direction: column;
+    gap: var(--s3);
+  }
+
+  .day {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+}
+
+@media (min-width: 1000px) and (prefers-reduced-motion: reduce) {
+  .side {
+    transition: none;
+  }
+}

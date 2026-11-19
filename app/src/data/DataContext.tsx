@@ -2,6 +2,8 @@ import { createContext, useContext } from 'react';
 import type { ReactNode } from 'react';
 import { OWNER_KITCHEN } from '@mise/shared/sections';
 import type { FirestoreKit } from '../session/firebaseBackend';
+import { createFirestoreBookingsSource } from '../bookings/bookingsSource';
+import type { BookingsSource } from '../bookings/bookingsSource';
 import { createFirestoreCalculatorSource } from '../calculator/calculatorSource';
 import type { CalculatorSource } from '../calculator/calculatorSource';
 import { browserRandomBytes, createFirestoreClientOrdersSource } from '../calculator/clientOrdersSource';
@@ -71,6 +73,8 @@ export interface DataServices {
   kioskOrders(locationId: string): KioskOrdersSource;
   // Settings (step 3g-2): this person's holiday (read once), the venue's app language and the sections shown to employees.
   settings(locationId: string): SettingsSource;
+  // Customer bookings at the counter (18 Nov 2026): the bookings, and the recipe names the editor suggests.
+  bookings(locationId: string): BookingsSource;
 }
 
 // What the data layers need from the backend besides Firestore: the account behind a client's ordering link is
@@ -114,6 +118,7 @@ export function createDataServices(
     kioskOrders: locationId => createFirestoreKioskOrdersSource(firestore, locationId),
     settings: locationId => createFirestoreSettingsSource(firestore,
       (name, data, timeoutMs) => auth.callFunction(name, data, timeoutMs), locationId),
+    bookings: locationId => createFirestoreBookingsSource(firestore, locationId),
   };
 }
 

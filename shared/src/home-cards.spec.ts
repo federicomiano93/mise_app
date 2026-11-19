@@ -79,7 +79,8 @@ describe.each([
   test('⚠️⚠️ a partial owner sees the cards of their own side and no other', () => {
     const kitchen = ['calculator', 'catalogue', 'orders', 'suppliers', 'pastries', 'inventory'];
     for (const id of c.HIDEABLE_IDS) {
-      expect(c.cardVisibleTo({}, true, id, 'owner-sales'), `sales: ${id}`).toBe(id === 'foodcost');
+      // Bookings (Mise 2, 18 Nov 2026): customers at the counter, the sales side's.
+      expect(c.cardVisibleTo({}, true, id, 'owner-sales'), `sales: ${id}`).toBe(id === 'foodcost' || id === 'bookings');
       expect(c.cardVisibleTo({}, true, id, 'owner-kitchen'), `kitchen: ${id}`).toBe(kitchen.includes(id));
       expect(c.cardVisibleTo({}, true, id, 'owner'), `owner: ${id}`).toBe(true);
       expect(c.cardVisibleTo({}, true, id), `no role: ${id}`).toBe(true);
@@ -115,9 +116,9 @@ describe.each([
     }
   });
 
-  test('the ids are the seven Home cards, and the two money cards are the opt-in ones', () => {
+  test('the ids are the seven Home cards plus Mise 2\'s bookings, and the two money cards are the opt-in ones', () => {
     expect([...c.HIDEABLE_IDS]).toStrictEqual(
-      ['calculator', 'catalogue', 'orders', 'suppliers', 'pastries', 'foodcost', 'inventory']);
+      ['calculator', 'catalogue', 'orders', 'suppliers', 'pastries', 'foodcost', 'inventory', 'bookings']);
     expect([...c.OPT_IN_IDS]).toStrictEqual(['foodcost', 'inventory']);
     expect(Object.isFrozen(c.STAFF_CARDS) && c.STAFF_CARDS.every(Object.isFrozen)).toBeTruthy();
   });

@@ -1,0 +1,34 @@
+/* A row of «Prenotazioni di oggi» (bookings rebuild step 3, the owner's design): the slot «09:00–10:00» blue and bold, the name,
+   then «2 prodotti» in grey at the right before the chevron. The card and the row's frame are «Ordini da fare»'s
+   (OrdersDueCard.module.css). On a narrow phone the name wraps under the slot; nothing widens the page. */
+
+.text {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--s3);
+  min-width: 0;
+}
+
+.time {
+  flex: none;
+  color: var(--accent-ink);
+  font-family: var(--mono);
+  font-size: var(--fs-md);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.name {
+  min-width: 0;
+  font-size: var(--fs-md);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.count {
+  flex: none;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}

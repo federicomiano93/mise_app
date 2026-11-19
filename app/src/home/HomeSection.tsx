@@ -6,6 +6,7 @@ import { Page } from '../shell/Page';
 import { useFocusOnBack } from '../shell/away/useFocusOnBack';
 import { StatusMessageProvider, useStatusMessage } from '../ui/StatusMessage';
 import { AwayBand } from './AwayBand';
+import { BookingsTodayPart } from './BookingsTodayPart';
 import { InstallHint } from './InstallHint';
 import { KioskBand } from './KioskBand';
 import { OrdersDuePart } from './OrdersDuePart';
@@ -27,7 +28,10 @@ export default function HomeSection() {
   // ⚠️ THE PAGE IS LAID OUT BY WHETHER THE ORDERS CARD IS DRAWN (review of PR #565): two columns only while it is, so on most days — and
   // always for somebody without Orders — «Da fare» keeps its readable width instead of a half page beside an empty one. The card's
   // data lives in its own part, which reports only this boolean: the Home is not redrawn by every snapshot of it.
-  const [two, setTwo] = useState(false);
+  // Since «Bookings» (18 Nov 2026) the right-hand column also holds «Prenotazioni di oggi»: two columns while either card is drawn.
+  const [ordersShown, setOrdersShown] = useState(false);
+  const [bookingsShown, setBookingsShown] = useState(false);
+  const two = ordersShown || bookingsShown;
   // The Home has no address below it: anything typed after /home goes back to the Home, as the other sections send a junk
   // address back to their list (nothing is started for it: the redirect returns before the parts, and their listeners, are drawn).
   if (pathname !== '/home') return <Navigate to="/home" replace />;
@@ -50,9 +54,16 @@ export default function HomeSection() {
               <PartBoundary>
                 <TodoCard />
               </PartBoundary>
-              <PartBoundary>
-                <OrdersDuePart onShownChange={setTwo} />
-              </PartBoundary>
+              {/* The right-hand column: «Ordini da fare», then «Prenotazioni di oggi», each in a part of its own. Never hidden by a flag:
+                  a part that failed must still show its box. */}
+              <div className={styles.side}>
+                <PartBoundary>
+                  <OrdersDuePart onShownChange={setOrdersShown} />
+                </PartBoundary>
+                <PartBoundary>
+                  <BookingsTodayPart onShownChange={setBookingsShown} />
+                </PartBoundary>
+              </div>
             </div>
           </div>
         </StatusMessageProvider>

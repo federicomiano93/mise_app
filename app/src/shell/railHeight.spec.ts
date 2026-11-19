@@ -44,39 +44,52 @@ function contentAt(block: string | undefined, base: string | undefined): number 
 describe('the rail on a short window', () => {
   const base = /\.railItem\s*\{([^}]*)\}/.exec(css)?.[1];
 
-  it('has ten items at most (the sum below counts that many)', () => {
-    // Since 13 Nov 2026 «Labels» follows Recipes in the rail.
-    expect(mostItems()).toBe(10);
-    // …and the sales owner's rail, with Clients, is shorter than that: Home, Clients, Food cost, Settings.
-    expect(SECTIONS.length).toBe(11);
+  it('has eleven items at most (the sum below counts that many)', () => {
+    // Since 13 Nov 2026 «Labels» follows Recipes in the rail; since 18 Nov 2026 «Bookings» follows the Home.
+    expect(mostItems()).toBe(11);
+    // …and the sales owner's rail, with Clients, is shorter than that: Home, Bookings, Clients, Food cost, Settings.
+    expect(SECTIONS.length).toBe(12);
   });
 
-  it('gives 64px above 835px, which fits any window from 836px', () => {
+  it('gives 64px above 903px, which fits any window from 904px', () => {
     expect(minHeight(base)).toBe(64);
     expect(contentAt(base, base)).toBeLessThanOrEqual(64);
-    expect(railNeeds(64)).toBeLessThanOrEqual(836);
+    expect(railNeeds(64)).toBeLessThanOrEqual(904);
   });
 
-  it('gives 56px up to 835px, which fits any window from 756px', () => {
-    expect(minHeight(itemAt(835))).toBe(56);
-    expect(contentAt(itemAt(835), base)).toBeLessThanOrEqual(56);
-    expect(railNeeds(56)).toBeLessThanOrEqual(756);
+  it('gives 56px up to 903px, which fits any window from 816px', () => {
+    expect(minHeight(itemAt(903))).toBe(56);
+    expect(contentAt(itemAt(903), base)).toBeLessThanOrEqual(56);
+    expect(railNeeds(56)).toBeLessThanOrEqual(816);
   });
 
-  it('gives 52px up to 755px without the brand letter, which fits any window from 676px', () => {
-    expect(minHeight(itemAt(755))).toBe(52);
-    expect(contentAt(itemAt(755), base)).toBeLessThanOrEqual(52);
-    expect(/@media\s*\(max-height:\s*755px\)\s*\{[^@]*\.mark\s*\{\s*display:\s*none;\s*\}/.test(css)).toBe(true);
-    expect(railNeeds(52, { withMark: false })).toBeLessThanOrEqual(676);
+  it('gives 52px up to 815px without the brand letter, which fits any window from 716px', () => {
+    expect(minHeight(itemAt(815))).toBe(52);
+    expect(contentAt(itemAt(815), base)).toBeLessThanOrEqual(52);
+    expect(/@media\s*\(max-height:\s*815px\)\s*\{[^@]*\.mark\s*\{\s*display:\s*none;\s*\}/.test(css)).toBe(true);
+    expect(railNeeds(52, { withMark: false })).toBeLessThanOrEqual(716);
   });
 
-  it('then fits the lab tablet (648px), Settings and the account included, never shrinking an item below 48px', () => {
+  it('then fits the lab tablet (648px) with the rail tightened, Settings and the account included, never an item below 48px', () => {
     expect(token('--s4')).toBe(16);
-    expect(minHeight(itemAt(675))).toBe(51);
-    // The 755px step's padding and gap still apply here: the content stays within the item.
-    expect(contentAt(itemAt(755), base)).toBeLessThanOrEqual(51);
-    expect(railNeeds(51, { withMark: false })).toBe(646);
-    expect(railNeeds(51, { withMark: false })).toBeLessThanOrEqual(648);
+    expect(token('--s2')).toBe(8);
+    const step = /@media\s*\(max-height:\s*715px\)\s*\{([\s\S]*?)\n\}/.exec(css)?.[1] ?? '';
+    const rule = (selector: string): string => new RegExp(`(?:^|\\s)${selector.replace('.', '\\.')}\\s*\\{([^}]*)\\}`).exec(step)?.[1] ?? '';
+    const rail = rule('.rail');
+    const nav = rule('.railNav');
+    const item = rule('.railItem');
+    expect(rail).toMatch(/padding-top:\s*var\(--s2\)/);
+    expect(rail).toMatch(/padding-bottom:\s*var\(--s2\)/);
+    expect(px(/gap:\s*([^;]+);/.exec(rail)?.[1])).toBe(2);
+    expect(px(/gap:\s*([^;]+);/.exec(nav)?.[1])).toBe(2);
+    const height = minHeight(item);
+    expect(height).toBe(49);
+    expect(contentAt(item, item)).toBeLessThanOrEqual(height);
+    // Padding (8 + 8), the items with a 2px gap more than there are items, the 2px gap to the account nav, the account nav (56).
+    const items = mostItems();
+    const needs = 2 * token('--s2') + items * height + (items + 1) * 2 + 2 + 56;
+    expect(needs).toBe(637);
+    expect(needs).toBeLessThanOrEqual(648);
     // No step of the rail draws an item under 48px.
     for (const block of css.matchAll(/\.railItem\s*\{([^}]*)\}/g)) {
       if (/min-height/.test(block[1] ?? '')) expect(minHeight(block[1])).toBeGreaterThanOrEqual(48);
