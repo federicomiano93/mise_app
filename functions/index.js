@@ -561,3 +561,8 @@ export const deleteOldBookings = onSchedule(
     logger.info('Old bookings deleted', result);
   },
 );
+
+// The nightly clean-up of records kept no longer (UK/EU GDPR, his decision of 18 Nov 2026).
+// ⚠️ It ships deleting NOTHING: every kind is off in functions/retention-model.js ENABLED, and the
+// function only logs what it would delete until he switches kinds on.
+export { retention } from './retention.js';
