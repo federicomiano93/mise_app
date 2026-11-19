@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  LIMITS, blankLine, boxNumber, choiceForDate, dayAfter, draftFrom, emptyDraft, firstProblem, groupsFor, nextNumber, oldestKeptDay,
+  LIMITS, blankLine, boxNumber, calendarWeeks, dayAfter, dayCounts, dayRows, dayToShow, draftFrom, emptyDraft, firstProblem, foldForSearch,
+  isOpen, monthAfter, monthOf, monthRange, nextNumber, oldestKeptDay,
   effectiveTotal, linePrice, listTotal, parseMoney, parseQty, readBooking, sameDraft, sortForDay, stillToHandOver, toBookingData, toPay,
   NO_FORM_RULES, phoneStorable, bookingTimeLabel, pickedLine, weightPrice, weightStorable,
 } from './bookingModel';
@@ -257,24 +258,67 @@ describe('days', () => {
     expect(sortForDay(list.filter(b => b.date === today)).map(b => b.id)).toEqual(['t1', 't2', 'tx']);
   });
 
-  it('groups the four choices', () => {
-    expect(groupsFor(list, { kind: 'today' }, today).map(g => [g.date, g.bookings.map(b => b.id)])).toEqual([[today, ['t1', 't2', 'tx']]]);
-    expect(groupsFor(list, { kind: 'tomorrow' }, today)[0]?.bookings.map(b => b.id)).toEqual(['tm']);
-    expect(groupsFor(list, { kind: 'later' }, today).map(g => g.date)).toEqual(['2026-11-25', '2026-12-24']);
-    expect(groupsFor(list, { kind: 'past', date: '2026-11-10' }, today)[0]?.bookings.map(b => b.id)).toEqual(['p']);
-    expect(groupsFor([], { kind: 'today' }, today)).toEqual([{ date: today, bookings: [] }]);
+  it('the calendar\'s months: the next, the one before, across the year, and the days a month query reads', () => {
+    expect(monthOf('2026-12-24')).toBe('2026-12');
+    expect(monthAfter('2026-12', 1)).toBe('2027-01');
+    expect(monthAfter('2026-01', -1)).toBe('2025-12');
+    expect(monthAfter('2026-11', 14)).toBe('2028-01');
+    expect(monthRange('2026-12')).toEqual({ from: '2026-12-01', until: '2027-01-01' });
+    expect(monthRange('2027-02')).toEqual({ from: '2027-02-01', until: '2027-03-01' });
   });
 
-  it('opens the list on a booking\'s day after a save', () => {
-    expect(choiceForDate(today, today)).toEqual({ kind: 'today' });
-    expect(choiceForDate('2026-11-19', today)).toEqual({ kind: 'tomorrow' });
-    expect(choiceForDate('2026-11-30', today)).toEqual({ kind: 'later' });
-    expect(choiceForDate('2026-11-01', today)).toEqual({ kind: 'past', date: '2026-11-01' });
+  it('⚠️ the calendar starts on MONDAY: blanks before the 1st, every day once, whole weeks', () => {
+    // 1 December 2026 is a Tuesday: one blank (Monday) before it.
+    const december = calendarWeeks('2026-12');
+    expect(december[0]).toEqual([null, '2026-12-01', '2026-12-02', '2026-12-03', '2026-12-04', '2026-12-05', '2026-12-06']);
+    expect(december.every(week => week.length === 7)).toBe(true);
+    expect(december.flat().filter(Boolean)).toHaveLength(31);
+    expect(december.at(-1)).toEqual(['2026-12-28', '2026-12-29', '2026-12-30', '2026-12-31', null, null, null]);
+    // 1 February 2027 is a Monday: no blank at all, four whole weeks.
+    expect(calendarWeeks('2027-02')[0]?.[0]).toBe('2027-02-01');
+    expect(calendarWeeks('2027-02')).toHaveLength(4);
+    // 1 November 2026 is a Sunday: six blanks.
+    expect(calendarWeeks('2026-11')[0]?.filter(cell => cell === null)).toHaveLength(6);
+  });
+
+  it('⚠️ counts a day\'s bookings for the badge WITHOUT the cancelled ones', () => {
+    const counts = dayCounts(list);
+    expect(counts.get(today)).toBe(2);
+    expect(counts.get('2026-12-24')).toBe(1);
+    expect(counts.get('2026-11-30')).toBeUndefined();
+    expect(dayCounts([bookingFixture({ id: 'c', date: today, status: 'cancelled' })]).get(today)).toBeUndefined();
+  });
+
+  it('a month opens on today when it holds it, else on its 1st', () => {
+    expect(dayToShow('2026-11', today)).toBe(today);
+    expect(dayToShow('2026-12', today)).toBe('2026-12-01');
+  });
+
+  it('«Cerca per nome» keeps the day\'s rows whose name holds the words, case and accents folded', () => {
+    const day = [
+      bookingFixture({ id: 'n1', date: today, time: '09:00', customerName: 'Niccolò Rossi' }),
+      bookingFixture({ id: 'n2', date: today, time: '10:00', customerName: 'ANNA ROSSINI' }),
+      bookingFixture({ id: 'n3', date: today, time: '08:00', customerName: 'Luca Verdi' }),
+      bookingFixture({ id: 'n4', date: '2026-11-20', customerName: 'Rossi Altro Giorno' }),
+    ];
+    expect(foldForSearch('  Niccolò   ROSSI ')).toBe('niccolo rossi');
+    expect(dayRows(day, today).map(b => b.id)).toEqual(['n3', 'n1', 'n2']);
+    expect(dayRows(day, today, 'rossi').map(b => b.id)).toEqual(['n1', 'n2']);
+    expect(dayRows(day, today, 'NICCOLO').map(b => b.id)).toEqual(['n1']);
+    expect(dayRows(day, today, 'àNNa').map(b => b.id)).toEqual(['n2']);
+    expect(dayRows(day, today, 'bianchi')).toEqual([]);
+  });
+
+  it('⚠️ a stored `todo` and a stored `ready` both read as open; collected and cancelled do not', () => {
+    expect(isOpen('todo')).toBe(true);
+    expect(isOpen('ready')).toBe(true);
+    expect(isOpen('collected')).toBe(false);
+    expect(isOpen('cancelled')).toBe(false);
   });
 
   it('lists today\'s bookings still to hand over for the Home', () => {
-    const shown = stillToHandOver([...list, bookingFixture({ id: 'done', date: today, status: 'collected' })], today);
-    expect(shown.map(b => b.id)).toEqual(['t1', 't2']);
+    const shown = stillToHandOver([...list, bookingFixture({ id: 'done', date: today, status: 'collected' }), bookingFixture({ id: 'rd', date: today, time: '23:00', status: 'ready' })], today);
+    expect(shown.map(b => b.id)).toEqual(['t1', 't2', 'rd']);
   });
 });
 

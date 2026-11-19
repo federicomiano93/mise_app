@@ -9,7 +9,7 @@ import type { BookingSettings } from '../bookings/bookingSettings';
 // A bookings source for the specs, in memory: the bookings are in one map, every write lands at once (as Firestore's local
 // copy does) and every live watcher is told. A write is refused, as the rules or the network would, by setting `refuseWith`.
 // ⚠️ FAKE CUSTOMERS ONLY (P13): no real name or phone in a fixture.
-type Watcher = { from: string; onChange: (items: Booking[], fromCache: boolean) => void; onError: (err: unknown) => void };
+type Watcher = { from: string; until: string; onChange: (items: Booking[], fromCache: boolean) => void; onError: (err: unknown) => void };
 
 export type FakeBookingsSource = BookingsSource & {
   items: Map<string, Booking>;
@@ -80,8 +80,9 @@ export function fakeBookingsSource(
   const tellSettings = () => { for (const w of settingsWatchers) w(source.settings, { fromServer: true }); };
 
   function push(): void {
-    for (const w of watchers) w.onChange([...items.values()].filter(b => b.date >= w.from), false);
+    for (const w of watchers) w.onChange(inRange(w.from, w.until), false);
   }
+  const inRange = (from: string, until: string): Booking[] => [...items.values()].filter(b => b.date >= from && b.date < until);
   const refusal = (): Promise<void> | null => (refuseWith === null ? null : Promise.reject(refuseWith as Error));
 
   return {
@@ -126,14 +127,14 @@ export function fakeBookingsSource(
     },
     watching: () => watchers.size,
     priceListWatchers: () => listWatchers.size,
-    watch: vi.fn((from: string, onChange, onError) => {
-      const watcher: Watcher = { from, onChange, onError };
+    watch: vi.fn(({ from, until }: { from: string; until: string }, onChange, onError) => {
+      const watcher: Watcher = { from, until, onChange, onError };
       watchers.add(watcher);
-      queueMicrotask(() => { if (watchers.has(watcher)) onChange([...items.values()].filter(b => b.date >= from), false); });
+      queueMicrotask(() => { if (watchers.has(watcher)) onChange(inRange(from, until), false); });
       return () => { watchers.delete(watcher); };
     }),
     watchDay: vi.fn((date: string, onChange, onError) => {
-      const watcher: Watcher = { from: date, onChange: (list, fromCache) => { onChange(list.filter(b => b.date === date), fromCache); }, onError };
+      const watcher: Watcher = { from: date, until: `${date}~`, onChange: (list, fromCache) => { onChange(list.filter(b => b.date === date), fromCache); }, onError };
       watchers.add(watcher);
       queueMicrotask(() => { if (watchers.has(watcher)) onChange([...items.values()].filter(b => b.date === date), false); });
       return () => { watchers.delete(watcher); };

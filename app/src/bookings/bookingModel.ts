@@ -614,35 +614,74 @@ export function sortForDay(bookings: readonly Booking[]): Booking[] {
   });
 }
 
-export type DayGroup = { readonly date: string; readonly bookings: readonly Booking[] };
+// ── The calendar (bookings rebuild step 3, 19 Nov 2026: the owner's design on the tablet) ──────────────────────────────
+//
+// The list is ONE day picked on a month calendar; the bookings listener reads exactly that month (bookingsSource.ts).
 
-export type ListChoice =
-  | { readonly kind: 'today' }
-  | { readonly kind: 'tomorrow' }
-  | { readonly kind: 'later' }
-  | { readonly kind: 'past'; readonly date: string };
+// A booking still to hand over. ⚠️ THE STORED `ready` READS AS OPEN TOO: the screens no longer say «To do» / «Ready» (the owner's
+// choice: a booking is open, Collected or Cancelled), and the old documents keep the value they have.
+export const isOpen = (status: BookingStatus): boolean => status === 'todo' || status === 'ready';
 
-// What one choice of the list shows, as groups of a day each (one group for a single day, possibly empty).
-export function groupsFor(bookings: readonly Booking[], choice: ListChoice, today: string): DayGroup[] {
-  const tomorrow = dayAfter(today, 1);
-  const single = (date: string): DayGroup[] => [{ date, bookings: sortForDay(bookings.filter(b => b.date === date)) }];
-  if (choice.kind === 'today') return single(today);
-  if (choice.kind === 'tomorrow') return single(tomorrow);
-  if (choice.kind === 'past') return single(choice.date);
-  const later = bookings.filter(b => b.date > tomorrow);
-  const dates = [...new Set(later.map(b => b.date))].sort();
-  return dates.map(date => ({ date, bookings: sortForDay(later.filter(b => b.date === date)) }));
+// 'YYYY-MM' of a day 'YYYY-MM-DD'.
+export const monthOf = (day: string): string => day.slice(0, 7);
+
+const MONTH_RE = /^([0-9]{4})-(0[1-9]|1[0-2])$/;
+
+// The month `n` months after `month` ('YYYY-MM'; n may be negative).
+export function monthAfter(month: string, n: number): string {
+  const found = MONTH_RE.exec(month);
+  if (found === null) return month;
+  const index = Number(found[1]) * 12 + (Number(found[2]) - 1) + n;
+  const year = Math.floor(index / 12);
+  return `${String(year).padStart(4, '0')}-${String(index - year * 12 + 1).padStart(2, '0')}`;
 }
 
-// Which choice of the list a day belongs to (after a save, the list opens where the booking is).
-export function choiceForDate(date: string, today: string): ListChoice {
-  if (date === today) return { kind: 'today' };
-  if (date === dayAfter(today, 1)) return { kind: 'tomorrow' };
-  if (date > today) return { kind: 'later' };
-  return { kind: 'past', date };
+// The days a month query reads: from its first day, up to (not including) the next month's first day.
+export function monthRange(month: string): { readonly from: string; readonly until: string } {
+  return { from: `${month}-01`, until: `${monthAfter(month, 1)}-01` };
+}
+
+// The month's days as calendar weeks, MONDAY FIRST (L M M G V S D): each week seven cells, a day 'YYYY-MM-DD' or null for the cells
+// before the 1st and after the last day.
+export function calendarWeeks(month: string): Array<Array<string | null>> {
+  const { from } = monthRange(month);
+  const first = parseISODate(from);
+  // getDay(): 0 Sunday … 6 Saturday → 0 Monday … 6 Sunday.
+  const lead = (first.getDay() + 6) % 7;
+  const cells: Array<string | null> = Array.from({ length: lead }, () => null);
+  for (let day = first; monthOf(toISODate(day)) === month; day = addDays(day, 1)) cells.push(toISODate(day));
+  while (cells.length % 7 !== 0) cells.push(null);
+  const weeks: Array<Array<string | null>> = [];
+  for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7));
+  return weeks;
+}
+
+// How many bookings each day holds, for the calendar's badge. ⚠️ CANCELLED ONES ARE NOT COUNTED (the owner's design): the badge is
+// the work of the day.
+export function dayCounts(bookings: readonly Booking[]): ReadonlyMap<string, number> {
+  const counts = new Map<string, number>();
+  for (const booking of bookings) {
+    if (booking.status === 'cancelled') continue;
+    counts.set(booking.date, (counts.get(booking.date) ?? 0) + 1);
+  }
+  return counts;
+}
+
+// The day shown when the calendar moves to `month`: today when it is in that month, else the 1st.
+export const dayToShow = (month: string, today: string): string => (monthOf(today) === month ? today : monthRange(month).from);
+
+// Text for «Cerca per nome»: case and accents folded («Niccolò» is found by «nicco», «ROSSI» by «rossi»), spaces squeezed.
+export function foldForSearch(text: string): string {
+  return text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+// The rows of one day, by time (cancelled last), kept to the names that hold what was typed.
+export function dayRows(bookings: readonly Booking[], day: string, query = ''): Booking[] {
+  const wanted = foldForSearch(query);
+  return sortForDay(bookings.filter(b => b.date === day && (wanted === '' || foldForSearch(b.customerName).includes(wanted))));
 }
 
 // Today's bookings still to hand over (the Home's card): not collected, not cancelled, by time.
 export function stillToHandOver(bookings: readonly Booking[], today: string): Booking[] {
-  return sortForDay(bookings.filter(b => b.date === today && (b.status === 'todo' || b.status === 'ready')));
+  return sortForDay(bookings.filter(b => b.date === today && isOpen(b.status)));
 }

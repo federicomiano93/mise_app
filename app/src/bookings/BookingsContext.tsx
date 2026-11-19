@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { todayISO } from '@mise/shared/day';
 import { useDataServices } from '../data/DataContext';
 import { useSession } from '../session/SessionContext';
-import { oldestKeptDay } from './bookingModel';
+import { monthOf } from './bookingModel';
 import { DEFAULT_SETTINGS } from './bookingSettings';
 import type { BookingSettings } from './bookingSettings';
 import { createBookingsStore } from './bookingsStore';
@@ -12,9 +12,9 @@ import type { BookingsSnapshot, BookingsStore } from './bookingsStore';
 // One bookings store for as long as the section is on screen: made from the open venue's source, started on mount and stopped
 // on unmount, so the listener exists only while somebody is in Bookings (P14).
 //
-// It reads from the oldest day still kept (30 days back) as the section OPENS. A tablet left on the section across midnight
-// keeps one day more than it needs, which costs nothing: the scheduled function deletes it on the server anyway.
-// The venue cannot change under it: a venue switch reloads the whole app (session.ts).
+// It reads ONE calendar month (bookings rebuild step 3): the month the section asks for with `store.watchMonth` — the calendar's,
+// or the open form's day's — and this month until it asks. The venue cannot change under it: a venue switch reloads the whole app
+// (session.ts).
 const BookingsContext = createContext<BookingsStore | null>(null);
 
 export function BookingsProvider({ children }: { children: ReactNode }) {
@@ -25,7 +25,7 @@ export function BookingsProvider({ children }: { children: ReactNode }) {
   const [store] = useState(() => createBookingsStore(services.bookings(locationId)));
 
   useEffect(() => {
-    store.start(oldestKeptDay(todayISO()));
+    store.start(monthOf(todayISO()));
     return () => store.stop();
   }, [store]);
 
@@ -73,4 +73,18 @@ export function useBookingsStore(): BookingsStore {
 export function useBookings(): BookingsSnapshot {
   const store = useBookingsStore();
   return useSyncExternalStore(store.subscribe, store.getSnapshot);
+}
+
+// ── The open form's day (bookings rebuild step 3) ──
+//
+// The bookings listener reads ONE month. While a form is open its day decides which (the free places of a slot, and the next short
+// number, are counted on that month's bookings), so the editor reports its day here and the section moves the listener. Outside
+// the section, or with no form, nobody listens.
+export const FormDayContext = createContext<(day: string | null) => void>(() => undefined);
+
+export function useReportFormDay(day: string): void {
+  const report = useContext(FormDayContext);
+  const valid = /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(day) ? day : null;
+  useEffect(() => { report(valid); }, [report, valid]);
+  useEffect(() => () => { report(null); }, [report]);
 }

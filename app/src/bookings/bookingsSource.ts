@@ -10,8 +10,9 @@
 // server when the signal comes back (Firestore's own queue, kept in the browser's database across a reload). The promise a
 // write returns settles only when the server answers: the caller never awaits it before leaving the editor.
 //
-// ⚠️ READS ARE BOUNDED (P14): ONE live query, the bookings of the last 30 days and every later one, newest days first, at most
-// READ_LIMIT. Older ones are deleted by the scheduled function anyway (functions/booking-cleanup-model.js).
+// ⚠️ READS ARE BOUNDED (P14): ONE live query, the bookings of ONE calendar month (bookings rebuild step 3: the month the calendar
+// shows), by day, at most READ_LIMIT; a new month is a new query. Bookings are deleted 30 days after their day by the scheduled
+// function (functions/booking-cleanup-model.js), so a month long gone reads empty — which is right.
 //
 // ⚠️ FIRESTORE COMES FROM THE SESSION'S BACKEND (`firestore()`), never from getFirestore(): its settings are fixed by its first
 // use (src/firestore-access.spec.ts). ⚠️ NOTHING PERSONAL IS LOGGED: a failure logs the error alone, never a booking.
@@ -32,16 +33,16 @@ const PRICE_LIST = 'price-list';
 const CONFIG = 'config';
 const SETTINGS_DOC = 'bookings';
 
-// How many bookings the list reads at most: about two a day for a year would still fit, and the retention keeps
-// 30 days of past ones only.
-export const READ_LIMIT = 500;
+// How many bookings one month's query reads at most. December at a busy counter is a few hundred (24 December alone may be two
+// hundred); the bound is there so a mistake can never read a whole collection.
+export const READ_LIMIT = 1500;
 // One day's bookings at most (the Home's card).
 export const DAY_LIMIT = 200;
 
 export interface BookingsSource {
-  // Every booking from `fromDate` on (YYYY-MM-DD), live. Returns the unsubscribe function at once. `fromCache` says the answer
-  // came from this device's offline copy rather than the server.
-  watch(fromDate: string, onChange: (items: Booking[], fromCache: boolean) => void, onError: (err: unknown) => void): () => void;
+  // Every booking with `from` <= date < `until` (YYYY-MM-DD: one calendar month, bookingModel.ts monthRange), live. Returns the
+  // unsubscribe function at once. `fromCache` says the answer came from this device's offline copy rather than the server.
+  watch(range: { readonly from: string; readonly until: string }, onChange: (items: Booking[], fromCache: boolean) => void, onError: (err: unknown) => void): () => void;
   // The bookings of ONE day, live (the Home's «Prenotazioni di oggi»: today only, never the days after).
   watchDay(date: string, onChange: (items: Booking[], fromCache: boolean) => void, onError: (err: unknown) => void): () => void;
   // The price list Food cost published (bookings step 2): the products the counter books, with their prices. An empty list when
@@ -118,9 +119,13 @@ export function createFirestoreBookingsSource(firestore: () => Promise<Firestore
   const stamped = ({ slotEnd, ...data }: BookingData) => ({ ...data, ...(slotEnd === null ? {} : { slotEnd }), bakery: locationId });
 
   return {
-    watch(fromDate, onChange, onError) {
+    // A range and an order on the same single field: Firestore's automatic index serves it (firestore.indexes.json keeps the
+    // collection-scope ascending index beside the cleanup's collection-group override).
+    watch({ from, until }, onChange, onError) {
       return listen(
-        ({ fs, db }) => fs.query(fs.collection(db, path), fs.where('date', '>=', fromDate), fs.orderBy('date', 'desc'), fs.limit(READ_LIMIT)),
+        ({ fs, db }) => fs.query(
+          fs.collection(db, path), fs.where('date', '>=', from), fs.where('date', '<', until), fs.orderBy('date'), fs.limit(READ_LIMIT),
+        ),
         docs => docs.map(d => readBooking(d.id, d.data())).filter((b): b is Booking => b !== null),
         onChange,
         onError,
