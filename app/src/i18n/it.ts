@@ -3103,6 +3103,8 @@ export const it: Messages = {
   'bookings.slipChoice.perPiece': 'Uno per pezzo',
   'bookings.slipChoice.together': 'Tutto insieme',
   'bookings.slipChoice.print': 'Stampa',
+  'bookings.slipMany.title': 'Stampare {n} biglietti?',
+  'bookings.slipMany.refused': 'Troppi biglietti ({n}): controlla le quantità della prenotazione.',
   'home.bookingsToday.title': 'Prenotazioni di oggi',
 
   // Bookings priced from the price list (bookings step 2, 18 Nov 2026).

@@ -3,7 +3,7 @@ import { act, screen, waitFor, within } from '@testing-library/react';
 import { todayISO } from '@mise/shared/day';
 import { bookingFixture, fakeBookingsSource, priceListOf } from '../testing/fakeBookingsSource';
 import { renderApp } from '../testing/renderApp';
-import type { BookingLine } from './bookingModel';
+import type { Booking, BookingLine } from './bookingModel';
 import { DEFAULT_SETTINGS } from './bookingSettings';
 import type { BookingSettings } from './bookingSettings';
 import { slipDay } from './bookingWords';
@@ -266,5 +266,183 @@ describe('the lab slips straight to the receipt printer', () => {
     expect(body).toContain('font="4" data="Anna Finta"');
     expect(body).toMatch(/font="4" data="To pay +76,00 €"/);
     expect(body).toMatch(/data="1\. 3 × Scacciata broccoli 1,5 kg +72,00 €"/);
+  });
+});
+
+// ── The review fixes of 19 Nov 2026 ──
+
+const GENERAL = 'Suonare due volte, ben cotta';
+function showWith(bookings: ReturnType<typeof bookingFixture>[], settings: Partial<BookingSettings> = {}) {
+  const source = fakeBookingsSource(bookings, PRICES, { ...DEFAULT_SETTINGS, askPhone: false, ...settings });
+  return { source, ...renderApp(`/bookings/${bookings[0]?.id ?? ''}`, { lang: 'en', session: { location: { country: 'IT' }, name: 'Panificio Prova' }, data: { bookings: () => source } }) };
+}
+const withNote = (over: Partial<Booking> = {}) => bookingFixture({
+  id: 'N1', date: TODAY, time: '09:00', slotEnd: '10:00', customerName: 'Anna Finta', phone: '', number: 12,
+  lines: [SCACCIATA, CANNOLI], notes: GENERAL, ...over,
+});
+const cardOf = () => screen.findByRole('region', { name: 'Anna Finta' }, LOAD);
+const labQuestion = () => screen.findByRole('alertdialog', { name: 'Slips for the lab' });
+
+describe('the booking\'s general note on the slips', () => {
+  const generalOf = (slip: Element) => [...slip.querySelectorAll('.bk-slip-general .bk-slip-hl')].map(mark => mark.textContent);
+
+  it('⚠️ is highlighted at the foot of EVERY lab slip through the browser, «One per piece» and «All together»', async () => {
+    vi.spyOn(window, 'print').mockImplementation(() => undefined);
+    const { user } = showWith([withNote()]);
+    await user.click(within(await cardOf()).getByRole('button', { name: 'Print for the lab' }));
+    await user.click(within(await labQuestion()).getByRole('button', { name: 'Print' }));
+    expect(slips()).toHaveLength(4);
+    for (const slip of slips()) {
+      expect(generalOf(slip)).toEqual(['Suonare due volte', 'ben cotta']);
+      // Under the products: the last thing on the slip.
+      expect(slip.lastElementChild).toHaveClass('bk-slip-general');
+    }
+    closeSlipHost();
+    await user.click(within(await cardOf()).getByRole('button', { name: 'Print for the lab' }));
+    const question = await labQuestion();
+    await user.click(within(question).getByRole('radio', { name: 'All together' }));
+    await user.click(within(question).getByRole('button', { name: 'Print' }));
+    expect(slips()).toHaveLength(1);
+    expect(generalOf(slips()[0] as Element)).toEqual(['Suonare due volte', 'ben cotta']);
+  });
+
+  it('a blank note prints nothing', async () => {
+    vi.spyOn(window, 'print').mockImplementation(() => undefined);
+    const { user } = showWith([withNote({ notes: '   ' })], { perPieceSlips: false });
+    await user.click(within(await cardOf()).getByRole('button', { name: 'Print for the lab' }));
+    expect(slips()).toHaveLength(1);
+    expect(host().querySelector('.bk-slip-general')).toBeNull();
+  });
+
+  it('⚠️ is double size at the foot of EVERY lab slip on the receipt printer, in both modes', async () => {
+    localStorage.setItem(PRINTER_HOST_KEY, '192.168.1.50');
+    const fetchSpy = vi.fn(async (_url: string, _init?: RequestInit) => new Response(OK));
+    vi.stubGlobal('fetch', fetchSpy);
+    const { user } = showWith([withNote()]);
+    await user.click(within(await cardOf()).getByRole('button', { name: 'Print for the lab' }));
+    await user.click(within(await labQuestion()).getByRole('button', { name: 'Print' }));
+    await waitFor(() => { expect(fetchSpy).toHaveBeenCalledTimes(4); });
+    for (const call of fetchSpy.mock.calls) {
+      const body = String(call[1]?.body);
+      expect(body).toContain('font="4" data="Suonare due volte"');
+      expect(body).toContain('font="4" data="ben cotta"');
+    }
+    await waitFor(() => { expect(screen.getByText('Printed ✓')).toBeInTheDocument(); });
+    fetchSpy.mockClear();
+    await user.click(within(await cardOf()).getByRole('button', { name: 'Print for the lab' }));
+    const question = await labQuestion();
+    await user.click(within(question).getByRole('radio', { name: 'All together' }));
+    await user.click(within(question).getByRole('button', { name: 'Print' }));
+    await waitFor(() => { expect(fetchSpy).toHaveBeenCalledTimes(1); });
+    expect(String(fetchSpy.mock.calls[0]?.[1]?.body)).toContain('font="4" data="ben cotta"');
+  });
+
+  it('is on the customer slip as plain text after the lines and before the money, through the browser and the printer', async () => {
+    vi.spyOn(window, 'print').mockImplementation(() => undefined);
+    const { user } = showWith([withNote({ total: 96, deposit: 20 })]);
+    await user.click(within(await cardOf()).getByRole('button', { name: 'Print for the customer' }));
+    const note = host().querySelector('.bk-slip-notes') as HTMLElement;
+    expect(note).toHaveTextContent('Suonare due volte, ben cotta');
+    expect(note.previousElementSibling).toHaveClass('bk-slip-lines');
+    expect(note.nextElementSibling).toHaveClass('bk-slip-rule');
+    expect(note.querySelector('.bk-slip-hl')).toBeNull();
+    closeSlipHost();
+    localStorage.setItem(PRINTER_HOST_KEY, '192.168.1.50');
+    const fetchSpy = vi.fn(async (_url: string, _init?: RequestInit) => new Response(OK));
+    vi.stubGlobal('fetch', fetchSpy);
+    await user.click(within(await cardOf()).getByRole('button', { name: 'Print for the customer' }));
+    await waitFor(() => { expect(fetchSpy).toHaveBeenCalledTimes(1); });
+    const body = String(fetchSpy.mock.calls[0]?.[1]?.body);
+    expect(body).toContain('data="Suonare due volte, ben cotta"');
+    expect(body.indexOf('Suonare due volte')).toBeLessThan(body.indexOf('Total'));
+  });
+});
+
+describe('runaway per-piece printing', () => {
+  const many = (qty: number) => withNote({ notes: '', lines: [{ ...SCACCIATA, qty, unitPrice: null }] });
+
+  it('⚠️ above 30 slips it asks first with the app\'s own dialog; Cancel prints nothing, Print prints all', async () => {
+    const print = vi.spyOn(window, 'print').mockImplementation(() => undefined);
+    const { user } = showWith([many(31)]);
+    await user.click(within(await cardOf()).getByRole('button', { name: 'Print for the lab' }));
+    await user.click(within(await labQuestion()).getByRole('button', { name: 'Print' }));
+    const ask = await screen.findByRole('alertdialog', { name: 'Print 31 slips?' });
+    await user.click(within(ask).getByRole('button', { name: 'Cancel' }));
+    expect(print).not.toHaveBeenCalled();
+    await user.click(within(await cardOf()).getByRole('button', { name: 'Print for the lab' }));
+    await user.click(within(await labQuestion()).getByRole('button', { name: 'Print' }));
+    await user.click(within(await screen.findByRole('alertdialog', { name: 'Print 31 slips?' })).getByRole('button', { name: 'Print' }));
+    expect(slips()).toHaveLength(31);
+  });
+
+  it('exactly 30 slips ask nothing', async () => {
+    vi.spyOn(window, 'print').mockImplementation(() => undefined);
+    const { user } = showWith([many(30)]);
+    await user.click(within(await cardOf()).getByRole('button', { name: 'Print for the lab' }));
+    await user.click(within(await labQuestion()).getByRole('button', { name: 'Print' }));
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(slips()).toHaveLength(30);
+  });
+
+  it('in Italian the question is «Stampare 31 biglietti?» with Annulla / Stampa', async () => {
+    vi.spyOn(window, 'print').mockImplementation(() => undefined);
+    const source = fakeBookingsSource([many(31)], PRICES, { ...DEFAULT_SETTINGS, askPhone: false });
+    const { user } = renderApp('/bookings/N1', { lang: 'it', session: { location: { country: 'IT' }, name: 'Panificio Prova' }, data: { bookings: () => source } });
+    await user.click(within(await cardOf()).getByRole('button', { name: 'Stampa per laboratorio' }));
+    await user.click(within(await screen.findByRole('alertdialog', { name: 'Biglietti per il laboratorio' })).getByRole('button', { name: 'Stampa' }));
+    const ask = await screen.findByRole('alertdialog', { name: 'Stampare 31 biglietti?' });
+    expect(within(ask).getByRole('button', { name: 'Annulla' })).toBeInTheDocument();
+    expect(within(ask).getByRole('button', { name: 'Stampa' })).toBeInTheDocument();
+  });
+
+  it('⚠️ above 300 nothing prints, on either path: a message on the status line says how many', async () => {
+    const print = vi.spyOn(window, 'print').mockImplementation(() => undefined);
+    const fetchSpy = vi.fn(async (_url: string, _init?: RequestInit) => new Response(OK));
+    vi.stubGlobal('fetch', fetchSpy);
+    const { user } = showWith([many(301)]);
+    await user.click(within(await cardOf()).getByRole('button', { name: 'Print for the lab' }));
+    await user.click(within(await labQuestion()).getByRole('button', { name: 'Print' }));
+    expect(await screen.findByText('Too many slips (301): check the booking’s quantities.')).toBeInTheDocument();
+    expect(print).not.toHaveBeenCalled();
+    localStorage.setItem(PRINTER_HOST_KEY, '192.168.1.50');
+    await user.click(within(await cardOf()).getByRole('button', { name: 'Print for the lab' }));
+    await user.click(within(await labQuestion()).getByRole('button', { name: 'Print' }));
+    expect(await screen.findByText('Too many slips (301): check the booking’s quantities.')).toBeInTheDocument();
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(document.getElementById(SLIP_HOST_ID)).toBeNull();
+  });
+});
+
+describe('the print buttons\' visibility and waiting', () => {
+  it('a cancelled booking shows no print buttons at all', async () => {
+    const { user } = showWith([withNote({ status: 'cancelled' })]);
+    const card = await cardOf();
+    expect(within(card).queryByRole('button', { name: 'Print for the lab' })).toBeNull();
+    expect(within(card).queryByRole('button', { name: 'Print for the customer' })).toBeNull();
+    // Putting it back to open brings them back.
+    await user.click(within(card).getByRole('button', { name: 'Cancelled' }));
+    expect(await within(card).findByRole('button', { name: 'Print for the lab' })).toBeInTheDocument();
+  });
+
+  it('⚠️ «Lab» waits for the venue settings too: the default «one per piece» never asks a venue that has it off', async () => {
+    const print = vi.spyOn(window, 'print').mockImplementation(() => undefined);
+    const off = { ...DEFAULT_SETTINGS, askPhone: false, perPieceSlips: false };
+    const source = fakeBookingsSource([withNote()], PRICES, off);
+    let answer: () => void = () => undefined;
+    vi.mocked(source.watchSettings).mockImplementationOnce((onChange: Parameters<typeof source.watchSettings>[0]) => {
+      answer = () => { onChange(off, { fromServer: true }); };
+      return () => undefined;
+    });
+    const { user } = renderApp('/bookings/N1', { session: { location: { country: 'IT' }, name: 'Panificio Prova' }, data: { bookings: () => source } });
+    const card = await cardOf();
+    await user.click(within(card).getByRole('button', { name: 'Print for the lab' }));
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(print).not.toHaveBeenCalled();
+    act(() => { answer(); });
+    await user.click(within(card).getByRole('button', { name: 'Print for the lab' }));
+    // The switch is off: no question, one slip.
+    await waitFor(() => { expect(print).toHaveBeenCalledTimes(1); });
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(slips()).toHaveLength(1);
   });
 });

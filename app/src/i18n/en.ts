@@ -3346,6 +3346,8 @@ export const en = {
   'bookings.slipChoice.perPiece': 'One per piece',
   'bookings.slipChoice.together': 'All together',
   'bookings.slipChoice.print': 'Print',
+  'bookings.slipMany.title': 'Print {n} slips?',
+  'bookings.slipMany.refused': 'Too many slips ({n}): check the booking’s quantities.',
   'home.bookingsToday.title': 'Today’s bookings',
 
   // Bookings priced from the price list (bookings step 2, 18 Nov 2026).

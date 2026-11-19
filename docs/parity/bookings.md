@@ -580,3 +580,16 @@ is a decimal one and no longer splits a note («+ 0,5 kg ricotta» is one highli
 this and nothing more»): a note like «tutto senza lattosio» written there instead of on a product never reaches the lab — he
 should say whether it goes back on the lab slip. Nothing limits a per-piece print: a mistyped 100 instead of 10 on a per-piece
 product, then Stampa, prints 100 slips (on the direct printer one after another, with no stop button).
+
+**Review fixes and the owner's answers (19 Nov 2026).** The owner decided: the booking's general note prints on EVERY lab slip
+(both modes, both paths), at the foot under the products, highlighted like a line's note (white on black in the browser, double size
+on the receipt printer), split on commas with `noteParts`, nothing before it, blank prints nothing; and it prints again on the
+customer slip as plain text after the lines and before the money (`.bk-slip-notes`). A per-piece print is now guarded, the same on
+both paths: above 30 slips the app's own dialog asks «Stampare {n} biglietti?», above 300 nothing prints and the status line says
+«Troppi biglietti ({n}): controlla le quantità della prenotazione.» (`slipCount` counts without building the slips). A cancelled
+booking shows no print buttons (hidden, not disabled). «Laboratorio» is pending until the venue settings have answered as well as
+the price list, so the default `perPieceSlips: true` never asks a venue that has it off. `noteParts` is a hand-written scan, no
+regex lookbehind (Safari before 16.4 cannot parse one). On the direct printer a wrapped customer product note keeps its 3-space
+indent on every line. The printer test page's accents line now carries «×». Nits: the loop variable `document` in
+`BookingDetail.tsx` is `slipDocument`; the radio group in `SlipChoice` keeps its `aria-label` because `Dialog` exposes no title id.
+**Still open:** what `[N]` after the name counts (the owner has not answered).

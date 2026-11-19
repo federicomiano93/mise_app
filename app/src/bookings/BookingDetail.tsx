@@ -28,7 +28,7 @@ import { PRINT_TIMEOUT_MS, readPrinterSetting, sendToPrinter } from './receiptPr
 import type { PrintOutcome, SlipLine } from './receiptPrinter';
 import { printOutcomeText } from './printWords';
 import { customerSlipLines, labSlipDocuments } from './slipText';
-import { asksSlipChoice, labSlips, perPieceProducts, pieceCount } from './labSlips';
+import { SLIPS_ASK_ABOVE, SLIPS_REFUSE_ABOVE, asksSlipChoice, labSlips, perPieceProducts, pieceCount, slipCount } from './labSlips';
 import type { LabSlipMode } from './labSlips';
 import { SlipChoice } from './SlipChoice';
 import { usePriceList } from './usePriceList';
@@ -91,12 +91,14 @@ function Shown({ booking, onBack }: { booking: Booking; onBack: () => void }) {
   const money = useMoney();
   const { location, name: venueName } = useSession();
   // The venue's settings (bookings settings, 18 Nov 2026): without the phone asked, no phone and no reminder on this page.
-  const { settings } = useBookingSettings();
+  const { settings, status: settingsStatus } = useBookingSettings();
   // Which products the venue marked «Chiedi per pezzo» (bookings rebuild step 4): the lab slips go one per piece for those. A
   // list not read yet, refused or broken marks none, and the lab slip prints «Tutto insieme» without asking.
   // ⚠️ «Laboratorio» WAITS FOR THE LIST'S FIRST ANSWER (pending until then): pressed before it, a booking of 3 scacciate would
   // print one slip «[2]» with no question.
+  // The settings are waited for too: pressed before them, the default «Biglietti per pezzo: on» would ask a venue that has it off.
   const { list: priceList, loaded: priceListLoaded } = usePriceList();
+  const labReady = priceListLoaded && settingsStatus === 'ready';
   const perPiece = useMemo(() => perPieceProducts(priceList.items, settings.perPieceSlips), [priceList, settings.perPieceSlips]);
   const [confirm, confirmDialog] = useConfirm();
   const ids = useId();
@@ -194,7 +196,7 @@ function Shown({ booking, onBack }: { booking: Booking; onBack: () => void }) {
     return () => { shown.current = false; };
   }, []);
   async function print(kind: 'lab' | 'customer') {
-    if (sending !== null || (kind === 'lab' && !priceListLoaded)) return;
+    if (sending !== null || (kind === 'lab' && !labReady)) return;
     const paperLocale = slipLocale(location, locale);
     const paperUnit = slipUnitWords(location);
 
@@ -215,6 +217,23 @@ function Shown({ booking, onBack }: { booking: Booking; onBack: () => void }) {
     }
     // «Anna Finta [3]» on every lab slip: how many pieces the customer has — what «Uno per pezzo» would print — on «Tutto insieme» too.
     const who = `${booking.customerName} [${pieceCount(booking, perPiece)}]`;
+    // ⚠️ RUNAWAY PRINTING (a mistyped quantity): counted before anything is built. Above 30 the person is asked, above 300 nothing
+    // prints. The same on the browser and the direct path.
+    if (kind === 'lab') {
+      const count = slipCount(booking, perPiece, mode);
+      if (count > SLIPS_REFUSE_ABOVE) {
+        say(t('bookings.slipMany.refused', { n: count }), 8000);
+        return;
+      }
+      if (count > SLIPS_ASK_ABOVE) {
+        const ok = await confirm({
+          title: t('bookings.slipMany.title', { n: count }),
+          okLabel: t('bookings.slipChoice.print'),
+          cancelLabel: t('common.cancel'),
+        });
+        if (!ok) return;
+      }
+    }
     const slips = kind === 'lab' ? labSlips(booking, perPiece, mode) : [];
 
     // ── «Cliente» ──
@@ -239,7 +258,7 @@ function Shown({ booking, onBack }: { booking: Booking; onBack: () => void }) {
     const throughBrowser = (from = 0) => {
       if (kind === 'lab') {
         printSlip(
-          <LabSlips who={who} slips={slips.slice(from)} locale={paperLocale} unitWord={paperUnit} />,
+          <LabSlips who={who} generalNote={booking.notes} slips={slips.slice(from)} locale={paperLocale} unitWord={paperUnit} />,
           undefined,
           mode === 'perPiece' ? 'piece' : 'receipt',
         );
@@ -255,19 +274,19 @@ function Shown({ booking, onBack }: { booking: Booking; onBack: () => void }) {
     const paper = { locale: paperLocale, units: paperUnit, plain: printer.plain };
     // ⚠️ ONE DOCUMENT PER SLIP on the direct path: the printer cuts after each, so the per-piece slips come out separately.
     const documents: SlipLine[][] = kind === 'lab'
-      ? labSlipDocuments({ ...paper, who, slips })
+      ? labSlipDocuments({ ...paper, who, slips, generalNote: booking.notes })
       : [customerSlipLines({ ...paper, booking, words: customerWords, venueName: venueName ?? '', money })];
     const slipName = t(kind === 'lab' ? 'bookings.print.lab' : 'bookings.print.customer');
     setSending(kind);
     // One after another, each waiting for the printer's answer; the first that does not print stops the rest.
     let printed = 0;
     let outcome: PrintOutcome = { ok: true };
-    for (const document of documents) {
+    for (const slipDocument of documents) {
       // Shown for as long as the printer may take to answer, not the default few seconds.
       say(documents.length > 1
         ? t('bookings.print.sendingMany', { current: printed + 1, total: documents.length })
         : t('bookings.print.sending'), PRINT_TIMEOUT_MS + 1000);
-      outcome = await sendToPrinter(printer, document);
+      outcome = await sendToPrinter(printer, slipDocument);
       if (!outcome.ok) break;
       printed += 1;
     }
@@ -405,32 +424,35 @@ function Shown({ booking, onBack }: { booking: Booking; onBack: () => void }) {
           ) : null}
         </dl>
 
-        <div className={styles.prints} role="group" aria-label={t('bookings.detail.print')}>
-          {/* «Lab» / «Customer» with the printer (bookings rebuild step 3); each name says the whole of it and holds the word drawn.
-              «Lab» may first ask one slip per piece or all together (step 4). */}
-          <Button
-            variant="secondary"
-            className={styles.print}
-            aria-label={t('bookings.print.labFull')}
-            isPending={sending === 'lab' || !priceListLoaded}
-            isDisabled={sending === 'customer'}
-            onPress={() => { void print('lab'); }}
-          >
-            <Printer aria-hidden="true" />
-            <span>{t('bookings.print.labShort')}</span>
-          </Button>
-          <Button
-            variant="secondary"
-            className={styles.print}
-            aria-label={t('bookings.print.customerFull')}
-            isPending={sending === 'customer'}
-            isDisabled={sending === 'lab'}
-            onPress={() => { void print('customer'); }}
-          >
-            <Printer aria-hidden="true" />
-            <span>{t('bookings.print.customerShort')}</span>
-          </Button>
-        </div>
+        {/* ⚠️ NO PRINT BUTTONS ON A CANCELLED BOOKING (the owner's decision): hidden, not disabled. */}
+        {booking.status !== 'cancelled' ? (
+          <div className={styles.prints} role="group" aria-label={t('bookings.detail.print')}>
+            {/* «Lab» / «Customer» with the printer (bookings rebuild step 3); each name says the whole of it and holds the word drawn.
+                «Lab» may first ask one slip per piece or all together (step 4). */}
+            <Button
+              variant="secondary"
+              className={styles.print}
+              aria-label={t('bookings.print.labFull')}
+              isPending={sending === 'lab' || !labReady}
+              isDisabled={sending === 'customer'}
+              onPress={() => { void print('lab'); }}
+            >
+              <Printer aria-hidden="true" />
+              <span>{t('bookings.print.labShort')}</span>
+            </Button>
+            <Button
+              variant="secondary"
+              className={styles.print}
+              aria-label={t('bookings.print.customerFull')}
+              isPending={sending === 'customer'}
+              isDisabled={sending === 'lab'}
+              onPress={() => { void print('customer'); }}
+            >
+              <Printer aria-hidden="true" />
+              <span>{t('bookings.print.customerShort')}</span>
+            </Button>
+          </div>
+        ) : null}
 
         <div className={styles.foot}>
           <Button variant="bare" className={styles.delete} aria-label={t('bookings.delete')} onPress={() => { void remove(); }}>
