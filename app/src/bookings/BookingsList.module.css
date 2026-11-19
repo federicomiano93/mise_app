@@ -224,7 +224,8 @@
 .row[data-status="collected"] .products,
 .row[data-status="cancelled"] .name,
 .row[data-status="cancelled"] .products {
-  color: var(--ink-3);
+  /* --ink-2, not --ink-3: crossed-out words must still be read (contrast 4.5:1 on the row, its tapped grey included). */
+  color: var(--ink-2);
   text-decoration: line-through;
 }
 

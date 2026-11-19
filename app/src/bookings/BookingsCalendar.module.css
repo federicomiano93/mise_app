@@ -4,7 +4,8 @@
    with the accent, an orange badge with the day's bookings. */
 
 .calendar {
-  padding: var(--s2) var(--s2) var(--s3);
+  /* Thin sides: at 360px seven cells keep their 44px width. */
+  padding: var(--s2) var(--s1) var(--s3);
   border: 1px solid var(--line);
   border-radius: var(--r-lg);
   background: var(--surface);
@@ -86,7 +87,7 @@
 
 .cell,
 .blank {
-  padding: 0 1px;
+  padding: 0;
   text-align: center;
 }
 

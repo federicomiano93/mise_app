@@ -333,3 +333,92 @@ describe('the booking\'s page', () => {
     expect(source.watch).toHaveBeenLastCalledWith(monthRange(NEXT), expect.any(Function), expect.any(Function));
   });
 });
+
+// ── Review fixes (19 Nov 2026): what the one-month listener must not break ──
+describe('a booking moved to another month', () => {
+  const saveAndConfirm = async (user: ReturnType<typeof renderApp>['user']) => {
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await user.click(within(await screen.findByRole('alertdialog', { name: 'Save this booking?' })).getByRole('button', { name: 'Save' }));
+  };
+
+  it('⚠️ listens to BOTH months while its form is open (its stored copy stays known)', async () => {
+    const { source } = show('/bookings/A3/edit');
+    await screen.findByLabelText('Customer name', {}, LOAD);
+    fireEvent.change(screen.getByLabelText('Day'), { target: { value: NEXT_DAY } });
+    await waitFor(() => { expect(source.watch).toHaveBeenLastCalledWith({ from: `${MONTH}-01`, until: monthRange(NEXT).until }, expect.any(Function), expect.any(Function)); });
+    expect(source.watching()).toBe(1);
+  });
+
+  it('⚠️ a refused save of the move, opened again and saved, UPDATES the booking — never a second copy', async () => {
+    const source = fakeBookingsSource(seed());
+    const { user } = show('/bookings/A3/edit', source);
+    await screen.findByLabelText('Customer name', {}, LOAD);
+    fireEvent.change(screen.getByLabelText('Day'), { target: { value: NEXT_DAY } });
+    await waitFor(() => { expect(source.watch).toHaveBeenLastCalledWith({ from: `${MONTH}-01`, until: monthRange(NEXT).until }, expect.any(Function), expect.any(Function)); });
+    source.refuseWith = permissionDenied();
+    await saveAndConfirm(user);
+    const banner = await screen.findByRole('button', { name: 'Open it to try again' }, LOAD);
+    source.refuseWith = null;
+    await user.click(banner);
+    expect(await screen.findByLabelText('Day', {}, LOAD)).toHaveValue(NEXT_DAY);
+    // The stored booking's month is listened to again with the new one: it is found, and updated.
+    await waitFor(() => { expect(source.watch).toHaveBeenLastCalledWith({ from: `${MONTH}-01`, until: monthRange(NEXT).until }, expect.any(Function), expect.any(Function)); });
+    await waitFor(() => { expect(screen.queryByText('Loading bookings…')).toBeNull(); });
+    await saveAndConfirm(user);
+    await waitFor(() => { expect(source.update).toHaveBeenCalledTimes(2); });
+    expect(source.update).toHaveBeenLastCalledWith('A3', expect.objectContaining({ date: NEXT_DAY, number: 3 }));
+    expect(source.create).not.toHaveBeenCalled();
+  });
+
+  it('⚠️ takes the next free number of its new month when its own is already used there', async () => {
+    const source = fakeBookingsSource([...seed(), bookingFixture({ id: 'R5', date: TODAY, time: '12:00', customerName: 'Rita Cinque', number: 5 })]);
+    const { user } = show('/bookings/R5/edit', source);
+    await screen.findByLabelText('Customer name', {}, LOAD);
+    fireEvent.change(screen.getByLabelText('Day'), { target: { value: NEXT_DAY } });
+    await waitFor(() => { expect(source.watch).toHaveBeenLastCalledWith({ from: `${MONTH}-01`, until: monthRange(NEXT).until }, expect.any(Function), expect.any(Function)); });
+    await saveAndConfirm(user);
+    // Sara Dopo is N. 5 in that month: Rita becomes N. 6. Moved within its own month she would keep 5.
+    await waitFor(() => { expect(source.update).toHaveBeenCalledWith('R5', expect.objectContaining({ date: NEXT_DAY, number: 6 })); });
+  });
+
+  it('⚠️ a month only this device\'s copy has answered for (offline) is said in the save question', async () => {
+    const source = fakeBookingsSource(seed());
+    vi.mocked(source.watch).mockImplementation(({ from, until }, onChange) => {
+      queueMicrotask(() => { onChange([...source.items.values()].filter(b => b.date >= from && b.date < until), true); });
+      return () => undefined;
+    });
+    const { user } = show('/bookings/A3/edit', source);
+    await screen.findByLabelText('Customer name', {}, LOAD);
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    expect(await screen.findByRole('alertdialog', { name: 'Save this booking?' })).toHaveTextContent('No connection: the bookings of that month could not be checked');
+  });
+});
+
+describe('getting there and back', () => {
+  it('⚠️ a booking opened by its address in another month (no day in the history) is found: its month is opened', async () => {
+    const { source } = show('/bookings/N1');
+    expect(await screen.findByRole('region', { name: 'Sara Dopo' }, LOAD)).toBeInTheDocument();
+    expect(source.dayOf).toHaveBeenCalledWith('N1');
+    expect(source.watch).toHaveBeenLastCalledWith(monthRange(NEXT), expect.any(Function), expect.any(Function));
+  });
+
+  it('a booking that is gone is still «no longer here»', async () => {
+    show('/bookings/GONE');
+    expect(await screen.findByText(/This booking is no longer here/, {}, LOAD)).toBeInTheDocument();
+  });
+
+  it('⚠️ Back from a booking puts the focus on its row; a first load leaves the focus alone (the skip link first)', async () => {
+    const { user } = show();
+    await waitFor(() => { expect(rowNames()).toHaveLength(4); }, LOAD);
+    await user.click(list().getByRole('link', { name: 'Anna Bianchi' }));
+    const card = await screen.findByRole('region', { name: 'Anna Bianchi' });
+    await user.click(within(card).getByRole('button', { name: 'Back' }));
+    await waitFor(() => { expect(list().getByRole('link', { name: 'Anna Bianchi' })).toHaveFocus(); });
+  });
+
+  it('a first load on a booking does not take the focus', async () => {
+    show('/bookings/A1');
+    await screen.findByRole('region', { name: 'Niccolò Rossi' }, LOAD);
+    expect(screen.getByRole('heading', { level: 1 })).not.toHaveFocus();
+  });
+});

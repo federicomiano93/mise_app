@@ -34,17 +34,19 @@ type Props = {
   readonly today: string;
   // The booking open beside the list, drawn as current.
   readonly selectedId: string | null;
+  // Whether the list is on screen (hidden on a phone behind any other screen, on the split behind a booking or its form).
+  readonly shown: boolean;
 };
 
 // The bookings of one day picked on a month calendar (bookings rebuild step 3, 19 Nov 2026: the owner's design on the tablet, for
 // 24 December — many bookings, each picked up in a time slot, ticked off at the counter). «New booking» is the list's one primary
 // action and starts on the picked day.
-export function BookingsList({ day, onDay, today, selectedId }: Props) {
+export function BookingsList({ day, onDay, today, selectedId, shown }: Props) {
   const { t, locale } = useT();
   const navigate = useNavigate();
   const store = useBookingsStore();
   const say = useStatusMessage();
-  const { status, month, items, refused } = useBookings();
+  const { status, month, through, items, refused } = useBookings();
   const { canManage } = useSession();
   const ids = useId();
   const words: UnitWords = {
@@ -52,8 +54,10 @@ export function BookingsList({ day, onDay, today, selectedId }: Props) {
     packs: n => t('bookings.unit.packs', { n }),
   };
   // The month's bookings arrive with their own month: until then (a month just asked) nothing is counted or listed.
-  const held = month === monthOf(day) ? items : [];
-  const loading = status === 'loading' || month !== monthOf(day);
+  const shownMonth = monthOf(day);
+  const covered = month !== null && through !== null && month <= shownMonth && shownMonth <= through;
+  const held = covered ? items : [];
+  const loading = status === 'loading' || !covered;
   const counts = dayCounts(held);
   // «Cerca per nome»: the picked day's rows, kept to the names holding what is typed (case and accents folded). A new day starts
   // with an empty box: a name typed for one day would hide another day's rows without a word.
@@ -78,6 +82,17 @@ export function BookingsList({ day, onDay, today, selectedId }: Props) {
     focusedFor.current = key;
     row.focus();
   });
+
+  // ⚠️ BACK FROM A BOOKING HANDS THE FOCUS TO ITS ROW: the list was hidden while the booking took the screen, and the focus,
+  // left inside a screen that is gone, would fall to the page's top. Only when nothing else holds it (a phone's gesture, Back).
+  const openedId = useRef<string | null>(null);
+  useEffect(() => {
+    if (!shown || openedId.current === null) return;
+    const id = openedId.current;
+    openedId.current = null;
+    if (document.activeElement !== null && document.activeElement !== document.body) return;
+    [...(rowsBox.current?.querySelectorAll<HTMLElement>('[data-booking]') ?? [])].find(node => node.dataset.booking === id)?.focus();
+  }, [shown]);
 
   // ⚠️ ONE TAP, NO QUESTION (the counter at pickup): Collected, and Undo puts it back to open. It shows at once (the store lays it
   // over the listener's copy); a refusal puts the row back and the section says so (BookingsSection.tsx StoreMessages).
@@ -157,7 +172,7 @@ export function BookingsList({ day, onDay, today, selectedId }: Props) {
           <ul className={styles.rows}>
             {rows.map(booking => (
               <li key={booking.id}>
-                <Row booking={booking} current={booking.id === selectedId} locale={locale} words={words} onToggle={toggle} />
+                <Row booking={booking} current={booking.id === selectedId} locale={locale} words={words} onToggle={toggle} onOpen={() => { openedId.current = booking.id; }} />
               </li>
             ))}
           </ul>
@@ -184,12 +199,13 @@ export function BookingsList({ day, onDay, today, selectedId }: Props) {
 // the booking, stretched over the whole row — the products one per line, Pickup / Delivery, and at the bottom right «✓ Collected»
 // (or «Undo» once collected). A cancelled one has no button: «Cancelled», crossed out.
 // ⚠️ THE BUTTON IS NOT INSIDE THE LINK (a button cannot nest in a link): the link's ::after covers the row, the button sits above it.
-function Row({ booking, current, locale, words, onToggle }: {
+function Row({ booking, current, locale, words, onToggle, onOpen }: {
   booking: Booking;
   current: boolean;
   locale: string;
   words: UnitWords;
   onToggle: (booking: Booking) => void;
+  onOpen: () => void;
 }) {
   const { t } = useT();
   const ids = useId();
@@ -209,6 +225,7 @@ function Row({ booking, current, locale, words, onToggle }: {
           className={styles.name}
           data-booking={booking.id}
           aria-current={current ? 'page' : undefined}
+          onClick={onOpen}
         >
           {booking.customerName}
         </Link>

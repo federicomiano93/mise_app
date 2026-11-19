@@ -34,12 +34,23 @@ import styles from './BookingDetail.module.css';
 // One booking (18 Nov 2026): its status (a tap saves it), when, who, what, the money, the two slips and the bin.
 //
 // ⚠️ THE BIN IS ALSO HOW A CUSTOMER'S «DELETE MY DATA» IS HONOURED: the booking goes for good, with the name, phone and address.
+// The loading line's title (one booking page at a time): the name takes the focus over from it.
+const WAITING_TITLE_ID = 'booking-waiting-title';
+
 export function BookingDetail({ id }: { id: string }) {
   const { t } = useT();
   const { status, items } = useBookings();
   const booking = items.find(item => item.id === id) ?? null;
   const navigate = useNavigate();
   const { state } = useLocation();
+  const navigationType = useNavigationType();
+  // The loading line's h1 takes the focus as the page's own would (not on Back, not on a first load); the booking's name takes it
+  // over when it arrives.
+  const waitingTitle = useRef<HTMLHeadingElement>(null);
+  const waiting = booking === null;
+  useEffect(() => {
+    if (waiting && navigationType !== 'POP') waitingTitle.current?.focus({ preventScroll: true });
+  }, []);
   // A booking opened from the list goes back by the browser's Back (the list is the entry behind it); opened by its address it
   // replaces itself with the list.
   const back = () => {
@@ -51,7 +62,7 @@ export function BookingDetail({ id }: { id: string }) {
     return (
       <section className={styles.card} aria-busy={status === 'loading'}>
         {/* The page draws no h1 for a booking (its h1 is the customer's name): until there is one, the section's name is it. */}
-        <FormBar backLabel={t('ui.back')} onBack={back} title={t('section.bookings')} level={1} />
+        <FormBar backLabel={t('ui.back')} onBack={back} title={t('section.bookings')} level={1} titleRef={waitingTitle} titleId={WAITING_TITLE_ID} />
         <div className={styles.body}>
           {status === 'loading' ? <p className={styles.muted}>{t('bookings.loading')}</p> : (
             <>
@@ -83,10 +94,11 @@ function Shown({ booking, onBack }: { booking: Booking; onBack: () => void }) {
   const navigationType = useNavigationType();
   // ⚠️ THE PAGE DRAWS NO h1 HERE (Page `ownHeading`), so the move of the focus a page makes is this booking's to make: on its
   // title, the customer's name, as the page would on its own h1 — opened from the list, from the Home, or after its loading line.
-  // Not on Back (POP) nor on the first load, as the page (the skip link stays the first Tab stop), unless the list sent it here.
+  // Not on Back (POP) nor on the first load, as the page (the skip link stays the first Tab stop) — except when the loading line's
+  // title held the focus: it hands it on to the name.
   useEffect(() => {
-    const lost = document.activeElement === null || document.activeElement === document.body;
-    if (cameFromList(state) || navigationType !== 'POP' || lost) title.current?.focus({ preventScroll: true });
+    const fromPlaceholder = document.activeElement?.id === WAITING_TITLE_ID;
+    if (navigationType !== 'POP' || fromPlaceholder) title.current?.focus({ preventScroll: true });
   }, []);
 
   const words: UnitWords = {
