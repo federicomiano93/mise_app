@@ -69,6 +69,11 @@ export function RestScreen({ venue, reloading, now, sections, armAt, onWake }: P
       tabIndex={0}
       aria-label={reloading ? t('kiosk.rest.reloading') : t('kiosk.rest.tap')}
       className={styles.cover}
+      // ⚠️ A TOP LAYER FOR REACT ARIA (code review): a dialog that opens while the tablet rests makes everything outside it `inert`
+      // (useModalOverlay → ariaHideOutside, Chrome 102 and later), the cover included — and an inert cover lets the waking tap fall
+      // through onto the hidden dialog's buttons, answering a question nobody saw. Marked so, the cover is left alone and keeps
+      // swallowing the tap. (The lab tablet's Chrome 101 has no `inert`; React Aria falls back to aria-hidden there.)
+      data-react-aria-top-layer=""
     >
       <div className={styles.block} data-shift={shift}>
         <div className={styles.corner}>

@@ -3,6 +3,7 @@
 // while it is up, and a sign-out taking it away.
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { useEffect, useState } from 'react';
 import { act, fireEvent, screen } from '@testing-library/react';
 import { KIOSK_STORAGE_KEY } from '@mise/shared/kiosk-model';
 import { isBusy, isBusyApartFrom, markBusy } from '../session/busy';
@@ -14,6 +15,7 @@ import { TICK_MS } from './kioskController';
 import { provideKioskLines } from './liveOrdersLines';
 import { requestRestNow } from './restNow';
 import type { KioskEnv } from './kioskController';
+import { Dialog } from '../ui/Dialog';
 import { LIFT_WAIT_MS } from './wakeTap';
 
 const MIN = 60_000;
@@ -150,6 +152,38 @@ describe('the rest screen', () => {
 });
 
 describe('the waking tap presses nothing', () => {
+  // A question that opens WHILE the tablet rests (a late refusal, «Order sent?» from another phone): React Aria's modal hides
+  // everything outside it — with `inert` on Chrome 102 and later, which makes a tap fall through the cover onto the dialog. The cover
+  // is a React Aria top layer, so it is never hidden and keeps swallowing the tap (code review of #575).
+  test('a dialog that opens under the rest cover never hides the cover, and the waking tap answers nothing', async () => {
+    const answered = vi.fn();
+    function LateQuestion() {
+      const [open, setOpen] = useState(false);
+      useEffect(() => {
+        const id = setTimeout(() => { setOpen(true); }, 6 * MIN);
+        return () => { clearTimeout(id); };
+      }, []);
+      return (
+        <Dialog isOpen={open} onClose={() => { setOpen(false); }} title="Order sent?" actions={<button type="button" onClick={answered}>Yes</button>} />
+      );
+    }
+    renderWithSession(<><LateQuestion /><Kiosk env={env()} /></>);
+    await idle(5 * MIN);
+    expect(cover()).toBeInTheDocument();
+    await idle(MIN);
+    const rest = document.getElementById('kiosk-rest') as HTMLElement;
+    expect(document.querySelector('[role="dialog"], [role="alertdialog"]')).not.toBeNull();
+    expect(rest).toHaveAttribute('data-react-aria-top-layer');
+    expect(rest.inert).not.toBe(true);
+    expect(rest).not.toHaveAttribute('aria-hidden', 'true');
+    expect(rest).not.toHaveAttribute('inert');
+    fireEvent.pointerDown(rest);
+    fireEvent.pointerUp(rest);
+    fireEvent.click(rest);
+    expect(answered).not.toHaveBeenCalled();
+    expect(cover()).not.toBeInTheDocument();
+  });
+
   test('a touch on the cover reaches no React handler and no document listener, and wakes it after the lift', async () => {
     const pressed = vi.fn();
     const heard = vi.fn();
