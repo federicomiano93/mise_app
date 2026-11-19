@@ -3235,7 +3235,7 @@ export const en = {
   'kiosk.rest.workDay': 'Work day: {date}',
   'kiosk.rest.toOrderTitle': 'To order today',
   'kiosk.rest.arrivingTitle': 'Arriving today',
-  'kiosk.home.rest': 'Rest',
+  'kiosk.home.rest': 'Standby',
   'kiosk.home.exit': 'Exit',
   'kiosk.home.cannotClose': 'This tablet doesn’t let the app close itself. To close it, open the recent-apps view and swipe Mise away.',
   'kiosk.home.aria': 'Kiosk mode',

@@ -1,5 +1,5 @@
-// «Rest» and «Exit» on the Home (staff slice 6, D8): only on a kiosk device, to every role, above «Da fare»; Rest asks the kiosk to
-// cover the screen, Exit closes the page or says how to.
+// «Standby» and «Exit» in the Home's top bar (staff slice 6, D8; moved from the Home's content on 19 Nov 2026): only on a kiosk device,
+// only on the Home, to every role; Standby asks the kiosk to cover the screen, Exit closes the page or says how to.
 
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import { act, screen, within } from '@testing-library/react';
@@ -18,23 +18,32 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe('the kiosk band on the Home', () => {
+describe('the kiosk pills in the top bar', () => {
   test('not there with kiosk mode off', async () => {
     renderApp('/home');
     expect(await screen.findByRole('heading', { level: 1, name: 'Home' })).toBeInTheDocument();
     expect(band()).not.toBeInTheDocument();
   });
 
-  test('an employee on a kiosk device sees Rest and Exit, above «Da fare»', async () => {
+  test('an employee on a kiosk device sees Standby and Exit in the top bar, before «Online»', async () => {
     localStorage.setItem(KIOSK_STORAGE_KEY, ON);
     renderApp('/home', { session: EMPLOYEE });
     const found = await screen.findByRole('group', { name: 'Kiosk mode' });
-    const rest = within(found).getByRole('button', { name: 'Rest' });
+    expect(within(found).getByRole('button', { name: 'Standby' })).toBeInTheDocument();
     expect(within(found).getByRole('button', { name: 'Exit' })).toBeInTheDocument();
-    // «Da fare»'s title (its words are the venue's own name for the list).
-    const todo = document.getElementById('home-todo-title') as HTMLElement;
-    expect(todo).not.toBeNull();
-    expect(rest.compareDocumentPosition(todo) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const bar = found.closest('header') as HTMLElement;
+    expect(bar).not.toBeNull();
+    const online = screen.getByText('Online');
+    expect(found.compareDocumentPosition(online) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // Nothing of it in the Home's own content any more.
+    expect(within(screen.getByRole('main')).queryByRole('group', { name: 'Kiosk mode' })).not.toBeInTheDocument();
+  });
+
+  test('not on another section, even with kiosk mode on', async () => {
+    localStorage.setItem(KIOSK_STORAGE_KEY, ON);
+    renderApp('/orders');
+    await screen.findByRole('heading', { level: 1 });
+    expect(band()).not.toBeInTheDocument();
   });
 
   test('follows the setting live (another tab switching it on)', async () => {
@@ -47,7 +56,7 @@ describe('the kiosk band on the Home', () => {
     expect(band()).toBeInTheDocument();
   });
 
-  test('Rest asks the kiosk to cover the screen, and counts the action by name', async () => {
+  test('Standby asks the kiosk to cover the screen, and counts the action by name', async () => {
     localStorage.setItem(KIOSK_STORAGE_KEY, ON);
     const asked = vi.fn();
     const stop = onRestNow(asked);
@@ -56,7 +65,7 @@ describe('the kiosk band on the Home', () => {
     window.addEventListener(ACTION_EVENT, count);
     try {
       const { user } = renderApp('/home');
-      await user.click(await screen.findByRole('button', { name: 'Rest' }));
+      await user.click(await screen.findByRole('button', { name: 'Standby' }));
       expect(asked).toHaveBeenCalledTimes(1);
       expect(actions).toContain('kiosk-rest');
     } finally {
@@ -81,7 +90,7 @@ describe('the kiosk band on the Home', () => {
     localStorage.setItem(KIOSK_STORAGE_KEY, ON);
     renderApp('/home', { lang: 'it', session: { language: 'it' } });
     const found = await screen.findByRole('group', { name: 'Modalità chiosco' });
-    expect(within(found).getByRole('button', { name: 'Riposo' })).toBeInTheDocument();
+    expect(within(found).getByRole('button', { name: 'Standby' })).toBeInTheDocument();
     expect(within(found).getByRole('button', { name: 'Esci' })).toBeInTheDocument();
   });
 });

@@ -521,3 +521,4 @@ Branch `feature/mise2-staff-6-kiosk-home`, stacked on slice 5 (`feature/mise2-st
 - Rest and Exit send the usage counts `kiosk-rest` / `kiosk-exit` (the existing telemetry, the same names as the current app): the only Firestore write the kiosk causes.
 - **Open point (a)**: with «Screen off after: Never» there is no night, so the rest screen reads Orders every 15 minutes around the clock (about 50 documents × 96 a day with 30 suppliers, roughly 10% of the free daily reads per tablet; the same as the current app).
 - **Open point (b)**: a screen reader hears only «Tap to continue» on the cover, because its content sits inside a `role=button`. Kept as built, for a lab tablet.
+- **His tablet decision, 19 Nov 2026**: «Standby» (was «Riposo» / «Rest») and «Exit» are two small pills in the app's top bar, just before «Online», on the Home only and only with kiosk mode on, no longer a band in the Home (`shell/KioskPills.tsx`); round icon-only buttons on narrow widths.
