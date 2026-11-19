@@ -355,12 +355,9 @@ to its markers, with his decision in the line.
 What each one means for the people using Mise 2 until it is ported:
 - 16. Suppliers: verified and fixed (13 Nov 2026). Still different: no Disattiva/Riattiva on a row (only on the card), no hand-made pencil
   (Mise 2 shows «Da fattura» on the invoice ones instead), and a reactivated row leaves the «Non in uso» group at once.
-- 26. Food cost step B (the cost on every «Made of» line, «No price», the «Which?» list of what has no price), and the two
-  decimals on those screens when they are built: Mise 2's lines keep their own notes (a recipe or an item with no price is
-  said, no money under a recipe or ingredient line; packaging shows its price each and total).
-  (Items 21, 22, 24, 25 and 28 are done: weighing units, the «Cost per 1 kg» block, the list search and the phone preview, the
-  read-first card with four figures and «Details», and two decimals on the screens Mise 2 has.)
-- 23. Food cost recipe link with several products (a check).
+  (Items 21-26 and 28 are done: weighing units, the «Cost per 1 kg» block, the recipe link with several products (23, 10 Nov 2026),
+  the list search and the phone preview, the read-first card with four figures and «Details», the line costs and «Which?» (26,
+  10 Nov 2026), and two decimals on the screens Mise 2 has.)
 - 41-43. Staff / join codes / roles screens (people, invitations incl. #475 role-first invite, the join form) and the
   kiosk (#406 keep-screen-on, the kiosk lines already in shared). Staff slices 1-4 are LIVE (joining with a code or a link, with a new account, role-first invitations, the people list: v2.2.x to v2.3.0); the kiosk (slices 5-6) is in PR #583, not live yet.
 
