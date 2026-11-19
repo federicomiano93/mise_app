@@ -1,5 +1,6 @@
-/* One booking (full width on the split since bookings rebuild step 3): a card with the form bar (Back · the customer's name ·
-   the pencil), the two statuses (Collected, Cancelled), the facts, the two print buttons and the bin.
+/* One booking: a card with the form bar (Back · the customer's name and its status tag · the pencil), the facts, the two print
+   buttons, and at the foot «Cancel booking» and the bin. On the tablet (19 Nov 2026) it is opened IN the day's list, in place of its
+   row, with a 2px accent border and an X in place of Back.
    ⚠️ NOTHING ON THE CARD MAY CLIP (no `overflow`): the form bar sticks to the top of the shell's scrolling area. */
 
 .card {
@@ -7,6 +8,38 @@
   border: 1px solid var(--line);
   border-radius: var(--r-lg);
   background: var(--surface);
+}
+
+.card[data-in-place="true"] {
+  border: 2px solid var(--accent);
+}
+
+/* The status tag beside the name: «✓ Collected» green, «Cancelled» red. Icon and text are one flex row, so the tick sits on the
+   text's middle. */
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
+  padding: 2px var(--s2);
+  border-radius: var(--r-pill);
+  font-size: var(--fs-sm);
+  font-weight: 650;
+}
+
+.tag > svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+
+.tag[data-tag="collected"] {
+  background: var(--ok-tint);
+  color: var(--ok-ink);
+}
+
+.tag[data-tag="cancelled"] {
+  background: var(--danger-tint);
+  color: var(--danger-ink);
 }
 
 .body {
@@ -50,49 +83,6 @@
   height: 20px;
 }
 
-.statuses {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--s2);
-}
-
-.statusChoice {
-  min-height: var(--hit);
-  padding: var(--s1) var(--s2);
-  border: 1.5px solid var(--line-2);
-  border-radius: var(--r-md);
-  background: var(--surface);
-  color: var(--ink);
-  font: inherit;
-  font-size: var(--fs-sm);
-  font-weight: 600;
-  overflow-wrap: anywhere;
-  cursor: pointer;
-}
-
-.statusChoice:focus-visible {
-  outline: 3px solid var(--accent);
-  outline-offset: 2px;
-}
-
-@media (hover: hover) {
-  .statusChoice:hover {
-    background: var(--sunken);
-  }
-}
-
-.statusChoice[aria-pressed="true"][data-status="collected"] {
-  border-color: var(--ink-2);
-  background: var(--sunken);
-  color: var(--ink);
-}
-
-.statusChoice[aria-pressed="true"][data-status="cancelled"] {
-  border-color: var(--danger);
-  background: var(--danger-tint);
-  color: var(--danger-ink);
-}
-
 .facts {
   display: flex;
   flex-direction: column;
@@ -124,8 +114,9 @@
 }
 
 .when {
-  font-size: var(--fs-md);
-  font-weight: 600;
+  font-size: var(--fs-xl);
+  font-weight: 700;
+  line-height: 1.25;
 }
 
 .when::first-letter {
@@ -224,10 +215,40 @@
   font-size: var(--fs-sm);
 }
 
-/* The bin: small and low-key, at the foot, never beside the main actions. */
+/* «Cancel booking» / «Reopen booking» and the bin: small and low-key, at the foot, never beside the main actions. */
 .foot {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   justify-content: flex-end;
+  gap: var(--s2);
+}
+
+.statusMove {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--hit);
+  padding: 0 var(--s3);
+  border: 0;
+  border-radius: var(--r-md);
+  background: transparent;
+  color: var(--ink-2);
+  font: inherit;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.statusMove[data-focus-visible] {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (hover: hover) {
+  .statusMove[data-hovered] {
+    background: var(--sunken);
+  }
 }
 
 .delete {

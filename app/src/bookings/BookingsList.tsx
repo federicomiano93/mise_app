@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import { Check, Plus, Printer, Search, Settings, Undo2 } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router';
 import { useT } from '../i18n/useT';
@@ -38,12 +39,15 @@ type Props = {
   readonly selectedId: string | null;
   // Whether the list is on screen (hidden on a phone behind any other screen, on the split behind a booking or its form).
   readonly shown: boolean;
+  // The booking OPEN IN THE LIST (the tablet, 19 Nov 2026): its card, drawn in place of its row (or above the rows when its row is
+  // not shown: another day's, filtered out by the search, not loaded yet). null on a phone and while none is open.
+  readonly open?: ReactNode;
 };
 
 // The bookings of one day picked on a month calendar (bookings rebuild step 3, 19 Nov 2026: the owner's design on the tablet, for
 // 24 December — many bookings, each picked up in a time slot, ticked off at the counter). «New booking» is the list's one primary
 // action and starts on the picked day.
-export function BookingsList({ day, onDay, today, selectedId, shown }: Props) {
+export function BookingsList({ day, onDay, today, selectedId, shown, open = null }: Props) {
   const { t, locale } = useT();
   const navigate = useNavigate();
   const store = useBookingsStore();
@@ -71,6 +75,7 @@ export function BookingsList({ day, onDay, today, selectedId, shown }: Props) {
   }
   const rows = dayRows(held, day, query);
   const dayHasRows = held.some(b => b.date === day);
+  const openInRows = open !== null && !loading && rows.some(b => b.id === selectedId);
 
   // After a save the focus goes to the saved booking's row, once, as soon as the list shows it (the editor it came from is gone).
   const { state, key } = useLocation();
@@ -85,16 +90,17 @@ export function BookingsList({ day, onDay, today, selectedId, shown }: Props) {
     row.focus();
   });
 
-  // ⚠️ BACK FROM A BOOKING HANDS THE FOCUS TO ITS ROW: the list was hidden while the booking took the screen, and the focus,
-  // left inside a screen that is gone, would fall to the page's top. Only when nothing else holds it (a phone's gesture, Back).
+  // ⚠️ BACK FROM A BOOKING HANDS THE FOCUS TO ITS ROW: the list was hidden while the booking took the screen (a phone), or the
+  // card holding the focus was closed (the tablet), and the focus, left inside a screen that is gone, would fall to the page's top.
+  // Only when nothing else holds it (a phone's gesture, Back, the card's X or Escape).
   const openedId = useRef<string | null>(null);
   useEffect(() => {
-    if (!shown || openedId.current === null) return;
+    if (!shown || selectedId !== null || openedId.current === null) return;
     const id = openedId.current;
     openedId.current = null;
     if (document.activeElement !== null && document.activeElement !== document.body) return;
     [...(rowsBox.current?.querySelectorAll<HTMLElement>('[data-booking]') ?? [])].find(node => node.dataset.booking === id)?.focus();
-  }, [shown]);
+  }, [shown, selectedId]);
 
   // ⚠️ ONE TAP, NO QUESTION (the counter at pickup): Collected, and Undo puts it back to open. It shows at once (the store lays it
   // over the listener's copy); a refusal puts the row back and the section says so (BookingsSection.tsx StoreMessages).
@@ -111,7 +117,7 @@ export function BookingsList({ day, onDay, today, selectedId, shown }: Props) {
   };
 
   return (
-    <section ref={rowsBox} className={styles.list} aria-labelledby={`${ids}-title`}>
+    <section ref={rowsBox} className={styles.list} data-open={open !== null ? 'true' : undefined} aria-labelledby={`${ids}-title`}>
       <h2 id={`${ids}-title`} className="visually-hidden">{t('section.bookings')}</h2>
       {/* The new booking starts on the day picked in the calendar; a day already gone gives none (it cannot be booked). */}
       <Button
@@ -123,33 +129,37 @@ export function BookingsList({ day, onDay, today, selectedId, shown }: Props) {
         <span>{t('bookings.new')}</span>
       </Button>
 
-      <BookingsCalendar
-        day={day}
-        today={today}
-        counts={counts}
-        onDay={onDay}
-        onMonth={next => { onDay(dayToShow(next, today)); }}
-      />
+      <div className={styles.calendar}>
+        <BookingsCalendar
+          day={day}
+          today={today}
+          counts={counts}
+          onDay={onDay}
+          onMonth={next => { onDay(dayToShow(next, today)); }}
+        />
+      </div>
 
       {/* ⚠️ THE LIVE REGIONS ARE ON THE PAGE EMPTY, AND ONLY WHAT IS INSIDE THEM COMES AND GOES: a region inserted already filled
           is not announced reliably (architecture, «Traps already paid for»). */}
-      <div role="alert">
-        {refused !== null ? (
-          <div className={styles.refused}>
-            <span>{t('bookings.refused.text')}</span>
-            <Button
-              variant="secondary"
-              onPress={() => { void navigate(refused.id === null ? newBookingPath() : editBookingPath(refused.id), { state: RESTORE_REFUSED }); }}
-            >
-              {t('bookings.refused.open')}
-            </Button>
-          </div>
-        ) : null}
-      </div>
+      <div className={styles.notices}>
+        <div role="alert">
+          {refused !== null ? (
+            <div className={styles.refused}>
+              <span>{t('bookings.refused.text')}</span>
+              <Button
+                variant="secondary"
+                onPress={() => { void navigate(refused.id === null ? newBookingPath() : editBookingPath(refused.id), { state: RESTORE_REFUSED }); }}
+              >
+                {t('bookings.refused.open')}
+              </Button>
+            </div>
+          ) : null}
+        </div>
 
-      <div role="status">
-        {status === 'error' ? <p className={styles.broken}>{t('bookings.streamError')}</p> : null}
-        {!loading && monthMayBeCut(held.length, READ_LIMIT) ? <p className={styles.broken}>{t('bookings.monthCut')}</p> : null}
+        <div role="status">
+          {status === 'error' ? <p className={styles.broken}>{t('bookings.streamError')}</p> : null}
+          {!loading && monthMayBeCut(held.length, READ_LIMIT) ? <p className={styles.broken}>{t('bookings.monthCut')}</p> : null}
+        </div>
       </div>
 
       <section className={styles.day} aria-labelledby={`${ids}-day`}>
@@ -171,6 +181,7 @@ export function BookingsList({ day, onDay, today, selectedId, shown }: Props) {
         <div role="status" className={styles.searchSaid}>
           {!loading && dayHasRows && rows.length === 0 ? t('bookings.search.none', { query: query.trim() }) : ''}
         </div>
+        {open !== null && !openInRows ? <div className={styles.expanded}>{open}</div> : null}
         {loading ? (
           <p className={styles.empty}>{t('bookings.loading')}</p>
         ) : !dayHasRows ? (
@@ -179,7 +190,7 @@ export function BookingsList({ day, onDay, today, selectedId, shown }: Props) {
           <ul className={styles.rows}>
             {rows.map(booking => (
               <li key={booking.id}>
-                <Row booking={booking} current={booking.id === selectedId} locale={locale} words={words} onToggle={toggle} onOpen={() => { openedId.current = booking.id; }} />
+                {open !== null && booking.id === selectedId ? <div className={styles.expanded}>{open}</div> : <Row booking={booking} current={booking.id === selectedId} locale={locale} words={words} onToggle={toggle} onOpen={() => { openedId.current = booking.id; }} />}
               </li>
             ))}
           </ul>
@@ -193,7 +204,7 @@ export function BookingsList({ day, onDay, today, selectedId, shown }: Props) {
       </Button>
       {/* The venue's bookings settings (bookings settings, 18 Nov 2026): only for whoever manages bookings (the rules' managesBookings). */}
       {canManage ? (
-        <Button variant="secondary" className={styles.printer} onPress={() => { void navigate(settingsPath(), { state: FROM_LIST }); }}>
+        <Button variant="secondary" className={`${styles.printer} ${styles.settings}`} onPress={() => { void navigate(settingsPath(), { state: FROM_LIST }); }}>
           <Settings aria-hidden="true" />
           <span>{t('bookings.settings.door')}</span>
         </Button>

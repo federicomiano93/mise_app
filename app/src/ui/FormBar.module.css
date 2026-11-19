@@ -29,6 +29,14 @@
   min-width: 0;
 }
 
+/* The title and, beside it, a tag (a booking's status); the tag drops under the name when they do not fit. */
+.titleRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s1) var(--s2);
+}
+
 /* ⚠️ WORDS ARE NEVER CUT. On a 296px phone the title had about 70px beside Back and Save, and
    «Modifica Lunedì» broke as «Modifi / ca». The title keeps at least 96px (one word of it); when that does not
    fit, the action (Save) drops to a line of its own, at the right, instead. */

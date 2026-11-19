@@ -153,17 +153,15 @@ describe('a booking', () => {
     expect(text).toMatch(/A presto!$/);
   });
 
-  it('a tap on a status saves it; cancelling asks first', async () => {
+  it('cancelling asks first; «Keep it» leaves the booking as it was', async () => {
     const { user, source } = show('/bookings/A1');
     const card = await screen.findByRole('region', { name: 'Mario Prova' }, LOAD);
-    await user.click(within(card).getByRole('button', { name: 'Collected' }));
-    await waitFor(() => { expect(source.items.get('A1')?.status).toBe('collected'); });
-    expect(within(card).getByRole('button', { name: 'Collected' })).toHaveAttribute('aria-pressed', 'true');
-    await user.click(within(card).getByRole('button', { name: 'Cancelled' }));
+    const before = source.items.get('A1')?.status;
+    await user.click(within(card).getByRole('button', { name: 'Cancel booking' }));
     const ask = await dialog('Cancel this booking?');
     await user.click(within(ask).getByRole('button', { name: 'Keep it' }));
-    expect(source.items.get('A1')?.status).toBe('collected');
-    await user.click(within(card).getByRole('button', { name: 'Cancelled' }));
+    expect(source.items.get('A1')?.status).toBe(before);
+    await user.click(within(card).getByRole('button', { name: 'Cancel booking' }));
     await user.click(within(await dialog('Cancel this booking?')).getByRole('button', { name: 'Cancel booking' }));
     await waitFor(() => { expect(source.items.get('A1')?.status).toBe('cancelled'); });
   });

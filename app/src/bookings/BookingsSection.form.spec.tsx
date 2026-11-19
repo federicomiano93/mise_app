@@ -78,14 +78,14 @@ describe('the layout', () => {
     await user.click(screen.getByRole('button', { name: 'Back' }));
     await waitFor(() => { expect(router.state.location.pathname).toBe('/bookings'); });
     expect((document.querySelector('[data-view]') as HTMLElement).className).not.toContain('fullForm');
-    // A booking's page takes the whole width too (bookings rebuild step 3), and so does its editor.
+    // A booking's page does NOT (19 Nov 2026): on the tablet it opens in the list. Its editor takes the whole width.
     await router.navigate('/bookings/A1');
     await waitFor(() => { expect((document.querySelector('[data-view]') as HTMLElement).dataset.view).toBe('booking'); });
-    expect((document.querySelector('[data-view]') as HTMLElement).className).toContain('fullForm');
+    expect((document.querySelector('[data-view]') as HTMLElement).className).not.toContain('fullForm');
     await router.navigate('/bookings/A1/edit');
     await waitFor(() => { expect((document.querySelector('[data-view]') as HTMLElement).className).toContain('fullForm'); });
     // The stylesheet does it from the split's width only.
-    expect(sectionCss).toMatch(/@media \(min-width: 1000px\)\s*\{\s*\.layout\.fullForm\s*\{\s*grid-template-columns: minmax\(0, 1fr\);\s*\}\s*\.layout\.fullForm \.list\s*\{\s*display: none;/);
+    expect(sectionCss).toMatch(/@media \(min-width: 1000px\)\s*\{[^@]*\.layout\.fullForm \.list\s*\{\s*display: none;/);
   });
 
   it('one mode only: a quiet «✓ Ritiro» line, not a control', async () => {

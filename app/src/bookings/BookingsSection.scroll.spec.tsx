@@ -53,7 +53,7 @@ describe('the scroll inside Bookings (a phone)', () => {
 });
 
 describe('the scroll inside Bookings (the split, 1000px and wider)', () => {
-  it('⚠️ a booking takes the whole width (bookings rebuild step 3): it opens at the top, and Back puts the list where it was', async () => {
+  it('⚠️ a booking opens IN the list (19 Nov 2026): the list keeps its place, opened and closed', async () => {
     vi.stubGlobal('matchMedia', (query: string) => ({
       matches: query === '(min-width: 1000px)',
       media: query,
@@ -65,7 +65,7 @@ describe('the scroll inside Bookings (the split, 1000px and wider)', () => {
     const main = scrolledTo(420);
     await user.click(rows()[1] as HTMLElement);
     await screen.findByRole('region', { name: 'Anna Finta' });
-    expect(main.scrollTop).toBe(0);
+    expect(main.scrollTop).toBe(420);
     await act(async () => { await router.navigate(-1); });
     await waitFor(() => { expect(rows()).toHaveLength(2); });
     expect(main.scrollTop).toBe(420);

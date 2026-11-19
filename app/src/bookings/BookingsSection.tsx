@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Navigate, useLocation, useParams } from 'react-router';
+import { Navigate, useLocation, useNavigate, useParams } from 'react-router';
 import { PartBoundary } from '../errors/PartBoundary';
 import { useT } from '../i18n/useT';
 import { KEEP_FOCUS, Page } from '../shell/Page';
@@ -17,7 +17,7 @@ import { monthOf } from './bookingModel';
 import { BookingsProvider, FormDayContext, useBookings, useBookingsStore } from './BookingsContext';
 import { useDataServices } from '../data/DataContext';
 import { useSession } from '../session/SessionContext';
-import { dayOfState, savedDateOf } from './bookingsNav';
+import { cameFromList, dayOfState, savedDateOf } from './bookingsNav';
 import { BOOKINGS_PATH, parseBookingsPath } from './bookingsPath';
 import type { BookingsView } from './bookingsPath';
 import styles from './BookingsSection.module.css';
@@ -26,8 +26,9 @@ import styles from './BookingsSection.module.css';
 // counter, for pickup or delivery, with the two slips they print. Loaded only when somebody opens it (shell/sectionScreens.ts),
 // and only for a person the venue shows it to (SectionRoute, session/visibility.ts).
 //
-// A phone shows the list OR one booking (its editor); from 1000px the list on the left and, on the right, the printer or the settings
-// screen; a booking and its form take the whole width (bookings rebuild steps 2 and 3).
+// A phone shows the list OR one booking (its editor). From 1000px (the tablet, 19 Nov 2026) the list is the whole screen: «New
+// booking», the calendar and the printer and settings doors on the left, the picked day's card on the right, and a booking OPENS
+// IN THAT CARD, in place of its row (BookingsList.tsx); the form, the printer and the settings take the whole width.
 // Its data lives exactly as long as it is on screen: BookingsProvider starts the one listener on mount and stops it on unmount (P14).
 // How long a failed read of a booking's day waits before it is tried again (it also tries when the connection comes back).
 const LOOKUP_RETRY_MS = 5000;
@@ -59,6 +60,7 @@ function StoreMessages() {
 function BookingsScreen() {
   const { t } = useT();
   const { pathname, state } = useLocation();
+  const navigate = useNavigate();
   const view = parseBookingsPath(useParams()['*']);
   const today = useTodayKey();
   // Which day the list shows (the day picked on the calendar, bookings rebuild step 3) is the section's own state, not the
@@ -140,10 +142,10 @@ function BookingsScreen() {
   const scrollArea = useOwnScrollArea();
   const listTop = useRef(0);
   const kind = view.kind;
-  // The booking form (bookings rebuild step 2) and the booking itself (step 3) take the WHOLE width, on the split too (the owner's
-  // design): the list is hidden while they are open, and Back brings it back where it was.
-  const formOpen = kind === 'new' || kind === 'edit' || kind === 'booking';
-  // Where the list is on screen: alone on a phone; on the split beside everything but the form.
+  // The booking form (bookings rebuild step 2), the printer and the settings take the WHOLE width, on the split too: the list is
+  // hidden while they are open, and Back brings it back where it was. A booking does NOT: on the split it opens in the list.
+  const formOpen = fullScreenOnSplit(kind);
+  // Where the list is on screen: alone on a phone; on the split behind everything but a full-width screen.
   const listShown = split ? !formOpen : kind === 'list';
   // ⚠️ SET IN THE LAYOUT EFFECT BELOW, before any scroll the move causes: the reset to the top, and the browser clamping the area
   // when the list is hidden, fire `scroll` events that may land before the listener is removed (a slow tablet), and must not be
@@ -166,7 +168,7 @@ function BookingsScreen() {
     const area = scrollArea();
     // The first render (the shell reset the area as the section opened) and StrictMode's second run are not moves.
     if (before === null || before.pathname === pathname || area === null) return;
-    const wasForm = before.kind === 'new' || before.kind === 'edit' || before.kind === 'booking';
+    const wasForm = fullScreenOnSplit(before.kind);
     // ⚠️ ON THE SPLIT the list keeps its place, except across the full-width form: hidden, the list let the area shrink to the
     // form's height (its place was lost), so it is put back as the form closes, and the form opens at the top.
     if (split) {
@@ -176,6 +178,32 @@ function BookingsScreen() {
     }
     area.scrollTop = kind === 'list' && before.kind !== 'list' ? listTop.current : 0;
   }, [pathname]);
+
+  // ⚠️ A BOOKING OPEN IN THE LIST (the split): closing it goes back to the list, by the browser's Back when the list is the entry
+  // behind it (so the history never holds the list twice), else by replacing the address.
+  const closeBooking = useCallback(() => {
+    if (cameFromList(state)) void navigate(-1);
+    else void navigate(BOOKINGS_PATH, { replace: true, state: KEEP_FOCUS });
+  }, [state, navigate]);
+  const openBooking = view.kind === 'booking' ? items.find(item => item.id === view.id) : undefined;
+  // Changing the day closes the open booking, unless it is on the day picked. ⚠️ A REPLACE, never Back: a Back could land on an
+  // entry that carries another day (a saved booking's), and the day just picked would be put back with it.
+  const pickDay = (picked: string) => {
+    setDay(picked);
+    if (split && view.kind === 'booking' && openBooking?.date !== picked) void navigate(BOOKINGS_PATH, { replace: true, state: KEEP_FOCUS });
+  };
+  // ⚠️ A BOOKING OPENED BY ITS ADDRESS (a deep link, a reload) CHOOSES ITS OWN DAY on the calendar, once per booking opened, so a
+  // day picked afterwards (which closes it) is never fought.
+  const dayChosenFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (view.kind !== 'booking') {
+      dayChosenFor.current = null;
+      return;
+    }
+    if (!split || openBooking === undefined || dayChosenFor.current === view.id) return;
+    dayChosenFor.current = view.id;
+    setDay(openBooking.date);
+  });
 
   if (view.kind === 'unknown') return <Navigate to={BOOKINGS_PATH} replace state={KEEP_FOCUS} />;
   const selectedId = view.kind === 'booking' || view.kind === 'edit' ? view.id : null;
@@ -188,13 +216,18 @@ function BookingsScreen() {
         <div className={formOpen ? `${styles.layout} ${styles.fullForm}` : styles.layout} data-view={view.kind}>
           <div className={styles.list}>
             <PartBoundary>
-              <BookingsList day={day} onDay={setDay} today={today} selectedId={selectedId} shown={listShown} />
+              <BookingsList day={day} onDay={pickDay} today={today} selectedId={selectedId} shown={listShown} open={split && view.kind === 'booking' ? (
+                // The card opened in place of its row: a part of its own, so a booking that breaks leaves the list standing.
+                <PartBoundary resetKey={pathname} title={t('section.bookings')}>
+                  <BookingDetail key={view.id} id={view.id} lookingUp={lookingUp} inPlace onClose={closeBooking} />
+                </PartBoundary>
+              ) : null} />
             </PartBoundary>
           </div>
           <div ref={detail} className={styles.detail}>
             {/* A booking's page has no h1 from the page: a broken one still gets one, through the boundary's own title. */}
             <PartBoundary resetKey={pathname} title={view.kind === 'booking' ? t('section.bookings') : undefined}>
-              <Detail view={view} lookingUp={lookingUp} />
+              <Detail view={view} lookingUp={lookingUp} split={split} />
             </PartBoundary>
           </div>
         </div>
@@ -203,13 +236,18 @@ function BookingsScreen() {
   );
 }
 
-function Detail({ view, lookingUp }: { view: Exclude<BookingsView, { kind: 'unknown' }>; lookingUp: boolean }) {
-  const { t } = useT();
+// The screens that take the whole width on the split, the list hidden behind them.
+function fullScreenOnSplit(kind: string): boolean {
+  return kind === 'new' || kind === 'edit' || kind === 'printer' || kind === 'settings';
+}
+
+function Detail({ view, lookingUp, split }: { view: Exclude<BookingsView, { kind: 'unknown' }>; lookingUp: boolean; split: boolean }) {
   switch (view.kind) {
     case 'list':
-      // Only on the split: on a phone the list is the whole screen (BookingsSection.module.css).
-      return <p className={styles.pick}>{t('bookings.pick')}</p>;
+      return null;
     case 'booking':
+      // On the split the booking is a card in the list, not a pane.
+      if (split) return null;
       return <BookingDetail key={view.id} id={view.id} lookingUp={lookingUp} />;
     // Keyed: another booking's editor is a fresh working copy, never the old one renamed.
     case 'new':

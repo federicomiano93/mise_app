@@ -420,7 +420,7 @@ describe('the print buttons\' visibility and waiting', () => {
     expect(within(card).queryByRole('button', { name: 'Print for the lab' })).toBeNull();
     expect(within(card).queryByRole('button', { name: 'Print for the customer' })).toBeNull();
     // Putting it back to open brings them back.
-    await user.click(within(card).getByRole('button', { name: 'Cancelled' }));
+    await user.click(within(card).getByRole('button', { name: 'Reopen booking' }));
     expect(await within(card).findByRole('button', { name: 'Print for the lab' })).toBeInTheDocument();
   });
 

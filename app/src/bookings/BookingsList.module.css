@@ -348,3 +348,79 @@
   width: 20px;
   height: 20px;
 }
+
+/* The calendar's wrapper and the two live regions' wrapper add no box on a phone: the column is as it was. */
+.calendar,
+.notices {
+  display: contents;
+}
+
+/* The booking opened IN the day's card, in place of its row (the tablet, 19 Nov 2026): the card draws its own 2px accent border. */
+.expanded {
+  min-width: 0;
+}
+
+/* THE TABLET (the counter tablet held sideways is 1024 wide; the same 1000px as the section's frame). The owner's design, two
+   columns: «New booking», the calendar, the live regions and the doors to the printer and the settings on the left, the picked
+   day's card on the right, as tall as the left column and taller. A booking opened in the card NARROWS the left column to about
+   300px (the calendar still fits and stays usable, so the day can be changed with a booking open) and the right takes the rest.
+   ⚠️ THE COLUMNS ARE `fr` BOTH WAYS, never a px for one: a length and a flex track do not interpolate, and the move would jump
+   (Chrome 107 and later animate it; the lab tablet's Chrome 101 jumps, which is all right). 3.2 / 6.8 is about 300px at 1024. */
+@media (min-width: 1000px) {
+  .list {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto auto auto auto 1fr;
+    gap: var(--s3) var(--s6);
+    align-items: start;
+    transition: grid-template-columns 350ms ease;
+  }
+
+  .list[data-open="true"] {
+    grid-template-columns: 3.2fr 6.8fr;
+  }
+
+  .list > * {
+    min-width: 0;
+  }
+
+  .add {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .calendar {
+    display: block;
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .notices {
+    display: flex;
+    flex-direction: column;
+    gap: var(--s3);
+    grid-column: 1;
+    grid-row: 3;
+  }
+
+  .day {
+    grid-column: 2;
+    grid-row: 1 / -1;
+  }
+
+  .printer {
+    grid-column: 1;
+    grid-row: 4;
+  }
+
+  .settings {
+    grid-column: 1;
+    grid-row: 5;
+  }
+}
+
+@media (min-width: 1000px) and (prefers-reduced-motion: reduce) {
+  .list {
+    transition: none;
+  }
+}

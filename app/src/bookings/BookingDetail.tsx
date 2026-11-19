@@ -1,5 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { MessageCircle, Pencil, Printer, Trash2 } from 'lucide-react';
+import type { KeyboardEvent } from 'react';
+import { Check, MessageCircle, Pencil, Printer, Trash2 } from 'lucide-react';
 import { Link, useLocation, useNavigate, useNavigationType } from 'react-router';
 import { formatMoney } from '@mise/shared/price-model';
 import { todayISO } from '@mise/shared/day';
@@ -12,7 +13,7 @@ import { useStatusMessage } from '../ui/StatusMessage';
 import { useConfirm } from '../ui/useConfirm';
 import { lineAmount } from '@mise/shared/price-list';
 import { bookingTimeLabel, toPay } from './bookingModel';
-import type { Booking, BookingStatus } from './bookingModel';
+import type { Booking } from './bookingModel';
 import { CustomerSlip, LabSlips } from './BookingSlips';
 import type { CustomerSlipWords } from './BookingSlips';
 import { slipDay, slipLocale, slipUnitWords, spellDate } from './bookingWords';
@@ -43,7 +44,22 @@ import styles from './BookingDetail.module.css';
 // The loading line's title (one booking page at a time): the name takes the focus over from it.
 const WAITING_TITLE_ID = 'booking-waiting-title';
 
-export function BookingDetail({ id, lookingUp = false }: { id: string; lookingUp?: boolean }) {
+// `inPlace` (the tablet, 19 Nov 2026): the booking is a card opened IN the day's list, in place of its row, closed by an X (and
+// by Escape) instead of left by Back. `onClose` is what that does.
+type Placing = { readonly inPlace?: boolean; readonly onClose?: () => void };
+
+// Escape closes a card opened in place. ⚠️ Only a key pressed INSIDE the card (a dialog opened from it draws in a portal, whose
+// events still bubble through React's tree: its own Escape must close the dialog alone).
+function closeOnEscape(onClose: (() => void) | undefined) {
+  return (event: KeyboardEvent<HTMLElement>) => {
+    if (onClose === undefined || event.key !== 'Escape' || event.defaultPrevented) return;
+    if (!event.currentTarget.contains(event.target as Node)) return;
+    event.stopPropagation();
+    onClose();
+  };
+}
+
+export function BookingDetail({ id, lookingUp = false, inPlace = false, onClose }: { id: string; lookingUp?: boolean } & Placing) {
   const { t } = useT();
   const { status, items } = useBookings();
   const booking = items.find(item => item.id === id) ?? null;
@@ -60,15 +76,16 @@ export function BookingDetail({ id, lookingUp = false }: { id: string; lookingUp
   // A booking opened from the list goes back by the browser's Back (the list is the entry behind it); opened by its address it
   // replaces itself with the list.
   const back = () => {
-    if (cameFromList(state)) void navigate(-1);
+    if (inPlace && onClose) onClose();
+    else if (cameFromList(state)) void navigate(-1);
     else void navigate(BOOKINGS_PATH, { replace: true });
   };
 
   if (booking === null) {
     return (
-      <section className={styles.card} aria-busy={status === 'loading' || lookingUp}>
+      <section className={styles.card} data-in-place={inPlace ? 'true' : undefined} aria-busy={status === 'loading' || lookingUp} onKeyDown={inPlace ? closeOnEscape(onClose) : undefined}>
         {/* The page draws no h1 for a booking (its h1 is the customer's name): until there is one, the section's name is it. */}
-        <FormBar backLabel={t('ui.back')} onBack={back} title={t('section.bookings')} level={1} titleRef={waitingTitle} titleId={WAITING_TITLE_ID} />
+        <FormBar backLabel={t(inPlace ? 'bookings.detail.close' : 'ui.back')} onBack={back} title={t('section.bookings')} level={1} titleRef={waitingTitle} titleId={WAITING_TITLE_ID} backIcon={inPlace ? 'close' : 'back'} />
         <div className={styles.body}>
           {status === 'loading' || lookingUp ? <p className={styles.muted}>{t('bookings.loading')}</p> : (
             <>
@@ -80,10 +97,10 @@ export function BookingDetail({ id, lookingUp = false }: { id: string; lookingUp
       </section>
     );
   }
-  return <Shown booking={booking} onBack={back} />;
+  return <Shown booking={booking} onBack={back} inPlace={inPlace} onClose={onClose} />;
 }
 
-function Shown({ booking, onBack }: { booking: Booking; onBack: () => void }) {
+function Shown({ booking, onBack, inPlace = false, onClose }: { booking: Booking; onBack: () => void } & Placing) {
   const { t, locale } = useT();
   const store = useBookingsStore();
   const navigate = useNavigate();
@@ -148,25 +165,30 @@ function Shown({ booking, onBack }: { booking: Booking; onBack: () => void }) {
     },
   })) : '';
 
-  // Two choices only, Collected and Cancelled (bookings rebuild step 3): a tap on the one already on puts the booking back to open
-  // (`todo`). The stored `ready` reads as open.
-  async function changeStatus(pressed: 'collected' | 'cancelled') {
-    // A double tap must not put the booking back a moment after it was set.
-    if (taps.locked(`${booking.id}:${pressed}`)) return;
-    const next: BookingStatus = booking.status === pressed ? 'todo' : pressed;
-    if (next === 'cancelled') {
-      const ok = await confirm({
-        title: t('bookings.cancel.title'),
-        message: t('bookings.cancel.body'),
-        okLabel: t('bookings.cancel.ok'),
-        cancelLabel: t('bookings.cancel.keep'),
-        danger: true,
-      });
-      if (!ok) return;
-    }
-    taps.lock(`${booking.id}:${pressed}`);
-    store.setStatus(booking.id, next);
-    say(next === 'todo' ? t('bookings.reopened') : t('bookings.statusSaved', { status: t(STATUS_WORD[next]) }));
+  // ⚠️ NO STATUS BUTTONS ON THE PAGE (19 Nov 2026, the owner's design): a tag beside the name says Collected or Cancelled, collecting
+  // is the list row's «Mark collected», and the page's one status move is at the foot — «Cancel booking» (asks first) and, on a
+  // cancelled booking, «Reopen booking» (no question: a mistaken cancel is undone at once).
+  async function cancel() {
+    if (taps.locked(`${booking.id}:cancelled`)) return;
+    const ok = await confirm({
+      title: t('bookings.cancel.title'),
+      message: t('bookings.cancel.body'),
+      okLabel: t('bookings.cancel.ok'),
+      cancelLabel: t('bookings.cancel.keep'),
+      danger: true,
+    });
+    if (!ok) return;
+    taps.lock(`${booking.id}:cancelled`);
+    store.setStatus(booking.id, 'cancelled');
+    say(t('bookings.statusSaved', { status: t(STATUS_WORD.cancelled) }));
+  }
+
+  function reopen() {
+    // A double tap must not write twice.
+    if (taps.locked(`${booking.id}:reopen`)) return;
+    taps.lock(`${booking.id}:reopen`);
+    store.setStatus(booking.id, 'todo');
+    say(t('bookings.reopened'));
   }
 
   async function remove() {
@@ -315,13 +337,19 @@ function Shown({ booking, onBack }: { booking: Booking; onBack: () => void }) {
   }
 
   return (
-    <section className={styles.card} aria-labelledby={`${ids}-title`}>
+    <section className={styles.card} data-in-place={inPlace ? 'true' : undefined} aria-labelledby={`${ids}-title`} onKeyDown={inPlace ? closeOnEscape(onClose) : undefined}>
       {/* The title (h1) is the CUSTOMER'S NAME, «Booking No. 12» small and grey under it; Edit is the pencil alone (bookings rebuild
           step 3, the owner's design). */}
       <FormBar
-        backLabel={t('ui.back')}
+        backLabel={t(inPlace ? 'bookings.detail.close' : 'ui.back')}
+        backIcon={inPlace ? 'close' : 'back'}
         onBack={onBack}
         level={1}
+        titleAfter={booking.status === 'collected' ? (
+          <span className={styles.tag} data-tag="collected"><Check aria-hidden="true" />{t(STATUS_WORD.collected)}</span>
+        ) : booking.status === 'cancelled' ? (
+          <span className={styles.tag} data-tag="cancelled">{t(STATUS_WORD.cancelled)}</span>
+        ) : undefined}
         title={booking.customerName}
         titleId={`${ids}-title`}
         titleRef={title}
@@ -338,24 +366,9 @@ function Shown({ booking, onBack }: { booking: Booking; onBack: () => void }) {
         )}
       />
       <div className={styles.body}>
-        <div role="group" aria-label={t('bookings.status.label')} className={styles.statuses}>
-          {(['collected', 'cancelled'] as const).map(value => (
-            <button
-              key={value}
-              type="button"
-              className={styles.statusChoice}
-              data-status={value}
-              aria-pressed={booking.status === value}
-              onClick={() => { void changeStatus(value); }}
-            >
-              {t(STATUS_WORD[value])}
-            </button>
-          ))}
-        </div>
-
         <dl className={styles.facts}>
           <div className={styles.fact}>
-            <dt>{t('bookings.detail.when')}</dt>
+            <dt className="visually-hidden">{t('bookings.detail.when')}</dt>
             <dd>
               <span className={styles.when}>{spellDate(booking.date, locale)} · {bookingTimeLabel(booking)}</span>
               <span className={styles.mode} data-mode={booking.mode}>{modeWord}</span>
@@ -400,6 +413,7 @@ function Shown({ booking, onBack }: { booking: Booking; onBack: () => void }) {
                 locale={locale}
                 words={words}
                 notes
+                order
                 end={line => (line.unitPrice !== null ? formatMoney(lineAmount(line.qty, line.unitPrice), money) : null)}
               />
             </dd>
@@ -455,6 +469,12 @@ function Shown({ booking, onBack }: { booking: Booking; onBack: () => void }) {
         ) : null}
 
         <div className={styles.foot}>
+          {/* Low-key, left of the bin. On a cancelled booking the same spot undoes the cancelling. */}
+          {booking.status === 'cancelled' ? (
+            <Button variant="bare" className={styles.statusMove} onPress={reopen}>{t('bookings.reopen.button')}</Button>
+          ) : (
+            <Button variant="bare" className={styles.statusMove} onPress={() => { void cancel(); }}>{t('bookings.cancel.ok')}</Button>
+          )}
           <Button variant="bare" className={styles.delete} aria-label={t('bookings.delete')} onPress={() => { void remove(); }}>
             <Trash2 aria-hidden="true" />
           </Button>

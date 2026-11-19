@@ -59,3 +59,40 @@
   font-variant-numeric: tabular-nums;
   font-weight: 600;
 }
+
+/* The booking page's order (19 Nov 2026): a box with a thin line, a divider between the rows and every other row on a faint ground.
+   «1.» «2.» in the accent colour, bold; the price bold at the right end. The box clips nothing that matters (rows only). */
+.order {
+  align-self: stretch;
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+  border: 1.5px solid var(--line);
+  border-radius: var(--r-md);
+  list-style: none;
+}
+
+.order > .line {
+  align-items: baseline;
+  padding: var(--s2) var(--s3);
+}
+
+.order > .line + .line {
+  border-top: 1px solid var(--line);
+}
+
+.order > .line:nth-child(even) {
+  background: var(--sunken);
+}
+
+.numberText {
+  flex: none;
+  min-width: 1.5em;
+  color: var(--accent);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.order .end {
+  font-weight: 700;
+}

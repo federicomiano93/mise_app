@@ -295,56 +295,86 @@ describe('the booking\'s page', () => {
     const edit = within(card).getByRole('button', { name: 'Edit' });
     expect(edit).not.toHaveTextContent('Edit');
     expect(edit.querySelector('svg')).not.toBeNull();
-    expect((document.querySelector('[data-view]') as HTMLElement).className).toContain('fullForm');
     // The browser tab keeps the section's name, never a customer's.
     expect(document.title).not.toContain('Niccolò');
   });
 
-  it('«When» says the day and the slot; the products numbered with their price at the right', async () => {
+  it('⚠️ on a phone the page is still a screen of its own: Back (no X), no accent border', async () => {
+    show('/bookings/A1');
+    const card = await screen.findByRole('region', { name: 'Niccolò Rossi' }, LOAD);
+    expect(within(card).getByRole('button', { name: 'Back' })).toBeInTheDocument();
+    expect(within(card).queryByRole('button', { name: 'Close' })).toBeNull();
+    expect(card).not.toHaveAttribute('data-in-place');
+  });
+
+  it('«Order» says the day and the slot first and large, the lines numbered «1.» in a box with their price at the right', async () => {
     show('/bookings/A1', fakeBookingsSource([bookingFixture({ id: 'A1', date: TODAY, time: '10:00', slotEnd: '11:00', customerName: 'Niccolò Rossi',
       lines: [line('Panettone', 2, { unitPrice: 25 })] })]));
     const card = await screen.findByRole('region', { name: 'Niccolò Rossi' }, LOAD);
     expect(card).toHaveTextContent('10:00–11:00');
     const item = within(card).getAllByRole('listitem')[0] as HTMLElement;
-    expect(item).toHaveTextContent('12 pcs Panettone£50.00');
+    expect(item).toHaveTextContent('1.2 pcs Panettone£50.00');
+    // No «When» heading to see (it stays for a screen reader), and «Items» is now «Order»; the lines are still an ordered list.
+    expect(within(card).getByText('When')).toHaveClass('visually-hidden');
+    expect(within(card).getByText('Order', { selector: 'dt' })).toBeInTheDocument();
+    expect(within(card).queryByText('Items')).toBeNull();
+    expect(item.closest('ol')).not.toBeNull();
   });
 
-  it('⚠️ two statuses only, Collected and Cancelled; a tap on the one on puts the booking back to open', async () => {
+  it('⚠️ no status buttons on the page: «Collected» and «Cancelled» are not buttons any more', async () => {
+    show('/bookings/A2');
+    const card = await screen.findByRole('region', { name: 'Anna Bianchi' }, LOAD);
+    expect(within(card).queryByRole('group', { name: 'Status' })).toBeNull();
+    for (const name of ['Collected', 'Cancelled']) expect(within(card).queryByRole('button', { name })).toBeNull();
+    // A stored «ready» is open: no tag at all, and never «To do» / «Ready».
+    expect(card.querySelector('[data-tag]')).toBeNull();
+    expect(card).not.toHaveTextContent(/To do|Ready/);
+  });
+
+  it('the status tag beside the name: «✓ Collected» for a collected booking, «Cancelled» for a cancelled one, none for an open one', async () => {
+    const source = fakeBookingsSource([
+      bookingFixture({ id: 'C1', date: TODAY, customerName: 'Ada Ritirata', status: 'collected' }),
+      bookingFixture({ id: 'C2', date: TODAY, customerName: 'Bea Annullata', status: 'cancelled' }),
+      bookingFixture({ id: 'C3', date: TODAY, customerName: 'Cleo Aperta', status: 'todo' }),
+    ]);
+    const { router } = show('/bookings/C1', source);
+    const tagOf = async (name: string) => (await screen.findByRole('region', { name }, LOAD)).querySelector('[data-tag]');
+    const collected = await tagOf('Ada Ritirata');
+    expect(collected).toHaveTextContent('Collected');
+    expect(collected?.querySelector('svg')).not.toBeNull();
+    // The heading's own name stays the customer's alone.
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(/^Ada Ritirata$/);
+    await act(async () => { await router.navigate('/bookings/C2'); });
+    expect(await tagOf('Bea Annullata')).toHaveTextContent('Cancelled');
+    await act(async () => { await router.navigate('/bookings/C3'); });
+    expect(await tagOf('Cleo Aperta')).toBeNull();
+  });
+
+  it('⚠️ «Cancel booking» at the foot asks first, then cancels; «Reopen booking» puts it back to open without a question', async () => {
     const { user, source } = show('/bookings/A2');
     const card = await screen.findByRole('region', { name: 'Anna Bianchi' }, LOAD);
-    const statuses = within(within(card).getByRole('group', { name: 'Status' })).getAllByRole('button');
-    expect(statuses.map(b => b.textContent)).toEqual(['Collected', 'Cancelled']);
-    // A stored «ready» is open: neither is on.
-    expect(statuses.every(b => b.getAttribute('aria-pressed') === 'false')).toBe(true);
-    expect(card).not.toHaveTextContent(/To do|Ready/);
-    await user.click(within(card).getByRole('button', { name: 'Collected' }));
-    await waitFor(() => { expect(source.items.get('A2')?.status).toBe('collected'); });
-    expect(within(card).getByRole('button', { name: 'Collected' })).toHaveAttribute('aria-pressed', 'true');
-    passTime(900);
-    await user.click(within(card).getByRole('button', { name: 'Collected' }));
-    await waitFor(() => { expect(source.items.get('A2')?.status).toBe('todo'); });
-    passTime(900);
-    // Cancelled still asks first; a second tap reopens without a question.
-    await user.click(within(card).getByRole('button', { name: 'Cancelled' }));
+    await user.click(within(card).getByRole('button', { name: 'Cancel booking' }));
+    expect(source.setStatus).not.toHaveBeenCalled();
     await user.click(within(await screen.findByRole('alertdialog', { name: 'Cancel this booking?' })).getByRole('button', { name: 'Cancel booking' }));
     await waitFor(() => { expect(source.items.get('A2')?.status).toBe('cancelled'); });
+    expect(card.querySelector('[data-tag="cancelled"]')).not.toBeNull();
+    // Printing is hidden on a cancelled booking.
+    expect(within(card).queryByRole('button', { name: 'Print for the lab' })).toBeNull();
     passTime(900);
-    await user.click(within(card).getByRole('button', { name: 'Cancelled' }));
+    await user.click(within(card).getByRole('button', { name: 'Reopen booking' }));
+    expect(screen.queryByRole('alertdialog')).toBeNull();
     await waitFor(() => { expect(source.items.get('A2')?.status).toBe('todo'); });
+    expect(within(card).getByRole('button', { name: 'Cancel booking' })).toBeInTheDocument();
   });
 
-  it('⚠️ a DOUBLE TAP on the booking page\'s Collected does not reopen it; a tap after the pause does', async () => {
-    const { user, source } = show('/bookings/A2');
-    const card = await screen.findByRole('region', { name: 'Anna Bianchi' }, LOAD);
-    const button = within(card).getByRole('button', { name: 'Collected' });
+  it('⚠️ a DOUBLE TAP on «Reopen booking» writes once', async () => {
+    const { user, source } = show('/bookings/AX');
+    const card = await screen.findByRole('region', { name: 'Gone Prova' }, LOAD);
+    const button = within(card).getByRole('button', { name: 'Reopen booking' });
     await user.click(button);
     await user.click(button);
-    await waitFor(() => { expect(source.items.get('A2')?.status).toBe('collected'); });
+    await waitFor(() => { expect(source.items.get('AX')?.status).toBe('todo'); });
     expect(source.setStatus).toHaveBeenCalledTimes(1);
-    passTime(900);
-    await user.click(button);
-    await waitFor(() => { expect(source.items.get('A2')?.status).toBe('todo'); });
-    expect(source.setStatus).toHaveBeenCalledTimes(2);
   });
 
   it('the print buttons read «Lab» / «Customer», named «Print for the lab» / «Print for the customer»', async () => {
@@ -354,13 +384,13 @@ describe('the booking\'s page', () => {
     expect(within(card).getByRole('button', { name: 'Print for the customer' })).toHaveTextContent(/^Customer$/);
   });
 
-  it('in Italian: «Prenotazione N. 1», «Ritirata» / «Annullata», «Laboratorio» / «Cliente»', async () => {
+  it('in Italian: «Prenotazione N. 1», «Annulla prenotazione», «Ordine», «Laboratorio» / «Cliente»', async () => {
     show('/bookings/A1', undefined, { lang: 'it', session: { location: { country: 'IT' } } });
     const card = await screen.findByRole('region', { name: 'Niccolò Rossi' }, LOAD);
     expect(card).toHaveTextContent('Prenotazione N. 1');
     expect(within(card).getByRole('button', { name: 'Modifica' })).toBeInTheDocument();
-    expect(within(card).getByRole('button', { name: 'Ritirata' })).toBeInTheDocument();
-    expect(within(card).getByRole('button', { name: 'Annullata' })).toBeInTheDocument();
+    expect(within(card).getByRole('button', { name: 'Annulla prenotazione' })).toBeInTheDocument();
+    expect(within(card).getByText('Ordine', { selector: 'dt' })).toBeInTheDocument();
     expect(within(card).getByRole('button', { name: 'Stampa per laboratorio' })).toHaveTextContent('Laboratorio');
     expect(within(card).getByRole('button', { name: 'Stampa per cliente' })).toHaveTextContent('Cliente');
     expect(card).toHaveTextContent('3 pz (1,5 kg) Panettone');
