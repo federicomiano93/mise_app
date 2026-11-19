@@ -188,6 +188,11 @@ Aria does not support Preact. The numbers are below.
   suppliers, this work week's orders-history, drafts/current, read-only), or the open Orders section's live answer
   (`liveOrdersLines.ts`, registered by `orders/OrdersContext.tsx`, when nothing is read); and «Rest now» (`restNow.ts`, a tiny register
   the Home's band calls; the controller's `restNow()` arms the waking tap only after `REST_NOW_GUARD_MS`).
+  ⚠️ **Four deliberate exceptions to «a feature never imports another feature's folder»**, all for the kiosk, whose cover lives outside every section:
+  `orders/OrdersContext.tsx` imports `kiosk/liveOrdersLines` (the open section registers its live answer for the cover, one tiny register);
+  `kiosk/restOrders.ts` imports `orders/kioskFeed` (the cover must use Orders' own rules, so it can never disagree with the section);
+  `home/KioskBand.tsx` imports `kiosk/*` (the band's «Rest» and «Exit» ask the kiosk, which owns the cover and the setting);
+  `settings/DeviceCard.tsx` imports `kiosk/*` (the card edits the kiosk's one-device setting through its own reader and writer).
 - `pastries/` — the first real section, and the pattern for the next: a source (`pastriesSource.ts`,
   the Firestore half, a port of `js/pastries/firebase-pastries.js`), a store (`pastriesStore.ts`,
   plain TypeScript with no React: the seven days, tonight's confirmations and the lock, the
