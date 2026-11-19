@@ -10,11 +10,20 @@ import type { KioskSection } from '@mise/shared/kiosk-lines';
 type Provider = () => KioskSection[] | null;
 
 let provider: Provider | null = null;
+const listeners = new Set<() => void>();
+const announce = () => { listeners.forEach(listener => { listener(); }); };
 
 // Registers the open section's answer; the returned function takes it away (only if it is still the one registered).
 export function provideKioskLines(answer: Provider): () => void {
   provider = answer;
-  return () => { if (provider === answer) provider = null; };
+  announce();
+  return () => { if (provider === answer) { provider = null; announce(); } };
+}
+
+// Told when the section opens or closes (a rest that outlives the section must start reading by itself). Returns the unsubscribe.
+export function subscribeLiveKioskLines(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => { listeners.delete(listener); };
 }
 
 // Whether the Orders section is open and answers.

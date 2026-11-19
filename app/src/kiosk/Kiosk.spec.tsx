@@ -307,6 +307,39 @@ describe('the Orders lines (staff slice 6)', () => {
       expect(source.readSuppliers).not.toHaveBeenCalled();
     } finally { stop(); }
   });
+
+  test('when the Orders section closes during the same rest, the cover starts reading by itself', async () => {
+    const source = fakeKioskOrdersSource({ suppliers: SUPPLIERS, history: HISTORY });
+    const orders = () => source;
+    const stop = provideKioskLines(() => [{ titleKey: 'kiosk.rest.toOrderTitle', names: ['Live supplier'], more: 0 }]);
+    try {
+      renderWithSession(<Kiosk env={env()} orders={orders} />);
+      await idle(5 * MIN);
+      expect(cover()).toHaveTextContent('Live supplier');
+      expect(source.readSuppliers).not.toHaveBeenCalled();
+      act(() => { stop(); });
+      await idle(TICK_MS);
+      expect(source.readSuppliers).toHaveBeenCalledTimes(1);
+      expect(cover()).toHaveTextContent('Brava');
+      expect(cover()).not.toHaveTextContent('Live supplier');
+    } finally { stop(); }
+  });
+
+  test('after midnight yesterday’s lines are gone even when every read fails', async () => {
+    vi.setSystemTime(new Date(2026, 9, 5, 23, 50, 0));
+    const source = fakeKioskOrdersSource({ suppliers: SUPPLIERS, history: HISTORY });
+    const orders = () => source;
+    renderWithSession(<Kiosk env={env()} orders={orders} />);
+    await idle(5 * MIN);
+    expect(cover()).toHaveTextContent('Brava');
+    source.readSuppliers.mockRejectedValue(new Error('offline'));
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    await idle(20 * MIN);
+    expect(new Date().getDate()).toBe(6);
+    expect(cover()).toBeInTheDocument();
+    expect(cover()).not.toHaveTextContent('Brava');
+    expect(cover()).not.toHaveTextContent('To order today');
+  });
 });
 
 describe('«Rest» on the Home (staff slice 6)', () => {

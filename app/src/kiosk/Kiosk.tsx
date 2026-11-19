@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore } from 'react';
 import type { KioskSection } from '@mise/shared/kiosk-lines';
 import { useOptionalDataServices } from '../data/DataContext';
 import { useJoinFlow } from '../session/JoinFlowContext';
@@ -10,7 +10,7 @@ import type { KioskEnv } from './kioskController';
 import { browserKioskEnv } from './kioskEnv';
 import type { KioskOrdersSource } from './kioskOrdersSource';
 import { useKioskSettings } from './kioskSettings';
-import { liveKioskLines, liveKioskLinesShown } from './liveOrdersLines';
+import { liveKioskLines, liveKioskLinesShown, subscribeLiveKioskLines } from './liveOrdersLines';
 import { onRestNow } from './restNow';
 import { createRestOrdersFeed, fetchRestSections } from './restOrders';
 import { RestScreen } from './RestScreen';
@@ -47,7 +47,7 @@ export function Kiosk({ env, orders }: { env?: KioskEnv; orders?: (locationId: s
   const allowed = session.status === 'ready' && session.locationId !== null
     && visibleSectionIds(session.location, session.canManage, session.role).has('orders');
   const makeSource = orders ?? (services === null ? null : services.kioskOrders);
-  const sections = useRestOrders(snapshot.state, allowed, session.locationId, makeSource);
+  const restLines = useRestOrders(snapshot.state, allowed, session.locationId, makeSource);
 
   if (snapshot.state === 'active') return null;
   return (
@@ -55,7 +55,7 @@ export function Kiosk({ env, orders }: { env?: KioskEnv; orders?: (locationId: s
       venue={session.status === 'ready' ? session.name : ''}
       reloading={snapshot.reloading}
       now={snapshot.paintedAt}
-      sections={allowed ? liveKioskLines() ?? sections : NO_SECTIONS}
+      sections={allowed ? liveKioskLines() ?? restLines() : NO_SECTIONS}
       armAt={snapshot.armAt}
       onWake={controller.wakeTap}
     />
@@ -64,33 +64,35 @@ export function Kiosk({ env, orders }: { env?: KioskEnv; orders?: (locationId: s
 
 // The reads behind the lines (restOrders.ts): started when the tablet goes to REST, stopped when it wakes or goes to night, refreshed
 // when the page comes back into view while resting. What was read last is still drawn in the night.
+// ⚠️ Returns a function asked at every paint (the cover repaints on every 15 s tick): the feed's own day check must be heard after
+// midnight even when no read succeeds — a copy kept in React state would keep yesterday's suppliers on the screen.
 function useRestOrders(
   state: 'active' | 'rest' | 'night', allowed: boolean, locationId: string | null,
   makeSource: ((locationId: string) => KioskOrdersSource) | null,
-): readonly KioskSection[] {
-  const [sections, setSections] = useState<readonly KioskSection[]>(NO_SECTIONS);
+): () => readonly KioskSection[] {
+  const [, repaint] = useReducer((n: number) => n + 1, 0);
   const allowedRef = useRef(allowed);
   allowedRef.current = allowed;
+  // Whether the open Orders section answers; when it closes during a rest the feed takes over (the feed refuses to start while it does).
+  const pageAnswers = useSyncExternalStore(subscribeLiveKioskLines, liveKioskLinesShown, liveKioskLinesShown);
 
   const feed = useMemo(() => {
     if (locationId === null || makeSource === null) return null;
     const source = makeSource(locationId);
-    const made = createRestOrdersFeed({
+    return createRestOrdersFeed({
       allowed: () => allowedRef.current,
       pageAnswers: liveKioskLinesShown,
       fetchSections: () => fetchRestSections(source),
-      onChange: () => { setSections(made.current()); },
+      onChange: repaint,
     });
-    return made;
   }, [locationId, makeSource]);
 
   useEffect(() => {
     if (feed === null) return undefined;
-    if (state === 'rest' && allowed) feed.start();
+    if (state === 'rest' && allowed) { feed.start(); feed.refreshIfStale(); }
     else feed.stop();
-    setSections(feed.current());
     return undefined;
-  }, [feed, state, allowed]);
+  }, [feed, state, allowed, pageAnswers]);
 
   useEffect(() => () => { feed?.stop(); }, [feed]);
 
@@ -101,5 +103,5 @@ function useRestOrders(
     return () => { document.removeEventListener('visibilitychange', onVisible); };
   }, [feed, state]);
 
-  return sections;
+  return useCallback(() => (feed === null ? NO_SECTIONS : feed.current()), [feed]);
 }
