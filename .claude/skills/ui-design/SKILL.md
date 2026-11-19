@@ -10,7 +10,7 @@ Whether a screen reads well is only Federico, on a phone.
 
 ## Mise 2 (`app/`) — its own design system
 
-Everything after this section is the CURRENT app's. Mise 2 has a new design, chosen in Claude
+This section is the LIVE design (what phones run since v2.0.0). Everything after it is the ROLLBACK copy's design (root pages, `records.css`, `style.css`): read it only when touching those. Mise 2 has a new design, chosen in Claude
 Design (project «Mise 2 — design tablet-first», https://claude.ai/design/p/326b31df-d02f-4c27-bce6-f015fa95b820,
 file `mise2.css`: change a value there first, then in `app/src/styles/tokens.css`). Read
 `docs/architecture.md` too, never whole (its headings, then every section except «`app/src`, folder
