@@ -7,6 +7,7 @@ import { renderApp } from '../testing/renderApp';
 import { bookingsScreenName, parseBookingsPath } from './bookingsPath';
 import slipCss from './booking-slip.css?raw';
 import slipPageCss from './booking-slip-page.css?raw';
+import piecePageCss from './booking-slip-piece-page.css?raw';
 
 // WHO is shown «Bookings» and WHERE it sits (18 Nov 2026): every role, employees included, hideable from employees by the
 // existing «Sections for employees» switch; the sales owner has it, the kitchen owner does not; a venue can switch it off.
@@ -85,7 +86,8 @@ describe('addresses and the usage names', () => {
     expect(parseBookingsPath('new')).toEqual({ kind: 'new' });
     expect(parseBookingsPath('Abc123')).toEqual({ kind: 'booking', id: 'Abc123' });
     expect(parseBookingsPath('Abc123/edit')).toEqual({ kind: 'edit', id: 'Abc123' });
-    for (const junk of ['new/edit', 'a/b', 'Abc123/edit/x', 'a-b', '%20']) expect(parseBookingsPath(junk), junk).toEqual({ kind: 'unknown' });
+    expect(parseBookingsPath('printer')).toEqual({ kind: 'printer' });
+    for (const junk of ['new/edit', 'printer/edit', 'a/b', 'Abc123/edit/x', 'a-b', '%20']) expect(parseBookingsPath(junk), junk).toEqual({ kind: 'unknown' });
   });
 
   it('⚠️ names its screens m2:bookings…, never with an id (nothing personal reaches the usage record)', () => {
@@ -93,6 +95,7 @@ describe('addresses and the usage names', () => {
     expect(screenNameFor('/bookings/Abc123')).toBe('bookings-detail');
     expect(screenNameFor('/bookings/new')).toBe('bookings-editor');
     expect(screenNameFor('/bookings/Abc123/edit')).toBe('bookings-editor');
+    expect(screenNameFor('/bookings/printer')).toBe('bookings-printer');
     expect(bookingsScreenName('/junk/x/y')).toBe('bookings');
   });
 });
@@ -108,6 +111,8 @@ describe('the slips\' stylesheets', () => {
 
   it('lay the page out for 80 mm receipt paper, in a file switched on only while printing', () => {
     expect(code(slipPageCss)).toMatch(/@page\s*\{\s*size:\s*80mm 297mm;\s*margin:\s*4mm;\s*\}/);
+    // The per-piece lab slips (bookings rebuild step 4): a short page each.
+    expect(code(piecePageCss)).toMatch(/@page\s*\{\s*size:\s*80mm 100mm;\s*margin:\s*4mm;\s*\}/);
     expect(code(slipCss)).not.toMatch(/@page/);
     expect(code(slipCss)).toMatch(/\.bk-slip\s*\{[^}]*width:\s*72mm;/);
   });

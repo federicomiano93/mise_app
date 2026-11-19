@@ -19,12 +19,10 @@ export const TREES = ['shared', 'app'];
 // entry when the lockfiles move to a fixed picomatch (the gate fails until then: «stale — remove it»).
 // ⚠️ With the list empty, only `dependencies.total > 0` proves the audit looked: then name a moderate
 // still in the trees (as the firebase-tools list does with uuid), or say plainly that it is gone.
-export const ALLOWED_VITE = new Map([
-  ['GHSA-fc5q-39xc-vjpf', { upTo: 'high', why: 'picomatch <= 4.0.7: ReDoS when a glob PATTERN repeats a single-branch ' +
-    'extglob. vite and vitest only build patterns from their own code and our config files (file globs, never text from ' +
-    'a person or the network), and picomatch runs only in the build and the tests on Node, never in the app on a phone. No patched ' +
-    'version exists (advisory raised to cover every version on 17 Nov 2026).' }],
-]);
+// ⚠️ EMPTY SINCE 18 NOV 2026, said plainly: npm withdrew picomatch's GHSA-fc5q-39xc-vjpf a day after raising it,
+// and both trees then reported nothing at all. Only `dependencies.total > 0` proves the audit looked; any high
+// or critical (picomatch's included, should it come back) fails until somebody looks and names it here.
+export const ALLOWED_VITE = new Map();
 
 // Returns the exit code, so the tests can drive it with a fake npm.
 export function main(tree, run = () => runNpmAudit(tree), out = console.log, err = console.error) {

@@ -8,21 +8,23 @@ import { useSession } from '../session/SessionContext';
 import { useTodayKey } from '../shell/useTodayKey';
 import { useVisibleSections } from '../shell/useVisibleSections';
 import styles from './OrdersDueCard.module.css';
+import own from './BookingsTodayPart.module.css';
 
 // The Bookings section's address of one booking. Written here rather than imported: a feature never imports another's folder
 // (bookings/bookingsPath.ts builds the same `/bookings/<id>`, the id encoded as one path segment). Only the TYPE of a booking is
 // read from there, which carries no code.
 const bookingAddress = (id: string): string => `/bookings/${encodeURIComponent(id)}`;
 
-// Today's bookings still to hand over: not collected, not cancelled, by time (bookings/bookingModel.ts stillToHandOver says the same).
+// Today's bookings still to hand over — the OPEN ones: not collected, not cancelled; a stored `todo` or `ready` alike (bookings
+// rebuild step 3: «Ready» is said nowhere). By time (bookings/bookingModel.ts stillToHandOver says the same).
 function stillToday(bookings: readonly Booking[], today: string): Booking[] {
   return bookings
     .filter(b => b.date === today && (b.status === 'todo' || b.status === 'ready'))
     .sort((a, b) => a.time.localeCompare(b.time) || a.number - b.number);
 }
 
-// «Prenotazioni di oggi» on the Home (18 Nov 2026): today's bookings still to hand over, one row each (time, name, ready or not);
-// a tap opens the booking. With none left the card is not drawn, and it is never drawn for somebody the venue does not show
+// «Prenotazioni di oggi» on the Home (18 Nov 2026): today's bookings still to hand over, one row each — since bookings rebuild step 3
+// «09:00–10:00» blue and bold, the name, «2 prodotti» in grey at the right, a chevron; a tap opens the booking. With none left the card is not drawn, and it is never drawn for somebody the venue does not show
 // Bookings to (nothing is read for them). Its one listener (today's bookings only, bounded) lives while the Home is on
 // screen and moves to the new day at midnight. It tells the Home only WHETHER it is drawn (the Home lays out its columns by it).
 export function BookingsTodayPart({ onShownChange }: { onShownChange: (shown: boolean) => void }) {
@@ -77,15 +79,17 @@ export function BookingsTodayPart({ onShownChange }: { onShownChange: (shown: bo
             <Link
               to={bookingAddress(booking.id)}
               className={styles.row}
-              data-ready={booking.status === 'ready' ? 'true' : undefined}
               onFocus={() => { focusedId.current = booking.id; }}
               onBlur={event => { if (event.currentTarget.isConnected) focusedId.current = null; }}
             >
-              <span className={styles.name}>
-                {booking.time} · {booking.customerName}
-                {' — '}
-                {t(booking.status === 'ready' ? 'bookings.status.ready' : 'bookings.status.todo')}
+              <span className={own.text}>
+                <span className={own.time}>
+                  {booking.time}
+                  {booking.slotEnd !== null ? `–${booking.slotEnd}` : ''}
+                </span>
+                <span className={own.name}>{booking.customerName}</span>
               </span>
+              <span className={own.count}>{t('home.bookingsToday.products', { n: booking.lines.length })}</span>
               <ChevronRight aria-hidden="true" />
             </Link>
           </li>

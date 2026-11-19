@@ -5,6 +5,7 @@ import { bookingFixture, fakeBookingsSource } from '../testing/fakeBookingsSourc
 import type { FakeBookingsSource } from '../testing/fakeBookingsSource';
 import { renderApp } from '../testing/renderApp';
 import homeCss from './HomeSection.module.css?raw';
+import homeRowCss from './BookingsTodayPart.module.css?raw';
 
 // «Prenotazioni di oggi» on the Home (18 Nov 2026): today's bookings still to hand over, a tap opens one; none left, or nobody
 // shown Bookings, and the card is gone. ⚠️ Fake customers only.
@@ -31,8 +32,31 @@ describe('the «Prenotazioni di oggi» card', () => {
     ]);
     show(source);
     await waitFor(() => { expect(card()).not.toBeNull(); }, LOAD);
-    expect(rows()).toEqual(['09:00 · Anna Finta — Ready', '11:00 · Mario Prova — To do']);
+    // A stored `ready` is open like `todo`, and neither is said (bookings rebuild step 3).
+    expect(rows()).toEqual(['09:00Anna Finta1 product', '11:00Mario Prova1 product']);
     expect(source.watchDay).toHaveBeenCalledWith(TODAY, expect.any(Function), expect.any(Function));
+  });
+
+  it('⚠️ a row reads «09:00–10:00» blue and bold, the name, «2 products» in grey, a chevron (bookings rebuild step 3)', async () => {
+    const two = bookingFixture({ id: 'a', date: TODAY, time: '09:00', slotEnd: '10:00', customerName: 'Mario Prova' });
+    const source = fakeBookingsSource([{ ...two, lines: [...two.lines, { ...two.lines[0]!, name: 'Pandoro' }] }]);
+    show(source);
+    await waitFor(() => { expect(card()).not.toBeNull(); }, LOAD);
+    const row = within(card() as HTMLElement).getAllByRole('link')[0] as HTMLElement;
+    expect(row).toHaveTextContent('09:00–10:00Mario Prova2 products');
+    expect(row).not.toHaveTextContent(/To do|Ready|—/);
+    expect(row.querySelector('svg')).not.toBeNull();
+    const time = within(row).getByText('09:00–10:00');
+    expect(time.className).toContain('time');
+    expect(homeRowCss).toMatch(/\.time\s*\{[^}]*color: var\(--accent-ink\);[^}]*font-weight: 700;/);
+    expect(homeRowCss).toMatch(/\.count\s*\{[^}]*color: var\(--ink-2\);/);
+  });
+
+  it('in Italian: «2 prodotti»', async () => {
+    const two = bookingFixture({ id: 'a', date: TODAY, time: '09:00', slotEnd: '10:00', customerName: 'Mario Prova' });
+    show(fakeBookingsSource([{ ...two, lines: [...two.lines, { ...two.lines[0]!, name: 'Pandoro' }] }]), { lang: 'it' });
+    const titled = await screen.findByRole('region', { name: 'Prenotazioni di oggi' }, LOAD);
+    expect(within(titled).getAllByRole('link')[0]).toHaveTextContent('09:00–10:00Mario Prova2 prodotti');
   });
 
   it('opens the booking', async () => {

@@ -93,6 +93,12 @@
   font-size: var(--fs-md);
 }
 
+.strongInput {
+  font-size: var(--fs-xl);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
 .input::placeholder {
   color: var(--ink-3);
 }
@@ -186,79 +192,6 @@
   border-color: var(--danger);
 }
 
-.lines {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s3);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.lineItem {
-  min-width: 0;
-}
-
-.line {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s2);
-  padding: var(--s3);
-  border: 1px solid var(--line);
-  border-radius: var(--r-md);
-  background: var(--bg);
-}
-
-.lineHead {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--s2);
-  min-height: var(--hit);
-}
-
-.lineTitle {
-  font-weight: 650;
-}
-
-.fromBook {
-  padding: 2px var(--s2);
-  border-radius: var(--r-pill);
-  background: var(--ok-tint);
-  color: var(--ok-ink);
-  font-size: var(--fs-xs);
-  font-weight: 650;
-}
-
-.removeLine {
-  display: grid;
-  place-items: center;
-  width: var(--hit);
-  height: var(--hit);
-  margin-left: auto;
-  border: 0;
-  border-radius: var(--r-md);
-  background: transparent;
-  color: var(--ink-2);
-  cursor: pointer;
-}
-
-.removeLine > svg {
-  width: 20px;
-  height: 20px;
-}
-
-.removeLine[data-focus-visible] {
-  outline: 3px solid var(--accent);
-  outline-offset: 2px;
-}
-
-.qtyRow {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: var(--s2);
-}
-
 .addLine {
   display: flex;
   align-items: center;
@@ -317,8 +250,57 @@
   .delete[data-hovered] {
     background: var(--danger-tint);
   }
+}
 
-  .removeLine[data-hovered] {
-    background: var(--sunken);
+.input:disabled {
+  background: var(--sunken);
+  color: var(--ink-2);
+}
+
+/* «✓ Ritiro» / «✓ Consegna» (bookings settings; restyled in the rebuild's step 2): a venue that takes one mode only says which,
+   in a small grey line under the day and slot — no box, nothing to tap. */
+.onlyMode {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+/* The form's main labels (the customer's name, the day, the slot): the biggest words of the form (the owner's design). */
+.label.bigLabel {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+/* «Giorno» | «Fascia oraria» side by side, one under the other below 520px. */
+.when {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s3);
+}
+
+@media (min-width: 520px) {
+  .when {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+}
+
+/* The product cards (ProductCard): one per row on a phone, two from 700px. */
+.cards {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+@media (min-width: 700px) {
+  .cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.cardItem {
+  min-width: 0;
 }

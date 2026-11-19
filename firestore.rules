@@ -521,6 +521,21 @@ service cloud.firestore {
         && !(value is string && value == 'owner-kitchen');
     }
 
+    // Who decides how the venue takes bookings (Mise 2, bookings settings, 18 Nov 2026): the
+    // section's own settings document, config/bookings. The «manage» tier of everything else in
+    // this file — canManage() — applied to bookings: whoever uses bookings AND runs the place.
+    // That is the owner and the manager, and the owner of the sales side, because bookings are
+    // that side's card (ROLE_CARDS), exactly as canManage() lets a partial owner write their own
+    // side's settings (config/orders, config/labels). The kitchen's owner is refused by
+    // usesBookingsAs(). Two reads, like usesBookings(): the value is read once and handed on.
+    function managesBookings(lid) {
+      return signedIn() && managesBookingsAs(roleIn(lid), lid);
+    }
+
+    function managesBookingsAs(value, lid) {
+      return usesBookingsAs(value, lid) && runsThePlace(value);
+    }
+
     // Which locations an account may open. Readable only by that account, so
     // one person cannot enumerate another's access; writable by no client at all.
     match /users/{uid} {
@@ -1880,10 +1895,69 @@ service cloud.firestore {
         allow delete: if canManage(lid, 'catalogue');
       }
 
+      // ── The bookings settings (Mise 2 only, bookings settings, 18 Nov 2026) ────
+      // How the venue takes bookings: whether the phone is asked, the WhatsApp reminder,
+      // pickup and/or delivery, the time slots and how many bookings each takes, the master
+      // switch of the per-piece slips and the «Da aggiungere» list. One document, written from
+      // Bookings' «Impostazioni» (app/src/bookings/bookingSettings.ts).
+      //
+      // ⚠️ ITS OWN BLOCK, BESIDE config/labels AND FOR THE SAME REASON: the general block
+      // below ties its readers to the Calculator. Read by everybody who takes bookings (the
+      // form obeys it), written by whoever manages them (managesBookings()).
+      //
+      // ⚠️ EVERY FIELD OPTIONAL IN BOTH DIRECTIONS, and a missing one means today's behaviour
+      // (phone asked, reminder on, both modes, the exact time, per-piece slips on, no extras):
+      // a venue that never saved it sees no change, and rules reach every phone at once while
+      // code arrives one device at a time. Written with merge; a cleared slot or limit is a
+      // deleted field. Never deleted whole (the screen puts back the defaults instead).
+      // Two reads to read (usesBookings), two to write (managesBookings).
+      match /config/bookings {
+        allow read: if usesBookings(lid);
+
+        allow create, update: if managesBookings(lid)
+          && stampedFor(lid)
+          && request.resource.data.keys().hasOnly([
+               'bakery', 'askPhone', 'whatsappReminder', 'modes',
+               'slotFirst', 'slotLast', 'slotMinutes', 'slotLimit',
+               'perPieceSlips', 'extras'
+             ])
+          && (!('askPhone' in request.resource.data) || request.resource.data.askPhone is bool)
+          && (!('whatsappReminder' in request.resource.data)
+              || request.resource.data.whatsappReminder is bool)
+          && (!('modes' in request.resource.data)
+              || request.resource.data.modes in ['both', 'pickup', 'delivery'])
+          && (!('slotFirst' in request.resource.data)
+              || (request.resource.data.slotFirst is string
+                  && request.resource.data.slotFirst.matches('^([01][0-9]|2[0-3]):[0-5][0-9]$')))
+          && (!('slotLast' in request.resource.data)
+              || (request.resource.data.slotLast is string
+                  && request.resource.data.slotLast.matches('^([01][0-9]|2[0-3]):[0-5][0-9]$')))
+          // 'HH:MM' compares as text in the order of the clock.
+          && (!('slotFirst' in request.resource.data) || !('slotLast' in request.resource.data)
+              || request.resource.data.slotFirst < request.resource.data.slotLast)
+          && (!('slotMinutes' in request.resource.data)
+              || request.resource.data.slotMinutes in [30, 60, 120])
+          && (!('slotLimit' in request.resource.data)
+              || (request.resource.data.slotLimit is int
+                  && request.resource.data.slotLimit >= 1
+                  && request.resource.data.slotLimit <= 999))
+          && (!('perPieceSlips' in request.resource.data)
+              || request.resource.data.perPieceSlips is bool)
+          // A list: rules cannot look inside it, so only its size (each word ≤ 40 is the app's).
+          && (!('extras' in request.resource.data)
+              || (request.resource.data.extras is list
+                  && request.resource.data.extras.size() <= 40));
+
+        allow delete: if false;
+      }
+
       match /config/{doc} {
+        // ⚠️ NOT config/bookings: it has its own block above, read by whoever uses bookings.
+        // Rules are ADDITIVE, so without `doc != 'bookings'` every member with the Calculator —
+        // the kitchen's owner, a venue with bookings switched off — would read it through here.
         allow read: if doc == 'orders'
           ? canUse(lid, 'orders')
-          : (member(lid) && sectionOn(lid, 'calculator'));
+          : (doc != 'bookings' && member(lid) && sectionOn(lid, 'calculator'));
 
         // ⚠️⚠️ WHO MAY WRITE DEPENDS ON WHICH DOCUMENT IT IS, AND THAT TERNARY IS
         // LOAD-BEARING. `config/orders` decides how the venue works — which roads
@@ -3363,10 +3437,18 @@ service cloud.firestore {
       // Written WHOLE by the editor (setDoc) and partly by a status change (updateDoc): the
       // rules judge the MERGED document, so every key is required on every write (hasAll)
       // and no other is allowed (hasOnly). The collection is new: no older shape exists.
+      // Bookings settings (18 Nov 2026) added the one OPTIONAL key `slotEnd` and let `phone` be
+      // '' (a venue that does not ask for it); a booking without either is as before.
       //
       // ⚠️ `lines` IS A LIST AND RULES CANNOT LOOK INSIDE ONE: only its size is judged here
-      // (1–50). Each line ({recipeId|null, name ≤120, qty > 0 ≤ 100000, unit pcs|kg, note? ≤120})
-      // is checked by the app before it writes (app/src/bookings/bookingModel.ts).
+      // (1–50). Each line ({recipeId|null, productId|null, unitPrice|null (the price of one unit when
+      // saved, frozen), name ≤200, qty > 0 ≤ 100000, unit pcs|kg, note? ≤120, and for a product sold
+      // by the pack packSize > 0 + packUnit g|kg|pcs, and for a piece of a chosen weight (bookings
+      // rebuild step 2, 19 Nov 2026) weightKg > 0 ≤ 50 — the weight of ONE piece, with unit pcs, qty
+      // the pieces and unitPrice the price of one such piece; lines without it are as before})
+      // is checked by the app before it writes (app/src/bookings/bookingModel.ts, weightStorable).
+      // ⚠️ So a line's weightKg — like every other key INSIDE a line — cannot be refused here: a
+      // per-index check of up to 50 lines would cost hundreds of evaluated expressions per write.
       //
       // `number` is the short number printed on both slips (1–9999), given once when the
       // booking is made. `createdAt` is the server's time of the first write and never
@@ -3377,15 +3459,24 @@ service cloud.firestore {
           let d = request.resource.data;
           let keys = ['bakery', 'customerName', 'phone', 'mode', 'address', 'date', 'time', 'lines',
                       'deposit', 'total', 'notes', 'status', 'number', 'createdAt', 'updatedAt'];
-          return d.keys().hasOnly(keys) && d.keys().hasAll(keys)
+          // `slotEnd` is the one key a booking may lack (bookings settings): only a booking taken
+          // in a time slot carries it.
+          return d.keys().hasOnly(keys.concat(['slotEnd'])) && d.keys().hasAll(keys)
             && d.customerName is string && d.customerName.size() > 0 && d.customerName.size() <= 80
             && d.phone is string && d.phone.size() <= 30
-            && d.phone.matches('^[0-9 +]*[0-9][0-9 +]*$')
+            // '' when the venue does not ask for the phone (config/bookings askPhone); otherwise
+            // digits, spaces and «+» with at least one digit.
+            && (d.phone == '' || d.phone.matches('^[0-9 +]*[0-9][0-9 +]*$'))
             && d.mode in ['pickup', 'delivery']
             && d.address is string && d.address.size() <= 200
             && (d.mode == 'pickup' || d.address.size() > 0)
             && d.date is string && d.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
             && d.time is string && d.time.matches('^([01][0-9]|2[0-3]):[0-5][0-9]$')
+            // A booking in a time slot: `time` is the slot's start and `slotEnd` its end, later
+            // than the start ('HH:MM' compares as text in the order of the clock).
+            && (!('slotEnd' in d)
+                || (d.slotEnd is string && d.slotEnd.matches('^([01][0-9]|2[0-3]):[0-5][0-9]$')
+                    && d.slotEnd > d.time))
             && d.lines is list && d.lines.size() >= 1 && d.lines.size() <= 50
             && (d.deposit == null || (d.deposit is number && d.deposit >= 0 && d.deposit <= 100000))
             && (d.total == null || (d.total is number && d.total >= 0 && d.total <= 100000))
@@ -3411,6 +3502,34 @@ service cloud.firestore {
         // The bin on a booking, and the way a customer's «delete my data» is honoured. The
         // app asks first (P20).
         allow delete: if usesBookings(lid);
+      }
+
+      // ── The bookings price list (Mise 2 only, bookings step 2, 18 Nov 2026) ─────
+      //
+      // ONE document, `price-list/bookings`, PUBLISHED from Food cost by whoever runs that side
+      // (cardAccess 'manage': the owner, a manager, the sales owner): for each product the owner
+      // ticked, its name, its selling price (VAT included) and what the price is for (a piece, a
+      // kilo, a pack). ⚠️ NO COST, NO MARGIN, NO VAT RATE: everybody who takes bookings reads it,
+      // employees included (usesBookings), which is the point — the counter prices a booking
+      // without being shown Food cost. The app builds the items from the products
+      // (shared/src/price-list.ts); rules cannot look inside the list, so only its size is judged.
+      //
+      // Written WHOLE at every publish (setDoc), stamped by the server. Never deleted: an empty
+      // list is published instead. Up to 4 reads (usesBookings 2, cardAccess 2).
+      match /price-list/{listId} {
+        allow read: if listId == 'bookings'
+          && (usesBookings(lid) || cardAccess(lid, 'foodcost', 'foodcost') != 'none');
+
+        allow create, update: if listId == 'bookings'
+          && cardAccess(lid, 'foodcost', 'foodcost') == 'manage'
+          && stampedFor(lid)
+          && request.resource.data.keys().hasOnly(['bakery', 'items', 'publishedAt'])
+          && request.resource.data.keys().hasAll(['bakery', 'items', 'publishedAt'])
+          && request.resource.data.items is list
+          && request.resource.data.items.size() <= 300
+          && request.resource.data.publishedAt == request.time;
+
+        allow delete: if false;
       }
     }
 

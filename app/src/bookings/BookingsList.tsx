@@ -1,51 +1,92 @@
-import { useEffect, useId, useRef } from 'react';
-import { Plus } from 'lucide-react';
+import { useEffect, useId, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
+import { Check, Plus, Printer, Search, Settings, Undo2 } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router';
 import { useT } from '../i18n/useT';
+import { useSession } from '../session/SessionContext';
 import type { MessageKey } from '../i18n/en';
 import { Button } from '../ui/Button';
-import { dayAfter, groupsFor, oldestKeptDay } from './bookingModel';
-import type { Booking, BookingStatus, ListChoice } from './bookingModel';
-import { linesSummary, spellDate } from './bookingWords';
-import { useBookings } from './BookingsContext';
-import { FROM_LIST, RESTORE_REFUSED, savedIdOf } from './bookingsNav';
-import { bookingPath, editBookingPath, newBookingPath } from './bookingsPath';
+import { useStatusMessage } from '../ui/StatusMessage';
+import { dayCounts, dayRows, dayToShow, monthMayBeCut, monthOf } from './bookingModel';
+import type { Booking, BookingStatus } from './bookingModel';
+import { BookingLines } from './BookingLines';
+import { BookingsCalendar } from './BookingsCalendar';
+import { READ_LIMIT } from './bookingsSource';
+import { useTapLockout } from './tapLockout';
+import { spellDate } from './bookingWords';
+import type { UnitWords } from './bookingWords';
+import { useBookings, useBookingsStore } from './BookingsContext';
+import { FROM_LIST, RESTORE_REFUSED, newFromList, openedFromList, savedIdOf } from './bookingsNav';
+import { bookingPath, editBookingPath, newBookingPath, printerPath, settingsPath } from './bookingsPath';
 import styles from './BookingsList.module.css';
 
+// What a person reads for a status (bookings rebuild step 3, the owner's choice): a booking is open, Collected or Cancelled. ⚠️ The
+// stored `todo` and `ready` both read as open, and «To do» / «Ready» are said nowhere.
 export const STATUS_WORD: Readonly<Record<BookingStatus, MessageKey>> = {
-  todo: 'bookings.status.todo',
-  ready: 'bookings.status.ready',
+  todo: 'bookings.status.open',
+  ready: 'bookings.status.open',
   collected: 'bookings.status.collected',
   cancelled: 'bookings.status.cancelled',
 };
 
-const CHOICES: ReadonlyArray<{ kind: ListChoice['kind']; label: MessageKey }> = [
-  { kind: 'today', label: 'bookings.choice.today' },
-  { kind: 'tomorrow', label: 'bookings.choice.tomorrow' },
-  { kind: 'later', label: 'bookings.choice.later' },
-  { kind: 'past', label: 'bookings.choice.past' },
-];
-
 type Props = {
-  readonly choice: ListChoice;
-  readonly onChoice: (choice: ListChoice) => void;
+  // The day picked on the calendar ('YYYY-MM-DD').
+  readonly day: string;
+  readonly onDay: (day: string) => void;
   // The device's day, YYYY-MM-DD (moves at midnight by itself: shell/useTodayKey.ts).
   readonly today: string;
   // The booking open beside the list, drawn as current.
   readonly selectedId: string | null;
+  // Whether the list is on screen (hidden on a phone behind any other screen, on the split behind a booking or its form).
+  readonly shown: boolean;
+  // The booking OPEN IN THE LIST (the tablet, 19 Nov 2026): its card, drawn in place of its row (or above the rows when its row is
+  // not shown: another day's, filtered out by the search, not loaded yet). null on a phone and while none is open.
+  readonly open?: ReactNode;
+  // The tablet's two columns (1000px and wider): the doors to the printer and the settings sit in the left column, else after the day.
+  readonly split?: boolean;
 };
 
-// The bookings by day (18 Nov 2026): Today, Tomorrow, Later (every day after tomorrow, a heading each) and a past day still
-// kept (the last 30 days). «New booking» is the list's one primary action.
-export function BookingsList({ choice, onChoice, today, selectedId }: Props) {
+// The bookings of one day picked on a month calendar (bookings rebuild step 3, 19 Nov 2026: the owner's design on the tablet, for
+// 24 December — many bookings, each picked up in a time slot, ticked off at the counter). «New booking» is the list's one primary
+// action and starts on the picked day.
+export function BookingsList({ day, onDay, today, selectedId, shown, open = null, split = false }: Props) {
   const { t, locale } = useT();
   const navigate = useNavigate();
-  const { status, items, refused } = useBookings();
+  const store = useBookingsStore();
+  const say = useStatusMessage();
+  const { status, month, through, items, refused } = useBookings();
+  const { canManage } = useSession();
   const ids = useId();
-  const yesterday = dayAfter(today, -1);
-  const oldest = oldestKeptDay(today);
-  const unitWord = (unit: 'pcs' | 'kg') => t(unit === 'kg' ? 'bookings.unit.kg' : 'bookings.unit.pcs');
-  const groups = groupsFor(items, choice, today);
+  const words: UnitWords = {
+    unit: unit => t(unit === 'kg' ? 'bookings.unit.kg' : 'bookings.unit.pcs'),
+    packs: n => t('bookings.unit.packs', { n }),
+  };
+  // The month's bookings arrive with their own month: until then (a month just asked) nothing is counted or listed.
+  const shownMonth = monthOf(day);
+  const covered = month !== null && through !== null && month <= shownMonth && shownMonth <= through;
+  const held = covered ? items : [];
+  const loading = status === 'loading' || !covered;
+  const counts = dayCounts(held);
+  // «Cerca per nome»: the picked day's rows, kept to the names holding what is typed (case and accents folded). A new day starts
+  // with an empty box: a name typed for one day would hide another day's rows without a word.
+  const [query, setQuery] = useState('');
+  const [queryDay, setQueryDay] = useState(day);
+  if (queryDay !== day) {
+    setQueryDay(day);
+    setQuery('');
+  }
+  const matches = dayRows(held, day, query);
+  // ⚠️ THE OPEN BOOKING'S ROW IS ALWAYS DRAWN, even when the search would hide it: its card then has ONE stable parent and key, so a
+  // search typed beside it never remounts it (the focus stays in the box, a print in flight keeps its state).
+  const rows = open !== null && selectedId !== null && !matches.some(b => b.id === selectedId)
+    ? dayRows(held, day).filter(b => b.id === selectedId || matches.includes(b))
+    : matches;
+  const dayHasRows = held.some(b => b.date === day);
+  const openInRows = open !== null && !loading && rows.some(b => b.id === selectedId);
+  // While the month reloads the rows are gone, but a card that stood in its row keeps its place (it is not unmounted and drawn again).
+  const cardPlaced = useRef(false);
+  if (!loading) cardPlaced.current = openInRows;
+  const keepCard = open !== null && selectedId !== null && loading && cardPlaced.current;
 
   // After a save the focus goes to the saved booking's row, once, as soon as the list shows it (the editor it came from is gone).
   const { state, key } = useLocation();
@@ -60,132 +101,222 @@ export function BookingsList({ choice, onChoice, today, selectedId }: Props) {
     row.focus();
   });
 
-  const pick = (kind: ListChoice['kind']) => {
-    if (kind === choice.kind) return;
-    onChoice(kind === 'past' ? { kind: 'past', date: yesterday } : { kind } as ListChoice);
+  // ⚠️ CLOSING A BOOKING HANDS THE FOCUS TO ITS ROW, found by the booking's id whatever way it was opened (a tap, a deep link): the
+  // list was hidden while the booking took the screen (a phone), or the card holding the focus was closed (the tablet), and the
+  // focus, left inside a screen that is gone, would fall to the page's top. Only when nothing else holds it (a phone's gesture, Back,
+  // the card's X or Escape). A row that is not shown (another day's) gives the focus to the day's heading.
+  const lastOpen = useRef<string | null>(null);
+  const dayHeading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    if (selectedId !== null) {
+      lastOpen.current = selectedId;
+      return;
+    }
+    const id = lastOpen.current;
+    lastOpen.current = null;
+    if (!shown || id === null) return;
+    if (document.activeElement !== null && document.activeElement !== document.body) return;
+    const row = [...(rowsBox.current?.querySelectorAll<HTMLElement>('[data-booking]') ?? [])].find(node => node.dataset.booking === id);
+    (row ?? dayHeading.current)?.focus();
+  }, [shown, selectedId]);
+
+  // ⚠️ ONE TAP, NO QUESTION (the counter at pickup): Collected, and Undo puts it back to open. It shows at once (the store lays it
+  // over the listener's copy); a refusal puts the row back and the section says so (BookingsSection.tsx StoreMessages).
+  const taps = useTapLockout();
+  const toggle = (booking: Booking) => {
+    // A second tap a moment after the first (a double tap) must not put the booking straight back.
+    if (taps.locked(booking.id)) return;
+    const next: BookingStatus = booking.status === 'collected' ? 'todo' : 'collected';
+    taps.lock(booking.id);
+    store.setStatus(booking.id, next);
+    say(next === 'collected'
+      ? t('bookings.row.collectedSaid', { name: booking.customerName })
+      : t('bookings.row.reopenedSaid', { name: booking.customerName }));
   };
 
-  return (
-    <section ref={rowsBox} className={styles.list} aria-labelledby={`${ids}-title`}>
-      <h2 id={`${ids}-title`} className="visually-hidden">{t('section.bookings')}</h2>
-      <Button variant="primary" className={styles.add} onPress={() => { void navigate(newBookingPath(), { state: FROM_LIST }); }}>
-        <Plus aria-hidden="true" />
-        <span>{t('bookings.new')}</span>
+  // ⚠️ THE DOORS ARE DRAWN ONCE, where the layout wants them (never twice, one hidden): in the tablet's left column, or after the
+  // day on a phone, so the reading and Tab order is the visual one on both.
+  const doors = (
+    <>
+      {/* This device's receipt printer (bookings step 3): out of the way of the day's work. */}
+      <Button variant="secondary" className={styles.printer} onPress={() => { void navigate(printerPath(), { state: FROM_LIST }); }}>
+        <Printer aria-hidden="true" />
+        <span>{t('bookings.printer.door')}</span>
       </Button>
-
-      <div role="group" aria-label={t('bookings.choice.label')} className={styles.choices}>
-        {CHOICES.map(({ kind, label }) => (
-          <button
-            key={kind}
-            type="button"
-            className={styles.choice}
-            aria-pressed={choice.kind === kind}
-            onClick={() => { pick(kind); }}
-          >
-            {t(label)}
-          </button>
-        ))}
-      </div>
-
-      {choice.kind === 'past' ? (
-        <div className={styles.past}>
-          <label className={styles.pastLabel} htmlFor={`${ids}-past`}>{t('bookings.past.label')}</label>
-          <input
-            id={`${ids}-past`}
-            className={styles.input}
-            type="date"
-            min={oldest}
-            max={yesterday}
-            value={choice.date}
-            aria-describedby={`${ids}-past-hint`}
-            onChange={event => {
-              const value = event.currentTarget.value;
-              // An emptied or out-of-range box keeps the day shown: the list never asks for a day it cannot hold.
-              if (/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(value) && value >= oldest && value <= yesterday) onChoice({ kind: 'past', date: value });
-            }}
-          />
-          <p id={`${ids}-past-hint`} className={styles.hint}>{t('bookings.past.hint')}</p>
-        </div>
+      {/* The venue's bookings settings (bookings settings, 18 Nov 2026): only for whoever manages bookings (the rules' managesBookings). */}
+      {canManage ? (
+        <Button variant="secondary" className={styles.printer} onPress={() => { void navigate(settingsPath(), { state: FROM_LIST }); }}>
+          <Settings aria-hidden="true" />
+          <span>{t('bookings.settings.door')}</span>
+        </Button>
       ) : null}
+    </>
+  );
 
-      {/* ⚠️ THE LIVE REGIONS ARE ON THE PAGE EMPTY, AND ONLY WHAT IS INSIDE THEM COMES AND GOES: a region inserted already filled
-          is not announced reliably (architecture, «Traps already paid for»). */}
-      <div role="alert">
-        {refused !== null ? (
-          <div className={styles.refused}>
-            <span>{t('bookings.refused.text')}</span>
-            <Button
-              variant="secondary"
-              onPress={() => { void navigate(refused.id === null ? newBookingPath() : editBookingPath(refused.id), { state: RESTORE_REFUSED }); }}
-            >
-              {t('bookings.refused.open')}
-            </Button>
+  return (
+    <section ref={rowsBox} className={styles.list} data-open={open !== null ? 'true' : undefined} aria-labelledby={`${ids}-title`}>
+      <h2 id={`${ids}-title`} className="visually-hidden">{t('section.bookings')}</h2>
+      {/* The tablet's left column (it animates its own width, BookingsList.module.css); on a phone it adds no box. */}
+      <div className={styles.side}>
+        {/* The new booking starts on the day picked in the calendar; a day already gone gives none (it cannot be booked). */}
+        <Button
+          variant="primary"
+          className={styles.add}
+          onPress={() => { void navigate(newBookingPath(), { state: newFromList(day >= today ? day : null) }); }}
+        >
+          <Plus aria-hidden="true" />
+          <span>{t('bookings.new')}</span>
+        </Button>
+
+        <div className={styles.calendar}>
+          <BookingsCalendar
+            day={day}
+            today={today}
+            counts={counts}
+            onDay={onDay}
+            onMonth={next => { onDay(dayToShow(next, today)); }}
+          />
+        </div>
+
+        {/* ⚠️ THE LIVE REGIONS ARE ON THE PAGE EMPTY, AND ONLY WHAT IS INSIDE THEM COMES AND GOES: a region inserted already filled
+            is not announced reliably (architecture, «Traps already paid for»). */}
+        <div className={styles.notices}>
+          <div role="alert">
+            {refused !== null ? (
+              <div className={styles.refused}>
+                <span>{t('bookings.refused.text')}</span>
+                <Button
+                  variant="secondary"
+                  onPress={() => { void navigate(refused.id === null ? newBookingPath() : editBookingPath(refused.id), { state: RESTORE_REFUSED }); }}
+                >
+                  {t('bookings.refused.open')}
+                </Button>
+              </div>
+            ) : null}
           </div>
-        ) : null}
+
+          <div role="status">
+            {status === 'error' ? <p className={styles.broken}>{t('bookings.streamError')}</p> : null}
+            {!loading && monthMayBeCut(held.length, READ_LIMIT) ? <p className={styles.broken}>{t('bookings.monthCut')}</p> : null}
+          </div>
+        </div>
+        {split ? doors : null}
       </div>
 
-      <div role="status">
-        {status === 'error' ? <p className={styles.broken}>{t('bookings.streamError')}</p> : null}
-      </div>
-
-      {status === 'loading' ? (
-        <p className={styles.empty}>{t('bookings.loading')}</p>
-      ) : (
-        <>
-          {groups.length === 0 ? <p className={styles.empty}>{t('bookings.empty.later')}</p> : null}
-          {groups.map(group => (
-            <section key={group.date} className={styles.day} aria-labelledby={`${ids}-${group.date}`}>
-              <h3 id={`${ids}-${group.date}`} className={styles.dayTitle}>{spellDate(group.date, locale)}</h3>
-              {group.bookings.length === 0 ? (
-                <p className={styles.empty}>{t('bookings.empty.day')}</p>
-              ) : (
-                <ul className={styles.rows}>
-                  {group.bookings.map(booking => (
-                    <li key={booking.id}>
-                      <Row booking={booking} current={booking.id === selectedId} locale={locale} unitWord={unitWord} />
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
-          ))}
-        </>
-      )}
+      <section className={styles.day} aria-labelledby={`${ids}-day`}>
+        <h3 id={`${ids}-day`} ref={dayHeading} tabIndex={-1} className={styles.dayTitle}>{spellDate(day, locale)}</h3>
+        <div className={styles.search}>
+          <label htmlFor={`${ids}-search`} className="visually-hidden">{t('bookings.search.label')}</label>
+          <Search aria-hidden="true" className={styles.searchIcon} />
+          <input
+            id={`${ids}-search`}
+            className={styles.searchBox}
+            type="search"
+            autoComplete="off"
+            spellCheck={false}
+            placeholder={t('bookings.search.label')}
+            value={query}
+            onChange={event => { setQuery(event.currentTarget.value); }}
+          />
+        </div>
+        <div role="status" className={styles.searchSaid}>
+          {!loading && dayHasRows && matches.length === 0 ? t('bookings.search.none', { query: query.trim() }) : ''}
+        </div>
+        {open !== null && !openInRows && !keepCard ? <div className={styles.expanded}>{open}</div> : null}
+        {keepCard ? (
+          <ul className={styles.rows}>
+            <li key={selectedId}><div className={styles.expanded}>{open}</div></li>
+          </ul>
+        ) : loading ? (
+          <p className={styles.empty}>{t('bookings.loading')}</p>
+        ) : !dayHasRows ? (
+          <p className={styles.empty}>{t('bookings.empty.day')}</p>
+        ) : (
+          <ul className={styles.rows}>
+            {rows.map(booking => (
+              <li key={booking.id}>
+                {open !== null && booking.id === selectedId ? <div className={styles.expanded}>{open}</div> : (
+                  <Row booking={booking} current={booking.id === selectedId} locale={locale} words={words} onToggle={toggle} replace={open !== null} />
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+      {split ? null : doors}
     </section>
   );
 }
 
-function Row({ booking, current, locale, unitWord }: {
+// One booking: its slot on the left (the start big and blue, the end small under it; an exact time alone), the name — the link to
+// the booking, stretched over the whole row — the products one per line, Pickup / Delivery, and at the bottom right «Mark collected»
+// (once collected: a green «✓ Collected» and «Undo collection»). A cancelled one has no button: «Cancelled», crossed out.
+// ⚠️ THE BUTTON IS NOT INSIDE THE LINK (a button cannot nest in a link): the link's ::after covers the row, the button sits above it.
+function Row({ booking, current, locale, words, onToggle, replace }: {
   booking: Booking;
   current: boolean;
   locale: string;
-  unitWord: (unit: 'pcs' | 'kg') => string;
+  words: UnitWords;
+  onToggle: (booking: Booking) => void;
+  // A booking is open in the list: this row replaces it in the history (list → this one), so the card's X goes to the list.
+  replace: boolean;
 }) {
   const { t } = useT();
-  const summary = linesSummary(booking.lines, locale, unitWord);
+  const ids = useId();
+  const collected = booking.status === 'collected';
+  const cancelled = booking.status === 'cancelled';
   return (
-    <Link
-      to={bookingPath(booking.id)}
-      state={FROM_LIST}
-      className={styles.row}
-      data-status={booking.status}
-      data-booking={booking.id}
-      aria-current={current ? 'page' : undefined}
-    >
-      <span className={styles.time}>{booking.time}</span>
-      <span className={styles.main}>
-        <span className={styles.name}>{booking.customerName}</span>
-        <span className={styles.summary}>
-          {summary.text}
-          {summary.more > 0 ? ` ${t('bookings.moreLines', { n: summary.more })}` : ''}
-        </span>
+    <div className={styles.row} data-status={booking.status} data-current={current ? 'true' : undefined}>
+      <span className={styles.slot}>
+        <span className={styles.start}>{booking.time}</span>
+        {booking.slotEnd !== null ? <span className={styles.end}><span className="visually-hidden">–</span>{booking.slotEnd}</span> : null}
       </span>
-      <span className={styles.tags}>
-        <span className={styles.mode} data-mode={booking.mode}>
-          {t(booking.mode === 'delivery' ? 'bookings.mode.delivery' : 'bookings.mode.pickup')}
-        </span>
-        <span className={styles.status} data-status={booking.status}>{t(STATUS_WORD[booking.status])}</span>
-      </span>
-    </Link>
+      <div className={styles.main}>
+        <Link
+          id={`${ids}-name`}
+          to={bookingPath(booking.id)}
+          state={openedFromList(booking.date)}
+          className={styles.name}
+          data-booking={booking.id}
+          aria-current={current ? 'page' : undefined}
+          replace={replace}
+        >
+          {booking.customerName}
+        </Link>
+        <div className={styles.products}>
+          <BookingLines lines={booking.lines} locale={locale} words={words} />
+        </div>
+        <div className={styles.foot}>
+          <span className={styles.mode} data-mode={booking.mode}>
+            {t(booking.mode === 'delivery' ? 'bookings.mode.delivery' : 'bookings.mode.pickup')}
+          </span>
+          {cancelled ? <span className={styles.cancelled}>{t('bookings.status.cancelled')}</span> : null}
+          {/* Collected: a green «✓ Collected» that is a STATE, not a button, then a plain «Undo collection» beside it. Before, the
+              action itself was green with a tick and the owner read it as «already collected» (19 Nov 2026): the action now says
+              «Mark collected» in blue, the tick and the green belong to the state alone. */}
+          {cancelled ? null : (
+            <div className={styles.actions}>
+              {collected ? <span className={styles.done}><Check aria-hidden="true" />{t('bookings.status.collected')}</span> : null}
+              <button
+                type="button"
+                className={styles.collect}
+                data-collected={collected ? 'true' : undefined}
+                aria-describedby={`${ids}-name`}
+                onClick={() => { onToggle(booking); }}
+              >
+                {collected ? (
+                  <>
+                    <Undo2 aria-hidden="true" />
+                    <span>{t('bookings.row.undo')}</span>
+                  </>
+                ) : (
+                  <span>{t('bookings.row.collect')}</span>
+                )}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }

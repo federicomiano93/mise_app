@@ -3,6 +3,7 @@ import { flushSync } from 'react-dom';
 import { createRoot } from 'react-dom/client';
 import type { Root } from 'react-dom/client';
 import slipPageHref from './booking-slip-page.css?url';
+import piecePageHref from './booking-slip-piece-page.css?url';
 
 // The host a booking's slip prints from (18 Nov 2026): built when a print button is pressed, removed once the person is back
 // in the app. The label's print host (recipes/printHost.tsx) paid for every rule below on the lab tablet; this is the same
@@ -21,24 +22,33 @@ import slipPageHref from './booking-slip-page.css?url';
 export const SLIP_PRINTING_CLASS = 'slip-printing';
 export const SLIP_HOST_ID = 'bookingSlip';
 export const SLIP_PAGE_ID = 'bookingSlipPage';
+// The short page of the lab slips «Uno per pezzo» (bookings rebuild step 4): booking-slip-piece-page.css.
+export const SLIP_PIECE_PAGE_ID = 'bookingSlipPiecePage';
 export const SLIP_PAGE_OFF = 'not all';
 export const SLIP_PAGE_ON = 'print';
 
+// Which paper a print is laid out on: the 297 mm page of every slip, or the 100 mm page of the per-piece lab slips.
+export type SlipPage = 'receipt' | 'piece';
+
 // A static file, linked switched off as soon as this module loads (the browser downloads it anyway, so it is there when Print
 // is pressed), never CSS built at run time (the page's CSP).
-function slipPageLink(): HTMLLinkElement {
-  const existing = document.getElementById(SLIP_PAGE_ID);
+function pageLink(id: string, href: string): HTMLLinkElement {
+  const existing = document.getElementById(id);
   if (existing instanceof HTMLLinkElement) return existing;
   const link = document.createElement('link');
-  link.id = SLIP_PAGE_ID;
+  link.id = id;
   link.rel = 'stylesheet';
-  link.href = slipPageHref;
+  link.href = href;
   link.media = SLIP_PAGE_OFF;
   document.head.appendChild(link);
   return link;
 }
 
+const slipPageLink = (): HTMLLinkElement => pageLink(SLIP_PAGE_ID, slipPageHref);
+const piecePageLink = (): HTMLLinkElement => pageLink(SLIP_PIECE_PAGE_ID, piecePageHref);
+
 slipPageLink();
+piecePageLink();
 
 const BACK_IN_PAGE = ['pointerdown', 'keydown'] as const;
 
@@ -54,17 +64,18 @@ export function closeSlipHost(): void {
   node.remove();
   document.documentElement.classList.remove(SLIP_PRINTING_CLASS);
   slipPageLink().media = SLIP_PAGE_OFF;
+  piecePageLink().media = SLIP_PAGE_OFF;
 }
 
 // Puts the slip in the document (flushSync: it is there before print() is called) and opens the browser's print dialog.
-// One host at a time: a second print removes the old one first.
-export function printSlip(content: ReactNode, print: () => void = () => { window.print(); }): void {
+// One host at a time: a second print removes the old one first. ⚠️ ONE PAGE SIZE PER PRINT: only the asked page's stylesheet is on.
+export function printSlip(content: ReactNode, print: () => void = () => { window.print(); }, page: SlipPage = 'receipt'): void {
   closeSlipHost();
   const node = document.createElement('div');
   node.id = SLIP_HOST_ID;
   document.body.appendChild(node);
   document.documentElement.classList.add(SLIP_PRINTING_CLASS);
-  slipPageLink().media = SLIP_PAGE_ON;
+  (page === 'piece' ? piecePageLink() : slipPageLink()).media = SLIP_PAGE_ON;
   const root = createRoot(node);
   const back = () => { closeSlipHost(); };
   // Capture phase: the removal happens before anything the tap or key goes on to do.
