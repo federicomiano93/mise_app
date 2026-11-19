@@ -468,23 +468,25 @@ function EditorForm({ id, booking, refused, settings }: FormProps) {
           ) : null}
         </fieldset>
 
-        <fieldset className={styles.group}>
-          <legend className={styles.legend}>{t('bookings.form.money')}</legend>
+        {/* No «Pagamento» title: the Total stands out on its own (the owner's choice on the tablet, 19 Nov 2026). Left empty, the
+            list's total shows in grey inside the box and follows the products; a number typed replaces it. */}
+        <div className={styles.group}>
+          <TextField
+            id={domId('total')}
+            label={t('bookings.form.total', { symbol: money.symbol })}
+            big
+            strong
+            value={draft.total}
+            placeholder={fromList.total !== null ? formatMoney(fromList.total, money) : undefined}
+            inputMode="decimal"
+            autoComplete="off"
+            error={errorOn('total')}
+            hint={fromList.total !== null && draft.total.trim() !== ''
+              ? t('bookings.form.totalTyped', { total: formatMoney(fromList.total, money) })
+              : null}
+            onChange={value => { update({ total: value }); }}
+          />
           <div className={styles.pair}>
-            <TextField
-              id={domId('total')}
-              label={t('bookings.form.total', { symbol: money.symbol })}
-              value={draft.total}
-              inputMode="decimal"
-              autoComplete="off"
-              error={errorOn('total')}
-              hint={fromList.total !== null
-                ? (draft.total.trim() === ''
-                  ? t('bookings.form.totalFromList', { total: formatMoney(fromList.total, money) })
-                  : t('bookings.form.totalTyped', { total: formatMoney(fromList.total, money) }))
-                : null}
-              onChange={value => { update({ total: value }); }}
-            />
             <TextField
               id={domId('deposit')}
               label={t('bookings.form.deposit', { symbol: money.symbol })}
@@ -501,18 +503,16 @@ function EditorForm({ id, booking, refused, settings }: FormProps) {
           <p className={styles.toPay} aria-live="polite">
             {due !== null ? <><span>{t('bookings.form.toPay')}</span> <strong>{formatMoney(due, money)}</strong></> : ''}
           </p>
-        </fieldset>
+        </div>
 
         <div className={styles.field}>
           <label className={styles.label} htmlFor={`${ids}-notes`}>{t('bookings.form.notes')}</label>
-          <p id={`${ids}-notes-hint`} className={styles.warnHint}>{t('bookings.form.notesHint')}</p>
           <textarea
             id={`${ids}-notes`}
             className={`${styles.input} ${styles.textarea}`}
             value={draft.notes}
             maxLength={LIMITS.notes}
             rows={3}
-            aria-describedby={`${ids}-notes-hint`}
             onChange={event => { update({ notes: event.currentTarget.value }); }}
           />
         </div>
@@ -592,16 +592,18 @@ type TextFieldProps = {
   hint?: string | null;
   // The form's main fields (the name, the day, the slot): their label in the big type of the owner's design.
   big?: boolean;
+  // The value itself in large bold type: the Total.
+  strong?: boolean;
 };
 
-function TextField({ id, label, value, onChange, error, placeholder, maxLength, type = 'text', inputMode, autoComplete, min, list, hint = null, big = false }: TextFieldProps) {
+function TextField({ id, label, value, onChange, error, placeholder, maxLength, type = 'text', inputMode, autoComplete, min, list, hint = null, big = false, strong = false }: TextFieldProps) {
   const described = [error !== null ? `${id}-error` : null, hint !== null ? `${id}-hint` : null].filter(Boolean).join(' ');
   return (
     <div className={styles.field}>
       <label className={big ? `${styles.label} ${styles.bigLabel}` : styles.label} htmlFor={id}>{label}</label>
       <input
         id={id}
-        className={styles.input}
+        className={strong ? `${styles.input} ${styles.strongInput}` : styles.input}
         type={type}
         value={value}
         placeholder={placeholder}

@@ -280,14 +280,15 @@ describe('the editor', () => {
     await addProduct(user, 'Focaccia', { otherWeight: '1.5' });
   };
 
-  it('starts empty, with placeholders, and a hint not to write allergies in the notes', async () => {
+  it('starts empty, with placeholders, and no line about allergies under the notes', async () => {
     await openNew();
     expect(screen.getByLabelText('Customer name')).toHaveValue('');
     expect(screen.getByLabelText('Customer name')).toHaveAttribute('placeholder', 'Customer’s name');
     expect(screen.getByText('No product yet: tap “Add a product”.')).toBeInTheDocument();
     expect(screen.getByRole('radio', { name: 'Pickup' })).not.toBeChecked();
     expect(screen.getByRole('radio', { name: 'Delivery' })).not.toBeChecked();
-    expect(screen.getByLabelText('Notes (optional)')).toHaveAccessibleDescription('Do not write the customer’s allergies or health information here.');
+    // The owner took the allergy line away (19 Nov 2026): the notes box has no sentence under it.
+    expect(screen.getByLabelText('Notes')).not.toHaveAttribute('aria-describedby');
     expect(isBusy()).toBe(false);
   });
 
@@ -319,8 +320,8 @@ describe('the editor', () => {
   it('saves after a question, writes what was typed, returns to the list on the booking\'s day', async () => {
     const { user, source, router } = await openNew();
     await fill(user);
-    await user.type(screen.getByLabelText('Total (£, optional)'), '30');
-    await user.type(screen.getByLabelText('Deposit (£, optional)'), '5');
+    await user.type(screen.getByLabelText('Total (£)'), '30');
+    await user.type(screen.getByLabelText('Deposit (£)'), '5');
     expect(screen.getByText('To pay').parentElement).toHaveTextContent('£25.00');
     expect(isBusy()).toBe(true);
     await user.click(screen.getByRole('button', { name: 'Save' }));
@@ -378,7 +379,7 @@ describe('the editor', () => {
     expect(within(card).getByLabelText('Quantity of Focaccia · 1.5 kg')).toHaveValue('1');
     await user.click(within(card).getByRole('button', { name: 'One more: Focaccia · 1.5 kg' }));
     expect(card).toHaveTextContent('£36.00');
-    expect(screen.getByLabelText('Total (£, optional)')).toHaveAccessibleDescription('Leave empty to use the price list’s total: £36.00.');
+    expect(screen.getByLabelText('Total (£)')).toHaveAttribute('placeholder', '£36.00'); // the list's total, grey inside the box;
   });
 
   it('a product sold by the pack is booked in packs, with what one pack holds', async () => {
@@ -406,8 +407,8 @@ describe('the editor', () => {
   it('an empty total box saves the price list\'s total; a typed one wins (a discount)', async () => {
     const { user, source } = await openNew();
     await fill(user);
-    expect(screen.getByLabelText('Total (£, optional)')).toHaveAccessibleDescription('Leave empty to use the price list’s total: £18.00.');
-    await user.type(screen.getByLabelText('Deposit (£, optional)'), '5');
+    expect(screen.getByLabelText('Total (£)')).toHaveAttribute('placeholder', '£18.00'); // the list's total, grey inside the box;
+    await user.type(screen.getByLabelText('Deposit (£)'), '5');
     expect(screen.getByText('To pay').parentElement).toHaveTextContent('£13.00');
     await user.click(screen.getByRole('button', { name: 'Save' }));
     await user.click(within(await dialog('Save this booking?')).getByRole('button', { name: 'Save' }));
@@ -464,8 +465,8 @@ describe('the editor', () => {
     await user.clear(screen.getByLabelText('Quantity of Focaccia · 1.5 kg'));
     await user.type(screen.getByLabelText('Quantity of Focaccia · 1.5 kg'), '9000');
     await user.click(screen.getByRole('button', { name: 'Save' }));
-    expect(screen.getByLabelText('Total (£, optional)')).toHaveFocus();
-    expect(screen.getByLabelText('Total (£, optional)')).toHaveAccessibleDescription(/The total is over 100,000: check the quantities\./);
+    expect(screen.getByLabelText('Total (£)')).toHaveFocus();
+    expect(screen.getByLabelText('Total (£)')).toHaveAccessibleDescription(/The total is over 100,000: check the quantities\./);
     expect(source.create).not.toHaveBeenCalled();
   });
 
@@ -571,10 +572,10 @@ describe('the editor', () => {
     expect(await screen.findByRole('region', { name: 'Nuova prenotazione' }, LOAD)).toBeInTheDocument();
     expect(screen.getByRole('radio', { name: 'Ritiro' })).toBeInTheDocument();
     expect(screen.getByRole('radio', { name: 'Consegna' })).toBeInTheDocument();
-    expect(screen.getByLabelText('Acconto (£, facoltativo)')).toBeInTheDocument();
+    expect(screen.getByLabelText('Acconto (£)')).toBeInTheDocument();
     expect(screen.getByLabelText('Nome cliente')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Aggiungi un prodotto' })).toBeInTheDocument();
-    expect(screen.getByText('Non scrivere qui allergie o informazioni sulla salute del cliente.')).toBeInTheDocument();
+    expect(screen.queryByText(/allergie/)).toBeNull();
   });
 
   it('an address that leads nowhere goes back to the list', async () => {

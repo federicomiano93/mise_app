@@ -47,7 +47,7 @@ describe('the layout', () => {
   it('the order of the form: the customer\'s name, the day and the slot, how it is handed over, the products, the money, the notes', async () => {
     show('/bookings/new');
     const form = await screen.findByRole('region', { name: 'New booking' }, LOAD);
-    const order = ['Customer name', 'Phone', 'Day', 'Time', 'Pickup', 'Add a product', 'Total (£, optional)', 'Notes (optional)']
+    const order = ['Customer name', 'Phone', 'Day', 'Time', 'Pickup', 'Add a product', 'Total (£)', 'Notes']
       .map(name => (name === 'Pickup' ? screen.getByRole('radio', { name }) : name === 'Add a product' ? screen.getByRole('button', { name }) : screen.getByLabelText(name)));
     const all = [...form.querySelectorAll('input, button, textarea, select')];
     const at = order.map(element => all.indexOf(element));
@@ -303,7 +303,7 @@ describe('the product cards', () => {
     await user.clear(qty);
     await user.type(qty, '30');
     expect(card).toHaveTextContent('£750.00');
-    expect(screen.getByLabelText('Total (£, optional)')).toHaveAccessibleDescription('Leave empty to use the price list’s total: £750.00.');
+    expect(screen.getByLabelText('Total (£)')).toHaveAttribute('placeholder', '£750.00'); // the list's total, grey inside the box;
   });
 
   it('numbered from 1 in black circles; a card taken away renumbers the others and hands the focus on', async () => {

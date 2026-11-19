@@ -145,7 +145,7 @@ describe('time slots', () => {
     const { user, source } = show('/bookings/OLD/edit', SLOTS, [bookingFixture({ id: 'OLD', date: TOMORROW, time: '09:40', number: 9 })]);
     await screen.findByLabelText('Time slot', {}, LOAD);
     expect(screen.getByLabelText('Time slot')).toHaveDisplayValue('09:40 (as booked)');
-    await user.type(screen.getByLabelText('Notes (optional)'), 'x');
+    await user.type(screen.getByLabelText('Notes'), 'x');
     await user.click(screen.getByRole('button', { name: 'Save' }));
     await user.click(within(await dialog('Save this booking?')).getByRole('button', { name: 'Save' }));
     await waitFor(() => { expect(source.update).toHaveBeenCalledWith('OLD', expect.objectContaining({ time: '09:40', slotEnd: null })); });

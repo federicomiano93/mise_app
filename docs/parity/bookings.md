@@ -410,3 +410,9 @@ with a message instead of cutting it. The card decides kg vs pieces with `effect
 listed), the same as the save. `parseWeight` also reads «gr», «hg», «etto», «etti». The counter counts only the steps this
 product asks («1 di 2»). Favourites that arrive after the window opened replace the search unless something was typed. The
 card shows only the bold line total, no price of one (the owner's choice on the tablet, 19 Nov 2026).
+
+**Owner's changes on the tablet (19 Nov 2026).** No «Pagamento» title: «Totale (€)» stands out on its own (big label, large bold
+value), and when left empty the list's total shows in grey inside the box, following the products; a typed number replaces it and
+the line under it says what the list would have given. No field says «facoltativo» any more (bookings form; the Calculator's
+«Calcolato da» placeholder is just «Nome»). The notes box no longer carries the line «Non scrivere qui allergie o informazioni
+sulla salute del cliente.» — taken away at the owner's request (the line at the top of this file describes the old form).
