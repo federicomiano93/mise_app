@@ -261,7 +261,8 @@
   color: var(--danger-ink);
 }
 
-/* «✓ Collected» / «Undo»: at the row's bottom right, above the name's stretched link. */
+/* «Mark collected» / «Undo collection»: at the row's bottom right, above the name's stretched link. Blue = something to
+   do; the green and the tick belong to the «✓ Collected» state beside it (the owner, 19 Nov 2026). */
 .collect {
   position: relative;
   z-index: 1;
@@ -269,12 +270,11 @@
   align-items: center;
   gap: var(--s1);
   min-height: var(--hit);
-  margin-left: auto;
   padding: 0 var(--s4);
-  border: 1.5px solid var(--ok);
+  border: 1.5px solid var(--accent);
   border-radius: var(--r-md);
-  background: var(--ok-tint);
-  color: var(--ok-ink);
+  background: var(--surface);
+  color: var(--accent-ink);
   font: inherit;
   font-size: var(--fs-sm);
   font-weight: 650;
@@ -293,6 +293,36 @@
   background: var(--surface);
   color: var(--ink);
 }
+
+/* The state and its button, kept together at the right; on a narrow row the button goes under the state, still at the right. */
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--s2);
+  margin-left: auto;
+}
+
+/* The state, not a button. */
+.done {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
+  padding: 4px var(--s3);
+  border-radius: var(--r-pill);
+  background: var(--ok-tint);
+  color: var(--ok-ink);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+}
+
+.done svg {
+  flex: none;
+  width: 18px;
+  height: 18px;
+}
+
 
 .collect:focus-visible {
   outline: 3px solid var(--accent);

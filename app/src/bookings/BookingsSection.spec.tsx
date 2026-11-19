@@ -65,7 +65,7 @@ describe('the list by day', () => {
     expect(within(row).getAllByRole('listitem').map(line => line.textContent)).toEqual(['11.5 kg Focaccia', '22 pcs Panettone', '31 kg Grissini']);
     expect(row).toHaveTextContent('Delivery');
     expect(row).not.toHaveTextContent('To do');
-    expect(within(row).getByRole('button', { name: 'Collected' })).toBeInTheDocument();
+    expect(within(row).getByRole('button', { name: 'Mark collected' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { level: 1, name: 'Bookings' })).toBeInTheDocument();
   });
 
@@ -87,7 +87,7 @@ describe('the list by day', () => {
     expect(screen.getByLabelText('Cerca per nome')).toBeInTheDocument();
     expect(rowOf('Anna Finta', 'Prenotazioni')).toHaveTextContent('Consegna');
     expect(rowOf('Mario Prova', 'Prenotazioni')).toHaveTextContent('Ritiro');
-    expect(within(rowOf('Mario Prova', 'Prenotazioni')).getByRole('button', { name: 'Ritirata' })).toBeInTheDocument();
+    expect(within(rowOf('Mario Prova', 'Prenotazioni')).getByRole('button', { name: 'Segna ritirata' })).toBeInTheDocument();
   });
 
   it('⚠️ reads ONE month, the one shown, with one listener that stops when the section closes', async () => {

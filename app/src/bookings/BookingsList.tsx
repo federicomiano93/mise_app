@@ -203,8 +203,8 @@ export function BookingsList({ day, onDay, today, selectedId, shown }: Props) {
 }
 
 // One booking: its slot on the left (the start big and blue, the end small under it; an exact time alone), the name — the link to
-// the booking, stretched over the whole row — the products one per line, Pickup / Delivery, and at the bottom right «✓ Collected»
-// (or «Undo» once collected). A cancelled one has no button: «Cancelled», crossed out.
+// the booking, stretched over the whole row — the products one per line, Pickup / Delivery, and at the bottom right «Mark collected»
+// (once collected: a green «✓ Collected» and «Undo collection»). A cancelled one has no button: «Cancelled», crossed out.
 // ⚠️ THE BUTTON IS NOT INSIDE THE LINK (a button cannot nest in a link): the link's ::after covers the row, the button sits above it.
 function Row({ booking, current, locale, words, onToggle, onOpen }: {
   booking: Booking;
@@ -244,29 +244,29 @@ function Row({ booking, current, locale, words, onToggle, onOpen }: {
             {t(booking.mode === 'delivery' ? 'bookings.mode.delivery' : 'bookings.mode.pickup')}
           </span>
           {cancelled ? <span className={styles.cancelled}>{t('bookings.status.cancelled')}</span> : null}
-          {collected ? <span className="visually-hidden">{t('bookings.status.collected')}</span> : null}
+          {/* Collected: a green «✓ Collected» that is a STATE, not a button, then a plain «Undo collection» beside it. Before, the
+              action itself was green with a tick and the owner read it as «already collected» (19 Nov 2026): the action now says
+              «Mark collected» in blue, the tick and the green belong to the state alone. */}
           {cancelled ? null : (
-            <button
-              type="button"
-              className={styles.collect}
-              data-collected={collected ? 'true' : undefined}
-              aria-describedby={`${ids}-name`}
-              onClick={() => { onToggle(booking); }}
-            >
-              {collected ? (
-                <>
-                  <Undo2 aria-hidden="true" />
-                  <span>{t('bookings.row.undo')}</span>
-                  {' '}
-                  <span className="visually-hidden">{t('bookings.row.undoMore')}</span>
-                </>
-              ) : (
-                <>
-                  <Check aria-hidden="true" />
+            <div className={styles.actions}>
+              {collected ? <span className={styles.done}><Check aria-hidden="true" />{t('bookings.status.collected')}</span> : null}
+              <button
+                type="button"
+                className={styles.collect}
+                data-collected={collected ? 'true' : undefined}
+                aria-describedby={`${ids}-name`}
+                onClick={() => { onToggle(booking); }}
+              >
+                {collected ? (
+                  <>
+                    <Undo2 aria-hidden="true" />
+                    <span>{t('bookings.row.undo')}</span>
+                  </>
+                ) : (
                   <span>{t('bookings.row.collect')}</span>
-                </>
-              )}
-            </button>
+                )}
+              </button>
+            </div>
           )}
         </div>
       </div>

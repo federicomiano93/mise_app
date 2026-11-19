@@ -186,13 +186,13 @@ describe('the rows', () => {
     expect(rowOf('Luca Verdi')).toHaveTextContent('Pickup');
   });
 
-  it('⚠️ a stored «ready» reads as open: no «To do» / «Ready» anywhere, and the same «Collected» button', async () => {
+  it('⚠️ a stored «ready» reads as open: no «To do» / «Ready» anywhere, and the same «Mark collected» button', async () => {
     show();
     await waitFor(() => { expect(rowNames()).toHaveLength(4); }, LOAD);
     const shown = screen.getByRole('region', { name: 'Bookings' });
     expect(shown).not.toHaveTextContent(/To do|Ready/);
-    expect(within(rowOf('Anna Bianchi')).getByRole('button', { name: 'Collected' })).toHaveAccessibleDescription('Anna Bianchi');
-    expect(within(rowOf('Luca Verdi')).getByRole('button', { name: 'Collected' })).toBeInTheDocument();
+    expect(within(rowOf('Anna Bianchi')).getByRole('button', { name: 'Mark collected' })).toHaveAccessibleDescription('Anna Bianchi');
+    expect(within(rowOf('Luca Verdi')).getByRole('button', { name: 'Mark collected' })).toBeInTheDocument();
   });
 
   it('a cancelled row: no button, a «Cancelled» tag, crossed out', async () => {
@@ -204,37 +204,40 @@ describe('the rows', () => {
     expect(row.firstElementChild).toHaveAttribute('data-status', 'cancelled');
   });
 
-  it('⚠️ ONE TAP sets «collected» at once (no question); «Undo» puts it back to open (todo)', async () => {
+  it('⚠️ ONE TAP sets «collected» at once (no question); «Undo collection» puts it back to open (todo)', async () => {
     const { user, source } = show();
     await waitFor(() => { expect(rowNames()).toHaveLength(4); }, LOAD);
     // The server is slow: the row changes before it answers.
     let answer: () => void = () => undefined;
     const real = vi.mocked(source.setStatus).getMockImplementation();
     vi.mocked(source.setStatus).mockImplementationOnce((id, status) => new Promise(resolve => { answer = () => { void real?.(id, status).then(resolve); }; }));
-    await user.click(within(rowOf('Anna Bianchi')).getByRole('button', { name: 'Collected' }));
+    await user.click(within(rowOf('Anna Bianchi')).getByRole('button', { name: 'Mark collected' }));
     expect(screen.queryByRole('alertdialog')).toBeNull();
     expect(rowOf('Anna Bianchi').firstElementChild).toHaveAttribute('data-status', 'collected');
-    const undo = within(rowOf('Anna Bianchi')).getByRole('button', { name: 'Undo the collection' });
+    const undo = within(rowOf('Anna Bianchi')).getByRole('button', { name: 'Undo collection' });
+    // The green «✓ Collected» is the state, written out, not a button (the owner read a green tick button as «already collected»).
+    expect(within(rowOf('Anna Bianchi')).queryByRole('button', { name: 'Collected' })).toBeNull();
+    expect(rowOf('Anna Bianchi')).toHaveTextContent('Collected');
     expect(source.setStatus).toHaveBeenLastCalledWith('A2', 'collected');
     await act(async () => { answer(); });
     await waitFor(() => { expect(source.items.get('A2')?.status).toBe('collected'); });
     passTime(900);
     await user.click(undo);
     await waitFor(() => { expect(source.items.get('A2')?.status).toBe('todo'); });
-    expect(within(rowOf('Anna Bianchi')).getByRole('button', { name: 'Collected' })).toBeInTheDocument();
+    expect(within(rowOf('Anna Bianchi')).getByRole('button', { name: 'Mark collected' })).toBeInTheDocument();
   });
 
-  it('⚠️ a DOUBLE TAP on «Collected» leaves it collected with ONE write; a tap after the pause is the «Undo»', async () => {
+  it('⚠️ a DOUBLE TAP on «Mark collected» leaves it collected with ONE write; a tap after the pause is the «Undo»', async () => {
     const { user, source } = show();
     await waitFor(() => { expect(rowNames()).toHaveLength(4); }, LOAD);
-    await user.click(within(rowOf('Anna Bianchi')).getByRole('button', { name: 'Collected' }));
+    await user.click(within(rowOf('Anna Bianchi')).getByRole('button', { name: 'Mark collected' }));
     // The same button, now «Undo», tapped again a moment later by the same finger.
-    await user.click(within(rowOf('Anna Bianchi')).getByRole('button', { name: 'Undo the collection' }));
+    await user.click(within(rowOf('Anna Bianchi')).getByRole('button', { name: 'Undo collection' }));
     await waitFor(() => { expect(source.items.get('A2')?.status).toBe('collected'); });
     expect(source.setStatus).toHaveBeenCalledTimes(1);
     expect(rowOf('Anna Bianchi').firstElementChild).toHaveAttribute('data-status', 'collected');
     passTime(900);
-    await user.click(within(rowOf('Anna Bianchi')).getByRole('button', { name: 'Undo the collection' }));
+    await user.click(within(rowOf('Anna Bianchi')).getByRole('button', { name: 'Undo collection' }));
     await waitFor(() => { expect(source.items.get('A2')?.status).toBe('todo'); });
     expect(source.setStatus).toHaveBeenCalledTimes(2);
   });
@@ -244,11 +247,11 @@ describe('the rows', () => {
     await waitFor(() => { expect(rowNames()).toHaveLength(4); }, LOAD);
     let refuse: () => void = () => undefined;
     vi.mocked(source.setStatus).mockImplementationOnce(() => new Promise((_, reject) => { refuse = () => { reject(permissionDenied()); }; }));
-    await user.click(within(rowOf('Luca Verdi')).getByRole('button', { name: 'Collected' }));
+    await user.click(within(rowOf('Luca Verdi')).getByRole('button', { name: 'Mark collected' }));
     expect(rowOf('Luca Verdi').firstElementChild).toHaveAttribute('data-status', 'collected');
     await act(async () => { refuse(); });
     await waitFor(() => { expect(rowOf('Luca Verdi').firstElementChild).toHaveAttribute('data-status', 'todo'); });
-    expect(within(rowOf('Luca Verdi')).getByRole('button', { name: 'Collected' })).toBeInTheDocument();
+    expect(within(rowOf('Luca Verdi')).getByRole('button', { name: 'Mark collected' })).toBeInTheDocument();
     expect(await screen.findByText('Not saved: you can’t change bookings in this venue. The booking is back as it was.')).toBeInTheDocument();
     expect(source.items.get('A3')?.status).toBe('todo');
   });
