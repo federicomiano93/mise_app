@@ -7,6 +7,7 @@ import { renderApp } from '../testing/renderApp';
 import { DEFAULT_SETTINGS } from './bookingSettings';
 import { dayAfter, monthAfter, monthOf, monthRange } from './bookingModel';
 import type { Booking } from './bookingModel';
+import { READ_LIMIT } from './bookingsSource';
 
 // Bookings rebuild step 3 (19 Nov 2026, the owner's design on the tablet): the month calendar, «Search by name», the rows with their
 // one-tap «Collected», and the booking's page. ⚠️ Fake customers only.
@@ -40,7 +41,18 @@ const rowNames = (name = 'Bookings') => list(name).queryAllByRole('link').map(li
 const rowOf = (name: string, region = 'Bookings') => list(region).getByRole('link', { name }).closest('li') as HTMLElement;
 const cell = (day: string) => document.querySelector(`[data-day="${day}"]`) as HTMLButtonElement;
 
-beforeEach(() => { vi.spyOn(console, 'error').mockImplementation(() => undefined); });
+// The status buttons ignore a second tap for a moment (a double tap): a spec that taps twice on purpose lets that moment pass.
+let skew = 0;
+const realNow = Date.now.bind(Date);
+const passTime = (ms: number) => {
+  skew += ms;
+  vi.spyOn(Date, 'now').mockImplementation(() => realNow() + skew);
+};
+
+beforeEach(() => {
+  skew = 0;
+  vi.spyOn(console, 'error').mockImplementation(() => undefined);
+});
 afterEach(() => { vi.restoreAllMocks(); });
 
 describe('the month calendar', () => {
@@ -121,6 +133,21 @@ describe('the month calendar', () => {
   });
 });
 
+describe('a month that fills the query', () => {
+  const crowd = (n: number) => Array.from({ length: n }, (_, i) => bookingFixture({ id: `C${String(i)}`, date: `${MONTH}-28`, number: i + 1, customerName: `Cliente ${String(i)}` }));
+
+  it('⚠️ says so when the month reaches the read limit', async () => {
+    show('/bookings', fakeBookingsSource(crowd(READ_LIMIT)));
+    expect(await screen.findByText('Too many bookings in this month: some may not be shown.', {}, LOAD)).toBeInTheDocument();
+  });
+
+  it('says nothing below the limit', async () => {
+    show('/bookings', fakeBookingsSource(crowd(READ_LIMIT - 1)));
+    await waitFor(() => { expect(screen.queryByText('Loading bookings…')).toBeNull(); }, LOAD);
+    expect(screen.queryByText(/Too many bookings in this month/)).toBeNull();
+  });
+});
+
 describe('«Search by name»', () => {
   it('filters the day\'s rows as you type, case and accents folded, and says when none matches', async () => {
     const { user } = show();
@@ -191,9 +218,25 @@ describe('the rows', () => {
     expect(source.setStatus).toHaveBeenLastCalledWith('A2', 'collected');
     await act(async () => { answer(); });
     await waitFor(() => { expect(source.items.get('A2')?.status).toBe('collected'); });
+    passTime(900);
     await user.click(undo);
     await waitFor(() => { expect(source.items.get('A2')?.status).toBe('todo'); });
     expect(within(rowOf('Anna Bianchi')).getByRole('button', { name: 'Collected' })).toBeInTheDocument();
+  });
+
+  it('⚠️ a DOUBLE TAP on «Collected» leaves it collected with ONE write; a tap after the pause is the «Undo»', async () => {
+    const { user, source } = show();
+    await waitFor(() => { expect(rowNames()).toHaveLength(4); }, LOAD);
+    await user.click(within(rowOf('Anna Bianchi')).getByRole('button', { name: 'Collected' }));
+    // The same button, now «Undo», tapped again a moment later by the same finger.
+    await user.click(within(rowOf('Anna Bianchi')).getByRole('button', { name: 'Undo the collection' }));
+    await waitFor(() => { expect(source.items.get('A2')?.status).toBe('collected'); });
+    expect(source.setStatus).toHaveBeenCalledTimes(1);
+    expect(rowOf('Anna Bianchi').firstElementChild).toHaveAttribute('data-status', 'collected');
+    passTime(900);
+    await user.click(within(rowOf('Anna Bianchi')).getByRole('button', { name: 'Undo the collection' }));
+    await waitFor(() => { expect(source.items.get('A2')?.status).toBe('todo'); });
+    expect(source.setStatus).toHaveBeenCalledTimes(2);
   });
 
   it('⚠️ a REFUSED tap puts the row back and says so', async () => {
@@ -274,14 +317,31 @@ describe('the booking\'s page', () => {
     await user.click(within(card).getByRole('button', { name: 'Collected' }));
     await waitFor(() => { expect(source.items.get('A2')?.status).toBe('collected'); });
     expect(within(card).getByRole('button', { name: 'Collected' })).toHaveAttribute('aria-pressed', 'true');
+    passTime(900);
     await user.click(within(card).getByRole('button', { name: 'Collected' }));
     await waitFor(() => { expect(source.items.get('A2')?.status).toBe('todo'); });
+    passTime(900);
     // Cancelled still asks first; a second tap reopens without a question.
     await user.click(within(card).getByRole('button', { name: 'Cancelled' }));
     await user.click(within(await screen.findByRole('alertdialog', { name: 'Cancel this booking?' })).getByRole('button', { name: 'Cancel booking' }));
     await waitFor(() => { expect(source.items.get('A2')?.status).toBe('cancelled'); });
+    passTime(900);
     await user.click(within(card).getByRole('button', { name: 'Cancelled' }));
     await waitFor(() => { expect(source.items.get('A2')?.status).toBe('todo'); });
+  });
+
+  it('⚠️ a DOUBLE TAP on the booking page\'s Collected does not reopen it; a tap after the pause does', async () => {
+    const { user, source } = show('/bookings/A2');
+    const card = await screen.findByRole('region', { name: 'Anna Bianchi' }, LOAD);
+    const button = within(card).getByRole('button', { name: 'Collected' });
+    await user.click(button);
+    await user.click(button);
+    await waitFor(() => { expect(source.items.get('A2')?.status).toBe('collected'); });
+    expect(source.setStatus).toHaveBeenCalledTimes(1);
+    passTime(900);
+    await user.click(button);
+    await waitFor(() => { expect(source.items.get('A2')?.status).toBe('todo'); });
+    expect(source.setStatus).toHaveBeenCalledTimes(2);
   });
 
   it('the print buttons read «Lab» / «Customer», named «Print for the lab» / «Print for the customer»', async () => {
@@ -370,15 +430,17 @@ describe('a booking moved to another month', () => {
     expect(source.create).not.toHaveBeenCalled();
   });
 
-  it('⚠️ takes the next free number of its new month when its own is already used there', async () => {
+  it('⚠️ keeps its own number when moved to a month where it is already used', async () => {
     const source = fakeBookingsSource([...seed(), bookingFixture({ id: 'R5', date: TODAY, time: '12:00', customerName: 'Rita Cinque', number: 5 })]);
     const { user } = show('/bookings/R5/edit', source);
     await screen.findByLabelText('Customer name', {}, LOAD);
     fireEvent.change(screen.getByLabelText('Day'), { target: { value: NEXT_DAY } });
     await waitFor(() => { expect(source.watch).toHaveBeenLastCalledWith({ from: `${MONTH}-01`, until: monthRange(NEXT).until }, expect.any(Function), expect.any(Function)); });
     await saveAndConfirm(user);
-    // Sara Dopo is N. 5 in that month: Rita becomes N. 6. Moved within its own month she would keep 5.
-    await waitFor(() => { expect(source.update).toHaveBeenCalledWith('R5', expect.objectContaining({ date: NEXT_DAY, number: 6 })); });
+    // Sara Dopo is N. 5 in that month too, but the rules refuse a changed number: Rita keeps 5 (the slips carry the date).
+    await waitFor(() => { expect(source.update).toHaveBeenCalledWith('R5', expect.objectContaining({ date: NEXT_DAY, number: 5 })); });
+    expect(source.items.get('R5')?.number).toBe(5);
+    expect(source.items.get('R5')?.date).toBe(NEXT_DAY);
   });
 
   it('⚠️ a month only this device\'s copy has answered for (offline) is said in the save question', async () => {
@@ -400,6 +462,29 @@ describe('getting there and back', () => {
     expect(await screen.findByRole('region', { name: 'Sara Dopo' }, LOAD)).toBeInTheDocument();
     expect(source.dayOf).toHaveBeenCalledWith('N1');
     expect(source.watch).toHaveBeenLastCalledWith(monthRange(NEXT), expect.any(Function), expect.any(Function));
+  });
+
+  it('⚠️ no «no longer here» flash while the day of a booking in another month is still being read', async () => {
+    const source = fakeBookingsSource(seed());
+    let answer: (day: string | null) => void = () => undefined;
+    vi.mocked(source.dayOf).mockImplementationOnce(() => new Promise(resolve => { answer = resolve; }));
+    show('/bookings/N1', source);
+    await waitFor(() => { expect(source.dayOf).toHaveBeenCalledWith('N1'); }, LOAD);
+    expect(screen.queryByText(/This booking is no longer here/)).toBeNull();
+    expect(screen.getByText('Loading bookings…', { selector: 'p' })).toBeInTheDocument();
+    await act(async () => { answer(NEXT_DAY); });
+    expect(await screen.findByRole('region', { name: 'Sara Dopo' }, LOAD)).toBeInTheDocument();
+  });
+
+  it('⚠️ a failed day lookup (offline) keeps loading, and is tried again when the connection is back', async () => {
+    const source = fakeBookingsSource(seed());
+    vi.mocked(source.dayOf).mockImplementationOnce(() => Promise.reject(new Error('unavailable')));
+    show('/bookings/N1', source);
+    await waitFor(() => { expect(source.dayOf).toHaveBeenCalledTimes(1); }, LOAD);
+    expect(screen.queryByText(/This booking is no longer here/)).toBeNull();
+    await act(async () => { window.dispatchEvent(new Event('online')); });
+    expect(await screen.findByRole('region', { name: 'Sara Dopo' }, LOAD)).toBeInTheDocument();
+    expect(source.dayOf).toHaveBeenCalledTimes(2);
   });
 
   it('a booking that is gone is still «no longer here»', async () => {

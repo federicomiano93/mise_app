@@ -295,10 +295,11 @@ function EditorForm({ id, booking, refused, settings }: FormProps) {
       // ⚠️ A RESTORED SAVE OF A BOOKING DELETED ON ANOTHER DEVICE IS MADE AGAIN AS A NEW ONE: written to its old id it would be a
       // create without `createdAt`, refused by the rules every time.
       const saveId = id !== null && stored === undefined && refused !== null ? null : id;
-      // The short number counts within the month of the booking's day (the listener reads by month). A booking moved into a month
-      // where another one already carries its number takes the next free one there: two of the same month never share a number.
+      // ⚠️ ONLY A NEW BOOKING GETS A NUMBER: the next free one within the month of its day (the listener reads by month). An existing
+      // booking ALWAYS keeps the number it was stored with, also when moved to another month where that number is taken: the rules
+      // refuse an update that changes `number`, so a renumbered move would be refused on every retry. The slips carry the date.
       const sameMonth = stocked.filter(item => item.id !== id && monthOf(item.date) === monthOf(draft.date));
-      const shortNumber = number !== null && !sameMonth.some(item => item.number === number) ? number : nextNumber(sameMonth);
+      const shortNumber = number !== null ? number : nextNumber(sameMonth);
       const data = toBookingData(draft, { status: statusNow, number: shortNumber, items });
       const savedId = store.save(saveId, data, draft, booking?.date ?? refused?.storedDate ?? null);
       leaving.current = true;

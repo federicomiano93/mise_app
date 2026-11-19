@@ -657,6 +657,9 @@ export function calendarWeeks(month: string): Array<Array<string | null>> {
   return weeks;
 }
 
+// ⚠️ A MONTH THAT FILLED ITS QUERY: the read is by day and cut at the limit, so the last days may be missing. Said in the list.
+export const monthMayBeCut = (count: number, limit: number): boolean => count >= limit;
+
 // How many bookings each day holds, for the calendar's badge. ⚠️ CANCELLED ONES ARE NOT COUNTED (the owner's design): the badge is
 // the work of the day.
 export function dayCounts(bookings: readonly Booking[]): ReadonlyMap<string, number> {

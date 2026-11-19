@@ -6,10 +6,12 @@ import { useSession } from '../session/SessionContext';
 import type { MessageKey } from '../i18n/en';
 import { Button } from '../ui/Button';
 import { useStatusMessage } from '../ui/StatusMessage';
-import { dayCounts, dayRows, dayToShow, monthOf } from './bookingModel';
+import { dayCounts, dayRows, dayToShow, monthMayBeCut, monthOf } from './bookingModel';
 import type { Booking, BookingStatus } from './bookingModel';
 import { BookingLines } from './BookingLines';
 import { BookingsCalendar } from './BookingsCalendar';
+import { READ_LIMIT } from './bookingsSource';
+import { useTapLockout } from './tapLockout';
 import { spellDate } from './bookingWords';
 import type { UnitWords } from './bookingWords';
 import { useBookings, useBookingsStore } from './BookingsContext';
@@ -96,8 +98,12 @@ export function BookingsList({ day, onDay, today, selectedId, shown }: Props) {
 
   // ⚠️ ONE TAP, NO QUESTION (the counter at pickup): Collected, and Undo puts it back to open. It shows at once (the store lays it
   // over the listener's copy); a refusal puts the row back and the section says so (BookingsSection.tsx StoreMessages).
+  const taps = useTapLockout();
   const toggle = (booking: Booking) => {
+    // A second tap a moment after the first (a double tap) must not put the booking straight back.
+    if (taps.locked(booking.id)) return;
     const next: BookingStatus = booking.status === 'collected' ? 'todo' : 'collected';
+    taps.lock(booking.id);
     store.setStatus(booking.id, next);
     say(next === 'collected'
       ? t('bookings.row.collectedSaid', { name: booking.customerName })
@@ -143,6 +149,7 @@ export function BookingsList({ day, onDay, today, selectedId, shown }: Props) {
 
       <div role="status">
         {status === 'error' ? <p className={styles.broken}>{t('bookings.streamError')}</p> : null}
+        {!loading && monthMayBeCut(held.length, READ_LIMIT) ? <p className={styles.broken}>{t('bookings.monthCut')}</p> : null}
       </div>
 
       <section className={styles.day} aria-labelledby={`${ids}-day`}>

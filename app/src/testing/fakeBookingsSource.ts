@@ -157,6 +157,9 @@ export function fakeBookingsSource(
     update: vi.fn(async (id: string, data: BookingData) => {
       const refused = refusal();
       if (refused) return refused;
+      // The rules refuse an update that changes the short number: a spec that renumbers a booking fails here, as it does live.
+      const stored = items.get(id);
+      if (stored && stored.number !== data.number) throw permissionDenied();
       items.set(id, fromData(id, data));
       push();
     }),

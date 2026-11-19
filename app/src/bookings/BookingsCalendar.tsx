@@ -1,4 +1,4 @@
-import { useId, useRef } from 'react';
+import { useId, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { parseISODate } from '@mise/shared/day';
@@ -38,6 +38,10 @@ export function BookingsCalendar({ day, today, counts, onDay, onMonth }: Props) 
   const narrow = new Intl.DateTimeFormat(locale, { weekday: 'narrow' });
   const long = new Intl.DateTimeFormat(locale, { weekday: 'long' });
   const spoken = new Intl.DateTimeFormat(locale, { weekday: 'long', day: 'numeric', month: 'long' });
+
+  // The day the arrows moved to holds the single Tab stop (roving tabindex); picking a day, or another month, takes it back to the picked day.
+  const [roving, setRoving] = useState<{ readonly day: string; readonly cell: string } | null>(null);
+  const stop = roving !== null && roving.day === day && monthOf(roving.cell) === month ? roving.cell : day;
 
   const focusDay = (target: string) => {
     grid.current?.querySelector<HTMLButtonElement>(`[data-day="${target}"]`)?.focus();
@@ -87,7 +91,8 @@ export function BookingsCalendar({ day, today, counts, onDay, onMonth }: Props) 
                       type="button"
                       className={styles.day}
                       data-day={cell}
-                      tabIndex={cell === day ? 0 : -1}
+                      tabIndex={cell === stop ? 0 : -1}
+                      onFocus={() => { setRoving({ day, cell }); }}
                       aria-pressed={cell === day}
                       aria-current={cell === today ? 'date' : undefined}
                       onClick={() => { onDay(cell); }}

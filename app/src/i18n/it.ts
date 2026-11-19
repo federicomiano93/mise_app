@@ -3000,6 +3000,7 @@ export const it: Messages = {
   'home.bookingsToday.products': { one: "{n} prodotto", other: "{n} prodotti" },
   'bookings.empty.day': 'Nessuna prenotazione per questo giorno.',
   'bookings.loading': 'Caricamento prenotazioni…',
+  'bookings.monthCut': 'Troppe prenotazioni in questo mese: alcune potrebbero non essere mostrate.',
   'bookings.streamError': 'Sincronizzazione interrotta — le prenotazioni potrebbero non essere aggiornate.',
   'bookings.mode.pickup': 'Ritiro',
   'bookings.mode.delivery': 'Consegna',

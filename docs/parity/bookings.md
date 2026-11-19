@@ -472,8 +472,10 @@ in grey at the right, the chevron; no «— Pronta / — Da fare».
 
 **Choices made for the owner, to hear about:**
 - The short booking number now counts within the MONTH of the booking's day (the listener holds one month): the first booking of an
-  empty month is N. 1 again. A booking moved into a month where its number is already taken gets the next free one there (its slips
-  must be printed again). Two devices offline at once can still give the same number, as before, and so can a month this device
+  empty month is N. 1 again. ⚠️ REVERSED after review (19 Nov 2026): an EXISTING booking ALWAYS keeps its stored number, also when it is
+  moved to another month where that number is already used (two bookings of a month may then share a number; the slips carry the date).
+  The rules refuse an update that changes `number` (the rules suite pins it), so a renumbered move was refused on every retry; the fake
+  source now refuses it too. Only a NEW booking gets the next number. Two devices offline at once can still give the same number, as before, and so can a month this device
   has never read while offline (the save question says so).
 - The arrows ‹ › also pick a day: today in today's month, else the 1st of the month shown.
 - A day already gone picked in the calendar gives «Nuova prenotazione» no day (the form refuses a past day for a new booking).
@@ -495,3 +497,10 @@ slots) and EN (manager@club.test) at 1024, 360 and 296: Home card, list, search,
 next month and back, the booking page, the keyboard on the calendar — axe-core, sideways scroll, targets, clipped text, one h1,
 console errors: 42/42 (run again after the review fixes). axe was run with React Aria's own live announcer (`[role="log"]`, an empty `role="img"` it leaves after an
 announcement, app-wide) left out. Not done: the real SM-T550 tablet.
+
+**Review fixes (19 Nov 2026)** on the same PR: (1) the number is kept on a move (above); (2) a second tap on «Ritirata» / «Annulla» or
+the booking page's Ritirata / Annullata within 800 ms of a status write is ignored (`tapLockout.ts`, per row and button, the button
+stays as it is); (3) a booking opened by its address in another month shows the loading line until its day has been read (`dayOf`),
+and a failed read is tried again after 5 s and when the connection returns, never giving up for good; (4) a month whose result
+reaches `READ_LIMIT` (1500) shows «Too many bookings in this month: some may not be shown.» (`monthMayBeCut`); (5) the calendar's
+single Tab stop follows the day the arrows moved to, and goes back to the picked day when a day or a month is picked.

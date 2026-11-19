@@ -3243,6 +3243,7 @@ export const en = {
   'home.bookingsToday.products': { one: "{n} product", other: "{n} products" },
   'bookings.empty.day': 'No bookings for this day.',
   'bookings.loading': 'Loading bookings…',
+  'bookings.monthCut': 'Too many bookings in this month: some may not be shown.',
   'bookings.streamError': 'Live sync interrupted — bookings may be out of date.',
   'bookings.mode.pickup': 'Pickup',
   'bookings.mode.delivery': 'Delivery',

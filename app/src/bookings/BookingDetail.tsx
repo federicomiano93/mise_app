@@ -29,6 +29,7 @@ import { printOutcomeText } from './printWords';
 import { customerSlipLines, labSlipLines } from './slipText';
 import { countryOf } from '@mise/shared/market';
 import { reminderMessage, reminderUrl, wantsReminder, whatsappNumber } from './reminderText';
+import { useTapLockout } from './tapLockout';
 import styles from './BookingDetail.module.css';
 
 // One booking (18 Nov 2026): its status (a tap saves it), when, who, what, the money, the two slips and the bin.
@@ -37,7 +38,7 @@ import styles from './BookingDetail.module.css';
 // The loading line's title (one booking page at a time): the name takes the focus over from it.
 const WAITING_TITLE_ID = 'booking-waiting-title';
 
-export function BookingDetail({ id }: { id: string }) {
+export function BookingDetail({ id, lookingUp = false }: { id: string; lookingUp?: boolean }) {
   const { t } = useT();
   const { status, items } = useBookings();
   const booking = items.find(item => item.id === id) ?? null;
@@ -60,11 +61,11 @@ export function BookingDetail({ id }: { id: string }) {
 
   if (booking === null) {
     return (
-      <section className={styles.card} aria-busy={status === 'loading'}>
+      <section className={styles.card} aria-busy={status === 'loading' || lookingUp}>
         {/* The page draws no h1 for a booking (its h1 is the customer's name): until there is one, the section's name is it. */}
         <FormBar backLabel={t('ui.back')} onBack={back} title={t('section.bookings')} level={1} titleRef={waitingTitle} titleId={WAITING_TITLE_ID} />
         <div className={styles.body}>
-          {status === 'loading' ? <p className={styles.muted}>{t('bookings.loading')}</p> : (
+          {status === 'loading' || lookingUp ? <p className={styles.muted}>{t('bookings.loading')}</p> : (
             <>
               <p>{t('bookings.notFound')}</p>
               <Link to={BOOKINGS_PATH} replace className={styles.link}>{t('bookings.backToList')}</Link>
@@ -88,6 +89,7 @@ function Shown({ booking, onBack }: { booking: Booking; onBack: () => void }) {
   const { settings } = useBookingSettings();
   const [confirm, confirmDialog] = useConfirm();
   const ids = useId();
+  const taps = useTapLockout();
   const number = t('bookings.number', { n: booking.number });
   const title = useRef<HTMLHeadingElement>(null);
   const { state } = useLocation();
@@ -136,6 +138,8 @@ function Shown({ booking, onBack }: { booking: Booking; onBack: () => void }) {
   // Two choices only, Collected and Cancelled (bookings rebuild step 3): a tap on the one already on puts the booking back to open
   // (`todo`). The stored `ready` reads as open.
   async function changeStatus(pressed: 'collected' | 'cancelled') {
+    // A double tap must not put the booking back a moment after it was set.
+    if (taps.locked(`${booking.id}:${pressed}`)) return;
     const next: BookingStatus = booking.status === pressed ? 'todo' : pressed;
     if (next === 'cancelled') {
       const ok = await confirm({
@@ -147,6 +151,7 @@ function Shown({ booking, onBack }: { booking: Booking; onBack: () => void }) {
       });
       if (!ok) return;
     }
+    taps.lock(`${booking.id}:${pressed}`);
     store.setStatus(booking.id, next);
     say(next === 'todo' ? t('bookings.reopened') : t('bookings.statusSaved', { status: t(STATUS_WORD[next]) }));
   }

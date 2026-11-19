@@ -4,6 +4,7 @@ import {
   isOpen, monthAfter, monthOf, monthRange, nextNumber, oldestKeptDay,
   effectiveTotal, linePrice, listTotal, parseMoney, parseQty, readBooking, sameDraft, sortForDay, stillToHandOver, toBookingData, toPay,
   NO_FORM_RULES, phoneStorable, bookingTimeLabel, pickedLine, weightPrice, weightStorable,
+  monthMayBeCut,
 } from './bookingModel';
 import type { Booking, Draft, FormRules } from './bookingModel';
 import { bookingFixture, priceListOf } from '../testing/fakeBookingsSource';
@@ -497,5 +498,13 @@ describe('a piece of a chosen weight (bookings rebuild step 2)', () => {
   it('a change of weight is an unsaved change', () => {
     const line = pickedLine(1, { name: 'Torta', item: null, weightKg: 1, note: '' });
     expect(sameDraft({ ...good, lines: [line] }, { ...good, lines: [{ ...line, weightKg: 1.5 }] })).toBe(false);
+  });
+});
+
+describe('monthMayBeCut', () => {
+  it('is true from the limit up and false below it', () => {
+    expect(monthMayBeCut(1499, 1500)).toBe(false);
+    expect(monthMayBeCut(1500, 1500)).toBe(true);
+    expect(monthMayBeCut(2000, 1500)).toBe(true);
   });
 });

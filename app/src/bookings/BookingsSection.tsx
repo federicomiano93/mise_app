@@ -29,6 +29,9 @@ import styles from './BookingsSection.module.css';
 // A phone shows the list OR one booking (its editor); from 1000px the list on the left and, on the right, the printer or the settings
 // screen; a booking and its form take the whole width (bookings rebuild steps 2 and 3).
 // Its data lives exactly as long as it is on screen: BookingsProvider starts the one listener on mount and stops it on unmount (P14).
+// How long a failed read of a booking's day waits before it is tried again (it also tries when the connection comes back).
+const LOOKUP_RETRY_MS = 5000;
+
 export default function BookingsSection() {
   return (
     <BookingsProvider>
@@ -94,18 +97,38 @@ function BookingsScreen() {
   const { locationId } = useSession();
   const { status: heldStatus, confirmed, items } = useBookings();
   const openId = view.kind === 'booking' || view.kind === 'edit' ? view.id : null;
-  const askedFor = useRef<string | null>(null);
   const openNow = useRef(openId);
   openNow.current = openId;
   const missing = openId !== null && heldStatus === 'ready' && confirmed && !items.some(b => b.id === openId);
+  // What the one-time day lookup has said about the booking open now: its day (null: it does not exist). A failed lookup (offline)
+  // is tried again — after a few seconds, and when the connection comes back — never given up for good.
+  const [answer, setAnswer] = useState<{ readonly id: string; readonly day: string | null } | null>(null);
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
-    if (!missing || openId === null || askedFor.current === openId || !locationId) return;
-    askedFor.current = openId;
+    if (!missing || openId === null || !locationId || answer?.id === openId) return;
+    let live = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const retry = () => { if (live) setAttempt(n => n + 1); };
     services.bookings(locationId).dayOf(openId).then(found => {
       // Applied only while that booking is still the one open (the section unmounted, or another opened, drops it).
-      if (found !== null && openNow.current === openId) setDay(found);
-    }, () => undefined);
-  }, [missing, openId, services, locationId]);
+      if (!live || openNow.current !== openId) return;
+      setAnswer({ id: openId, day: found });
+      if (found !== null) setDay(found);
+    }, () => {
+      if (!live) return;
+      timer = setTimeout(retry, LOOKUP_RETRY_MS);
+      window.addEventListener('online', retry, { once: true });
+    });
+    return () => {
+      live = false;
+      if (timer !== undefined) clearTimeout(timer);
+      window.removeEventListener('online', retry);
+    };
+  }, [missing, openId, services, locationId, answer, attempt]);
+  // ⚠️ The booking page says «no longer here» only once the lookup has answered that there is no such booking (or that its day is
+  // the one already read): until then — also while it keeps failing offline — it keeps its loading line.
+  const answered = answer !== null && answer.id === openId && (answer.day === null || answer.day === day);
+  const lookingUp = missing && !answered;
 
   // ⚠️ BOOKINGS OWN THE SCROLL for the moves inside the section (architecture rule 9, shell/scrollArea.tsx): the list and a booking
   // are separate addresses, and the shell's reset to the top at every address would throw the list back to its top at every booking
@@ -171,7 +194,7 @@ function BookingsScreen() {
           <div ref={detail} className={styles.detail}>
             {/* A booking's page has no h1 from the page: a broken one still gets one, through the boundary's own title. */}
             <PartBoundary resetKey={pathname} title={view.kind === 'booking' ? t('section.bookings') : undefined}>
-              <Detail view={view} />
+              <Detail view={view} lookingUp={lookingUp} />
             </PartBoundary>
           </div>
         </div>
@@ -180,14 +203,14 @@ function BookingsScreen() {
   );
 }
 
-function Detail({ view }: { view: Exclude<BookingsView, { kind: 'unknown' }> }) {
+function Detail({ view, lookingUp }: { view: Exclude<BookingsView, { kind: 'unknown' }>; lookingUp: boolean }) {
   const { t } = useT();
   switch (view.kind) {
     case 'list':
       // Only on the split: on a phone the list is the whole screen (BookingsSection.module.css).
       return <p className={styles.pick}>{t('bookings.pick')}</p>;
     case 'booking':
-      return <BookingDetail key={view.id} id={view.id} />;
+      return <BookingDetail key={view.id} id={view.id} lookingUp={lookingUp} />;
     // Keyed: another booking's editor is a fresh working copy, never the old one renamed.
     case 'new':
       return <BookingEditor key="new" id={null} />;
