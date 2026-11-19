@@ -3,11 +3,9 @@ import { Plus, Trash2 } from 'lucide-react';
 import { useBlocker, useLocation, useNavigate } from 'react-router';
 import type { BlockerFunction } from 'react-router';
 import { formatMoney } from '@mise/shared/price-model';
-import { useDataServices } from '../data/DataContext';
 import { useT } from '../i18n/useT';
 import type { MessageKey } from '../i18n/en';
 import { markBusy } from '../session/busy';
-import { useSession } from '../session/SessionContext';
 import { useMoney } from '../session/useMoney';
 import { useTodayKey } from '../shell/useTodayKey';
 import { Button } from '../ui/Button';
@@ -21,7 +19,7 @@ import {
 import type { Booking, BookingMode, BookingStatus, Draft, DraftField, DraftLine, DraftProblem, FormRules } from './bookingModel';
 import { onlyMode, placesLeft, slotFromValue, slotValue, slotsOf } from './bookingSettings';
 import type { BookingSettings, Slot } from './bookingSettings';
-import type { PriceList } from '@mise/shared/price-list';
+import { usePriceList } from './usePriceList';
 import { spellDate } from './bookingWords';
 import { useBookingSettings, useBookings, useBookingsStore, useReportFormDay } from './BookingsContext';
 import { afterSave, cameFromBooking, cameFromList, newBookingDateOf, restoresRefused } from './bookingsNav';
@@ -576,23 +574,6 @@ function fieldName(t: ReturnType<typeof useT>['t'], field: DraftField, inSlots: 
     total: 'bookings.slip.total',
   };
   return t(words[field]);
-}
-
-// The published price list, live while the editor is open. `unavailable`: refused or broken (free text still works).
-function usePriceList(): { readonly list: PriceList; readonly unavailable: boolean; readonly loaded: boolean } {
-  const services = useDataServices();
-  const { locationId } = useSession();
-  const [state, setState] = useState<{ list: PriceList; unavailable: boolean; loaded: boolean }>(
-    { list: { items: [], publishedAtMs: null }, unavailable: false, loaded: false },
-  );
-  useEffect(() => {
-    if (!locationId) return undefined;
-    return services.bookings(locationId).watchPriceList(
-      list => { setState({ list, unavailable: false, loaded: true }); },
-      () => { setState({ list: { items: [], publishedAtMs: null }, unavailable: true, loaded: true }); },
-    );
-  }, [services, locationId]);
-  return state;
 }
 
 type TextFieldProps = {
