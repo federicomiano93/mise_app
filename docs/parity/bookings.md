@@ -571,3 +571,12 @@ updated lab-slip cases of `BookingsSection.spec.tsx` and `PrinterScreen.spec.tsx
 **Not verified**: a real print on the Epson FP-81 II RT (font 4, 21 columns, one document per slip cut separately, accents and
 «×»), the browser's print on the counter tablet (Chrome 101: the 100 mm page, the page breaks, the black highlight), and the
 emulator drive at 1024 / 360 / 296 with axe-core for the new dialog.
+
+**Review fixes (19 Nov 2026).** «Laboratorio» waits (pending) until the booking page's price list has answered once: pressed
+before, a booking of 3 scacciate would have printed one slip «[2]» with no question. The printer's test page now has a
+double-size line, so a printer that refuses font 4 refuses the test print first, not a real booking. A comma between two digits
+is a decimal one and no longer splits a note («+ 0,5 kg ricotta» is one highlight). The 100 mm page is pinned by a spec.
+**Still for the owner, after review:** the booking's own «Note» field is no longer printed on any slip (the lab slip is «exactly
+this and nothing more»): a note like «tutto senza lattosio» written there instead of on a product never reaches the lab — he
+should say whether it goes back on the lab slip. Nothing limits a per-piece print: a mistyped 100 instead of 10 on a per-piece
+product, then Stampa, prints 100 slips (on the direct printer one after another, with no stop button).
