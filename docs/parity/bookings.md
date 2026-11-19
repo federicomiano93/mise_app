@@ -504,3 +504,70 @@ stays as it is); (3) a booking opened by its address in another month shows the 
 and a failed read is tried again after 5 s and when the connection returns, never giving up for good; (4) a month whose result
 reaches `READ_LIMIT` (1500) shows «Too many bookings in this month: some may not be shown.» (`monthMayBeCut`); (5) the calendar's
 single Tab stop follows the day the arrows moved to, and goes back to the picked day when a day or a month is picked.
+
+## Rebuild step 4 — as built (19 Nov 2026): the lab slips per piece and the customer slip
+
+Branch `feature/mise2-bookings-slips`, a PR stacked on step 3 (`feature/mise2-bookings-list`). Built from the mockups the owner
+approved on the tablet, for 24 December: many bookings of stuffed focaccia («scacciate»); in the lab each piece gets its own paper
+slip with the customer's name and how many pieces they have, stuck on the piece with a toothpick so none gets lost in the oven. No
+saved field, no rules change: the slips read the booking, the venue's `perPieceSlips` and each price-list item's `perPiece`.
+
+**The question** (`BookingDetail.tsx`, `SlipChoice.tsx`). «Laboratorio» asks only when the venue's «Biglietti per pezzo» is on AND
+the booking holds a line of a product marked «Chiedi per pezzo» in whole pieces (`asksSlipChoice`, `labSlips.ts`); otherwise it
+prints «Tutto insieme» without a word. The app's own dialog (`useConfirm` with a body, the Pastries' «Copy day» way): title
+«Biglietti per il laboratorio» / «Slips for the lab», two radio rows «Uno per pezzo» / «One per piece» (chosen at the start) and
+«Tutto insieme» / «All together», Annulla / Stampa. ⚠️ No explanation text, at the owner's request: no intro line, no sub-lines
+(the spec pins the dialog's whole text). The booking page now reads the published price list too (`usePriceList.ts`, moved out of
+the editor; one document while the page is open); a list not read yet, refused or broken marks no product per piece.
+
+**The lab slips** (`labSlips.ts`, `BookingSlips.tsx` `LabSlips`, `slipText.ts` `labSlipLines` / `labSlipDocuments`).
+- «Uno per pezzo»: a per-piece line of N pieces gives N identical slips of one piece; any other line gives ONE slip with its
+  quantity («12 × Cannoli siciliani»). 3 scacciate + 12 cannoli → 4 slips. An old line in kilos is never split.
+- «Tutto insieme»: ONE slip with every line.
+- Each slip, exactly: the customer's name big followed by `[N]`, a dashed line, then each product — the quantity only when more
+  than one («12 ×»; a line in kilos keeps «1,5 kg», a pack «3 confezioni (250 g)»), the name bold, the weight of a piece
+  («1,5 kg») — and under it the line's note split on its commas, each piece highlighted white on black around its words only (an
+  inline span, `box-decoration-break: clone`, `print-color-adjust: exact` so the browser prints the black even with «background
+  graphics» off: checked in Chromium's PDF). ⚠️ NO date, time slot, booking number, price, phone, address, nor the booking's own
+  notes (the old lab slip's «LABORATORIO», number, day and mode are gone).
+- `[N]` = how many slips «Uno per pezzo» makes for the booking, i.e. the pieces they have; shown on «Tutto insieme» too. With the
+  venue's switch off every line counts one.
+- Through the browser every slip is a page of its own (`.bk-slip + .bk-slip` breaks the page); the per-piece slips print on a
+  page 80 × 100 mm (`booking-slip-piece-page.css`, switched on by `slipHost.tsx` only for that print) instead of 297 mm, so a
+  receipt printer driven by the browser does not feed an A4's length of paper per piece. On the direct printer each slip is its
+  own non-fiscal document (the printer cuts after each), sent one after another; the first that does not print stops the rest,
+  the dialog says «1 of 4 slips printed.» with the reason, and «Print through the browser» prints only the slips left.
+
+**The customer slip** (`CustomerSlip`, `customerSlipLines`): the venue's name; «Prenotazione N. 12»; the customer's name big;
+«Ritiro: gio 24 dic» (or «Consegna: …»; the day short, in the venue's country's way, `slipDay`); «dalle 09:00 alle 10:00» from
+`time` / `slotEnd` («alle 09:40» for an old booking with no slot); the lines numbered «1. 2 × Scacciata broccoli 1,5 kg   48,00 €»,
+each with its note under it; Totale / Acconto / Da pagare, Da pagare big; the privacy line. Prices through `formatMoney` with the
+venue's money, as before.
+
+**The direct printer** (`receiptPrinter.ts`): a third line style, `big`, Epson's font 4, wrapped at 21 columns
+(`BIG_COLUMNS`): the name on both slips, each piece of a lab note, «Da pagare». ⚠️ Reverse print is not verified on the FP-81 II
+RT, so the note is double size there instead of highlighted (a comment says so); whether font 4 is double size, and bold, on
+this model is also for the test print. «Plain letters only» now writes «×» as «x».
+
+**Kept as it was**: the WhatsApp reminder (behind its switch); the slips' interface words follow `t()` and their units, numbers and
+dates the venue's country, as before.
+
+**Choices made for the owner, to hear about:**
+- `[N]` is my reading of his paper slips («Anna Finta [3]»): how many pieces the customer has, the same on every slip of the
+  booking and on «Tutto insieme». Easy to change (one line, `pieceCount`).
+- The privacy line is worded for the name only when the venue does not ask for the phone AND the booking holds no phone and no
+  address (an older booking with a phone, or a delivery, keeps the full line).
+- The per-piece page is 100 mm long: enough for a name, one product and a long note; a longer one runs onto a second page.
+- On the customer slip a quantity of one is written «1 ×» (every line says how many); on the lab slip it is not written.
+
+**Tests**: `labSlips.spec.ts` (per-piece products and the switch, the question, 3 + 12 → 4 slips, «Tutto insieme», `[N]`, the note's
+pieces, the quantity words, the short day), `slipText.spec.ts` (the lab slip's lines and nothing else, one document per slip, the
+customer slip's lines, money and big «Da pagare», plain letters), `receiptPrinter.spec.ts` (font 4 wrapped at 21, «×»),
+`BookingsSection.slips.spec.tsx` (the question appears or not, its whole text, Cancel, Italian, the 4 pages on the short paper,
+the inline highlights, no date / price on the lab slip, «Tutto insieme», the customer slip in English and Italian, an old booking's
+exact time, the privacy line, the direct printer's 4 documents, a stop half-way and the browser printing the rest), and the
+updated lab-slip cases of `BookingsSection.spec.tsx` and `PrinterScreen.spec.tsx`.
+
+**Not verified**: a real print on the Epson FP-81 II RT (font 4, 21 columns, one document per slip cut separately, accents and
+«×»), the browser's print on the counter tablet (Chrome 101: the 100 mm page, the page breaks, the black highlight), and the
+emulator drive at 1024 / 360 / 296 with axe-core for the new dialog.
