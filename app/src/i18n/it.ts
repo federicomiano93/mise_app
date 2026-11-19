@@ -3047,6 +3047,7 @@ export const it: Messages = {
   'bookings.form.customer': 'Cliente',
   'bookings.form.name': 'Nome cliente',
   'bookings.form.namePlaceholder': 'Nome del cliente',
+  'bookings.form.nameSuggest': 'Nomi suggeriti',
   'bookings.form.phone': 'Telefono',
   'bookings.form.phonePlaceholder': 'es. +39 333 123 4567',
   'bookings.form.mode': 'Ritiro o consegna',

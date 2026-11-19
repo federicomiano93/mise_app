@@ -634,3 +634,30 @@ tablet keeps the page's own h1 «Prenotazioni»; the card's name is its h2 (`Pag
 longer swaps its heading at each open and close. A card just opened ignores its X, the phone and reminder links and the pencil for
 400 ms (`useTapLockout`). (7) `FormBar` gives a title beside a tag `min-width: 0` and `overflow-wrap: anywhere`. Specs: the phone's
 DOM order, open A / open B / X, typing beside an open card, save for X / pick Y / open / close, the bin, the 400 ms lockout.
+
+## Name suggestions — as built (19 Nov 2026)
+
+The owner's ask: under «Nome cliente» the booking form offers the commonest names of the province of Catania, so a name is two taps
+instead of a word typed in full. The mockup was approved on the tablet.
+
+- **Words, not people.** `commonNames.ts` holds two lists of words (first names, surnames), commonest first; no name is tied to a
+  surname, a phone or a customer. Never fill them from a phone directory (GDPR). «Distefano» and «Di Stefano» are both there on
+  purpose.
+- **Italian venues only** (`countryOf(location) === 'IT'`): any other country, or none, keeps the plain box with no combobox roles.
+- **Pure half** `nameSuggestions.ts`: `suggestNames(text)` → at most 5 `NameRow`s (`name`, `replaceFrom`, `typedLetters`);
+  `applyName(text, row, max)`. Matching is on the word being typed (after the last space) from 2 letters, folded (lowercase, no
+  accents, no apostrophes or spaces): «pata» finds Patanè, «dag» finds D'Agata. A complete word offers nothing. A compound surname
+  is found by the last two words joined («Di M» → Di Mauro, only entries that hold a space) and its pick replaces both words. The
+  first word offers first names first, then surnames; a later word offers surnames first. No word twice.
+- **The window** `CustomerNameField.tsx` (`useNameSuggest`, used by the editor's local `TextField` through its `suggest` prop) +
+  `.module.css`: a combobox like Food cost's `NameSuggest`, but floating over the fields below (absolute under the box, `z-index` 3,
+  above the sticky form bar) because the owner asked for a window, not a push-down list. No heading inside; the typed letters are
+  bold. It never picks by itself; Enter only on a row highlighted with the arrows; Escape, blur and a tap outside close it.
+  A pick puts the word plus ONE space, keeps the focus (the pointer-down is swallowed) and the window reopens only on new letters.
+- **The keyboard** can cover it: when the window opens or grows and its bottom is below `visualViewport.height` (else
+  `innerHeight`), the field is scrolled to the top (`scrollIntoView({ block: 'start' })`, `scroll-margin-top` clears the form bar);
+  a window that already fits scrolls nothing.
+- **Saved value unchanged.** The trailing space of a pick is trimmed by `firstProblem`, the save question and `toBookingData`.
+- Text: `bookings.form.nameSuggest` (listbox label), «Suggested names» / «Nomi suggeriti».
+- Specs: `nameSuggestions.spec.ts` (pure, plus the lists' hygiene), `BookingsSection.names.spec.tsx` (the window, a pick, the
+  arrows, Escape/blur/outside, other countries, the trimmed save, the CSS pins).

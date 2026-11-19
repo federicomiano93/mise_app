@@ -1,0 +1,47 @@
+/* The window of common names laid over the form under «Nome cliente» (see CustomerNameField.tsx for why it floats). The box and its
+   label keep BookingEditor.module.css's look; this file is only the window. */
+
+.window {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 3;
+  margin-top: var(--s1);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-2);
+  overflow: hidden;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  min-height: calc(var(--hit) + var(--s1));
+  padding: var(--s2) var(--s4);
+  border-top: 1px solid var(--line);
+  color: var(--ink);
+  font-size: var(--fs-lg);
+  font-weight: 400;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.row:first-child {
+  border-top: 0;
+}
+
+.row[data-active="true"] {
+  background: var(--accent-tint);
+}
+
+.typed {
+  font-weight: 700;
+}
+
+@media (hover: hover) {
+  .row:hover {
+    background: var(--accent-tint);
+  }
+}

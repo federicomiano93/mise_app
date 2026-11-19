@@ -3290,6 +3290,7 @@ export const en = {
   'bookings.form.customer': 'Customer',
   'bookings.form.name': 'Customer name',
   'bookings.form.namePlaceholder': 'Customer’s name',
+  'bookings.form.nameSuggest': 'Suggested names',
   'bookings.form.phone': 'Phone',
   'bookings.form.phonePlaceholder': 'e.g. +39 333 123 4567',
   'bookings.form.mode': 'Pickup or delivery',

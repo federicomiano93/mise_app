@@ -304,3 +304,14 @@
 .cardItem {
   min-width: 0;
 }
+
+/* The name's box carries the window of common names (CustomerNameField): the window is placed against this wrapper, which is exactly
+   the box's width. */
+.anchor {
+  position: relative;
+}
+
+/* When the keyboard would cover the window the field is scrolled to the top: its label must stay clear of the sticky form bar. */
+.suggestField {
+  scroll-margin-top: calc(var(--hit-lg) + var(--s6) + var(--s4));
+}
