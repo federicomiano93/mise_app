@@ -31,7 +31,8 @@ export const LIMITS = Object.freeze({
   lines: 50,
   // A product name's own bound (Food cost's), so a listed product is never cut short of its name on the list.
   lineName: 200,
-  lineNote: 120,
+  // The window's changes make this note; it is refused there (never cut) when longer. Rules do not look inside lines.
+  lineNote: 300,
   money: 100_000,
   qty: 100_000,
   number: 9999,
@@ -405,7 +406,7 @@ export function firstProblem(
     // ⚠️ IN THE UNIT IT WILL BE WRITTEN IN (review, 18 Nov 2026): a product on the price list is counted in the list's unit,
     // whatever the row held when the list arrived, so a «1,5» checked in kilos could never be written as one piece.
     const price = linePrice(line, items);
-    const qty = parseQty(line.qty, price.kind === 'listed' ? price.unit : line.unit);
+    const qty = parseQty(line.qty, effectiveUnit(line, price));
     if (qty === null) return { field: { line: index, part: 'qty' }, reason: 'required' };
     if (qty === 'invalid') return { field: { line: index, part: 'qty' }, reason: 'qty' };
     // A weight is only ever chosen in the window, from parseWeight's bounds; a restored copy is checked all the same.
@@ -447,6 +448,12 @@ export type LinePrice =
   | { readonly kind: 'listed'; readonly item: PriceItem; readonly unit: BookingUnit; readonly unitPrice: number }
   | { readonly kind: 'none' };
 
+// The unit a line is counted in: the price list's for a listed product, the line's own for a frozen or free one. The card, the
+// total, the checks and the save all call this one, so the card shows exactly what will be saved.
+export function effectiveUnit(line: Pick<DraftLine, 'unit'>, price: LinePrice): BookingUnit {
+  return price.kind === 'listed' ? price.unit : line.unit;
+}
+
 export function linePrice(line: DraftLine, items: readonly PriceItem[]): LinePrice {
   const kept = line.kept;
   // ⚠️ A SAVED LINE LEFT AS IT WAS KEEPS EXACTLY WHAT IT HAD — its price, or no price at all: a free-text line saved before its
@@ -484,7 +491,7 @@ export function draftLineAmount(line: DraftLine, items: readonly PriceItem[]): n
   const price = linePrice(line, items);
   const unitPrice = unitPriceOf(price);
   if (unitPrice === null) return null;
-  const qty = parseQty(line.qty, price.kind === 'listed' ? price.unit : line.unit);
+  const qty = parseQty(line.qty, effectiveUnit(line, price));
   return typeof qty === 'number' ? lineAmount(qty, unitPrice) : null;
 }
 
@@ -534,7 +541,7 @@ export function toBookingData(
     .map(line => {
       const price = linePrice(line, items);
       // A listed product is counted in the list's unit; a frozen or free line in its own.
-      const unit: BookingUnit = price.kind === 'listed' ? price.unit : line.unit;
+      const unit: BookingUnit = effectiveUnit(line, price);
       const qty = parseQty(line.qty, unit);
       const name = cut(line.name, LIMITS.lineName);
       const note = cut(line.note, LIMITS.lineNote);

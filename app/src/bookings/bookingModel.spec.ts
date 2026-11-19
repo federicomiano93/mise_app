@@ -395,7 +395,9 @@ describe('a piece of a chosen weight (bookings rebuild step 2)', () => {
     // A piece without a weight; a name typed freely; a note cut to the line's bound.
     expect(pickedLine(8, { name: 'Panettone', item: items[0]!, weightKg: null, note: '' })).toMatchObject({ unit: 'pcs', weightKg: null });
     expect(pickedLine(9, { name: ' Torta ', item: null, weightKg: 2, note: 'x'.repeat(200) })).toMatchObject({ name: 'Torta', weightKg: 2 });
-    expect(pickedLine(9, { name: 'Torta', item: null, weightKg: null, note: 'x'.repeat(200) }).note).toHaveLength(LIMITS.lineNote);
+    // The window refuses a longer note itself; this cut is only the last guard.
+    expect(pickedLine(9, { name: 'Torta', item: null, weightKg: null, note: 'x'.repeat(400) }).note).toHaveLength(LIMITS.lineNote);
+    expect(LIMITS.lineNote).toBe(300);
   });
 
   it('its price is the price per kilo × the weight, to the cent, and the line is that × the pieces', () => {

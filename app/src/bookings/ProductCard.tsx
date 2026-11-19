@@ -4,7 +4,7 @@ import { formatWeight } from '@mise/shared/price-list';
 import { useT } from '../i18n/useT';
 import { useMoney } from '../session/useMoney';
 import { Button } from '../ui/Button';
-import { LIMITS, boxNumber, linePack, parseQty } from './bookingModel';
+import { LIMITS, boxNumber, effectiveUnit, linePack, parseQty } from './bookingModel';
 import type { DraftLine, LinePrice } from './bookingModel';
 import styles from './ProductCard.module.css';
 
@@ -32,7 +32,8 @@ export function ProductCard({ index, line, price, amount, cardId, qtyId, nameErr
   const { t, locale } = useT();
   const money = useMoney();
   const n = index + 1;
-  const qty = parseQty(line.qty, line.unit);
+  const unit = effectiveUnit(line, price);
+  const qty = parseQty(line.qty, unit);
   const current = typeof qty === 'number' ? qty : null;
   const step = (by: number) => {
     const next = current === null ? 1 : Math.min(LIMITS.qty, Math.max(1, Math.round((current + by) * 1000) / 1000));
@@ -91,12 +92,12 @@ export function ProductCard({ index, line, price, amount, cardId, qtyId, nameErr
           >
             <Plus aria-hidden="true" />
           </Button>
-          {line.unit === 'kg' ? <span className={styles.unit}>{t('bookings.unit.kg')}</span> : null}
+          {unit === 'kg' ? <span className={styles.unit}>{t('bookings.unit.kg')}</span> : null}
         </div>
         {unitPrice !== null ? (
           <div className={styles.money}>
             <span className={styles.each}>
-              {line.unit === 'kg'
+              {unit === 'kg'
                 ? t('bookings.price.perKg', { price: formatMoney(unitPrice, money) })
                 : t('bookings.card.each', { price: formatMoney(unitPrice, money) })}
             </span>

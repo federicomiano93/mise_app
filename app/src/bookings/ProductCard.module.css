@@ -136,7 +136,7 @@
 
 /* N: a number that can also be typed. */
 .qty {
-  width: 3.25em;
+  width: 4.25em;
   min-height: 44px;
   padding: 0 var(--s1);
   border: 1.5px solid transparent;
