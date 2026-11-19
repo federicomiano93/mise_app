@@ -362,18 +362,17 @@ What each one means for the people using Mise 2 until it is ported:
   read-first card with four figures and «Details», and two decimals on the screens Mise 2 has.)
 - 23. Food cost recipe link with several products (a check).
 - 41-43. Staff / join codes / roles screens (people, invitations incl. #475 role-first invite, the join form) and the
-  kiosk (#406 keep-screen-on, the kiosk lines already in shared). Until built: new people cannot join; existing accounts work.
+  kiosk (#406 keep-screen-on, the kiosk lines already in shared). Staff slices 1-4 are LIVE (joining with a code or a link, with a new account, role-first invitations, the people list: v2.2.x to v2.3.0); the kiosk (slices 5-6) is in PR #583, not live yet.
 
 Deferred too, with no item number:
-- Reminder notifications: order reminders stop arriving with the switch, also for The Italian Club (warn them first: a
-  line of the checklist above).
+- Reminder notifications: order reminders have not arrived since the switch (15 Nov 2026), for every venue.
 - The sales owner's «tell me when a client orders» notification switch (the current app's Clients page has it): Mise 2 has no
   push switch yet, deferred with the reminders above. A phone that already registered in the current app keeps receiving the
   pushes, and the tap lands on Orders received (`/calculator` is replaced for that role by `/clients/orders`, `SectionRoute`); a
   phone that did not register cannot do it from Mise 2 until the switch exists.
 - `order.html` stays served as it is (client links already sent): the Pages build keeps it, see `docs/switch-runbook.md`.
 - The 3-month order-list clean-up function (F9, a separate task): until it exists nothing is deleted, as today.
-- The app-admin hub (create a customer business, its owner link, re-send, delete) stops with the switch until ported: no new business from the app meanwhile (existing ones unaffected; a one-off script if needed). Its own slice after 41-43 (his decision D10, 13 Nov 2026, `docs/parity/staff-plan.md`).
+- The app-admin hub (create a customer business, its owner link, re-send, delete) has not been in the app since the switch (15 Nov 2026): no new business from the app meanwhile (existing ones unaffected; a one-off script if needed). Its own slice after 41-43 (his decision D10, 13 Nov 2026, `docs/parity/staff-plan.md`).
 
 ## Settings 3g-2 (was the WIP branch left out of the release branch)
 

@@ -123,6 +123,8 @@ Sizes: **S** = a short session, **M** = one session. **About five sessions in al
 
 **When slices 1-4 are in, new people can join again. When 5-6 are in, the kiosk is back.** Then items 41-43 are ticked and their line leaves the deferred list.
 
+*Status (20 Nov 2026): slices 1-4 are live (v2.2.0 to v2.3.0); slices 5-6 are in PR #583.*
+
 ---
 
 ## 4. Decisions for you (each changes what a person sees)

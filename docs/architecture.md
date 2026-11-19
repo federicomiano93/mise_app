@@ -1,8 +1,8 @@
 # Mise 2 — architecture
 
 Mise 2 is the rewrite of Mise as ONE tablet-first single-page app in React + TypeScript + Vite.
-It lives in this repository beside the current app until the switch (step 5 of the plan), and
-until then it is served only on the preview, at `<preview>/mise2/`. This file is the map: what
+It lives in this repository beside the old app, which is now the rollback copy: phones run Mise 2
+since v2.0.0 (15 Nov 2026). This file is the map: what
 is where, why it is that way, and the rules a new screen must follow.
 
 > ⚠️ GitHub Pages builds this repository with Jekyll. A double curly brace or a curly brace
@@ -13,7 +13,7 @@ is where, why it is that way, and the rules a new screen must follow.
 
 | Folder | What | Package |
 |---|---|---|
-| `js/`, `*.html`, `*.css`, `sw.js`, `dist/` | the CURRENT app (bug fixes only until the switch) | root, zero dependencies |
+| `js/`, `*.html`, `*.css`, `sw.js`, `dist/` | the old app, now the ROLLBACK copy (touched only when a task names it) | root, zero dependencies |
 | `functions/` | Cloud Functions, shared by both apps | its own |
 | `shared/` | pure TypeScript logic, ported from `js/` | `@mise/shared` |
 | `app/` | Mise 2 itself | `mise2-app` |
