@@ -12,8 +12,11 @@ for Federico**, and the question is about TIMING, not content: he picks the hour
 
 - [ ] PR open from a feature branch; `gh pr checks <n>` → `test`, `rules` and `mise2` green.
 - [ ] `code-reviewer` has reviewed the branch; its findings fixed or listed.
-- [ ] `smoke-test` gates run; the changed screens driven on the emulator (`drive-app`).
-- [ ] Precached files changed → `node scripts/sw-hashes.mjs` was run (its test is green).
+- [ ] `mise2-check` gates run; the changed screens driven on the emulator (`drive-app`, «Mise 2»).
+      Phones run Mise 2 since `v2.0.0` (15 Nov 2026): its worker and precache list are generated
+      by the build, so there is nothing to bump. `smoke-test`, `bump-sw` and
+      `node scripts/sw-hashes.mjs` only matter when the PR touches the rollback copy (`js/`,
+      `dist/`, the root `sw.js`, a root page).
 - [ ] **`cd functions && npm audit --audit-level=high`** — `deploy-functions` runs on EVERY
       push to main and refuses on a high advisory, even when `functions/` did not change
       (twice on 30 Sep 2026). If it fails, fix the lockfile on its OWN branch first.
@@ -26,8 +29,9 @@ for Federico**, and the question is about TIMING, not content: he picks the hour
       origin/main`, push, checks green again), `git diff origin/main -- firestore.rules`
       shows ONLY this PR's change, and decide whether they go FIRST (the app sends a key the
       live rules refuse) — see `firestore-rules`.
-- [ ] Stacked PRs: every PR in the stack targets `main`; the top one carries the others —
-      ONE merge of the top one, then check the lower ones show as merged.
+- [ ] Stacked PRs (a feature built in steps, each PR on the previous one's branch): every PR
+      in the stack targets `main` before the merge; the top one carries the others — ONE merge
+      of the top one, then check the lower ones show as merged.
 - [ ] Draft the tag annotation (see 4) and check it for business data NOW.
 
 - [ ] The PR's **preview link** works (the `preview` job comments it on the PR: a Firebase
@@ -47,17 +51,18 @@ live?»* and tell him to **expect two clicks** if rules change (the harness asks
    fourth → stop and read it. Then `node scripts/rules-live-diff.mjs` → `identical: true`.
 2. **Merge**: `gh pr merge <n> --merge` (merge commits, never squash — the history reads
    PR by PR). ⚠️ Never `git push origin main`; main takes nothing without the PR.
-3. **Watch main**: `gh run list --branch main --limit 3` → the push run's `test`, `rules`
-   and `deploy-functions` all `success` (`gh run watch <id>`). ⚠️ On 13 Sep a push fired
-   no run for 30+ minutes: if nothing appears in ~5 min, say so; Pages can be kicked by
-   hand: `gh api -X POST repos/federicomiano93/mise_app/pages/builds`.
+3. **Watch main**: `gh run list --branch main --limit 4` → the push run of `Tests` (`test`,
+   `rules`, `mise2`, `deploy-functions`) and the `Pages` run (builds Mise 2 for `/mise_app/`
+   and publishes it) all `success` (`gh run watch <id>`). ⚠️ On 13 Sep a push fired no run for
+   30+ minutes: if nothing appears in ~5 min, say so and re-run the `Pages` workflow from its
+   page (`gh workflow run Pages --ref main`).
 4. **Verify live** (P6), on an updated local main (`git switch main && git pull`):
-   - `curl -s -o /dev/null -w "%{http_code}" https://federicomiano93.github.io/mise_app/`
-     and `…/dist/index.js`, `…/dist/i18n.js`, `…/js/firebase.js` → all `200`. The bundled pages need
-     `dist/index.js` and `dist/i18n.js` (a 404 there breaks the app for new visitors);
-     `js/firebase.js` is still loaded by `reset-password.html`, which keeps native module tags.
-   - `node scripts/verify-live-assets.mjs` → `sameRelease: true`, `problems: []`
-     (right after the merge Pages may still serve the old sw.js: wait and re-run).
+   - `node scripts/verify-live-site.mjs` → `problems: []` and a NEW `cacheName`
+     (`mise2-mise_app--…`; it asks the site, not the checkout: the worker, every precached
+     file, the entry script, `order.html`, `reset-password.html`, `install-guide.html` with
+     every file they load, the old pages' stubs, the manifest). Right after the merge Pages may
+     still serve the previous site for a few minutes: wait and re-run before calling anything
+     broken. `verify-live-assets.mjs` is the rollback copy's and no longer says anything.
    - `node scripts/rules-live-diff.mjs origin/main` → `identical: true` (live rules = main).
    - `deploy-functions` success confirmed (step 3) — on EVERY release.
    - **Open the live app** in a real phone-sized browser (`drive-app` has the window and
@@ -82,13 +87,17 @@ live?»* and tell him to **expect two clicks** if rules change (the harness asks
   app — but if the release RAISED a model number (products' `model`, which the rules refuse
   to lower) or made a key REQUIRED on a whole-document write, every document saved since
   refuses the old app's saves. Then do NOT roll back: patch forward with a fix PR.
+- ⚠️ **A revert brings back the PREVIOUS Mise 2, never the old plain-JS app.** Products saved
+  by Mise 2 are `model: 3`, which the old app cannot save over; going back to it is the
+  separate procedure in `docs/switch-runbook.md`, only on Federico's explicit decision.
 
 ## 4. Tag and Release
 
-- Version: patch = fix · minor = feature · major = breaking. A release that changes only
-  `functions/package-lock.json` is a patch with the cache unchanged.
+- Version: patch = fix · minor = feature · major = breaking. Every push to main rebuilds the
+  worker, so even a release that changes only a lockfile moves the cache name (phones offer an
+  update with nothing new to see — say so in the tag).
 - Annotation: subject line = what changed for the people using it; a short paragraph;
-  `PR #n, cache vNNN`. ⚠️ **The repo is PUBLIC and a tag cannot be edited later** (the
+  `PR #n, cache mise2-mise_app--<hash>` (the `cacheName` `verify-live-site.mjs` printed). ⚠️ **The repo is PUBLIC and a tag cannot be edited later** (the
   `v1.9.0` tag still carries four real supplier names): no supplier, customer or staff
   names, no prices, no emails, no venue ids.
 - `git tag -a vX.Y.Z -F <annotation-file>` on the MERGE commit → `git push origin vX.Y.Z`
@@ -98,8 +107,8 @@ live?»* and tell him to **expect two clicks** if rules change (the harness asks
 ## 5. Records (local notes — copy each to `..\backup-note\` before editing)
 
 - `STORICO-DEPLOY.md`: a new entry at the TOP of the release list — tag, date, PR(s), merge
-  sha, cache, what changed, rules deployed first + ruleset id, live assets N/N matching,
-  functions deployed, anything learnt.
+  sha, cache, what changed, rules deployed first + ruleset id, `verify-live-site.mjs` files
+  checked and problems, functions deployed, anything learnt.
 - `CLAUDE.md`: the «Live on `main`» line (cache + tag) only.
 - **The «Controlli di Mise» page** (URL in CLAUDE.md, «Open backlog»; shape in memory
   `pagina-controlli`): add this release's items with ONE `ArtifactData batch` — a group
