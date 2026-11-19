@@ -35,6 +35,7 @@ import { SlipChoice } from './SlipChoice';
 import { usePriceList } from './usePriceList';
 import { countryOf } from '@mise/shared/market';
 import { reminderMessage, reminderUrl, wantsReminder, whatsappNumber } from './reminderText';
+import { KEEP_FOCUS } from '../shell/Page';
 import { useTapLockout } from './tapLockout';
 import styles from './BookingDetail.module.css';
 
@@ -43,6 +44,11 @@ import styles from './BookingDetail.module.css';
 // ⚠️ THE BIN IS ALSO HOW A CUSTOMER'S «DELETE MY DATA» IS HONOURED: the booking goes for good, with the name, phone and address.
 // The loading line's title (one booking page at a time): the name takes the focus over from it.
 const WAITING_TITLE_ID = 'booking-waiting-title';
+// The address the title last took the focus for (module scope: a remounted card finds it again).
+const focusedFor: { current: string | null } = { current: null };
+// The lockout key of a card just opened in the list.
+const OPEN_KEY = 'opened';
+const OPEN_LOCK_MS = 400;
 
 // `inPlace` (the tablet, 19 Nov 2026): the booking is a card opened IN the day's list, in place of its row, closed by an X (and
 // by Escape) instead of left by Back. `onClose` is what that does.
@@ -75,7 +81,15 @@ export function BookingDetail({ id, lookingUp = false, inPlace = false, onClose 
   }, []);
   // A booking opened from the list goes back by the browser's Back (the list is the entry behind it); opened by its address it
   // replaces itself with the list.
+  // ⚠️ A card just opened in the list ignores a tap on its X and links for a moment: the tap that opened it, doubled, would close it
+  // at once (or follow a link under the finger).
+  const opening = useTapLockout(OPEN_LOCK_MS);
+  useEffect(() => {
+    if (inPlace) opening.lock(OPEN_KEY);
+  }, []);
+  const justOpened = () => inPlace && opening.locked(OPEN_KEY);
   const back = () => {
+    if (justOpened()) return;
     if (inPlace && onClose) onClose();
     else if (cameFromList(state)) void navigate(-1);
     else void navigate(BOOKINGS_PATH, { replace: true });
@@ -85,22 +99,22 @@ export function BookingDetail({ id, lookingUp = false, inPlace = false, onClose 
     return (
       <section className={styles.card} data-in-place={inPlace ? 'true' : undefined} aria-busy={status === 'loading' || lookingUp} onKeyDown={inPlace ? closeOnEscape(onClose) : undefined}>
         {/* The page draws no h1 for a booking (its h1 is the customer's name): until there is one, the section's name is it. */}
-        <FormBar backLabel={t(inPlace ? 'bookings.detail.close' : 'ui.back')} onBack={back} title={t('section.bookings')} level={1} titleRef={waitingTitle} titleId={WAITING_TITLE_ID} backIcon={inPlace ? 'close' : 'back'} />
+        <FormBar backLabel={t(inPlace ? 'bookings.detail.close' : 'ui.back')} onBack={back} title={t('section.bookings')} level={inPlace ? 2 : 1} titleRef={waitingTitle} titleId={WAITING_TITLE_ID} backIcon={inPlace ? 'close' : 'back'} />
         <div className={styles.body}>
           {status === 'loading' || lookingUp ? <p className={styles.muted}>{t('bookings.loading')}</p> : (
             <>
               <p>{t('bookings.notFound')}</p>
-              <Link to={BOOKINGS_PATH} replace className={styles.link}>{t('bookings.backToList')}</Link>
+              <Link to={BOOKINGS_PATH} replace state={KEEP_FOCUS} className={styles.link}>{t('bookings.backToList')}</Link>
             </>
           )}
         </div>
       </section>
     );
   }
-  return <Shown booking={booking} onBack={back} inPlace={inPlace} onClose={onClose} />;
+  return <Shown booking={booking} onBack={back} inPlace={inPlace} onClose={onClose} justOpened={justOpened} />;
 }
 
-function Shown({ booking, onBack, inPlace = false, onClose }: { booking: Booking; onBack: () => void } & Placing) {
+function Shown({ booking, onBack, inPlace = false, onClose, justOpened }: { booking: Booking; onBack: () => void; justOpened: () => boolean } & Placing) {
   const { t, locale } = useT();
   const store = useBookingsStore();
   const navigate = useNavigate();
@@ -122,15 +136,19 @@ function Shown({ booking, onBack, inPlace = false, onClose }: { booking: Booking
   const taps = useTapLockout();
   const number = t('bookings.number', { n: booking.number });
   const title = useRef<HTMLHeadingElement>(null);
-  const { state } = useLocation();
+  const { state, key: locationKey } = useLocation();
   const navigationType = useNavigationType();
   // ⚠️ THE PAGE DRAWS NO h1 HERE (Page `ownHeading`), so the move of the focus a page makes is this booking's to make: on its
   // title, the customer's name, as the page would on its own h1 — opened from the list, from the Home, or after its loading line.
   // Not on Back (POP) nor on the first load, as the page (the skip link stays the first Tab stop) — except when the loading line's
   // title held the focus: it hands it on to the name.
+  // ⚠️ ONLY WHEN THE PERSON OPENED IT: a card drawn again at the same address (a stream reload, the search, midnight) never takes the
+  // focus back from where it is (the search box).
   useEffect(() => {
     const fromPlaceholder = document.activeElement?.id === WAITING_TITLE_ID;
-    if (navigationType !== 'POP' || fromPlaceholder) title.current?.focus({ preventScroll: true });
+    const already = focusedFor.current === locationKey;
+    focusedFor.current = locationKey;
+    if (fromPlaceholder || (navigationType !== 'POP' && !already)) title.current?.focus({ preventScroll: true });
   }, []);
 
   const words: UnitWords = {
@@ -202,7 +220,8 @@ function Shown({ booking, onBack, inPlace = false, onClose }: { booking: Booking
     if (!ok) return;
     store.remove(booking.id);
     say(t('bookings.deleted'));
-    void navigate(BOOKINGS_PATH, { replace: true });
+    if (inPlace && onClose) onClose();
+    else void navigate(BOOKINGS_PATH, { replace: true });
   }
 
   // ⚠️ READ WHILE PRINTING, never at module load: the slip's unit word and its numbers follow the venue's country.
@@ -344,7 +363,7 @@ function Shown({ booking, onBack, inPlace = false, onClose }: { booking: Booking
         backLabel={t(inPlace ? 'bookings.detail.close' : 'ui.back')}
         backIcon={inPlace ? 'close' : 'back'}
         onBack={onBack}
-        level={1}
+        level={inPlace ? 2 : 1}
         titleAfter={booking.status === 'collected' ? (
           <span className={styles.tag} data-tag="collected"><Check aria-hidden="true" />{t(STATUS_WORD.collected)}</span>
         ) : booking.status === 'cancelled' ? (
@@ -359,7 +378,7 @@ function Shown({ booking, onBack, inPlace = false, onClose }: { booking: Booking
             variant="secondary"
             className={styles.edit}
             aria-label={t('ui.edit')}
-            onPress={() => { void navigate(editBookingPath(booking.id), { state: editFromBooking(booking.date) }); }}
+            onPress={() => { if (justOpened()) return; void navigate(editBookingPath(booking.id), { state: editFromBooking(booking.date) }); }}
           >
             <Pencil aria-hidden="true" />
           </Button>
@@ -381,7 +400,7 @@ function Shown({ booking, onBack, inPlace = false, onClose }: { booking: Booking
               <dt>{t('bookings.detail.customer')}</dt>
               <dd>
                 {phoneShown ? (
-                  <a className={styles.link} href={`tel:${booking.phone.replace(/\s+/g, '')}`} aria-label={t('bookings.detail.call', { phone: booking.phone })}>
+                  <a className={styles.link} href={`tel:${booking.phone.replace(/\s+/g, '')}`} onClick={event => { if (justOpened()) event.preventDefault(); }} aria-label={t('bookings.detail.call', { phone: booking.phone })}>
                     {booking.phone}
                   </a>
                 ) : null}
@@ -391,6 +410,7 @@ function Shown({ booking, onBack, inPlace = false, onClose }: { booking: Booking
                     <a
                       className={styles.reminder}
                       href={reminder}
+                      onClick={event => { if (justOpened()) event.preventDefault(); }}
                       target="_blank"
                       rel="noopener noreferrer"
                       aria-describedby={`${ids}-reminder-hint`}

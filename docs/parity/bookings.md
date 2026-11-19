@@ -620,3 +620,17 @@ opening in place with the rest still listed, one at a time, closing by X, Escape
 cancel dialog, a deep link choosing the day, a day change closing it), the booking-page specs in `BookingsSection.list.spec.tsx`
 (no status buttons, the tags, cancel asks then cancels, reopen, double tap, «Ordine» and «1.», no «Quando», the phone unchanged).
 Not done: the real SM-T550 tablet; `ui-check` is still to run.
+
+**Review fixes of the booking page and tablet layout (19 Nov 2026):** (1) the DOM order is the phone's visual order again (New booking,
+calendar, notices, the day's list, then the two doors); on the tablet the doors are DRAWN IN the left column instead (`split` prop,
+once, never one hidden copy), so the Tab order is left column then the day; no `order` or `display: contents` trick for sequence.
+(2) A row opened while a booking is open REPLACES the entry (list → current), so the card's X leaves for the list. (3) The open
+booking's row is always drawn, whatever the search says, so its card has one stable parent and key (and keeps its place while the month
+reloads); the title takes the focus only for the address it was opened at (`focusedFor`, never on a later remount), so typing in
+«Cerca per nome» keeps the focus in the box. (4) Closing in the list (X, Escape, the bin, the not-found link) always REPLACES the
+address with `/bookings`, never Back, so the day looked at is kept; the browser's own Back still pops to the list entry. (5) On close
+the focus goes to the booking's row found by `data-booking` (opened by a tap or a deep link), else to the day's heading. (6) The
+tablet keeps the page's own h1 «Prenotazioni»; the card's name is its h2 (`Page ownHeading` only off the split), so the screen no
+longer swaps its heading at each open and close. A card just opened ignores its X, the phone and reminder links and the pencil for
+400 ms (`useTapLockout`). (7) `FormBar` gives a title beside a tag `min-width: 0` and `overflow-wrap: anywhere`. Specs: the phone's
+DOM order, open A / open B / X, typing beside an open card, save for X / pick Y / open / close, the bin, the 400 ms lockout.

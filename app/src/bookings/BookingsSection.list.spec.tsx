@@ -69,6 +69,22 @@ describe('the month calendar', () => {
     expect(within(table).getAllByRole('button').filter(b => b.tabIndex === 0)).toEqual([cell(TODAY)]);
   });
 
+  it('⚠️ on a phone the DOM order is the visual one: New booking, calendar, the day list, then the printer door (never before the list)', async () => {
+    show();
+    await waitFor(() => { expect(rowNames()).toHaveLength(4); }, LOAD);
+    const region = screen.getByRole('region', { name: 'Bookings' });
+    const order = [
+      within(region).getByRole('button', { name: 'New booking' }),
+      within(region).getByRole('table'),
+      within(region).getByRole('searchbox'),
+      within(region).getAllByRole('link')[0] as HTMLElement,
+      within(region).getByRole('button', { name: 'Receipt printer' }),
+    ];
+    for (let i = 1; i < order.length; i += 1) {
+      expect((order[i - 1] as HTMLElement).compareDocumentPosition(order[i] as HTMLElement) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    }
+  });
+
   it('in Italian: L M M G V S D, the month by name, «Mese precedente / successivo»', async () => {
     show('/bookings', undefined, { lang: 'it' });
     await waitFor(() => { expect(rowNames('Prenotazioni')).toHaveLength(4); }, LOAD);

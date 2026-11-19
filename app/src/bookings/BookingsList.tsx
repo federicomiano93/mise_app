@@ -42,12 +42,14 @@ type Props = {
   // The booking OPEN IN THE LIST (the tablet, 19 Nov 2026): its card, drawn in place of its row (or above the rows when its row is
   // not shown: another day's, filtered out by the search, not loaded yet). null on a phone and while none is open.
   readonly open?: ReactNode;
+  // The tablet's two columns (1000px and wider): the doors to the printer and the settings sit in the left column, else after the day.
+  readonly split?: boolean;
 };
 
 // The bookings of one day picked on a month calendar (bookings rebuild step 3, 19 Nov 2026: the owner's design on the tablet, for
 // 24 December — many bookings, each picked up in a time slot, ticked off at the counter). «New booking» is the list's one primary
 // action and starts on the picked day.
-export function BookingsList({ day, onDay, today, selectedId, shown, open = null }: Props) {
+export function BookingsList({ day, onDay, today, selectedId, shown, open = null, split = false }: Props) {
   const { t, locale } = useT();
   const navigate = useNavigate();
   const store = useBookingsStore();
@@ -73,9 +75,18 @@ export function BookingsList({ day, onDay, today, selectedId, shown, open = null
     setQueryDay(day);
     setQuery('');
   }
-  const rows = dayRows(held, day, query);
+  const matches = dayRows(held, day, query);
+  // ⚠️ THE OPEN BOOKING'S ROW IS ALWAYS DRAWN, even when the search would hide it: its card then has ONE stable parent and key, so a
+  // search typed beside it never remounts it (the focus stays in the box, a print in flight keeps its state).
+  const rows = open !== null && selectedId !== null && !matches.some(b => b.id === selectedId)
+    ? dayRows(held, day).filter(b => b.id === selectedId || matches.includes(b))
+    : matches;
   const dayHasRows = held.some(b => b.date === day);
   const openInRows = open !== null && !loading && rows.some(b => b.id === selectedId);
+  // While the month reloads the rows are gone, but a card that stood in its row keeps its place (it is not unmounted and drawn again).
+  const cardPlaced = useRef(false);
+  if (!loading) cardPlaced.current = openInRows;
+  const keepCard = open !== null && selectedId !== null && loading && cardPlaced.current;
 
   // After a save the focus goes to the saved booking's row, once, as soon as the list shows it (the editor it came from is gone).
   const { state, key } = useLocation();
@@ -90,16 +101,23 @@ export function BookingsList({ day, onDay, today, selectedId, shown, open = null
     row.focus();
   });
 
-  // ⚠️ BACK FROM A BOOKING HANDS THE FOCUS TO ITS ROW: the list was hidden while the booking took the screen (a phone), or the
-  // card holding the focus was closed (the tablet), and the focus, left inside a screen that is gone, would fall to the page's top.
-  // Only when nothing else holds it (a phone's gesture, Back, the card's X or Escape).
-  const openedId = useRef<string | null>(null);
+  // ⚠️ CLOSING A BOOKING HANDS THE FOCUS TO ITS ROW, found by the booking's id whatever way it was opened (a tap, a deep link): the
+  // list was hidden while the booking took the screen (a phone), or the card holding the focus was closed (the tablet), and the
+  // focus, left inside a screen that is gone, would fall to the page's top. Only when nothing else holds it (a phone's gesture, Back,
+  // the card's X or Escape). A row that is not shown (another day's) gives the focus to the day's heading.
+  const lastOpen = useRef<string | null>(null);
+  const dayHeading = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
-    if (!shown || selectedId !== null || openedId.current === null) return;
-    const id = openedId.current;
-    openedId.current = null;
+    if (selectedId !== null) {
+      lastOpen.current = selectedId;
+      return;
+    }
+    const id = lastOpen.current;
+    lastOpen.current = null;
+    if (!shown || id === null) return;
     if (document.activeElement !== null && document.activeElement !== document.body) return;
-    [...(rowsBox.current?.querySelectorAll<HTMLElement>('[data-booking]') ?? [])].find(node => node.dataset.booking === id)?.focus();
+    const row = [...(rowsBox.current?.querySelectorAll<HTMLElement>('[data-booking]') ?? [])].find(node => node.dataset.booking === id);
+    (row ?? dayHeading.current)?.focus();
   }, [shown, selectedId]);
 
   // ⚠️ ONE TAP, NO QUESTION (the counter at pickup): Collected, and Undo puts it back to open. It shows at once (the store lays it
@@ -115,6 +133,25 @@ export function BookingsList({ day, onDay, today, selectedId, shown, open = null
       ? t('bookings.row.collectedSaid', { name: booking.customerName })
       : t('bookings.row.reopenedSaid', { name: booking.customerName }));
   };
+
+  // ⚠️ THE DOORS ARE DRAWN ONCE, where the layout wants them (never twice, one hidden): in the tablet's left column, or after the
+  // day on a phone, so the reading and Tab order is the visual one on both.
+  const doors = (
+    <>
+      {/* This device's receipt printer (bookings step 3): out of the way of the day's work. */}
+      <Button variant="secondary" className={styles.printer} onPress={() => { void navigate(printerPath(), { state: FROM_LIST }); }}>
+        <Printer aria-hidden="true" />
+        <span>{t('bookings.printer.door')}</span>
+      </Button>
+      {/* The venue's bookings settings (bookings settings, 18 Nov 2026): only for whoever manages bookings (the rules' managesBookings). */}
+      {canManage ? (
+        <Button variant="secondary" className={styles.printer} onPress={() => { void navigate(settingsPath(), { state: FROM_LIST }); }}>
+          <Settings aria-hidden="true" />
+          <span>{t('bookings.settings.door')}</span>
+        </Button>
+      ) : null}
+    </>
+  );
 
   return (
     <section ref={rowsBox} className={styles.list} data-open={open !== null ? 'true' : undefined} aria-labelledby={`${ids}-title`}>
@@ -163,22 +200,11 @@ export function BookingsList({ day, onDay, today, selectedId, shown, open = null
             {!loading && monthMayBeCut(held.length, READ_LIMIT) ? <p className={styles.broken}>{t('bookings.monthCut')}</p> : null}
           </div>
         </div>
-        {/* This device's receipt printer (bookings step 3): at the foot, out of the way of the day's work. */}
-        <Button variant="secondary" className={styles.printer} onPress={() => { void navigate(printerPath(), { state: FROM_LIST }); }}>
-          <Printer aria-hidden="true" />
-          <span>{t('bookings.printer.door')}</span>
-        </Button>
-        {/* The venue's bookings settings (bookings settings, 18 Nov 2026): only for whoever manages bookings (the rules' managesBookings). */}
-        {canManage ? (
-          <Button variant="secondary" className={`${styles.printer} ${styles.settings}`} onPress={() => { void navigate(settingsPath(), { state: FROM_LIST }); }}>
-            <Settings aria-hidden="true" />
-            <span>{t('bookings.settings.door')}</span>
-          </Button>
-        ) : null}
+        {split ? doors : null}
       </div>
 
       <section className={styles.day} aria-labelledby={`${ids}-day`}>
-        <h3 id={`${ids}-day`} className={styles.dayTitle}>{spellDate(day, locale)}</h3>
+        <h3 id={`${ids}-day`} ref={dayHeading} tabIndex={-1} className={styles.dayTitle}>{spellDate(day, locale)}</h3>
         <div className={styles.search}>
           <label htmlFor={`${ids}-search`} className="visually-hidden">{t('bookings.search.label')}</label>
           <Search aria-hidden="true" className={styles.searchIcon} />
@@ -194,10 +220,14 @@ export function BookingsList({ day, onDay, today, selectedId, shown, open = null
           />
         </div>
         <div role="status" className={styles.searchSaid}>
-          {!loading && dayHasRows && rows.length === 0 ? t('bookings.search.none', { query: query.trim() }) : ''}
+          {!loading && dayHasRows && matches.length === 0 ? t('bookings.search.none', { query: query.trim() }) : ''}
         </div>
-        {open !== null && !openInRows ? <div className={styles.expanded}>{open}</div> : null}
-        {loading ? (
+        {open !== null && !openInRows && !keepCard ? <div className={styles.expanded}>{open}</div> : null}
+        {keepCard ? (
+          <ul className={styles.rows}>
+            <li key={selectedId}><div className={styles.expanded}>{open}</div></li>
+          </ul>
+        ) : loading ? (
           <p className={styles.empty}>{t('bookings.loading')}</p>
         ) : !dayHasRows ? (
           <p className={styles.empty}>{t('bookings.empty.day')}</p>
@@ -205,12 +235,15 @@ export function BookingsList({ day, onDay, today, selectedId, shown, open = null
           <ul className={styles.rows}>
             {rows.map(booking => (
               <li key={booking.id}>
-                {open !== null && booking.id === selectedId ? <div className={styles.expanded}>{open}</div> : <Row booking={booking} current={booking.id === selectedId} locale={locale} words={words} onToggle={toggle} onOpen={() => { openedId.current = booking.id; }} />}
+                {open !== null && booking.id === selectedId ? <div className={styles.expanded}>{open}</div> : (
+                  <Row booking={booking} current={booking.id === selectedId} locale={locale} words={words} onToggle={toggle} replace={open !== null} />
+                )}
               </li>
             ))}
           </ul>
         )}
       </section>
+      {split ? null : doors}
     </section>
   );
 }
@@ -219,13 +252,14 @@ export function BookingsList({ day, onDay, today, selectedId, shown, open = null
 // the booking, stretched over the whole row — the products one per line, Pickup / Delivery, and at the bottom right «Mark collected»
 // (once collected: a green «✓ Collected» and «Undo collection»). A cancelled one has no button: «Cancelled», crossed out.
 // ⚠️ THE BUTTON IS NOT INSIDE THE LINK (a button cannot nest in a link): the link's ::after covers the row, the button sits above it.
-function Row({ booking, current, locale, words, onToggle, onOpen }: {
+function Row({ booking, current, locale, words, onToggle, replace }: {
   booking: Booking;
   current: boolean;
   locale: string;
   words: UnitWords;
   onToggle: (booking: Booking) => void;
-  onOpen: () => void;
+  // A booking is open in the list: this row replaces it in the history (list → this one), so the card's X goes to the list.
+  replace: boolean;
 }) {
   const { t } = useT();
   const ids = useId();
@@ -245,7 +279,7 @@ function Row({ booking, current, locale, words, onToggle, onOpen }: {
           className={styles.name}
           data-booking={booking.id}
           aria-current={current ? 'page' : undefined}
-          onClick={onOpen}
+          replace={replace}
         >
           {booking.customerName}
         </Link>

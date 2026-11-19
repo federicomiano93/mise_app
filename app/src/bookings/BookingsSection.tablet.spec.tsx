@@ -40,7 +40,16 @@ function onTablet() {
   }));
 }
 
+// A card just opened ignores a tap on its X for a moment (the tap that opened it, doubled): a spec that closes it lets that pass.
+let skew = 0;
+const realNow = Date.now.bind(Date);
+const passTime = (ms: number) => {
+  skew += ms;
+  vi.spyOn(Date, 'now').mockImplementation(() => realNow() + skew);
+};
+
 beforeEach(() => {
+  skew = 0;
   vi.spyOn(console, 'error').mockImplementation(() => undefined);
   onTablet();
 });
@@ -91,7 +100,9 @@ describe('a booking opened in place', () => {
     expect(links()).toEqual(['Anna Bianchi']);
     expect(bookings().querySelector('[data-open="true"]')).toBeNull();
     expect(bookings()).toHaveAttribute('data-open', 'true');
-    expect(screen.getByRole('heading', { level: 1 })).toHaveFocus();
+    // The page keeps its own h1 («Bookings»); the card's name is an h2 and takes the focus.
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Bookings');
+    expect(screen.getByRole('heading', { level: 2, name: 'Niccolò Rossi' })).toHaveFocus();
     // An X in place of Back.
     expect(within(card).getByRole('button', { name: 'Close' })).toBeInTheDocument();
     expect(within(card).queryByRole('button', { name: 'Back' })).toBeNull();
@@ -110,6 +121,12 @@ describe('a booking opened in place', () => {
     expect(links()).toEqual(['Niccolò Rossi']);
     expect(router.state.location.pathname).toBe('/bookings/A2');
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+    // Open A, open B, X: the list, with the focus on B's row (the history stayed list → current).
+    passTime(500);
+    await user.click(within(screen.getByRole('region', { name: 'Anna Bianchi' })).getByRole('button', { name: 'Close' }));
+    await waitFor(() => { expect(router.state.location.pathname).toBe('/bookings'); });
+    await waitFor(() => { expect(within(bookings()).getByRole('link', { name: 'Anna Bianchi' })).toHaveFocus(); });
+    expect(links()).toEqual(['Anna Bianchi', 'Niccolò Rossi']);
   });
 
   it('closes by its X: back to /bookings, both rows listed, the focus on the booking\'s row', async () => {
@@ -117,6 +134,10 @@ describe('a booking opened in place', () => {
     await waitFor(() => { expect(links()).toHaveLength(2); }, LOAD);
     await user.click(within(bookings()).getByRole('link', { name: 'Niccolò Rossi' }));
     const card = await screen.findByRole('region', { name: 'Niccolò Rossi' }, LOAD);
+    // A second tap right after the one that opened it does nothing.
+    await user.click(within(card).getByRole('button', { name: 'Close' }));
+    expect(router.state.location.pathname).toBe('/bookings/A1');
+    passTime(500);
     await user.click(within(card).getByRole('button', { name: 'Close' }));
     await waitFor(() => { expect(router.state.location.pathname).toBe('/bookings'); });
     await waitFor(() => { expect(links()).toEqual(['Anna Bianchi', 'Niccolò Rossi']); });
@@ -198,5 +219,72 @@ describe('a booking opened in place', () => {
     await screen.findByRole('region', { name: 'Anna Bianchi' }, LOAD);
     fireEvent.change(within(bookings()).getByRole('searchbox'), { target: { value: 'zzz' } });
     expect(screen.getByRole('region', { name: 'Anna Bianchi' })).toBeInTheDocument();
+  });
+
+  it('⚠️ typing in «Cerca per nome» beside an open card keeps the focus in the box and the card in place (never remounted)', async () => {
+    const { user } = show();
+    await waitFor(() => { expect(links()).toHaveLength(2); }, LOAD);
+    await user.click(within(bookings()).getByRole('link', { name: 'Anna Bianchi' }));
+    const card = await screen.findByRole('region', { name: 'Anna Bianchi' }, LOAD);
+    const box = within(bookings()).getByRole('searchbox');
+    await user.click(box);
+    await user.type(box, 'nicc');
+    expect(box).toHaveFocus();
+    expect(box).toHaveValue('nicc');
+    // The card is the very same element, still in its row, though «nicc» does not match Anna.
+    expect(screen.getByRole('region', { name: 'Anna Bianchi' })).toBe(card);
+    expect(card.closest('li')).not.toBeNull();
+    expect(links()).toEqual(['Niccolò Rossi']);
+  });
+
+  it('⚠️ saved for day X, day Y picked, a Y booking opened: its X leaves the list on Y (never back to X)', async () => {
+    const { user, router } = show('/bookings', { });
+    await waitFor(() => { expect(links()).toHaveLength(2); }, LOAD);
+    await act(async () => { await router.navigate('/bookings', { state: { bookingSavedDate: TODAY, bookingSavedId: null, keepFocus: true } }); });
+    await user.click(cell(OTHER));
+    await waitFor(() => { expect(links()).toEqual(['Sara Altrove']); });
+    await user.click(within(bookings()).getByRole('link', { name: 'Sara Altrove' }));
+    const card = await screen.findByRole('region', { name: 'Sara Altrove' }, LOAD);
+    passTime(500);
+    await user.click(within(card).getByRole('button', { name: 'Close' }));
+    await waitFor(() => { expect(router.state.location.pathname).toBe('/bookings'); });
+    expect(cell(OTHER)).toHaveAttribute('aria-pressed', 'true');
+    expect(links()).toEqual(['Sara Altrove']);
+  });
+
+  it('a deep-linked booking, closed, gives the focus to its row, found by its id', async () => {
+    const { user, router } = show('/bookings/B1');
+    await screen.findByRole('region', { name: 'Sara Altrove' }, LOAD);
+    await waitFor(() => { expect(cell(OTHER)).toHaveAttribute('aria-pressed', 'true'); });
+    passTime(500);
+    await user.click(within(screen.getByRole('region', { name: 'Sara Altrove' })).getByRole('button', { name: 'Close' }));
+    await waitFor(() => { expect(router.state.location.pathname).toBe('/bookings'); });
+    await waitFor(() => { expect(within(bookings()).getByRole('link', { name: 'Sara Altrove' })).toHaveFocus(); });
+  });
+
+  it('the bin goes through the same close: back to /bookings, replacing the entry', async () => {
+    const { user, router } = show();
+    await waitFor(() => { expect(links()).toHaveLength(2); }, LOAD);
+    await user.click(within(bookings()).getByRole('link', { name: 'Anna Bianchi' }));
+    const card = await screen.findByRole('region', { name: 'Anna Bianchi' }, LOAD);
+    const length = window.history.length;
+    await user.click(within(card).getByRole('button', { name: 'Delete booking' }));
+    await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Delete' }));
+    await waitFor(() => { expect(router.state.location.pathname).toBe('/bookings'); });
+    expect(window.history.length).toBe(length);
+  });
+
+  it('⚠️ open A, open B, then the browser Back: the list, no card open — never A again', async () => {
+    const { user, router } = show();
+    await waitFor(() => { expect(links()).toHaveLength(2); }, LOAD);
+    await user.click(within(bookings()).getByRole('link', { name: 'Niccolò Rossi' }));
+    await screen.findByRole('region', { name: 'Niccolò Rossi' }, LOAD);
+    await user.click(within(bookings()).getByRole('link', { name: 'Anna Bianchi' }));
+    await screen.findByRole('region', { name: 'Anna Bianchi' }, LOAD);
+    await act(async () => { await router.navigate(-1); });
+    await waitFor(() => { expect(router.state.location.pathname).toBe('/bookings'); });
+    await waitFor(() => { expect(links()).toEqual(['Anna Bianchi', 'Niccolò Rossi']); });
+    expect(screen.queryByRole('region', { name: 'Niccolò Rossi' })).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Anna Bianchi' })).toBeNull();
   });
 });

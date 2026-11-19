@@ -349,21 +349,12 @@
   height: 20px;
 }
 
-/* The wrappers add no box on a phone: the column is as it was, in its old order (`order` works across `display: contents`). */
+/* The wrappers add no box on a phone: the column is as it was, in its own order (the DOM order IS the visual order). */
 .side,
 .calendar,
 .notices {
   display: contents;
 }
-
-.add {
-  order: 1;
-}
-.calendar { order: 2; }
-.notices { order: 3; }
-.day { order: 4; }
-.printer { order: 5; }
-.settings { order: 6; }
 
 /* The booking opened IN the day's card, in place of its row (the tablet, 19 Nov 2026): the card draws its own 2px accent border. */
 .expanded {

@@ -17,7 +17,7 @@ import { monthOf } from './bookingModel';
 import { BookingsProvider, FormDayContext, useBookings, useBookingsStore } from './BookingsContext';
 import { useDataServices } from '../data/DataContext';
 import { useSession } from '../session/SessionContext';
-import { cameFromList, dayOfState, savedDateOf } from './bookingsNav';
+import { dayOfState, savedDateOf } from './bookingsNav';
 import { BOOKINGS_PATH, parseBookingsPath } from './bookingsPath';
 import type { BookingsView } from './bookingsPath';
 import styles from './BookingsSection.module.css';
@@ -179,12 +179,11 @@ function BookingsScreen() {
     area.scrollTop = kind === 'list' && before.kind !== 'list' ? listTop.current : 0;
   }, [pathname]);
 
-  // ⚠️ A BOOKING OPEN IN THE LIST (the split): closing it goes back to the list, by the browser's Back when the list is the entry
-  // behind it (so the history never holds the list twice), else by replacing the address.
+  // ⚠️ A BOOKING OPEN IN THE LIST (the split) IS CLOSED BY REPLACING THE ADDRESS, never by Back: a Back could land on an older entry
+  // carrying another day (a saved booking's), and the day being looked at would jump. The browser's own Back still pops to the list.
   const closeBooking = useCallback(() => {
-    if (cameFromList(state)) void navigate(-1);
-    else void navigate(BOOKINGS_PATH, { replace: true, state: KEEP_FOCUS });
-  }, [state, navigate]);
+    void navigate(BOOKINGS_PATH, { replace: true, state: KEEP_FOCUS });
+  }, [navigate]);
   const openBooking = view.kind === 'booking' ? items.find(item => item.id === view.id) : undefined;
   // Changing the day closes the open booking, unless it is on the day picked. ⚠️ A REPLACE, never Back: a Back could land on an
   // entry that carries another day (a saved booking's), and the day just picked would be put back with it.
@@ -209,14 +208,14 @@ function BookingsScreen() {
   const selectedId = view.kind === 'booking' || view.kind === 'edit' ? view.id : null;
 
   return (
-    // A booking's page draws its own h1, the customer's name (bookings rebuild step 3); the tab keeps the section's name, never a
-    // customer's.
-    <Page title={t('section.bookings')} ownHeading={view.kind === 'booking'}>
+    // A booking's page on a phone draws its own h1, the customer's name (bookings rebuild step 3); the tab keeps the section's name,
+    // never a customer's. On the tablet the card is in the list: the page keeps its own h1 and the name is the card's h2.
+    <Page title={t('section.bookings')} ownHeading={view.kind === 'booking' && !split}>
       <FormDayContext.Provider value={reportFormDays}>
         <div className={formOpen ? `${styles.layout} ${styles.fullForm}` : styles.layout} data-view={view.kind}>
           <div className={styles.list}>
             <PartBoundary>
-              <BookingsList day={day} onDay={pickDay} today={today} selectedId={selectedId} shown={listShown} open={split && view.kind === 'booking' ? (
+              <BookingsList day={day} onDay={pickDay} today={today} selectedId={selectedId} shown={listShown} split={split} open={split && view.kind === 'booking' ? (
                 // The card opened in place of its row: a part of its own, so a booking that breaks leaves the list standing.
                 <PartBoundary resetKey={pathname} title={t('section.bookings')}>
                   <BookingDetail key={view.id} id={view.id} lookingUp={lookingUp} inPlace onClose={closeBooking} />
