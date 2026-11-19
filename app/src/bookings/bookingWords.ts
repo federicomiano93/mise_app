@@ -55,6 +55,36 @@ export function lineQtyText(
   return `${numberIn(locale, line.qty)} ${words.unit(line.unit)}`;
 }
 
+// A line as the slips print it (bookings rebuild step 4, the owner's mockups): the quantity, the name (bold on paper), the size.
+// «2 × Scacciata broccoli 1,5 kg»: a piece is counted «N ×» and its weight follows the name; a line in kilos keeps «1,5 kg» before
+// the name and a pack keeps «3 confezioni (250 g)» (the lab must know a pack is not a piece), both always. `count`: 'always' on the
+// customer's slip, 'many' on the lab's, where ONE piece says no quantity at all.
+export type SlipLineParts = { readonly qty: string; readonly name: string; readonly size: string };
+
+export function slipLineParts(
+  line: {
+    readonly qty: number; readonly unit: BookingUnit; readonly packSize: number | null; readonly packUnit: string | null;
+    readonly weightKg: number | null; readonly name: string;
+  },
+  locale: string,
+  words: UnitWords,
+  count: 'always' | 'many',
+): SlipLineParts {
+  if (line.weightKg === null && line.packSize !== null && line.packUnit !== null) {
+    return { qty: lineQtyText(line, locale, words), name: line.name, size: '' };
+  }
+  if (line.weightKg === null && line.unit === 'kg') return { qty: lineQtyText(line, locale, words), name: line.name, size: '' };
+  const times = count === 'always' || line.qty !== 1 ? `${numberIn(locale, line.qty)} ×` : '';
+  return { qty: times, name: line.name, size: line.weightKg !== null ? formatWeight(line.weightKg, locale) : '' };
+}
+
+// «mer 24 dic» / «Wed 24 Dec»: the day on the customer's slip, short, in the slip's locale.
+export function slipDay(iso: string, locale: string): string {
+  const date = parseISODate(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  return new Intl.DateTimeFormat(locale, { weekday: 'short', day: 'numeric', month: 'short' }).format(date).replace(/\./g, '').replace(/,/g, '');
+}
+
 // The units on a printed slip, in the language of the venue's country: «pz» / «confezione(i)» in Italy, «pcs» / «pack(s)»
 // elsewhere; «kg» everywhere. Read while drawing, never at module load (no venue is open then).
 export function slipUnitWords(location: unknown): UnitWords {

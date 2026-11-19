@@ -1,0 +1,47 @@
+/* «Uno per pezzo» / «Tutto insieme» inside the dialog: a list of rows, each a whole-row tap target at least as tall as a touch
+   target (the Pastries' «Copy day» list, CopyDayPicker.module.css). */
+
+.choices {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+}
+
+.choice {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  min-height: var(--hit);
+  padding: var(--s2) var(--s4);
+  border-top: 1px solid var(--line);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.choice:first-child {
+  border-top: 0;
+}
+
+/* The chosen row is told by its tint as well as by the radio. */
+.choice[data-checked="true"] {
+  background: var(--accent-tint);
+}
+
+/* The native radio, at a size a finger can see; the label around it is the touch target. */
+.radio {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.label {
+  flex: 1;
+  min-width: 0;
+}
+
+.choice[data-checked="true"] .label {
+  font-weight: 600;
+}

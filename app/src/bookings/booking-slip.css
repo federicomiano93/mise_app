@@ -8,7 +8,8 @@
   ⚠️ BLACK ON WHITE AND NO TOKEN, ON PURPOSE: a receipt printer burns a dot or it does not, so the design system's colours
   mean nothing on this paper (the label's rule).
 
-  The page itself (80 mm wide) is booking-slip-page.css, switched on only while a slip prints (slipHost.tsx says why).
+  The page itself (80 mm wide) is booking-slip-page.css, or booking-slip-piece-page.css for the short slips of «Uno per pezzo»,
+  switched on only while a slip prints (slipHost.tsx says why). Redrawn in bookings rebuild step 4 (19 Nov 2026).
 */
 
 /* On screen the host is never seen. */
@@ -28,31 +29,70 @@
   overflow-wrap: anywhere;
 }
 
+/* Every slip of one print on a page of its own (bookings rebuild step 4): «Uno per pezzo» comes out as separate slips, one per
+   piece, each cut or torn on its own. Both spellings: Chrome 101 knows `break-before` on a block, the older one is its alias. */
+.bk-slip + .bk-slip {
+  break-before: page;
+  page-break-before: always;
+}
+
 .bk-slip p {
   margin: 0 0 1.5mm;
 }
 
-.bk-slip-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 2mm;
+.bk-slip-rule {
+  margin: 2mm 0;
+  border: 0;
+  border-top: 0.3mm dashed #000;
 }
 
-.bk-slip-title {
-  font-size: 12pt;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-}
+/* ── The lab slip: the name big with [N], a dashed line, the products, the notes highlighted ── */
 
-.bk-slip-number {
-  font-size: 12pt;
-  font-weight: 700;
-}
-
-.bk-slip-number--big {
+.bk-slip-who {
   font-size: 18pt;
+  font-weight: 700;
+  line-height: 1.15;
 }
+
+.bk-slip-items {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bk-slip-item {
+  margin-bottom: 2.5mm;
+}
+
+.bk-slip--lab .bk-slip-product {
+  font-size: 14pt;
+}
+
+.bk-slip-product strong {
+  font-weight: 700;
+}
+
+/* The line's note, each comma-separated piece white on black AROUND ITS WORDS ONLY (inline, never a block), so «senza cipolla»
+   cannot be missed at the oven. `box-decoration-break: clone` gives a piece that wraps the same edges on each line;
+   `print-color-adjust: exact` makes the browser print the black, which it leaves out by default to save ink. Chrome 101 knows
+   both only with the -webkit- prefix, so both spellings. */
+.bk-slip-changes {
+  font-size: 13pt;
+  font-weight: 700;
+  line-height: 1.7;
+}
+
+.bk-slip-hl {
+  padding: 0.3mm 1.2mm;
+  background: #000;
+  color: #fff;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+/* ── The customer slip ── */
 
 .bk-slip-venue {
   font-size: 12pt;
@@ -60,25 +100,21 @@
   text-align: center;
 }
 
-.bk-slip-customer {
-  font-size: 12pt;
-  font-weight: 700;
-}
-
-.bk-slip-when {
-  font-weight: 600;
-}
-
-.bk-slip-mode {
+.bk-slip-number {
   font-size: 11pt;
   font-weight: 700;
-  text-transform: uppercase;
 }
 
-.bk-slip-rule {
-  margin: 2mm 0;
-  border: 0;
-  border-top: 0.3mm dashed #000;
+.bk-slip-customer {
+  font-size: 18pt;
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+.bk-slip-when,
+.bk-slip-time {
+  font-size: 11pt;
+  font-weight: 600;
 }
 
 .bk-slip-lines {
@@ -90,42 +126,31 @@
 .bk-slip-line {
   display: grid;
   grid-template-columns: auto 1fr;
-  column-gap: 2mm;
+  column-gap: 1.5mm;
   margin-bottom: 1.5mm;
-  font-size: 11pt;
+  font-size: 10.5pt;
 }
 
-.bk-slip-qty {
-  font-weight: 700;
-  white-space: nowrap;
+.bk-slip-index {
+  font-variant-numeric: tabular-nums;
 }
 
 .bk-slip-name {
   display: flex;
   justify-content: space-between;
   gap: 2mm;
-  font-weight: 600;
 }
 
-/* What a priced line comes to, on the customer's slip (bookings step 2). */
+/* What a priced line comes to. */
 .bk-slip-amount {
   flex: none;
   font-variant-numeric: tabular-nums;
 }
 
-.bk-slip-notes {
-  font-size: 10pt;
-  white-space: pre-wrap;
-}
-
 .bk-slip-linenote {
   grid-column: 2;
-  font-size: 9pt;
+  font-size: 9.5pt;
   font-style: italic;
-}
-
-.bk-slip-label {
-  font-weight: 700;
 }
 
 .bk-slip-money {
@@ -142,7 +167,7 @@
 }
 
 .bk-slip-due {
-  font-size: 12pt;
+  font-size: 15pt;
   font-weight: 700;
 }
 

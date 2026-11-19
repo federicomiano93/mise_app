@@ -186,27 +186,25 @@ describe('a booking', () => {
 });
 
 describe('the two slips', () => {
-  it('⚠️ the lab slip: date, time, pickup or delivery, the products and notes, the number — NO phone, NO address, NO name', async () => {
+  it('⚠️ the lab slip (bookings rebuild step 4): the name with [N], the products and their notes — NO date, time, number, price, phone or address', async () => {
     const print = vi.spyOn(window, 'print').mockImplementation(() => undefined);
     const { user } = show('/bookings/A2', undefined, { session: { location: { country: 'IT' }, name: 'Panificio Prova' } });
     const card = await screen.findByRole('region', { name: 'Anna Finta' }, LOAD);
     await user.click(within(card).getByRole('button', { name: 'Print for the lab' }));
+    // No product of the list is «Chiedi per pezzo»: no question, one slip with everything.
+    expect(screen.queryByRole('alertdialog')).toBeNull();
     expect(print).toHaveBeenCalledTimes(1);
     const host = document.getElementById(SLIP_HOST_ID) as HTMLElement;
     expect(host.parentElement).toBe(document.body);
     expect(document.documentElement).toHaveClass(SLIP_PRINTING_CLASS);
-    expect(host).toHaveTextContent('LAB');
-    expect(host).toHaveTextContent('No. 4');
-    expect(host).toHaveTextContent('09:00');
-    expect(host).toHaveTextContent('Delivery');
-    // The unit follows the venue's COUNTRY: «pz» in Italy, whatever the interface language.
-    expect(host).toHaveTextContent('2 pz');
-    expect(host).toHaveTextContent('1,5 kg');
-    expect(host).toHaveTextContent('sliced');
-    expect(host).toHaveTextContent('Ring twice');
-    expect(host).not.toHaveTextContent('333');
-    expect(host).not.toHaveTextContent('Via Finta');
-    expect(host).not.toHaveTextContent('Anna Finta');
+    expect(host.querySelectorAll('.bk-slip')).toHaveLength(1);
+    // Three lines, none per piece: [3].
+    expect(host.querySelector('.bk-slip-who')).toHaveTextContent('Anna Finta [3]');
+    // The quantity follows the venue's COUNTRY: «1,5 kg» in Italy, whatever the interface language; a piece is «2 ×».
+    expect(host).toHaveTextContent('1,5 kg Focaccia');
+    expect(host).toHaveTextContent('2 × Panettone');
+    expect(host.querySelector('.bk-slip-hl')).toHaveTextContent('sliced');
+    for (const secret of ['No. 4', '09:00', 'Delivery', 'Ring twice', '€', '333', 'Via Finta']) expect(host, secret).not.toHaveTextContent(secret);
   });
 
   it('⚠️ both slips and the booking say a pack as «3 confezioni (250 g)», never as pieces', async () => {

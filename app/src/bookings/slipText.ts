@@ -1,19 +1,25 @@
-// slipText.ts — the two booking slips as lines of text for the receipt printer (bookings step 3, 18 Nov 2026).
+// slipText.ts — the booking slips as lines of text for the receipt printer (bookings step 3, 18 Nov 2026; redrawn in bookings
+// rebuild step 4, 19 Nov 2026).
 //
-// The same content as the slips printed through the browser (BookingSlips.tsx), line for line: the LAB slip has no name, no
-// phone, no address and no price; the CUSTOMER slip has the venue, the number, the name, what was ordered with what each priced
-// line comes to, when, the money and the privacy line. The words are handed in already chosen (the interface's t(), the venue's
-// country for units, numbers and dates, the venue's money), so this file only lays them out on a paper COLUMNS wide.
+// ⚠️ THE SAME CONTENT AS THE SLIPS PRINTED THROUGH THE BROWSER (BookingSlips.tsx), line for line: the LAB slip is the name with
+// [N], a dashed line, the products and their notes — no date, no time, no number, no price, no phone, no address; the CUSTOMER
+// slip has the venue, «Prenotazione N. 12», the name, the day and the slot, the numbered lines with what each priced one comes to,
+// the money and the privacy line. The words are handed in already chosen (the interface's t(), the venue's country for units,
+// numbers and dates, the venue's money), so this file only lays them out on a paper COLUMNS wide.
+//
+// Where the browser highlights the lab slip's note white on black, this paper prints it DOUBLE SIZE (style 'big'): reverse print
+// is not verified on the shop's Epson (receiptPrinter.ts, FONT).
 
 import { formatMoney } from '@mise/shared/price-model';
 import type { Money } from '@mise/shared/currency';
 import { lineAmount } from '@mise/shared/price-list';
-import { bookingTimeLabel, toPay } from './bookingModel';
-import type { Booking } from './bookingModel';
-import type { SlipWords } from './BookingSlips';
-import { lineQtyText, shortDate, spellDate } from './bookingWords';
-import type { UnitWords } from './bookingWords';
-import { COLUMNS, plainText } from './receiptPrinter';
+import { toPay } from './bookingModel';
+import type { Booking, BookingLine } from './bookingModel';
+import type { CustomerSlipWords } from './BookingSlips';
+import { slipLineParts } from './bookingWords';
+import type { SlipLineParts, UnitWords } from './bookingWords';
+import { noteParts } from './labSlips';
+import { BIG_COLUMNS, COLUMNS, plainText } from './receiptPrinter';
 import type { SlipLine, SlipStyle } from './receiptPrinter';
 
 const RULE = '-'.repeat(COLUMNS);
@@ -27,9 +33,7 @@ export function twoColumns(left: string, right: string, style: SlipStyle = 'norm
   return [line(left, style), line(`${' '.repeat(Math.max(0, columns - right.length))}${right}`, style)];
 }
 
-type Common = {
-  readonly booking: Booking;
-  readonly words: SlipWords;
+type Paper = {
   readonly locale: string;
   readonly units: UnitWords;
   // ⚠️ «Plain letters only» is applied HERE, to every piece before it is laid out: «€» → «EUR» and «à» → «a'» make a line
@@ -39,52 +43,60 @@ type Common = {
 
 const lettersOf = (plain: boolean | undefined) => (text: string): string => (plain === true ? plainText(text) : text);
 
-function items({ booking, locale, units, plain }: Common, money: Money | null): SlipLine[] {
-  const p = lettersOf(plain);
-  const out: SlipLine[] = [];
-  for (const item of booking.lines) {
-    const left = p(`${lineQtyText(item, locale, units)} ${item.name}`);
-    const right = money !== null && item.unitPrice !== null ? p(formatMoney(lineAmount(item.qty, item.unitPrice), money)) : '';
-    out.push(...twoColumns(left, right));
-    if (item.note !== '') out.push(line(p(`  ${item.note}`)));
+// «2 × Scacciata broccoli 1,5 kg», the pieces that are there.
+const productText = (parts: SlipLineParts): string => [parts.qty, parts.name, parts.size].filter(part => part !== '').join(' ');
+
+// ── The lab ──
+
+// ONE lab slip: «Anna Finta [3]» double size, a dashed line, each product in bold (the quantity only when more than one) and
+// under it each piece of its note double size. ⚠️ NOTHING ELSE: no date, no time, no number, no price, no phone, no address.
+export function labSlipLines(input: Paper & { readonly who: string; readonly lines: readonly BookingLine[] }): SlipLine[] {
+  const { who, lines, locale, units } = input;
+  const p = lettersOf(input.plain);
+  const out: SlipLine[] = [line(p(who), 'big'), line(RULE)];
+  for (const item of lines) {
+    out.push(line(p(productText(slipLineParts(item, locale, units, 'many'))), 'bold'));
+    for (const note of noteParts(item.note)) out.push(line(p(note), 'big'));
   }
   return out;
 }
 
-// «Foglio laboratorio»: what to make and when. ⚠️ NO NAME, NO PHONE, NO ADDRESS, NO PRICE.
-export function labSlipLines(input: Common): SlipLine[] {
-  const { booking, words, locale } = input;
-  const p = lettersOf(input.plain);
-  const out: SlipLine[] = [
-    ...twoColumns(p(words.labTitle), p(words.number), 'bold'),
-    line(p(`${spellDate(booking.date, locale)} · ${bookingTimeLabel(booking)}`), 'bold'),
-    line(p(words.mode.toLocaleUpperCase(locale)), 'bold'),
-    line(RULE),
-    ...items(input, null),
-  ];
-  if (booking.notes !== '') out.push(line(RULE), line(p(`${words.notes}: ${booking.notes}`)));
-  return out;
+// Every lab slip of one print, each its own document: the printer cuts after each, so «Uno per pezzo» comes out as separate slips.
+export function labSlipDocuments(input: Paper & { readonly who: string; readonly slips: readonly (readonly BookingLine[])[] }): SlipLine[][] {
+  const { slips, ...rest } = input;
+  return slips.map(lines => labSlipLines({ ...rest, lines }));
 }
 
-// «Biglietto cliente»: the venue, the number, the name, what and when, the money, the privacy line.
-export function customerSlipLines(input: Common & { readonly venueName: string; readonly money: Money }): SlipLine[] {
-  const { booking, words, locale, venueName, money } = input;
+// ── The customer ──
+
+// «Biglietto cliente»: the venue, «Prenotazione N. 12», the name double size, «Ritiro: gio 24 dic», «dalle 09:00 alle 10:00», the
+// numbered lines with each priced one's amount and its note under it, Totale / Acconto / Da pagare (double size), the privacy line.
+export function customerSlipLines(input: Paper & {
+  readonly booking: Booking; readonly words: CustomerSlipWords; readonly venueName: string; readonly money: Money;
+}): SlipLine[] {
+  const { booking, words, locale, units, venueName, money } = input;
   const p = lettersOf(input.plain);
   const out: SlipLine[] = [];
   if (venueName !== '') out.push(line(p(venueName), 'bold'));
   out.push(
-    line(p(words.number), 'bold'),
-    line(p(booking.customerName), 'bold'),
-    line(p(`${words.mode}: ${shortDate(booking.date, locale)} ${bookingTimeLabel(booking)}`)),
+    line(p(words.title), 'bold'),
+    line(p(booking.customerName), 'big'),
+    line(p(words.when), 'bold'),
+    line(p(words.time), 'bold'),
     line(RULE),
-    ...items(input, money),
   );
+  booking.lines.forEach((item, index) => {
+    const left = p(`${index + 1}. ${productText(slipLineParts(item, locale, units, 'always'))}`);
+    const right = item.unitPrice !== null ? p(formatMoney(lineAmount(item.qty, item.unitPrice), money)) : '';
+    out.push(...twoColumns(left, right));
+    if (item.note !== '') out.push(line(p(`   ${item.note}`)));
+  });
   const due = toPay(booking.total, booking.deposit);
   if (booking.total !== null || booking.deposit !== null) {
     out.push(line(RULE));
     if (booking.total !== null) out.push(...twoColumns(p(words.total), p(formatMoney(booking.total, money))));
     if (booking.deposit !== null) out.push(...twoColumns(p(words.deposit), p(formatMoney(booking.deposit, money))));
-    if (due !== null) out.push(...twoColumns(p(words.toPay), p(formatMoney(due, money)), 'bold'));
+    if (due !== null) out.push(...twoColumns(p(words.toPay), p(formatMoney(due, money)), 'big', BIG_COLUMNS));
   }
   out.push(line(RULE), line(p(words.privacy)));
   return out;

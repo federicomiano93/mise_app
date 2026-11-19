@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { MessageCircle, Pencil, Printer, Trash2 } from 'lucide-react';
 import { Link, useLocation, useNavigate, useNavigationType } from 'react-router';
 import { formatMoney } from '@mise/shared/price-model';
@@ -13,9 +13,9 @@ import { useConfirm } from '../ui/useConfirm';
 import { lineAmount } from '@mise/shared/price-list';
 import { bookingTimeLabel, toPay } from './bookingModel';
 import type { Booking, BookingStatus } from './bookingModel';
-import { CustomerSlip, LabSlip } from './BookingSlips';
-import type { SlipWords } from './BookingSlips';
-import { slipLocale, slipUnitWords, spellDate } from './bookingWords';
+import { CustomerSlip, LabSlips } from './BookingSlips';
+import type { CustomerSlipWords } from './BookingSlips';
+import { slipDay, slipLocale, slipUnitWords, spellDate } from './bookingWords';
 import { BookingLines } from './BookingLines';
 import type { UnitWords } from './bookingWords';
 import { useBookingSettings, useBookings, useBookingsStore } from './BookingsContext';
@@ -25,8 +25,13 @@ import { cameFromList, editFromBooking } from './bookingsNav';
 import { BOOKINGS_PATH, editBookingPath } from './bookingsPath';
 import { printSlip } from './slipHost';
 import { PRINT_TIMEOUT_MS, readPrinterSetting, sendToPrinter } from './receiptPrinter';
+import type { PrintOutcome, SlipLine } from './receiptPrinter';
 import { printOutcomeText } from './printWords';
-import { customerSlipLines, labSlipLines } from './slipText';
+import { customerSlipLines, labSlipDocuments } from './slipText';
+import { asksSlipChoice, labSlips, perPieceProducts, pieceCount } from './labSlips';
+import type { LabSlipMode } from './labSlips';
+import { SlipChoice } from './SlipChoice';
+import { usePriceList } from './usePriceList';
 import { countryOf } from '@mise/shared/market';
 import { reminderMessage, reminderUrl, wantsReminder, whatsappNumber } from './reminderText';
 import { useTapLockout } from './tapLockout';
@@ -87,6 +92,10 @@ function Shown({ booking, onBack }: { booking: Booking; onBack: () => void }) {
   const { location, name: venueName } = useSession();
   // The venue's settings (bookings settings, 18 Nov 2026): without the phone asked, no phone and no reminder on this page.
   const { settings } = useBookingSettings();
+  // Which products the venue marked «Chiedi per pezzo» (bookings rebuild step 4): the lab slips go one per piece for those. A
+  // list not read yet, refused or broken marks none, and the lab slip prints «Tutto insieme» without asking.
+  const { list: priceList } = usePriceList();
+  const perPiece = useMemo(() => perPieceProducts(priceList.items, settings.perPieceSlips), [priceList, settings.perPieceSlips]);
   const [confirm, confirmDialog] = useConfirm();
   const ids = useId();
   const taps = useTapLockout();
@@ -184,39 +193,88 @@ function Shown({ booking, onBack }: { booking: Booking; onBack: () => void }) {
   }, []);
   async function print(kind: 'lab' | 'customer') {
     if (sending !== null) return;
-    const words: SlipWords = {
-      number,
-      mode: modeWord,
-      labTitle: t('bookings.slip.labTitle'),
-      notes: t('bookings.slip.notes'),
+    const paperLocale = slipLocale(location, locale);
+    const paperUnit = slipUnitWords(location);
+
+    // ── «Laboratorio»: one slip per piece, or all together (bookings rebuild step 4) ──
+    // ⚠️ ASKED ONLY WHEN IT MEANS SOMETHING: the venue's «Biglietti per pezzo» on and a per-piece product in the booking. Otherwise
+    // «Tutto insieme», without a word. The owner's design: no explanation in the dialog, «Uno per pezzo» chosen at the start.
+    let mode: LabSlipMode = 'together';
+    if (kind === 'lab' && asksSlipChoice(booking, perPiece)) {
+      const choice: { current: LabSlipMode } = { current: 'perPiece' };
+      const ok = await confirm({
+        title: t('bookings.slipChoice.title'),
+        body: <SlipChoice choice={choice} />,
+        okLabel: t('bookings.slipChoice.print'),
+        cancelLabel: t('common.cancel'),
+      });
+      if (!ok) return;
+      mode = choice.current;
+    }
+    // «Anna Finta [3]» on every lab slip: how many pieces the customer has — what «Uno per pezzo» would print — on «Tutto insieme» too.
+    const who = `${booking.customerName} [${pieceCount(booking, perPiece)}]`;
+    const slips = kind === 'lab' ? labSlips(booking, perPiece, mode) : [];
+
+    // ── «Cliente» ──
+    // The privacy line names only the name where that is all the booking holds: the venue does not ask for the phone, and the
+    // booking has neither a phone (an older one may) nor an address (a delivery).
+    const nameOnly = !settings.askPhone && booking.phone === '' && booking.address === '';
+    const customerWords: CustomerSlipWords = {
+      title: t('bookings.detail.title', { number }),
+      when: t('bookings.slip.when', { mode: modeWord, day: slipDay(booking.date, paperLocale) }),
+      // An old booking with no slot shows its exact time.
+      time: booking.slotEnd !== null
+        ? t('bookings.slip.slot', { from: booking.time, to: booking.slotEnd })
+        : t('bookings.slip.at', { time: booking.time }),
       total: t('bookings.slip.total'),
       deposit: t('bookings.slip.deposit'),
       toPay: t('bookings.slip.toPay'),
-      privacy: t('bookings.slip.privacy'),
+      privacy: t(nameOnly ? 'bookings.slip.privacyName' : 'bookings.slip.privacy'),
     };
-    const paperLocale = slipLocale(location, locale);
-    const paperUnit = slipUnitWords(location);
-    const throughBrowser = () => {
-      printSlip(kind === 'lab'
-        ? <LabSlip booking={booking} words={words} locale={paperLocale} unitWord={paperUnit} />
-        : <CustomerSlip booking={booking} words={words} locale={paperLocale} unitWord={paperUnit} venueName={venueName ?? ''} money={money} />);
+
+    // Through the browser's dialog: every slip of the print in one host, a page each. `from`: the first lab slip still to print
+    // (after a direct print that stopped half-way, only the rest).
+    const throughBrowser = (from = 0) => {
+      if (kind === 'lab') {
+        printSlip(
+          <LabSlips who={who} slips={slips.slice(from)} locale={paperLocale} unitWord={paperUnit} />,
+          undefined,
+          mode === 'perPiece' ? 'piece' : 'receipt',
+        );
+      } else {
+        printSlip(<CustomerSlip booking={booking} words={customerWords} locale={paperLocale} unitWord={paperUnit} venueName={venueName ?? ''} money={money} />);
+      }
     };
     const printer = readPrinterSetting();
     if (printer === null) {
       throughBrowser();
       return;
     }
-    const common = { booking, words, locale: paperLocale, units: paperUnit, plain: printer.plain };
-    const lines = kind === 'lab' ? labSlipLines(common) : customerSlipLines({ ...common, venueName: venueName ?? '', money });
+    const paper = { locale: paperLocale, units: paperUnit, plain: printer.plain };
+    // ⚠️ ONE DOCUMENT PER SLIP on the direct path: the printer cuts after each, so the per-piece slips come out separately.
+    const documents: SlipLine[][] = kind === 'lab'
+      ? labSlipDocuments({ ...paper, who, slips })
+      : [customerSlipLines({ ...paper, booking, words: customerWords, venueName: venueName ?? '', money })];
     const slipName = t(kind === 'lab' ? 'bookings.print.lab' : 'bookings.print.customer');
     setSending(kind);
-    // Shown for as long as the printer may take to answer, not the default few seconds.
-    say(t('bookings.print.sending'), PRINT_TIMEOUT_MS + 1000);
-    const outcome = await sendToPrinter(printer, lines);
+    // One after another, each waiting for the printer's answer; the first that does not print stops the rest.
+    let printed = 0;
+    let outcome: PrintOutcome = { ok: true };
+    for (const document of documents) {
+      // Shown for as long as the printer may take to answer, not the default few seconds.
+      say(documents.length > 1
+        ? t('bookings.print.sendingMany', { current: printed + 1, total: documents.length })
+        : t('bookings.print.sending'), PRINT_TIMEOUT_MS + 1000);
+      outcome = await sendToPrinter(printer, document);
+      if (!outcome.ok) break;
+      printed += 1;
+    }
+    const reason = outcome.ok ? '' : printOutcomeText(t, outcome);
+    const partial = printed > 0 && !outcome.ok ? t('bookings.print.partial', { n: printed, total: documents.length }) : '';
     if (!shown.current) {
       say(outcome.ok
         ? t('bookings.print.doneAway', { slip: slipName, number })
-        : t('bookings.print.failedAway', { slip: slipName, number, reason: printOutcomeText(t, outcome) }), outcome.ok ? undefined : 12000);
+        : t('bookings.print.failedAway', { slip: slipName, number, reason: partial === '' ? reason : `${partial} ${reason}` }), outcome.ok ? undefined : 12000);
       return;
     }
     setSending(null);
@@ -227,11 +285,12 @@ function Shown({ booking, onBack }: { booking: Booking; onBack: () => void }) {
     say('');
     const fallback = await confirm({
       title: t('bookings.print.failedTitle'),
-      message: printOutcomeText(t, outcome),
+      message: partial === '' ? reason : [partial, reason],
       okLabel: t('bookings.print.browser'),
       cancelLabel: t('common.cancel'),
     });
-    if (fallback) throughBrowser();
+    // The browser prints what the printer did not.
+    if (fallback) throughBrowser(printed);
   }
 
   return (
@@ -346,7 +405,7 @@ function Shown({ booking, onBack }: { booking: Booking; onBack: () => void }) {
 
         <div className={styles.prints} role="group" aria-label={t('bookings.detail.print')}>
           {/* «Lab» / «Customer» with the printer (bookings rebuild step 3); each name says the whole of it and holds the word drawn.
-              What they print is unchanged until step 4. */}
+              «Lab» may first ask one slip per piece or all together (step 4). */}
           <Button
             variant="secondary"
             className={styles.print}

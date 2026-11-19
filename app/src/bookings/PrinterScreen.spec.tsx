@@ -121,7 +121,7 @@ describe('the receipt printer screen', () => {
 });
 
 describe('a slip straight to the receipt printer', () => {
-  it('⚠️ with a printer set, the lab slip goes to it — no browser dialog, and no name, phone or address on it', async () => {
+  it('⚠️ with a printer set, the lab slip goes to it — no browser dialog; the name with [N], and no phone, address or price', async () => {
     localStorage.setItem(PRINTER_HOST_KEY, '192.168.1.50');
     const fetchSpy = printer();
     const print = vi.spyOn(window, 'print').mockImplementation(() => undefined);
@@ -132,8 +132,9 @@ describe('a slip straight to the receipt printer', () => {
     expect(print).not.toHaveBeenCalled();
     expect(document.getElementById(SLIP_HOST_ID)).toBeNull();
     const xml = sent(fetchSpy);
-    expect(xml).toContain('1,5 kg Focaccia');
-    for (const secret of ['Anna', '333', 'Via Finta']) expect(xml).not.toContain(secret);
+    expect(xml).toContain('<printNormal operator="1" font="4" data="Anna Finta [1]" />');
+    expect(xml).toContain('<printNormal operator="1" font="2" data="1,5 kg Focaccia" />');
+    for (const secret of ['333', 'Via Finta', '18,00', 'N. 4']) expect(xml).not.toContain(secret);
   });
 
   it('the customer slip goes with its prices', async () => {
