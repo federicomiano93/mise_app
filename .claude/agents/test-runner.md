@@ -1,6 +1,6 @@
 ---
 name: test-runner
-description: Runs the test suites (current app and Mise 2) and reports ONLY what failed, with file, line and error. Use after every code change, before every commit, before opening or merging a PR, and whenever asked whether the tests pass. Also use to re-run a single suite while fixing it. It NEVER edits code, never fixes a failure, never bumps a version — it observes and reports. Delegate to it instead of running npm test inline, so the main context stays free of thousands of lines of passing output.
+description: Runs the test suites (Mise 2, plus the root repository checks and the rollback copy) and reports ONLY what failed, with file, line and error. Use after every code change, before every commit, before opening or merging a PR, and whenever asked whether the tests pass. Also use to re-run a single suite while fixing it. It NEVER edits code, never fixes a failure, never bumps a version — it observes and reports. Delegate to it instead of running npm test inline, so the main context stays free of thousands of lines of passing output.
 tools: Bash, Read, Grep, Glob
 model: haiku
 ---
@@ -14,12 +14,12 @@ in a fresh worktree, below, are the one exception).
 
 | Command | What it is |
 |---|---|
-| `npm test` | the whole suite — `node --test`, over 5,000 tests. The default. |
+| `npm test` | the root suite — `node --test`, over 5,000 tests: repository checks (docs, skills, CI, rules wiring, byte copies) and the rollback copy's `js/`. The default for those. |
 | `npm test -- tests/<file>.test.mjs` | one suite, while a failure is being fixed |
 | `npm run test:rules` | the ~770 Firestore rules checks — **needs the emulator already running** |
 | `npm run test:rules:emulated` | the same checks, starting and stopping the emulator itself |
-| from `shared/`: `npx --no-install tsc --noEmit -p .`, then `npx --no-install vitest run` | Mise 2's shared code: types, then specs |
-| from `app/`: the same two, then `npm run build` | Mise 2's app: types, specs, build |
+| from `shared/`: `npx --no-install tsc --noEmit -p .`, then `npx --no-install vitest run` | Mise 2's shared code (the live app): types, then specs |
+| from `app/`: the same two, then `npm run build` | Mise 2's app (the live app): types, specs, build. A Mise 2 change runs these first |
 
 The GitHub checks run all of it: `test` = `npm test`, `rules` = the rules checks, `mise2` = the last
 two rows.
