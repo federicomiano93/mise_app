@@ -593,3 +593,32 @@ regex lookbehind (Safari before 16.4 cannot parse one). On the direct printer a 
 indent on every line. The printer test page's accents line now carries «×». Nits: the loop variable `document` in
 `BookingDetail.tsx` is `slipDocument`; the radio group in `SlipChoice` keeps its `aria-label` because `Dialog` exposes no title id.
 **Still open:** what `[N]` after the name counts (the owner has not answered).
+
+**Booking page and tablet layout (19 Nov 2026)** on the same PR, from the owner's design approved on the tablet. No saved field, no
+rules change. **The tablet (from 1000px; the phone is untouched):** the list is the whole screen in two columns — «Nuova prenotazione»,
+the calendar, the live regions and the doors «Stampante scontrini» / «Impostazioni» on the left, the picked day's card (heading,
+«Cerca per nome», the rows) on the right; «Scegli una prenotazione per vederla qui.» (`bookings.pick`) is gone. A tap on a booking's
+name (route `/bookings/:id`, unchanged) opens it IN the list: `BookingsSection` hands `BookingsList` the open card (`open`), drawn in
+place of its row (above the rows when its row is not shown: the search hides it, its day is not loaded yet), with a 2px accent border
+(`BookingDetail` `inPlace`) and an X («Chiudi», `FormBar` `backIcon="close"`) in place of Back. The list's grid goes from `1fr 1fr`
+to `3.2fr 6.8fr` (about 300px for the calendar at 1024) in 350 ms, none under `prefers-reduced-motion`. ⚠️ Both are `fr`: a length
+and a flex track do not interpolate; Chrome 107 and later animate it, the lab tablet's Chrome 101 jumps, which is accepted. One
+open at a time (another row replaces it). Closing — the X, Escape (only a key pressed inside the card: a dialog's own Escape closes
+the dialog alone), the browser's Back — goes back to `/bookings` and puts the focus on the booking's row; opening puts it on the
+card's h1. Picking another day closes it (a `replace`, never Back: a Back could land on an entry carrying another day) unless the
+booking is on that day; a deep link chooses the booking's own day, once per booking opened. The form («Nuova», the pencil) stays
+full screen, and so do the printer and settings screens: ⚠️ they sat beside the list on the right before, which the new two-column
+list has no room for, so they now take the whole width like the form (Back brings the list back where it was) — a choice made for
+the owner. **The booking page, everywhere:** no big «Ritirata» / «Annullata» buttons; a tag beside the name instead («✓ Ritirata»
+green, «Annullata» red, none for an open one; `FormBar` `titleAfter`, outside the heading); at the foot, left of the bin, a low-key
+«Annulla prenotazione» that asks first (the old cancel question, its body now says it can be reopened from the page) and, on a
+cancelled booking, «Riapri prenotazione», which sets `todo` WITHOUT a question (my call: a mistaken cancel is undone at once); the
+un-collect stays on the list row. No «Quando» heading on screen (kept hidden for screen readers): the day and slot first, `--fs-xl`
+bold, the Ritiro/Consegna tag under it. «Prodotti» is «Ordine»; the lines (`BookingLines` `order`) are numbered «1.» in the accent
+colour inside a 1.5px box with dividers and every other row on `--sunken`, quantity, bold name and weight, the note under it, the
+price bold at the right — still an `ol`; the list rows keep their black circles. The print buttons wrap one under the other when
+narrow, and stay hidden on a cancelled booking. **Tests:** `BookingsSection.tablet.spec.tsx` (the two columns' stylesheet, a row
+opening in place with the rest still listed, one at a time, closing by X, Escape and Back with the focus returned, Escape in the
+cancel dialog, a deep link choosing the day, a day change closing it), the booking-page specs in `BookingsSection.list.spec.tsx`
+(no status buttons, the tags, cancel asks then cancels, reopen, double tap, «Ordine» and «1.», no «Quando», the phone unchanged).
+Not done: the real SM-T550 tablet; `ui-check` is still to run.
