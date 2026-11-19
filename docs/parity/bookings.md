@@ -354,7 +354,7 @@ the name bold with «· 1,5 kg» (or the pack's size), a small red bin (44px tar
 off at 1; N can also be typed), the price of one small and grey («24,00 € l’una», «12,00 € al kg» for an old kilo line) above the
 bold line total, and the line's note. A removed card hands the focus to the card now in its place, or to «Aggiungi un prodotto».
 
-**The product window** (`ProductPicker.tsx`, pure half `productPickerModel.ts`): a modal, one product per opening, «x di 3» and a back
+**The product window** (`ProductPicker.tsx`, pure half `productPickerModel.ts`): a modal, one product per opening, «n di N» (N = the steps this product really asks) and a back
 arrow from step 2. 1 «Scegli il prodotto»: the favourites as tiles (3 a row on the tablet, 2 on a phone) with their price, then
 «Cerca tra tutti i prodotti» (every word typed, over the whole list) and «Aggiungi “…” (fuori listino)» for a name typed freely —
 the old form's free text. With no favourite the search opens at once. 2 «Scegli il peso»: the item's weights, each with price per
@@ -402,5 +402,11 @@ gives the focus to the new card, as «Aggiungi» disappears. Enter in the search
 typed (or the typed name when nothing matches), never the only partial match. A weighed price that rounds to 0,00 is no price
 (stored as 0 it would read back as none). On the split, a scroll event caused by the form opening (the reset to the top, the area
 clamped as the list hides) is no longer taken for the list's place: checked in Chromium, list scrolled to 900px → form → Back →
-900px. Still for the owner: the step counter stays «x di 3» when a step is skipped (1 → 3); a product's name is not edited on its
+900px. Still for the owner: a product's name is not edited on its
 card (remove and add again, at today's price).
+
+**Step 2 review fixes (19 Nov 2026).** The line note limit is 300 (was 120, cut silently): the window refuses a longer note
+with a message instead of cutting it. The card decides kg vs pieces with `effectiveUnit` (the list's unit when the product is
+listed), the same as the save. `parseWeight` also reads «gr», «hg», «etto», «etti». The counter counts only the steps this
+product asks («1 di 2»). Favourites that arrive after the window opened replace the search unless something was typed. The
+Italian unit price reads «24,00 € cad.».
