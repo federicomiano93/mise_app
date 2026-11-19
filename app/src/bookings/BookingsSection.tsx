@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Navigate, useLocation, useParams } from 'react-router';
 import { PartBoundary } from '../errors/PartBoundary';
 import { useT } from '../i18n/useT';
@@ -13,10 +13,9 @@ import { BookingEditor } from './BookingEditor';
 import { PrinterScreen } from './PrinterScreen';
 import { BookingSettingsScreen } from './BookingSettingsScreen';
 import { BookingsList } from './BookingsList';
-import { choiceForDate } from './bookingModel';
-import type { ListChoice } from './bookingModel';
-import { BookingsProvider, useBookingsStore } from './BookingsContext';
-import { savedDateOf } from './bookingsNav';
+import { monthOf } from './bookingModel';
+import { BookingsProvider, FormDayContext, useBookingsStore } from './BookingsContext';
+import { dayOfState, savedDateOf } from './bookingsNav';
 import { BOOKINGS_PATH, parseBookingsPath } from './bookingsPath';
 import type { BookingsView } from './bookingsPath';
 import styles from './BookingsSection.module.css';
@@ -25,7 +24,8 @@ import styles from './BookingsSection.module.css';
 // counter, for pickup or delivery, with the two slips they print. Loaded only when somebody opens it (shell/sectionScreens.ts),
 // and only for a person the venue shows it to (SectionRoute, session/visibility.ts).
 //
-// A phone shows the list OR one booking (its editor); from 1000px the list on the left and the booking on the right, as Pastries.
+// A phone shows the list OR one booking (its editor); from 1000px the list on the left and, on the right, the printer or the settings
+// screen; a booking and its form take the whole width (bookings rebuild steps 2 and 3).
 // Its data lives exactly as long as it is on screen: BookingsProvider starts the one listener on mount and stops it on unmount (P14).
 export default function BookingsSection() {
   return (
@@ -44,7 +44,9 @@ function StoreMessages() {
   const store = useBookingsStore();
   const say = useStatusMessage();
   useEffect(() => store.onMessage(message => {
-    say(message.kind === 'no-access' ? t('bookings.err.noAccess') : t('bookings.err.notSaved'), 5000);
+    // A one-tap Collected / Undo the server refused: the row is already back as it was, and the words say so.
+    if (message.status) say(message.kind === 'no-access' ? t('bookings.err.statusNoAccess') : t('bookings.err.statusNotSaved'), 6000);
+    else say(message.kind === 'no-access' ? t('bookings.err.noAccess') : t('bookings.err.notSaved'), 5000);
   }), [store, say, t]);
   return null;
 }
@@ -54,17 +56,32 @@ function BookingsScreen() {
   const { pathname, state } = useLocation();
   const view = parseBookingsPath(useParams()['*']);
   const today = useTodayKey();
-  // Which day the list shows is the section's own state, not the address: picking a day is lateral, and Back must not walk
-  // through every day that was looked at. Kept while the section is open, across a booking opened and closed.
-  const [choice, setChoice] = useState<ListChoice>(() => {
-    const saved = savedDateOf(state);
-    return saved === null ? { kind: 'today' } : choiceForDate(saved, today);
-  });
+  // Which day the list shows (the day picked on the calendar, bookings rebuild step 3) is the section's own state, not the
+  // address: picking a day is lateral, and Back must not walk through every day that was looked at. Kept while the section is
+  // open, across a booking opened and closed. It opens on the day the move is about (a booking reloaded, one just saved), else today.
+  const [day, setDay] = useState<string>(() => dayOfState(state) ?? today);
   // After a save the list opens on the booking's day (the editor hands it over in the navigation's state).
   const saved = savedDateOf(state);
   useEffect(() => {
-    if (saved !== null) setChoice(choiceForDate(saved, today));
-  }, [saved, today]);
+    if (saved !== null) setDay(saved);
+  }, [saved]);
+  // ⚠️ A TABLET LEFT OPEN ACROSS MIDNIGHT: a list that was showing today moves to the new today; a day picked on purpose stays.
+  const todayBefore = useRef(today);
+  useEffect(() => {
+    if (todayBefore.current === today) return;
+    const was = todayBefore.current;
+    todayBefore.current = today;
+    setDay(current => (current === was ? today : current));
+  }, [today]);
+
+  // ⚠️ THE ONE LISTENER READS ONE MONTH (bookingsSource.ts): the picked day's — or, while a form is open, its own day's, so the
+  // free places of a slot and the next short number are counted on the month the booking is for.
+  const store = useBookingsStore();
+  const [formDay, setFormDay] = useState<string | null>(null);
+  const reportFormDay = useCallback((value: string | null) => { setFormDay(value); }, []);
+  const formOpenNow = view.kind === 'new' || view.kind === 'edit';
+  const watched = monthOf(formOpenNow && formDay !== null ? formDay : day);
+  useEffect(() => { store.watchMonth(watched); }, [store, watched]);
 
   // ⚠️ BOOKINGS OWN THE SCROLL for the moves inside the section (architecture rule 9, shell/scrollArea.tsx): the list and a booking
   // are separate addresses, and the shell's reset to the top at every address would throw the list back to its top at every booking
@@ -76,9 +93,9 @@ function BookingsScreen() {
   const scrollArea = useOwnScrollArea();
   const listTop = useRef(0);
   const kind = view.kind;
-  // The booking form takes the WHOLE width, on the split too (bookings rebuild step 2, the owner's design): the list is hidden while
-  // it is open, and Back brings it back.
-  const formOpen = kind === 'new' || kind === 'edit';
+  // The booking form (bookings rebuild step 2) and the booking itself (step 3) take the WHOLE width, on the split too (the owner's
+  // design): the list is hidden while they are open, and Back brings it back where it was.
+  const formOpen = kind === 'new' || kind === 'edit' || kind === 'booking';
   // Where the list is on screen: alone on a phone; on the split beside everything but the form.
   const listShown = split ? !formOpen : kind === 'list';
   // ⚠️ SET IN THE LAYOUT EFFECT BELOW, before any scroll the move causes: the reset to the top, and the browser clamping the area
@@ -102,7 +119,7 @@ function BookingsScreen() {
     const area = scrollArea();
     // The first render (the shell reset the area as the section opened) and StrictMode's second run are not moves.
     if (before === null || before.pathname === pathname || area === null) return;
-    const wasForm = before.kind === 'new' || before.kind === 'edit';
+    const wasForm = before.kind === 'new' || before.kind === 'edit' || before.kind === 'booking';
     // ⚠️ ON THE SPLIT the list keeps its place, except across the full-width form: hidden, the list let the area shrink to the
     // form's height (its place was lost), so it is put back as the form closes, and the form opens at the top.
     if (split) {
@@ -117,19 +134,24 @@ function BookingsScreen() {
   const selectedId = view.kind === 'booking' || view.kind === 'edit' ? view.id : null;
 
   return (
-    <Page title={t('section.bookings')}>
-      <div className={formOpen ? `${styles.layout} ${styles.fullForm}` : styles.layout} data-view={view.kind}>
-        <div className={styles.list}>
-          <PartBoundary>
-            <BookingsList choice={choice} onChoice={setChoice} today={today} selectedId={selectedId} />
-          </PartBoundary>
+    // A booking's page draws its own h1, the customer's name (bookings rebuild step 3); the tab keeps the section's name, never a
+    // customer's.
+    <Page title={t('section.bookings')} ownHeading={view.kind === 'booking'}>
+      <FormDayContext.Provider value={reportFormDay}>
+        <div className={formOpen ? `${styles.layout} ${styles.fullForm}` : styles.layout} data-view={view.kind}>
+          <div className={styles.list}>
+            <PartBoundary>
+              <BookingsList day={day} onDay={setDay} today={today} selectedId={selectedId} />
+            </PartBoundary>
+          </div>
+          <div ref={detail} className={styles.detail}>
+            {/* A booking's page has no h1 from the page: a broken one still gets one, through the boundary's own title. */}
+            <PartBoundary resetKey={pathname} title={view.kind === 'booking' ? t('section.bookings') : undefined}>
+              <Detail view={view} />
+            </PartBoundary>
+          </div>
         </div>
-        <div ref={detail} className={styles.detail}>
-          <PartBoundary resetKey={pathname}>
-            <Detail view={view} />
-          </PartBoundary>
-        </div>
-      </div>
+      </FormDayContext.Provider>
     </Page>
   );
 }

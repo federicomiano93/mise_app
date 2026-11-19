@@ -35,7 +35,7 @@ describe('the scroll inside Bookings (a phone)', () => {
     await waitFor(() => { expect(rows()).toHaveLength(2); }, LOAD);
     const main = scrolledTo(420);
     await user.click(rows()[1] as HTMLElement);
-    await screen.findByRole('region', { name: 'Booking No. 1' });
+    await screen.findByRole('region', { name: 'Anna Finta' });
     expect(main.scrollTop).toBe(0);
     await act(async () => { await router.navigate(-1); });
     await waitFor(() => { expect(router.state.location.pathname).toBe('/bookings'); });
@@ -53,18 +53,21 @@ describe('the scroll inside Bookings (a phone)', () => {
 });
 
 describe('the scroll inside Bookings (the split, 1000px and wider)', () => {
-  it('the list keeps its place when a booking opens beside it', async () => {
+  it('⚠️ a booking takes the whole width (bookings rebuild step 3): it opens at the top, and Back puts the list where it was', async () => {
     vi.stubGlobal('matchMedia', (query: string) => ({
       matches: query === '(min-width: 1000px)',
       media: query,
       addEventListener: () => undefined,
       removeEventListener: () => undefined,
     }));
-    const { user } = show();
+    const { user, router } = show();
     await waitFor(() => { expect(rows()).toHaveLength(2); }, LOAD);
     const main = scrolledTo(420);
     await user.click(rows()[1] as HTMLElement);
-    await screen.findByRole('region', { name: 'Booking No. 1' });
+    await screen.findByRole('region', { name: 'Anna Finta' });
+    expect(main.scrollTop).toBe(0);
+    await act(async () => { await router.navigate(-1); });
+    await waitFor(() => { expect(rows()).toHaveLength(2); });
     expect(main.scrollTop).toBe(420);
   });
 

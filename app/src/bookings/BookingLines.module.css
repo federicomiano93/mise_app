@@ -1,0 +1,61 @@
+/* A booking's products, one per line: a black numbered circle (22px, as the form's cards), the quantity, the name in bold, and on
+   the booking's page the price at the right edge. Long names wrap; nothing widens the page (296px included). */
+
+.lines {
+  /* Stretched in a column that lines its items up at the start (the booking page's facts): the price keeps to the right edge. */
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.line {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s2);
+}
+
+.number {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin-top: 1px;
+  border-radius: var(--r-pill);
+  background: var(--ink);
+  color: var(--surface);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.qty {
+  font-weight: 400;
+}
+
+.name {
+  font-weight: 700;
+}
+
+.note {
+  display: block;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.end {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}

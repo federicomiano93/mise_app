@@ -23,7 +23,7 @@ import { onlyMode, placesLeft, slotFromValue, slotValue, slotsOf } from './booki
 import type { BookingSettings, Slot } from './bookingSettings';
 import type { PriceList } from '@mise/shared/price-list';
 import { spellDate } from './bookingWords';
-import { useBookingSettings, useBookings, useBookingsStore } from './BookingsContext';
+import { useBookingSettings, useBookings, useBookingsStore, useReportFormDay } from './BookingsContext';
 import { afterSave, cameFromBooking, cameFromList, newBookingDateOf, restoresRefused } from './bookingsNav';
 import { BOOKINGS_PATH, bookingPath } from './bookingsPath';
 import type { RefusedSave } from './bookingsStore';
@@ -133,6 +133,9 @@ function EditorForm({ id, booking, refused, settings }: FormProps) {
     : emptyDraft(nextKey, { date: newBookingDateOf(arrivedWith), mode: only })));
   const [draft, setDraft] = useState<Draft>(() => refused?.draft ?? initial);
   const [problem, setProblem] = useState<DraftProblem | null>(null);
+  // The bookings listener follows this form's day (bookings rebuild step 3): a day in another month moves it there, so the free
+  // places of its slots and the next short number are counted on that month's bookings.
+  useReportFormDay(draft.date);
   const dirty = refused !== null || !sameDraft(initial, draft);
   // Read by the router's blocker at the moment of a navigation, when a state value could be a render behind.
   const dirtyRef = useRef(dirty);
@@ -249,6 +252,12 @@ function EditorForm({ id, booking, refused, settings }: FormProps) {
   const asking = useRef(false);
   async function save() {
     if (asking.current) return;
+    // ⚠️ THE DAY'S MONTH IS STILL BEING READ (the day just moved to another month): its slots' free places and the next short number
+    // are not known yet. A moment, never a guess.
+    if (store.getSnapshot().status === 'loading') {
+      say(t('bookings.form.stillReading'));
+      return;
+    }
     const found = firstProblem(draft, { today, isNew, items, rules });
     if (found !== null) {
       setProblem(found);

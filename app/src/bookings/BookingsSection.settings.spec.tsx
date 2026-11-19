@@ -47,16 +47,32 @@ describe('no phone asked', () => {
     await waitFor(() => { expect(source.create).toHaveBeenCalledWith(expect.objectContaining({ phone: '', slotEnd: null })); });
   });
 
-  it('the booking page shows no phone and no WhatsApp reminder', async () => {
-    show('/bookings/A1', NO_PHONE, [bookingFixture({ id: 'A1', date: TODAY, number: 3 })], { session: { location: { country: 'IT' } } });
-    const card = await screen.findByRole('region', { name: 'Booking No. 3' }, LOAD);
-    expect(card).not.toHaveTextContent('+39 333 000 0000');
+  it('⚠️ the booking page has NO «Customer» group when the phone is off and none is stored (bookings rebuild step 3)', async () => {
+    show('/bookings/A1', NO_PHONE, [bookingFixture({ id: 'A1', date: TODAY, number: 3, phone: '' })], { session: { location: { country: 'IT' } } });
+    const card = await screen.findByRole('region', { name: 'Mario Prova' }, LOAD);
+    expect(within(card).queryByText('Customer', { selector: 'dt' })).toBeNull();
     expect(within(card).queryByRole('link', { name: /WhatsApp/ })).toBeNull();
+    expect(within(card).queryByRole('link', { name: /^Call/ })).toBeNull();
+  });
+
+  it('…an old booking with a phone stored still shows it, with no WhatsApp reminder (the phone is off)', async () => {
+    show('/bookings/A1', NO_PHONE, [bookingFixture({ id: 'A1', date: TODAY, number: 3 })], { session: { location: { country: 'IT' } } });
+    const card = await screen.findByRole('region', { name: 'Mario Prova' }, LOAD);
+    expect(within(card).getByText('Customer', { selector: 'dt' })).toBeInTheDocument();
+    expect(within(card).getByRole('link', { name: 'Call +39 333 000 0000' })).toBeInTheDocument();
+    expect(within(card).queryByRole('link', { name: /WhatsApp/ })).toBeNull();
+  });
+
+  it('…a delivery with the phone off keeps the group for its address alone', async () => {
+    show('/bookings/A1', NO_PHONE, [bookingFixture({ id: 'A1', date: TODAY, number: 3, phone: '', mode: 'delivery', address: 'Via Finta 9' })]);
+    const card = await screen.findByRole('region', { name: 'Mario Prova' }, LOAD);
+    expect(within(card).getByText('Customer', { selector: 'dt' })).toBeInTheDocument();
+    expect(card).toHaveTextContent('Via Finta 9');
   });
 
   it('the reminder switched off alone hides only the reminder', async () => {
     show('/bookings/A1', { ...DEFAULT_SETTINGS, whatsappReminder: false }, [bookingFixture({ id: 'A1', date: TODAY, number: 3 })], { session: { location: { country: 'IT' } } });
-    const card = await screen.findByRole('region', { name: 'Booking No. 3' }, LOAD);
+    const card = await screen.findByRole('region', { name: 'Mario Prova' }, LOAD);
     expect(card).toHaveTextContent('+39 333 000 0000');
     expect(within(card).queryByRole('link', { name: /WhatsApp/ })).toBeNull();
   });
@@ -152,22 +168,26 @@ describe('time slots', () => {
   });
 });
 
-describe('the day the list shows', () => {
-  it('«New booking» from Tomorrow starts on tomorrow', async () => {
+describe('the day picked in the calendar (bookings rebuild step 3)', () => {
+  it('«New booking» pre-fills «Day» with the day picked', async () => {
     const { user } = show('/bookings', DEFAULT_SETTINGS);
-    await user.click(await screen.findByRole('button', { name: 'Tomorrow' }, LOAD));
+    await screen.findByText('No bookings for this day.', {}, LOAD);
+    // Tomorrow may be in the next month: the calendar's › first.
+    if (TOMORROW.slice(0, 7) !== TODAY.slice(0, 7)) await user.click(screen.getByRole('button', { name: 'Next month' }));
+    await user.click(document.querySelector(`[data-day="${TOMORROW}"]`) as HTMLElement);
     await user.click(screen.getByRole('button', { name: 'New booking' }));
     await screen.findByRole('region', { name: 'New booking' }, LOAD);
     expect(screen.getByLabelText('Day')).toHaveValue(TOMORROW);
   });
 
-  it('…from Today on today; from a past day, no day', async () => {
+  it('…opening on today; a day already gone gives no day (it cannot be booked)', async () => {
     const { user } = show('/bookings', DEFAULT_SETTINGS);
     await user.click(await screen.findByRole('button', { name: 'New booking' }, LOAD));
     await screen.findByRole('region', { name: 'New booking' }, LOAD);
     expect(screen.getByLabelText('Day')).toHaveValue(TODAY);
     await user.click(screen.getByRole('button', { name: 'Back' }));
-    await user.click(await screen.findByRole('button', { name: 'Past day' }, LOAD));
+    await screen.findByText('No bookings for this day.', {}, LOAD);
+    await user.click(screen.getByRole('button', { name: 'Previous month' }));
     await user.click(screen.getByRole('button', { name: 'New booking' }));
     await screen.findByRole('region', { name: 'New booking' }, LOAD);
     expect(screen.getByLabelText('Day')).toHaveValue('');

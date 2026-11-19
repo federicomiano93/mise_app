@@ -26,14 +26,17 @@ type Props = {
   sub?: ReactNode;
   // The one primary action, always here at the top (P20): Save.
   action?: ReactNode;
+  // 1 when the screen's own h1 is this title (a booking, whose name is its h1 and the page draws none: Page `ownHeading`).
+  level?: 1 | 2;
 };
 
 // The bar at the top of a screen one level down (the design's `.form-bar`): Back · title · the one
 // primary action. It sticks to the top of the scrolling area, so Save never scrolls out of reach
 // of a long form.
-export function FormBar({ backLabel, onBack, backDisabled = false, title, titleId, titleRef, onTitle, titleDoorLabel, titleDoorRef, sub, action }: Props) {
+export function FormBar({ backLabel, onBack, backDisabled = false, title, titleId, titleRef, onTitle, titleDoorLabel, titleDoorRef, sub, action, level = 2 }: Props) {
   const ownNameId = useId();
   const nameId = titleId ?? ownNameId;
+  const Heading = level === 1 ? 'h1' : 'h2';
   return (
     <header className={styles.bar}>
       <Button className={styles.back} aria-label={backLabel} onPress={onBack} isDisabled={backDisabled}>
@@ -42,14 +45,14 @@ export function FormBar({ backLabel, onBack, backDisabled = false, title, titleI
       <div className={styles.text}>
         {onTitle ? (
           // ⚠️ THE NAME IS WHAT THE HEADING AND THE SCREEN ARE CALLED: the button's longer name would otherwise become theirs.
-          <h2 ref={titleRef} tabIndex={-1} className={styles.title} aria-labelledby={nameId}>
+          <Heading ref={titleRef} tabIndex={-1} className={styles.title} aria-labelledby={nameId}>
             <button ref={titleDoorRef} type="button" className={styles.door} aria-label={titleDoorLabel} onClick={onTitle}>
               <span id={nameId} className={styles.doorText}>{title}</span>
               <ChevronRight aria-hidden="true" />
             </button>
-          </h2>
+          </Heading>
         ) : (
-          <h2 ref={titleRef} id={titleId} tabIndex={-1} className={styles.title}>{title}</h2>
+          <Heading ref={titleRef} id={titleId} tabIndex={-1} className={styles.title}>{title}</Heading>
         )}
         {sub}
       </div>

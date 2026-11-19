@@ -1,4 +1,5 @@
-/* One booking: a card with the form bar (Back · title · Edit), the four statuses, the facts, the two print buttons and the bin.
+/* One booking (full width on the split since bookings rebuild step 3): a card with the form bar (Back · the customer's name ·
+   the pencil), the two statuses (Collected, Cancelled), the facts, the two print buttons and the bin.
    ⚠️ NOTHING ON THE CARD MAY CLIP (no `overflow`): the form bar sticks to the top of the shell's scrolling area. */
 
 .card {
@@ -13,6 +14,21 @@
   flex-direction: column;
   gap: var(--s4);
   padding: var(--s4);
+}
+
+/* «Booking No. 12», small and grey under the customer's name (bookings rebuild step 3). */
+.sub {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+}
+
+/* Edit is the pencil alone: a square button. Two classes, so the order the stylesheets load does not decide the padding. */
+.card .edit {
+  justify-content: center;
+  width: var(--hit);
+  padding: 0;
 }
 
 .muted {
@@ -40,12 +56,6 @@
   gap: var(--s2);
 }
 
-@media (min-width: 520px) {
-  .statuses {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-}
-
 .statusChoice {
   min-height: var(--hit);
   padding: var(--s1) var(--s2);
@@ -69,18 +79,6 @@
   .statusChoice:hover {
     background: var(--sunken);
   }
-}
-
-.statusChoice[aria-pressed="true"][data-status="todo"] {
-  border-color: var(--warn);
-  background: var(--warn-tint);
-  color: var(--warn-ink);
-}
-
-.statusChoice[aria-pressed="true"][data-status="ready"] {
-  border-color: var(--ok);
-  background: var(--ok-tint);
-  color: var(--ok-ink);
 }
 
 .statusChoice[aria-pressed="true"][data-status="collected"] {
@@ -148,44 +146,12 @@
   color: var(--accent-ink);
 }
 
-.strong {
-  font-weight: 600;
-}
-
 .link {
   display: inline-flex;
   align-items: center;
   min-height: var(--hit);
   color: var(--accent-ink);
   font-weight: 600;
-}
-
-.lines {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s2);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.line {
-  display: flex;
-  gap: var(--s3);
-}
-
-.qty {
-  flex: none;
-  min-width: 4.5rem;
-  font-variant-numeric: tabular-nums;
-  font-weight: 650;
-}
-
-.lineNote {
-  display: block;
-  color: var(--ink-2);
-  font-size: var(--fs-sm);
-  font-style: italic;
 }
 
 .notes {

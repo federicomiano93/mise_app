@@ -4,12 +4,29 @@
 // page leaves the focus to the booking, which puts it on its own title (shell/Page.tsx KEEP_FOCUS).
 export const FROM_LIST = { fromBookingsList: true, keepFocus: true } as const;
 
+// A booking opened from a row of the list: FROM_LIST with the booking's day, so the section opens that day's month again when the
+// page is reloaded on the booking (the browser keeps a history entry's state across a reload; bookings rebuild step 3).
+export function openedFromList(day: string): typeof FROM_LIST & { readonly bookingDay: string } {
+  return { ...FROM_LIST, bookingDay: day };
+}
+
+// The day a move inside Bookings is about: a booking just saved, a booking opened (from a row, or the editor from a booking), or
+// the day a new booking starts on. The section opens on it; null when the state names none.
+export function dayOfState(state: unknown): string | null {
+  if (typeof state !== 'object' || state === null) return null;
+  for (const key of ['bookingSavedDate', 'bookingDay', 'newBookingDate']) {
+    const value = (state as Record<string, unknown>)[key];
+    if (typeof value === 'string' && /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(value)) return value;
+  }
+  return null;
+}
+
 export function cameFromList(state: unknown): boolean {
   return typeof state === 'object' && state !== null && 'fromBookingsList' in state;
 }
 
-// «New booking» from the list (bookings settings, 18 Nov 2026): the form starts on the day the list is showing — today or
-// tomorrow; a day already gone or the several days of «Later» give no day.
+// «New booking» from the list: the form starts on the day picked in the calendar (bookings rebuild step 3); a day already gone
+// gives no day (a new booking cannot be taken for it).
 export function newFromList(date: string | null): typeof FROM_LIST & { readonly newBookingDate?: string } {
   return date === null ? FROM_LIST : { ...FROM_LIST, newBookingDate: date };
 }
@@ -47,6 +64,11 @@ export function restoresRefused(state: unknown): boolean {
 
 // The editor opened by a booking's Edit: its Back is the browser's Back, to that booking.
 export const FROM_BOOKING = { fromBooking: true, keepFocus: true } as const;
+
+// The same, with the booking's day (a reload of the editor opens that day's month).
+export function editFromBooking(day: string): typeof FROM_BOOKING & { readonly bookingDay: string } {
+  return { ...FROM_BOOKING, bookingDay: day };
+}
 
 export function cameFromBooking(state: unknown): boolean {
   return typeof state === 'object' && state !== null && 'fromBooking' in state;

@@ -1,0 +1,157 @@
+/* The bookings list's month calendar (bookings rebuild step 3, the owner's design): ‹ month › on one line, then seven columns,
+   Monday first. Day cells 44px tall; their width is the seventh of the box (about 50px in the tablet's list column; on a 296px
+   phone seven 44px cells cannot fit, so they are about 37px wide there — still 44px tall). Today ringed, the picked day filled
+   with the accent, an orange badge with the day's bookings. */
+
+.calendar {
+  padding: var(--s2) var(--s2) var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.arrow {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-md);
+  background: none;
+  color: var(--ink);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.arrow svg {
+  width: 22px;
+  height: 22px;
+}
+
+.arrow[data-focus-visible] {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.arrow[data-pressed] {
+  background: var(--sunken);
+}
+
+@media (hover: hover) {
+  .arrow[data-hovered] {
+    background: var(--sunken);
+  }
+}
+
+/* A block, not a flex box: ::first-letter (below) applies to a block container only. */
+.month {
+  display: block;
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--fs-lg);
+  font-weight: 650;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+/* Intl writes an Italian month in lower case («dicembre 2026»); a heading starts with a capital. */
+.month::first-letter {
+  text-transform: uppercase;
+}
+
+.grid {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0 2px;
+  table-layout: fixed;
+}
+
+.weekday {
+  padding: var(--s1) 0;
+  color: var(--ink-2);
+  font-size: var(--fs-xs);
+  font-weight: 650;
+  text-align: center;
+}
+
+.cell,
+.blank {
+  padding: 0 1px;
+  text-align: center;
+}
+
+.day {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  max-width: 48px;
+  height: 44px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: var(--r-pill);
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--fs-md);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.number {
+  line-height: 1;
+}
+
+/* Today: a ring. */
+.day[aria-current="date"] {
+  border-color: var(--accent);
+  font-weight: 700;
+}
+
+/* The picked day: filled blue. */
+.day[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 700;
+}
+
+.day:focus-visible {
+  outline: 3px solid var(--ink);
+  outline-offset: 1px;
+}
+
+@media (hover: hover) {
+  .day:hover:not([aria-pressed="true"]) {
+    background: var(--sunken);
+  }
+}
+
+/* The day's bookings: an orange badge at the cell's top right, over the ring. */
+.badge {
+  position: absolute;
+  top: -4px;
+  right: -2px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: var(--r-pill);
+  background: var(--warn);
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+}

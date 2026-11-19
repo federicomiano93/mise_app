@@ -6,7 +6,7 @@ import { bookingFixture, fakeBookingsSource, permissionDenied, priceListOf } fro
 import type { FakeBookingsSource } from '../testing/fakeBookingsSource';
 import { addProduct } from '../testing/bookingForm';
 import { renderApp } from '../testing/renderApp';
-import { dayAfter } from './bookingModel';
+import { dayAfter, monthOf, monthRange, nextNumber } from './bookingModel';
 import type { Booking } from './bookingModel';
 import { SLIP_HOST_ID, SLIP_PRINTING_CLASS, closeSlipHost } from './slipHost';
 
@@ -45,7 +45,9 @@ function show(path: string, source: FakeBookingsSource = fakeBookingsSource(seed
 }
 
 const list = (name = 'Bookings') => within(screen.getByRole('region', { name }));
-const rowNames = (name = 'Bookings') => list(name).queryAllByRole('link').map(link => link.querySelector('span:nth-child(2) > span')?.textContent);
+const rowNames = (name = 'Bookings') => list(name).queryAllByRole('link').map(link => link.textContent);
+// A row of the list: the list item that holds the booking's name (the name is the row's link).
+const rowOf = (name: string, region = 'Bookings') => list(region).getByRole('link', { name }).closest('li') as HTMLElement;
 const dialog = (name: string) => screen.findByRole('alertdialog', { name });
 
 beforeEach(() => { vi.spyOn(console, 'error').mockImplementation(() => undefined); });
@@ -55,32 +57,16 @@ afterEach(() => {
 });
 
 describe('the list by day', () => {
-  it('opens on today, by time, each row with its time, name, what was ordered, pickup or delivery and status', async () => {
+  it('opens on today, by time, each row with its slot, name, products one per line and pickup or delivery', async () => {
     show('/bookings');
     await waitFor(() => { expect(rowNames()).toEqual(['Anna Finta', 'Mario Prova']); }, LOAD);
-    const row = list().getAllByRole('link')[0] as HTMLElement;
+    const row = rowOf('Anna Finta');
     expect(row).toHaveTextContent('09:00');
-    expect(row).toHaveTextContent('1.5 kg Focaccia, 2 pcs Panettone +1 more');
+    expect(within(row).getAllByRole('listitem').map(line => line.textContent)).toEqual(['11.5 kg Focaccia', '22 pcs Panettone', '31 kg Grissini']);
     expect(row).toHaveTextContent('Delivery');
-    expect(row).toHaveTextContent('To do');
+    expect(row).not.toHaveTextContent('To do');
+    expect(within(row).getByRole('button', { name: 'Collected' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { level: 1, name: 'Bookings' })).toBeInTheDocument();
-  });
-
-  it('tomorrow, later and a past day still kept', async () => {
-    const { user } = show('/bookings');
-    await waitFor(() => { expect(rowNames()).toHaveLength(2); }, LOAD);
-    await user.click(list().getByRole('button', { name: 'Tomorrow' }));
-    expect(rowNames()).toEqual(['Luca Tomorrow']);
-    expect(list().getByRole('button', { name: 'Tomorrow' })).toHaveAttribute('aria-pressed', 'true');
-    await user.click(list().getByRole('button', { name: 'Later' }));
-    expect(rowNames()).toEqual(['Sara Later']);
-    await user.click(list().getByRole('button', { name: 'Past day' }));
-    const day = list().getByLabelText('Day to look at');
-    expect(day).toHaveAttribute('min', dayAfter(TODAY, -30));
-    expect(day).toHaveAttribute('max', dayAfter(TODAY, -1));
-    fireEvent.change(day, { target: { value: PAST } });
-    expect(rowNames()).toEqual(['Pia Past']);
-    expect(list().getByText('Bookings are kept for 30 days after their day, then deleted.')).toBeInTheDocument();
   });
 
   it('says when a day has none, and when the live stream broke', async () => {
@@ -96,15 +82,18 @@ describe('the list by day', () => {
     await waitFor(() => { expect(rowNames('Prenotazioni')).toHaveLength(2); }, LOAD);
     expect(screen.getByRole('heading', { level: 1, name: 'Prenotazioni' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Nuova prenotazione' })).toBeInTheDocument();
-    for (const word of ['Oggi', 'Domani', 'Più avanti', 'Giorno passato']) expect(screen.getByRole('button', { name: word })).toBeInTheDocument();
-    expect(list('Prenotazioni').getAllByRole('link')[0]).toHaveTextContent('Consegna');
-    expect(list('Prenotazioni').getAllByRole('link')[1]).toHaveTextContent('Ritiro');
+    for (const word of ['Oggi', 'Domani', 'Più avanti', 'Giorno passato']) expect(screen.queryByRole('button', { name: word })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Mese precedente' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Cerca per nome')).toBeInTheDocument();
+    expect(rowOf('Anna Finta', 'Prenotazioni')).toHaveTextContent('Consegna');
+    expect(rowOf('Mario Prova', 'Prenotazioni')).toHaveTextContent('Ritiro');
+    expect(within(rowOf('Mario Prova', 'Prenotazioni')).getByRole('button', { name: 'Ritirata' })).toBeInTheDocument();
   });
 
-  it('reads 30 days back and no further, with one listener that stops when the section closes', async () => {
+  it('⚠️ reads ONE month, the one shown, with one listener that stops when the section closes', async () => {
     const { source, router } = show('/bookings');
     await waitFor(() => { expect(source.watching()).toBe(1); }, LOAD);
-    expect(source.watch).toHaveBeenCalledWith(dayAfter(TODAY, -30), expect.any(Function), expect.any(Function));
+    expect(source.watch).toHaveBeenLastCalledWith(monthRange(monthOf(TODAY)), expect.any(Function), expect.any(Function));
     await act(async () => { await router.navigate('/settings'); });
     await waitFor(() => { expect(source.watching()).toBe(0); });
   });
@@ -115,19 +104,19 @@ describe('a booking', () => {
     const { user } = show('/bookings');
     await waitFor(() => { expect(rowNames()).toHaveLength(2); }, LOAD);
     await user.click(list().getAllByRole('link')[0] as HTMLElement);
-    const card = await screen.findByRole('region', { name: 'Booking No. 4' });
+    const card = await screen.findByRole('region', { name: 'Anna Finta' });
     expect(card).toHaveTextContent('Anna Finta');
     expect(within(card).getByRole('link', { name: 'Call +39 333 000 0000' })).toHaveAttribute('href', 'tel:+393330000000');
     expect(card).toHaveTextContent('Via Finta 1, Roma');
     expect(card).toHaveTextContent('sliced');
     expect(card).toHaveTextContent('Ring twice');
     expect(card).toHaveTextContent('£32.50');
-    expect(within(card).getByRole('heading', { level: 2 })).toHaveFocus();
+    expect(within(card).getByRole('heading', { level: 1, name: 'Anna Finta' })).toHaveFocus();
   });
 
   it('the WhatsApp reminder opens the customer\'s chat with the message written, in a new tab (bookings step 4)', async () => {
     show('/bookings/A2', undefined, { session: { location: { country: 'IT' }, name: 'Panificio Prova' } });
-    const card = await screen.findByRole('region', { name: 'Booking No. 4' }, LOAD);
+    const card = await screen.findByRole('region', { name: 'Anna Finta' }, LOAD);
     const link = within(card).getByRole('link', { name: 'WhatsApp reminder' });
     expect(link).toHaveAccessibleDescription('Opens WhatsApp with the message ready: check it, then send it.');
     expect(link).toHaveAttribute('target', '_blank');
@@ -147,17 +136,17 @@ describe('a booking', () => {
       bookingFixture({ id: 'X2', date: TODAY, number: 8, phone: '123' }),
     ]);
     const { router } = show('/bookings/X1', source, { session: { location: { country: 'IT' } } });
-    const card = await screen.findByRole('region', { name: 'Booking No. 7' }, LOAD);
+    const card = await screen.findByRole('region', { name: 'Mario Prova' }, LOAD);
     expect(within(card).queryByRole('link', { name: 'WhatsApp reminder' })).toBeNull();
     await act(async () => { await router.navigate('/bookings/X2'); });
-    const other = await screen.findByRole('region', { name: 'Booking No. 8' });
+    const other = await screen.findByRole('region', { name: 'Mario Prova' });
     expect(within(other).getByRole('link', { name: 'Call 123' })).toBeInTheDocument();
     expect(within(other).queryByRole('link', { name: 'WhatsApp reminder' })).toBeNull();
   });
 
   it('in Italian: «Promemoria WhatsApp», and the message in Italian', async () => {
     show('/bookings/A1', undefined, { lang: 'it', session: { location: { country: 'IT' }, name: 'Panificio Prova' } });
-    const card = await screen.findByRole('region', { name: /N\. 3/ }, LOAD);
+    const card = await screen.findByRole('region', { name: 'Mario Prova' }, LOAD);
     const link = within(card).getByRole('link', { name: 'Promemoria WhatsApp' });
     const text = new URL(link.getAttribute('href') as string).searchParams.get('text') ?? '';
     expect(text).toMatch(/^Ciao Mario Prova,\nti ricordiamo il ritiro della tua prenotazione N\. 3 da Panificio Prova:\n.+ alle 11:00\n/);
@@ -166,14 +155,14 @@ describe('a booking', () => {
 
   it('a tap on a status saves it; cancelling asks first', async () => {
     const { user, source } = show('/bookings/A1');
-    const card = await screen.findByRole('region', { name: 'Booking No. 3' }, LOAD);
-    await user.click(within(card).getByRole('button', { name: 'Ready' }));
-    await waitFor(() => { expect(source.items.get('A1')?.status).toBe('ready'); });
-    expect(within(card).getByRole('button', { name: 'Ready' })).toHaveAttribute('aria-pressed', 'true');
+    const card = await screen.findByRole('region', { name: 'Mario Prova' }, LOAD);
+    await user.click(within(card).getByRole('button', { name: 'Collected' }));
+    await waitFor(() => { expect(source.items.get('A1')?.status).toBe('collected'); });
+    expect(within(card).getByRole('button', { name: 'Collected' })).toHaveAttribute('aria-pressed', 'true');
     await user.click(within(card).getByRole('button', { name: 'Cancelled' }));
     const ask = await dialog('Cancel this booking?');
     await user.click(within(ask).getByRole('button', { name: 'Keep it' }));
-    expect(source.items.get('A1')?.status).toBe('ready');
+    expect(source.items.get('A1')?.status).toBe('collected');
     await user.click(within(card).getByRole('button', { name: 'Cancelled' }));
     await user.click(within(await dialog('Cancel this booking?')).getByRole('button', { name: 'Cancel booking' }));
     await waitFor(() => { expect(source.items.get('A1')?.status).toBe('cancelled'); });
@@ -181,7 +170,7 @@ describe('a booking', () => {
 
   it('⚠️ the bin asks, then deletes it for good (also a customer\'s «delete my data») and goes back to the list', async () => {
     const { user, source, router } = show('/bookings/A2');
-    const card = await screen.findByRole('region', { name: 'Booking No. 4' }, LOAD);
+    const card = await screen.findByRole('region', { name: 'Anna Finta' }, LOAD);
     await user.click(within(card).getByRole('button', { name: 'Delete booking' }));
     const ask = await dialog('Delete this booking?');
     expect(ask).toHaveTextContent('Use this also when a customer asks for their data to be deleted.');
@@ -200,8 +189,8 @@ describe('the two slips', () => {
   it('⚠️ the lab slip: date, time, pickup or delivery, the products and notes, the number — NO phone, NO address, NO name', async () => {
     const print = vi.spyOn(window, 'print').mockImplementation(() => undefined);
     const { user } = show('/bookings/A2', undefined, { session: { location: { country: 'IT' }, name: 'Panificio Prova' } });
-    const card = await screen.findByRole('region', { name: 'Booking No. 4' }, LOAD);
-    await user.click(within(card).getByRole('button', { name: 'Lab slip' }));
+    const card = await screen.findByRole('region', { name: 'Anna Finta' }, LOAD);
+    await user.click(within(card).getByRole('button', { name: 'Print for the lab' }));
     expect(print).toHaveBeenCalledTimes(1);
     const host = document.getElementById(SLIP_HOST_ID) as HTMLElement;
     expect(host.parentElement).toBe(document.body);
@@ -226,11 +215,11 @@ describe('the two slips', () => {
       { recipeId: null, productId: 'pG', unitPrice: 3.5, packSize: 250, packUnit: 'g', weightKg: null, name: 'Grissini', qty: 3, unit: 'pcs', note: '' },
     ] })]);
     const { user } = show('/bookings/G1', source, { session: { location: { country: 'IT' }, name: 'Panificio Prova' } });
-    const card = await screen.findByRole('region', { name: 'Booking No. 9' }, LOAD);
+    const card = await screen.findByRole('region', { name: 'Mario Prova' }, LOAD);
     expect(card).toHaveTextContent('3 packs (250 g)');
-    await user.click(within(card).getByRole('button', { name: 'Lab slip' }));
+    await user.click(within(card).getByRole('button', { name: 'Print for the lab' }));
     expect(document.getElementById(SLIP_HOST_ID)).toHaveTextContent('3 confezioni (250 g)');
-    await user.click(within(card).getByRole('button', { name: 'Customer slip' }));
+    await user.click(within(card).getByRole('button', { name: 'Print for the customer' }));
     expect(document.getElementById(SLIP_HOST_ID)).toHaveTextContent('3 confezioni (250 g)');
     expect(document.getElementById(SLIP_HOST_ID)).not.toHaveTextContent('3 pz');
   });
@@ -238,8 +227,8 @@ describe('the two slips', () => {
   it('the customer slip: the venue, the number, the name, the products, when, the money and the privacy line', async () => {
     vi.spyOn(window, 'print').mockImplementation(() => undefined);
     const { user } = show('/bookings/A2', undefined, { session: { location: { country: 'IT' }, name: 'Panificio Prova' } });
-    const card = await screen.findByRole('region', { name: 'Booking No. 4' }, LOAD);
-    await user.click(within(card).getByRole('button', { name: 'Customer slip' }));
+    const card = await screen.findByRole('region', { name: 'Anna Finta' }, LOAD);
+    await user.click(within(card).getByRole('button', { name: 'Print for the customer' }));
     const host = document.getElementById(SLIP_HOST_ID) as HTMLElement;
     // What each priced line comes to (18,00 € and 20,00 €; Grissini has no price).
     for (const text of ['Panificio Prova', 'No. 4', 'Anna Finta', 'Focaccia', 'Delivery', '09:00', '42,50 €', '10,00 €', '32,50 €', '18,00 €', '20,00 €',
@@ -252,9 +241,9 @@ describe('the two slips', () => {
   it('a second print replaces the first host, and a tap back in the page after printing removes it', async () => {
     vi.spyOn(window, 'print').mockImplementation(() => undefined);
     const { user } = show('/bookings/A1');
-    const card = await screen.findByRole('region', { name: 'Booking No. 3' }, LOAD);
-    await user.click(within(card).getByRole('button', { name: 'Lab slip' }));
-    await user.click(within(card).getByRole('button', { name: 'Customer slip' }));
+    const card = await screen.findByRole('region', { name: 'Mario Prova' }, LOAD);
+    await user.click(within(card).getByRole('button', { name: 'Print for the lab' }));
+    await user.click(within(card).getByRole('button', { name: 'Print for the customer' }));
     expect(document.querySelectorAll(`#${SLIP_HOST_ID}`)).toHaveLength(1);
     act(() => { window.dispatchEvent(new Event('afterprint')); });
     expect(document.getElementById(SLIP_HOST_ID)).not.toBeNull();
@@ -333,10 +322,11 @@ describe('the editor', () => {
       customerName: 'Gino Prova', phone: '+39 333 111 2222', mode: 'pickup', address: '', date: TOMORROW, time: '08:15', slotEnd: null,
       // One piece of 1.5 kg, priced £12.00 a kilo: £18.00 the piece.
       lines: [{ recipeId: null, productId: 'pF', unitPrice: 18, name: 'Focaccia', qty: 1, unit: 'pcs', weightKg: 1.5 }],
-      deposit: 5, total: 30, notes: '', status: 'todo', number: 7,
+      // One more than the highest number in the month of the booking's day (the listener reads that month).
+      deposit: 5, total: 30, notes: '', status: 'todo', number: nextNumber(seed().filter(b => monthOf(b.date) === monthOf(TOMORROW))),
     });
     await waitFor(() => { expect(rowNames()).toEqual(['Gino Prova', 'Luca Tomorrow']); });
-    expect(list().getByRole('button', { name: 'Tomorrow' })).toHaveAttribute('aria-pressed', 'true');
+    expect(list().getByRole('button', { pressed: true })).toHaveAttribute('data-day', TOMORROW);
     // The focus is on the saved booking's row, not lost with the editor.
     await waitFor(() => { expect(list().getAllByRole('link')[0]).toHaveFocus(); });
     expect(isBusy()).toBe(false);
@@ -557,8 +547,8 @@ describe('the editor', () => {
   it('an existing booking\'s editor waits for the bookings before it copies one', async () => {
     const source = fakeBookingsSource(seed());
     let release: () => void = () => undefined;
-    vi.mocked(source.watch).mockImplementation((from, onChange) => {
-      release = () => { onChange([...source.items.values()].filter(b => b.date >= from), false); };
+    vi.mocked(source.watch).mockImplementation(({ from, until }, onChange) => {
+      release = () => { onChange([...source.items.values()].filter(b => b.date >= from && b.date < until), false); };
       return () => undefined;
     });
     show('/bookings/A1/edit', source);

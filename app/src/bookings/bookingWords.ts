@@ -55,18 +55,6 @@ export function lineQtyText(
   return `${numberIn(locale, line.qty)} ${words.unit(line.unit)}`;
 }
 
-// The list row's short summary: the first two lines, then «+3 more».
-export const SUMMARY_LINES = 2;
-
-export function linesSummary(
-  lines: readonly BookingLine[],
-  locale: string,
-  words: UnitWords,
-): { readonly text: string; readonly more: number } {
-  const shown = lines.slice(0, SUMMARY_LINES).map(line => `${lineQtyText(line, locale, words)} ${line.name}`);
-  return { text: shown.join(', '), more: Math.max(0, lines.length - SUMMARY_LINES) };
-}
-
 // The units on a printed slip, in the language of the venue's country: «pz» / «confezione(i)» in Italy, «pcs» / «pack(s)»
 // elsewhere; «kg» everywhere. Read while drawing, never at module load (no venue is open then).
 export function slipUnitWords(location: unknown): UnitWords {

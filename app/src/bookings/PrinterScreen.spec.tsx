@@ -126,8 +126,8 @@ describe('a slip straight to the receipt printer', () => {
     const fetchSpy = printer();
     const print = vi.spyOn(window, 'print').mockImplementation(() => undefined);
     const { user } = show('/bookings/A2');
-    const card = await screen.findByRole('region', { name: 'Booking No. 4' }, LOAD);
-    await user.click(within(card).getByRole('button', { name: 'Lab slip' }));
+    const card = await screen.findByRole('region', { name: 'Anna Finta' }, LOAD);
+    await user.click(within(card).getByRole('button', { name: 'Print for the lab' }));
     await waitFor(() => { expect(screen.getByText('Printed ✓')).toBeInTheDocument(); });
     expect(print).not.toHaveBeenCalled();
     expect(document.getElementById(SLIP_HOST_ID)).toBeNull();
@@ -140,8 +140,8 @@ describe('a slip straight to the receipt printer', () => {
     localStorage.setItem(PRINTER_HOST_KEY, '192.168.1.50');
     const fetchSpy = printer();
     const { user } = show('/bookings/A2');
-    const card = await screen.findByRole('region', { name: 'Booking No. 4' }, LOAD);
-    await user.click(within(card).getByRole('button', { name: 'Customer slip' }));
+    const card = await screen.findByRole('region', { name: 'Anna Finta' }, LOAD);
+    await user.click(within(card).getByRole('button', { name: 'Print for the customer' }));
     await waitFor(() => { expect(fetchSpy).toHaveBeenCalledTimes(1); });
     expect(sent(fetchSpy)).toContain('Anna Finta');
     expect(sent(fetchSpy)).toMatch(/1,5 kg Focaccia +18,00 €/);
@@ -152,8 +152,8 @@ describe('a slip straight to the receipt printer', () => {
     printer('<response success="false" code="EPTR_REC_EMPTY" status="0" />');
     const print = vi.spyOn(window, 'print').mockImplementation(() => undefined);
     const { user } = show('/bookings/A2');
-    const card = await screen.findByRole('region', { name: 'Booking No. 4' }, LOAD);
-    await user.click(within(card).getByRole('button', { name: 'Lab slip' }));
+    const card = await screen.findByRole('region', { name: 'Anna Finta' }, LOAD);
+    await user.click(within(card).getByRole('button', { name: 'Print for the lab' }));
     const question = await screen.findByRole('alertdialog', { name: 'Not printed' });
     expect(question).toHaveTextContent('EPTR_REC_EMPTY');
     await user.click(within(question).getByRole('button', { name: 'Print through the browser' }));
@@ -166,9 +166,9 @@ describe('a slip straight to the receipt printer', () => {
     let answer: (response: Response) => void = () => undefined;
     vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(resolve => { answer = resolve; })));
     const { user, router } = show('/bookings/A2');
-    const card = await screen.findByRole('region', { name: 'Booking No. 4' }, LOAD);
-    await user.click(within(card).getByRole('button', { name: 'Lab slip' }));
-    expect(within(card).getByRole('button', { name: 'Customer slip' })).toBeDisabled();
+    const card = await screen.findByRole('region', { name: 'Anna Finta' }, LOAD);
+    await user.click(within(card).getByRole('button', { name: 'Print for the lab' }));
+    expect(within(card).getByRole('button', { name: 'Print for the customer' })).toBeDisabled();
     await act(async () => { await router.navigate('/bookings'); });
     await act(async () => { answer(new Response('<response success="false" code="EPTR_REC_EMPTY" status="0" />')); });
     expect(await screen.findByText(/Lab slip, booking No\. 4: not printed\. .*EPTR_REC_EMPTY/)).toBeInTheDocument();
@@ -179,8 +179,8 @@ describe('a slip straight to the receipt printer', () => {
     const fetchSpy = printer();
     const print = vi.spyOn(window, 'print').mockImplementation(() => undefined);
     const { user } = show('/bookings/A2');
-    const card = await screen.findByRole('region', { name: 'Booking No. 4' }, LOAD);
-    await user.click(within(card).getByRole('button', { name: 'Lab slip' }));
+    const card = await screen.findByRole('region', { name: 'Anna Finta' }, LOAD);
+    await user.click(within(card).getByRole('button', { name: 'Print for the lab' }));
     expect(print).toHaveBeenCalledTimes(1);
     expect(fetchSpy).not.toHaveBeenCalled();
   });

@@ -78,10 +78,10 @@ describe('the layout', () => {
     await user.click(screen.getByRole('button', { name: 'Back' }));
     await waitFor(() => { expect(router.state.location.pathname).toBe('/bookings'); });
     expect((document.querySelector('[data-view]') as HTMLElement).className).not.toContain('fullForm');
-    // An existing booking's page keeps the list beside it; its editor takes the whole width.
+    // A booking's page takes the whole width too (bookings rebuild step 3), and so does its editor.
     await router.navigate('/bookings/A1');
     await waitFor(() => { expect((document.querySelector('[data-view]') as HTMLElement).dataset.view).toBe('booking'); });
-    expect((document.querySelector('[data-view]') as HTMLElement).className).not.toContain('fullForm');
+    expect((document.querySelector('[data-view]') as HTMLElement).className).toContain('fullForm');
     await router.navigate('/bookings/A1/edit');
     await waitFor(() => { expect((document.querySelector('[data-view]') as HTMLElement).className).toContain('fullForm'); });
     // The stylesheet does it from the split's width only.

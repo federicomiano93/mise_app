@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { MessageCircle, Pencil, Printer, Trash2 } from 'lucide-react';
-import { Link, useLocation, useNavigate } from 'react-router';
+import { Link, useLocation, useNavigate, useNavigationType } from 'react-router';
 import { formatMoney } from '@mise/shared/price-model';
 import { todayISO } from '@mise/shared/day';
 import { useT } from '../i18n/useT';
@@ -11,16 +11,17 @@ import { FormBar } from '../ui/FormBar';
 import { useStatusMessage } from '../ui/StatusMessage';
 import { useConfirm } from '../ui/useConfirm';
 import { lineAmount } from '@mise/shared/price-list';
-import { BOOKING_STATUSES, bookingTimeLabel, toPay } from './bookingModel';
+import { bookingTimeLabel, toPay } from './bookingModel';
 import type { Booking, BookingStatus } from './bookingModel';
 import { CustomerSlip, LabSlip } from './BookingSlips';
 import type { SlipWords } from './BookingSlips';
-import { lineQtyText, slipLocale, slipUnitWords, spellDate } from './bookingWords';
+import { slipLocale, slipUnitWords, spellDate } from './bookingWords';
+import { BookingLines } from './BookingLines';
 import type { UnitWords } from './bookingWords';
 import { useBookingSettings, useBookings, useBookingsStore } from './BookingsContext';
 import { reminderOn } from './bookingSettings';
 import { STATUS_WORD } from './BookingsList';
-import { FROM_BOOKING, cameFromList } from './bookingsNav';
+import { cameFromList, editFromBooking } from './bookingsNav';
 import { BOOKINGS_PATH, editBookingPath } from './bookingsPath';
 import { printSlip } from './slipHost';
 import { PRINT_TIMEOUT_MS, readPrinterSetting, sendToPrinter } from './receiptPrinter';
@@ -49,7 +50,8 @@ export function BookingDetail({ id }: { id: string }) {
   if (booking === null) {
     return (
       <section className={styles.card} aria-busy={status === 'loading'}>
-        <FormBar backLabel={t('ui.back')} onBack={back} title={t('section.bookings')} />
+        {/* The page draws no h1 for a booking (its h1 is the customer's name): until there is one, the section's name is it. */}
+        <FormBar backLabel={t('ui.back')} onBack={back} title={t('section.bookings')} level={1} />
         <div className={styles.body}>
           {status === 'loading' ? <p className={styles.muted}>{t('bookings.loading')}</p> : (
             <>
@@ -78,9 +80,13 @@ function Shown({ booking, onBack }: { booking: Booking; onBack: () => void }) {
   const number = t('bookings.number', { n: booking.number });
   const title = useRef<HTMLHeadingElement>(null);
   const { state } = useLocation();
-  // Opened from the list, the page leaves the focus alone: it goes to this booking's title, so its name is what is heard.
+  const navigationType = useNavigationType();
+  // ⚠️ THE PAGE DRAWS NO h1 HERE (Page `ownHeading`), so the move of the focus a page makes is this booking's to make: on its
+  // title, the customer's name, as the page would on its own h1 — opened from the list, from the Home, or after its loading line.
+  // Not on Back (POP) nor on the first load, as the page (the skip link stays the first Tab stop), unless the list sent it here.
   useEffect(() => {
-    if (cameFromList(state)) title.current?.focus();
+    const lost = document.activeElement === null || document.activeElement === document.body;
+    if (cameFromList(state) || navigationType !== 'POP' || lost) title.current?.focus({ preventScroll: true });
   }, []);
 
   const words: UnitWords = {
@@ -89,6 +95,8 @@ function Shown({ booking, onBack }: { booking: Booking; onBack: () => void }) {
   };
   const modeWord = t(booking.mode === 'delivery' ? 'bookings.mode.delivery' : 'bookings.mode.pickup');
   const due = toPay(booking.total, booking.deposit);
+  const phoneShown = booking.phone !== '';
+  const addressShown = booking.mode === 'delivery' && booking.address !== '';
 
   // ⚠️ THE WHATSAPP REMINDER (bookings step 4): a link that opens WhatsApp on this device, on the customer's chat, with the
   // message written; the person reads it and sends it. Only while the order is still to come, and only for a phone WhatsApp can
@@ -113,8 +121,10 @@ function Shown({ booking, onBack }: { booking: Booking; onBack: () => void }) {
     },
   })) : '';
 
-  async function changeStatus(next: BookingStatus) {
-    if (next === booking.status) return;
+  // Two choices only, Collected and Cancelled (bookings rebuild step 3): a tap on the one already on puts the booking back to open
+  // (`todo`). The stored `ready` reads as open.
+  async function changeStatus(pressed: 'collected' | 'cancelled') {
+    const next: BookingStatus = booking.status === pressed ? 'todo' : pressed;
     if (next === 'cancelled') {
       const ok = await confirm({
         title: t('bookings.cancel.title'),
@@ -126,7 +136,7 @@ function Shown({ booking, onBack }: { booking: Booking; onBack: () => void }) {
       if (!ok) return;
     }
     store.setStatus(booking.id, next);
-    say(t('bookings.statusSaved', { status: t(STATUS_WORD[next]) }));
+    say(next === 'todo' ? t('bookings.reopened') : t('bookings.statusSaved', { status: t(STATUS_WORD[next]) }));
   }
 
   async function remove() {
@@ -209,22 +219,30 @@ function Shown({ booking, onBack }: { booking: Booking; onBack: () => void }) {
 
   return (
     <section className={styles.card} aria-labelledby={`${ids}-title`}>
+      {/* The title (h1) is the CUSTOMER'S NAME, «Booking No. 12» small and grey under it; Edit is the pencil alone (bookings rebuild
+          step 3, the owner's design). */}
       <FormBar
         backLabel={t('ui.back')}
         onBack={onBack}
-        title={t('bookings.detail.title', { number })}
+        level={1}
+        title={booking.customerName}
         titleId={`${ids}-title`}
         titleRef={title}
+        sub={<p className={styles.sub}>{t('bookings.detail.title', { number })}</p>}
         action={(
-          <Button variant="primary" className={styles.edit} onPress={() => { void navigate(editBookingPath(booking.id), { state: FROM_BOOKING }); }}>
+          <Button
+            variant="secondary"
+            className={styles.edit}
+            aria-label={t('ui.edit')}
+            onPress={() => { void navigate(editBookingPath(booking.id), { state: editFromBooking(booking.date) }); }}
+          >
             <Pencil aria-hidden="true" />
-            <span>{t('ui.edit')}</span>
           </Button>
         )}
       />
       <div className={styles.body}>
         <div role="group" aria-label={t('bookings.status.label')} className={styles.statuses}>
-          {BOOKING_STATUSES.map(value => (
+          {(['collected', 'cancelled'] as const).map(value => (
             <button
               key={value}
               type="button"
@@ -246,48 +264,47 @@ function Shown({ booking, onBack }: { booking: Booking; onBack: () => void }) {
               <span className={styles.mode} data-mode={booking.mode}>{modeWord}</span>
             </dd>
           </div>
-          <div className={styles.fact}>
-            <dt>{t('bookings.detail.customer')}</dt>
-            <dd>
-              <span className={styles.strong}>{booking.customerName}</span>
-              {settings.askPhone && booking.phone !== '' ? (
-                <a className={styles.link} href={`tel:${booking.phone.replace(/\s+/g, '')}`} aria-label={t('bookings.detail.call', { phone: booking.phone })}>
-                  {booking.phone}
-                </a>
-              ) : null}
-              {booking.mode === 'delivery' && booking.address !== '' ? <span>{booking.address}</span> : null}
-              {reminder !== '' ? (
-                <>
-                  <a
-                    className={styles.reminder}
-                    href={reminder}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-describedby={`${ids}-reminder-hint`}
-                  >
-                    <MessageCircle aria-hidden="true" />
-                    <span>{t('bookings.reminder.button')}</span>
+          {/* ⚠️ NO «CUSTOMER» GROUP WHEN THE PHONE IS OFF (the venue does not ask for it and none is stored) and nothing else is
+              to say: the name is already the title. A stored phone is shown even where the venue no longer asks (an old booking). */}
+          {phoneShown || addressShown ? (
+            <div className={styles.fact}>
+              <dt>{t('bookings.detail.customer')}</dt>
+              <dd>
+                {phoneShown ? (
+                  <a className={styles.link} href={`tel:${booking.phone.replace(/\s+/g, '')}`} aria-label={t('bookings.detail.call', { phone: booking.phone })}>
+                    {booking.phone}
                   </a>
-                  <span id={`${ids}-reminder-hint`} className={styles.reminderHint}>{t('bookings.reminder.hint')}</span>
-                </>
-              ) : null}
-            </dd>
-          </div>
+                ) : null}
+                {addressShown ? <span>{booking.address}</span> : null}
+                {reminder !== '' ? (
+                  <>
+                    <a
+                      className={styles.reminder}
+                      href={reminder}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-describedby={`${ids}-reminder-hint`}
+                    >
+                      <MessageCircle aria-hidden="true" />
+                      <span>{t('bookings.reminder.button')}</span>
+                    </a>
+                    <span id={`${ids}-reminder-hint`} className={styles.reminderHint}>{t('bookings.reminder.hint')}</span>
+                  </>
+                ) : null}
+              </dd>
+            </div>
+          ) : null}
           <div className={styles.fact}>
             <dt>{t('bookings.detail.items')}</dt>
             <dd>
-              <ul className={styles.lines}>
-                {booking.lines.map((line, index) => (
-                  <li key={index} className={styles.line}>
-                    <span className={styles.qty}>{lineQtyText(line, locale, words)}</span>
-                    <span>
-                      <span className={styles.strong}>{line.name}</span>
-                      {line.note !== '' ? <span className={styles.lineNote}>{line.note}</span> : null}
-                    </span>
-                    {line.unitPrice !== null ? <span className={styles.amount}>{formatMoney(lineAmount(line.qty, line.unitPrice), money)}</span> : null}
-                  </li>
-                ))}
-              </ul>
+              {/* Numbered as in the list, the price at the right edge. */}
+              <BookingLines
+                lines={booking.lines}
+                locale={locale}
+                words={words}
+                notes
+                end={line => (line.unitPrice !== null ? formatMoney(lineAmount(line.qty, line.unitPrice), money) : null)}
+              />
             </dd>
           </div>
           {booking.notes !== '' ? (
@@ -311,13 +328,29 @@ function Shown({ booking, onBack }: { booking: Booking; onBack: () => void }) {
         </dl>
 
         <div className={styles.prints} role="group" aria-label={t('bookings.detail.print')}>
-          <Button variant="secondary" className={styles.print} isPending={sending === 'lab'} isDisabled={sending === 'customer'} onPress={() => { void print('lab'); }}>
+          {/* «Lab» / «Customer» with the printer (bookings rebuild step 3); each name says the whole of it and holds the word drawn.
+              What they print is unchanged until step 4. */}
+          <Button
+            variant="secondary"
+            className={styles.print}
+            aria-label={t('bookings.print.labFull')}
+            isPending={sending === 'lab'}
+            isDisabled={sending === 'customer'}
+            onPress={() => { void print('lab'); }}
+          >
             <Printer aria-hidden="true" />
-            <span>{t('bookings.print.lab')}</span>
+            <span>{t('bookings.print.labShort')}</span>
           </Button>
-          <Button variant="secondary" className={styles.print} isPending={sending === 'customer'} isDisabled={sending === 'lab'} onPress={() => { void print('customer'); }}>
+          <Button
+            variant="secondary"
+            className={styles.print}
+            aria-label={t('bookings.print.customerFull')}
+            isPending={sending === 'customer'}
+            isDisabled={sending === 'lab'}
+            onPress={() => { void print('customer'); }}
+          >
             <Printer aria-hidden="true" />
-            <span>{t('bookings.print.customer')}</span>
+            <span>{t('bookings.print.customerShort')}</span>
           </Button>
         </div>
 
