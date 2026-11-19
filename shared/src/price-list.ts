@@ -147,15 +147,18 @@ export function cleanRemovable(raw: readonly unknown[]): string[] {
   return out;
 }
 
-// A weight typed in the settings («3 kg», «800 g», «1,5», «500»), in kilos, or null when it is not one the list can hold.
+// A weight typed in the settings («3 kg», «800 g», «800 gr», «3 etti», «1,5», «500»), in kilos, or null when it is not one the list can hold.
 // A bare number is kilos up to MAX_WEIGHT_KG and grams above it («500» is half a kilo, «3» three kilos).
 export function parseWeight(text: string): number | null {
-  const match = /^\s*([0-9]+(?:[.,][0-9]+)?)\s*(kg|g)?\s*$/i.exec(text);
+  const match = /^\s*([0-9]+(?:[.,][0-9]+)?)\s*(kg|gr|g|hg|etti|etto)?\s*$/i.exec(text);
   if (match === null) return null;
   const value = Number((match[1] ?? '').replace(',', '.'));
   if (!Number.isFinite(value) || value <= 0) return null;
   const unit = match[2]?.toLowerCase();
-  const kg = unit === 'g' || (unit === undefined && value > MAX_WEIGHT_KG) ? value / 1000 : value;
+  // «gr» is grams, «hg» / «etto» / «etti» hectograms (a tenth of a kilo).
+  const kg = unit === 'g' || unit === 'gr' || (unit === undefined && value > MAX_WEIGHT_KG)
+    ? value / 1000
+    : unit === 'hg' || unit === 'etto' || unit === 'etti' ? value / 10 : value;
   const rounded = toGram(kg);
   return rounded > 0 && rounded <= MAX_WEIGHT_KG ? rounded : null;
 }

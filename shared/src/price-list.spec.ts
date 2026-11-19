@@ -181,6 +181,16 @@ describe('parseWeight / formatWeight', () => {
     expect(parseWeight('750G')).toBe(0.75);
   });
 
+  it('reads «gr» as grams and «hg» / «etto» / «etti» as hectograms', () => {
+    expect(parseWeight('800 gr')).toBe(0.8);
+    expect(parseWeight('800gr')).toBe(0.8);
+    expect(parseWeight('800 GR')).toBe(0.8);
+    expect(parseWeight('3 etti')).toBe(0.3);
+    expect(parseWeight('1 etto')).toBe(0.1);
+    expect(parseWeight('5hg')).toBe(0.5);
+    expect(parseWeight('3 ettogrammi')).toBeNull();
+  });
+
   it('a bare number is kilos up to 50 and grams above', () => {
     expect(parseWeight('3')).toBe(3);
     expect(parseWeight('50')).toBe(50);
