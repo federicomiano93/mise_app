@@ -304,3 +304,9 @@
 .cardItem {
   min-width: 0;
 }
+
+/* The name's box carries the window of common names (CustomerNameField): the window is placed against this wrapper, which is exactly
+   the box's width. */
+.anchor {
+  position: relative;
+}

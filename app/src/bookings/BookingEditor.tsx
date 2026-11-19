@@ -2,10 +2,12 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { Plus, Trash2 } from 'lucide-react';
 import { useBlocker, useLocation, useNavigate } from 'react-router';
 import type { BlockerFunction } from 'react-router';
+import { countryOf } from '@mise/shared/market';
 import { formatMoney } from '@mise/shared/price-model';
 import { useT } from '../i18n/useT';
 import type { MessageKey } from '../i18n/en';
 import { markBusy } from '../session/busy';
+import { useSession } from '../session/SessionContext';
 import { useMoney } from '../session/useMoney';
 import { useTodayKey } from '../shell/useTodayKey';
 import { Button } from '../ui/Button';
@@ -27,6 +29,8 @@ import { BOOKINGS_PATH, bookingPath } from './bookingsPath';
 import type { RefusedSave } from './bookingsStore';
 import { ProductCard } from './ProductCard';
 import { ProductPicker } from './ProductPicker';
+import { useNameSuggest } from './CustomerNameField';
+import type { NameSuggest } from './CustomerNameField';
 import type { Picked } from './ProductPicker';
 import styles from './BookingEditor.module.css';
 
@@ -98,6 +102,7 @@ function EditorForm({ id, booking, refused, settings }: FormProps) {
   const navigate = useNavigate();
   const say = useStatusMessage();
   const money = useMoney();
+  const { location } = useSession();
   const today = useTodayKey();
   const [confirm, confirmDialog] = useConfirm();
   const ids = useId();
@@ -157,6 +162,15 @@ function EditorForm({ id, booking, refused, settings }: FormProps) {
   const update = (patch: Partial<Draft>) => {
     setDraft(current => ({ ...current, ...patch }));
   };
+  // The common names under «Nome cliente»: Italian venues only (the lists are Italian names; any other country keeps the plain box).
+  // ⚠️ A PICK LEAVES A SPACE AFTER THE NAME: nothing to clean here, because the save, its question and the stored name all trim it
+  // (`toBookingData`, `firstProblem`), and «unsaved changes» compares the working copy, which typing the name changes just as much.
+  const nameSuggest = useNameSuggest({
+    enabled: countryOf(location) === 'IT',
+    value: draft.customerName,
+    maxLength: LIMITS.customerName,
+    onChange: value => { update({ customerName: value }); },
+  });
   // A card changes only its quantity and its note (the product, its unit and weight come from the window).
   const updateLine = (key: number, patch: Partial<DraftLine>) => {
     setDraft(current => ({ ...current, lines: current.lines.map(line => (line.key === key ? { ...line, ...patch } : line)) }));
@@ -365,6 +379,7 @@ function EditorForm({ id, booking, refused, settings }: FormProps) {
             placeholder={t('bookings.form.namePlaceholder')}
             maxLength={LIMITS.customerName}
             autoComplete="off"
+            suggest={nameSuggest}
             error={errorOn('customerName')}
             onChange={value => { update({ customerName: value }); }}
           />
@@ -595,28 +610,40 @@ type TextFieldProps = {
   big?: boolean;
   // The value itself in large bold type: the Total.
   strong?: boolean;
+  // The window of common names (only the customer's name, only on an Italian venue).
+  suggest?: NameSuggest | null;
 };
 
-function TextField({ id, label, value, onChange, error, placeholder, maxLength, type = 'text', inputMode, autoComplete, min, list, hint = null, big = false, strong = false }: TextFieldProps) {
+function TextField({ id, label, value, onChange, error, placeholder, maxLength, type = 'text', inputMode, autoComplete, min, list, hint = null, big = false, strong = false, suggest = null }: TextFieldProps) {
   const described = [error !== null ? `${id}-error` : null, hint !== null ? `${id}-hint` : null].filter(Boolean).join(' ');
+  const input = (
+    <input
+      id={id}
+      className={strong ? `${styles.input} ${styles.strongInput}` : styles.input}
+      type={type}
+      value={value}
+      placeholder={placeholder}
+      maxLength={maxLength}
+      inputMode={inputMode}
+      autoComplete={autoComplete}
+      min={min}
+      list={list}
+      aria-invalid={error !== null ? true : undefined}
+      aria-describedby={described === '' ? undefined : described}
+      onChange={event => { onChange(event.currentTarget.value); }}
+      {...(suggest === null ? {} : {
+        ...suggest.inputProps,
+        onChange: event => { suggest.inputProps.onChange(event.currentTarget); },
+        onSelect: event => { suggest.inputProps.onSelect(event.currentTarget); },
+        // The keyboard would write «pap» in lower case after a pick; names are capitalised words.
+        autoCapitalize: 'words',
+      })}
+    />
+  );
   return (
-    <div className={styles.field}>
+    <div className={styles.field} ref={suggest?.fieldRef}>
       <label className={big ? `${styles.label} ${styles.bigLabel}` : styles.label} htmlFor={id}>{label}</label>
-      <input
-        id={id}
-        className={strong ? `${styles.input} ${styles.strongInput}` : styles.input}
-        type={type}
-        value={value}
-        placeholder={placeholder}
-        maxLength={maxLength}
-        inputMode={inputMode}
-        autoComplete={autoComplete}
-        min={min}
-        list={list}
-        aria-invalid={error !== null ? true : undefined}
-        aria-describedby={described === '' ? undefined : described}
-        onChange={event => { onChange(event.currentTarget.value); }}
-      />
+      {suggest === null ? input : <div className={styles.anchor}>{input}{suggest.list}</div>}
       {error !== null ? <p id={`${id}-error`} className={styles.error}>{error}</p> : null}
       {hint !== null ? <p id={`${id}-hint`} className={styles.hint}>{hint}</p> : null}
     </div>

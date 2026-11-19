@@ -634,3 +634,42 @@ tablet keeps the page's own h1 «Prenotazioni»; the card's name is its h2 (`Pag
 longer swaps its heading at each open and close. A card just opened ignores its X, the phone and reminder links and the pencil for
 400 ms (`useTapLockout`). (7) `FormBar` gives a title beside a tag `min-width: 0` and `overflow-wrap: anywhere`. Specs: the phone's
 DOM order, open A / open B / X, typing beside an open card, save for X / pick Y / open / close, the bin, the 400 ms lockout.
+
+## Name suggestions — as built (19 Nov 2026)
+
+The owner's ask: under «Nome cliente» the booking form offers the commonest names of the province of Catania, so a name is two taps
+instead of a word typed in full. The mockup was approved on the tablet.
+
+- **Words, not people.** `commonNames.ts` holds two lists of words (first names, surnames), commonest first; no name is tied to a
+  surname, a phone or a customer. Never fill them from a phone directory (GDPR). «Distefano» and «Di Stefano» are both there on
+  purpose.
+- **Italian venues only** (`countryOf(location) === 'IT'`): any other country, or none, keeps the plain box with no combobox roles.
+- **Pure half** `nameSuggestions.ts`: `suggestNames(text)` → at most 5 `NameRow`s (`name`, `replaceFrom`, `typedLetters`);
+  `applyName(text, row, max)`. Matching is on the word being typed (after the last space) from 2 letters, folded (lowercase, no
+  accents, no apostrophes or spaces): «pata» finds Patanè, «dag» finds D'Agata. Only the word IDENTICAL to an entry is left out («Maria» still offers Mariano). A compound surname
+  is found by the last two words joined («Di M» → Di Mauro, only entries that hold a space) and its pick replaces both words. The
+  first word offers first names first, then surnames; a later word offers surnames first. No word twice.
+- **The window** `CustomerNameField.tsx` (`useNameSuggest`, used by the editor's local `TextField` through its `suggest` prop) +
+  `.module.css`: a combobox like Food cost's `NameSuggest`, but floating over the fields below (absolute under the box, `z-index` 1,
+  below the sticky form bar, above the fields after the box) because the owner asked for a window, not a push-down list. No heading inside; the typed letters are
+  bold. It never picks by itself; Enter only on a row highlighted with the arrows; Escape, blur and a tap outside close it.
+  A pick puts the word plus ONE space, keeps the focus (the pointer-down is swallowed) and the window reopens only on new letters.
+- **The keyboard** can cover it: when the window opens or grows and its bottom is below `visualViewport.height` (else
+  `innerHeight`), the field is scrolled to the top (`scrollIntoView({ block: 'start' })`, `scroll-margin-top` clears the form bar);
+  a window that already fits scrolls nothing.
+- **Saved value unchanged.** The trailing space of a pick is trimmed by `firstProblem`, the save question and `toBookingData`.
+- Text: `bookings.form.nameSuggest` (listbox label), «Suggested names» / «Nomi suggeriti».
+- Specs: `nameSuggestions.spec.ts` (pure, plus the lists' hygiene), `BookingsSection.names.spec.tsx` (the window, a pick, the
+  arrows, Escape/blur/outside, other countries, the trimmed save, the CSS pins).
+
+### Fix round after the lab tablet (19 Nov 2026)
+
+Driven on the SM-T550 (1024x648, Chrome 101): with the keyboard up about 289px remain and the tablet's `.detail` column
+(`overflow-y: auto`) CLIPPED the window to 1.5 rows. Changes: (1) a box 560px wide or more (measured on the field with a
+`ResizeObserver`, `data-wide`) lays the rows in three columns (two rows for five names), the phone keeps the list; arrows still
+go in list order. (2) The fit check compares the window's bottom with the smaller of the visual viewport's bottom and the nearest
+scrolling ancestor's bottom, and scrolls that ancestor (else the page) so the box sits just under the form bar, measured at run time
+(`useLayoutEffect`, no fixed `scroll-margin-top`). (3) `autoCapitalize="words"`. (4) Offered only with the caret at the end; an
+edit or a caret move into an earlier word closes the window. (5) «Unsaved changes» compares the name trimmed (`sameDraft`). (6)
+`z-index` 1, under the form bar's 2, so a scrolled window slides under the bar and never over Save. (7) The two lists are folded once
+at load; the accent range and the no-break space are escapes in the source.

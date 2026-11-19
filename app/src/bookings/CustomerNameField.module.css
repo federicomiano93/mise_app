@@ -1,0 +1,70 @@
+/* The window of common names laid over the form under «Nome cliente» (see CustomerNameField.tsx for why it floats). The box and its
+   label keep BookingEditor.module.css's look; this file is only the window.
+   ⚠️ z-index 1: above the fields that follow the box (none of them sets a z-index; a card's transform makes no layer above 0) and
+   BELOW the sticky form bar (FormBar: 2), so a scrolled window slides under the bar and never over Save. */
+
+.window {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 1;
+  margin-top: var(--s1);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-2);
+  overflow: hidden;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  min-height: calc(var(--hit) + var(--s1));
+  padding: var(--s2) var(--s4);
+  border-top: 1px solid var(--line);
+  color: var(--ink);
+  font-size: var(--fs-lg);
+  font-weight: 400;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.row:first-child {
+  border-top: 0;
+}
+
+.row[data-active="true"] {
+  background: var(--accent-tint);
+}
+
+.typed {
+  font-weight: 700;
+}
+
+@media (hover: hover) {
+  .row:hover {
+    background: var(--accent-tint);
+  }
+}
+
+/* A wide box (the tablet's form, measured in CustomerNameField.tsx): three equal columns, so the five names take two rows. Hairlines
+   between the cells only, none around: the window's own border is the outside. */
+.window[data-wide="true"] {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.window[data-wide="true"] .row {
+  min-height: var(--hit);
+  padding: var(--s2) var(--s3);
+  border-left: 1px solid var(--line);
+}
+
+.window[data-wide="true"] .row:nth-child(-n + 3) {
+  border-top: 0;
+}
+
+.window[data-wide="true"] .row:nth-child(3n + 1) {
+  border-left: 0;
+}
