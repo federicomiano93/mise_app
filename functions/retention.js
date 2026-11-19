@@ -109,7 +109,10 @@ async function sweepKind(db, venues, spec, now, enabled, cap, log) {
     if (counts.wouldDelete || counts.skipped) byVenue[lid] = { wouldDelete: counts.wouldDelete, skipped: counts.skipped };
   }
   if (state.capped) {
-    log.error('Retention: cap reached, this kind stops for tonight', { kind: spec.kind, cap });
+    // Report-only deletes nothing, so nothing stops and an error alert would fire every night: a warning, and the
+    // result's `capped: true` says the count is a floor («cap or more»).
+    if (enabled) log.error('Retention: cap reached, this kind stops for tonight', { kind: spec.kind, cap });
+    else log.warn('Retention: cap reached in report-only mode, the count is a floor', { kind: spec.kind, cap });
   }
   if (state.reads >= MAX_READS) {
     log.warn('Retention: read budget used up, this kind stops for tonight', { kind: spec.kind, reads: state.reads });

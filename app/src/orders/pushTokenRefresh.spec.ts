@@ -38,6 +38,7 @@ function deps(over: Partial<RefreshDeps> = {}): Deps {
     tokenOwner: () => 'u1',
     now: () => NOW,
     online: () => true,
+    notificationsGranted: () => true,
     write: async (lid, token, stamp) => { written.push({ lid, token, stamp }); },
     ...over,
   } as Deps;
@@ -106,6 +107,26 @@ describe('refreshIfDue', () => {
     }
   });
 
+  // ⚠️ A phone that blocked notifications must let its row age out; granted again later, the next open refreshes it.
+  test('nothing and no stamp while notifications are blocked or not asked yet', async () => {
+    for (const permission of ['denied', 'default']) {
+      vi.stubGlobal('Notification', { permission });
+      const d = deps({ ...browserRefreshDeps(async () => {}), storage: memoryStorage(), token: () => 'tok:abc-123', tokenOwner: () => 'u1' });
+      const written: unknown[] = [];
+      d.write = async (...args) => { written.push(args); };
+      expect(await refreshIfDue(READY, d)).toBe('not-granted');
+      expect(written).toHaveLength(0);
+      expect(d.storage?.getItem(REFRESH_STAMP_KEY)).toBeNull();
+    }
+    vi.stubGlobal('Notification', { permission: 'granted' });
+    const g = deps({ ...browserRefreshDeps(async () => {}), storage: memoryStorage(), token: () => 'tok:abc-123', tokenOwner: () => 'u1' });
+    const written: unknown[] = [];
+    g.write = async (...args) => { written.push(args); };
+    expect(await refreshIfDue(READY, g)).toBe('sent');
+    expect(written).toHaveLength(1);
+    vi.unstubAllGlobals();
+  });
+
   test('nothing offline, and no stamp, so the signal coming back asks again', async () => {
     const d = deps({ online: () => false });
     expect(await refreshIfDue(READY, d)).toBe('offline');
@@ -155,23 +176,48 @@ describe('refreshIfDue', () => {
 });
 
 describe('tokenWriter', () => {
-  test('one MERGE of the stamp onto locations/{lid}/fcm-tokens/{token}, through the backend\'s Firestore', async () => {
-    const calls: unknown[][] = [];
-    const kit = {
+  function kitWith(updateDoc: (...args: unknown[]) => Promise<void>, calls: unknown[][], created: unknown[][] = []): FirestoreKit {
+    return {
       db: { id: 'db' },
       fs: {
         doc: (...args: unknown[]) => ({ path: args.slice(1).join('/') }),
-        setDoc: async (...args: unknown[]) => { calls.push(args); },
+        updateDoc: async (...args: unknown[]) => { calls.push(args); await updateDoc(...args); },
+        setDoc: async (...args: unknown[]) => { created.push(args); },
       },
     } as unknown as FirestoreKit;
-    const firestore = vi.fn(async () => kit);
-    await tokenWriter(firestore)('bakery', 'tok:abc', { bakery: 'bakery', uid: 'u1', updatedAt: NOW });
+  }
+  const STAMP = { bakery: 'bakery', uid: 'u1', updatedAt: NOW };
+
+  test('one UPDATE of the stamp onto locations/{lid}/fcm-tokens/{token}, through the backend’s Firestore', async () => {
+    const calls: unknown[][] = [];
+    const created: unknown[][] = [];
+    const firestore = vi.fn(async () => kitWith(async () => {}, calls, created));
+    await tokenWriter(firestore)('bakery', 'tok:abc', STAMP);
     expect(firestore).toHaveBeenCalledOnce();
-    expect(calls).toStrictEqual([[
-      { path: 'locations/bakery/fcm-tokens/tok:abc' },
-      { bakery: 'bakery', uid: 'u1', updatedAt: NOW },
-      { merge: true },
-    ]]);
+    expect(calls).toStrictEqual([[{ path: 'locations/bakery/fcm-tokens/tok:abc' }, STAMP]]);
+    expect(created).toHaveLength(0);
+  });
+
+  // ⚠️ A row the server deleted on purpose (a dead token, a removed member's phone) must stay deleted.
+  test('a row that is gone (not-found) is never re-created and is not an error', async () => {
+    const calls: unknown[][] = [];
+    const created: unknown[][] = [];
+    const gone = async () => { throw Object.assign(new Error('x'), { code: 'not-found' }); };
+    await expect(tokenWriter(async () => kitWith(gone, calls, created))('bakery', 'tok:abc', STAMP)).resolves.toBeUndefined();
+    expect(created).toHaveLength(0);
+  });
+
+  test('a not-found keeps the stamp, so it is not asked again on every open', async () => {
+    const calls: unknown[][] = [];
+    const gone = async () => { throw Object.assign(new Error('x'), { code: 'not-found' }); };
+    const d = deps({ write: tokenWriter(async () => kitWith(gone, calls)) });
+    expect(await refreshIfDue(READY, d)).toBe('sent');
+    expect(stampOf(d)).toStrictEqual({ lid: 'bakery', uid: 'u1', at: NOW });
+  });
+
+  test('any other error still throws', async () => {
+    const down = async () => { throw Object.assign(new Error('x'), { code: 'unavailable' }); };
+    await expect(tokenWriter(async () => kitWith(down, []))('bakery', 'tok:abc', STAMP)).rejects.toMatchObject({ code: 'unavailable' });
   });
 });
 

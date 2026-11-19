@@ -8,9 +8,16 @@
 // the stamp while the phone is in use.
 //
 // WHAT: once the session is ready, if this phone holds a token (`push-token`) whose stored owner (`push-token-uid`, the
-// current app's keys) is the person signed in, ONE merge of exactly `{ bakery, uid, updatedAt }` onto that document — the
+// current app's keys) is the person signed in, ONE update of exactly `{ bakery, uid, updatedAt }` onto that document — the
 // fields rememberToken writes, which the rules' fcm-tokens block already accepts (uid the writer's own, updatedAt a
-// number). MERGED, never whole: the same document carries this phone's «do not buzz me about order lists».
+// number). An UPDATE, never a merge: the same document carries this phone's «do not buzz me about order lists», which an
+// update leaves alone.
+// ⚠️ UPDATE ONLY, NEVER RE-CREATE. The server deletes a row on purpose: a dead token (functions/index.js,
+// registration-token-not-registered) and a removed member's phone (functions/onboarding.js). A merge would quietly bring
+// it back. The cost: a row deleted by mistake no longer heals itself; the current app's own tap re-registers it.
+// A `not-found` answer is final: nothing is created and the stamp stays, so it is not asked again on every open.
+// ⚠️ ONLY WHEN NOTIFICATIONS ARE GRANTED (as the current app's pushSupport().ok, js/push.js). A phone that blocked them
+// writes nothing and stamps nothing, so its row ages out after 60 days, and refreshes on the next open if it is granted again.
 // A phone whose token belongs to somebody else writes nothing: re-registering it in this person's name is the current
 // app's decision, made on a tap, never in the background.
 //
@@ -55,11 +62,13 @@ export interface RefreshDeps {
   now(): number;
   // false only when the device KNOWS it has no signal.
   online(): boolean;
-  // The merge onto locations/{lid}/fcm-tokens/{token}.
+  // true only when the browser has notifications and the person allowed them.
+  notificationsGranted(): boolean;
+  // The update of locations/{lid}/fcm-tokens/{token} (never a create).
   write(lid: string, token: string, stamp: TokenStamp): Promise<unknown>;
 }
 
-export type RefreshResult = 'skipped' | 'no-token' | 'not-owner' | 'offline' | 'not-due' | 'sent' | 'failed';
+export type RefreshResult = 'skipped' | 'no-token' | 'not-owner' | 'not-granted' | 'offline' | 'not-due' | 'sent' | 'failed';
 
 // What the stamp holds: when, and for which venue and person.
 interface StoredStamp { lid: string; uid: string; at: number }
@@ -104,6 +113,7 @@ export async function refreshIfDue(session: TelemetrySession | null | undefined,
     const token = d.token();
     if (!usableToken(token)) return 'no-token';
     if (d.tokenOwner() !== uid) return 'not-owner';
+    if (!d.notificationsGranted()) return 'not-granted';
     const now = d.now();
     if (!refreshDue(readStamp(storage), lid, uid, now)) return 'not-due';
     if (!d.online()) return 'offline';
@@ -140,7 +150,13 @@ export async function refreshIfDue(session: TelemetrySession | null | undefined,
 export function tokenWriter(firestore: () => Promise<FirestoreKit>): RefreshDeps['write'] {
   return async (lid, token, stamp) => {
     const { fs, db } = await firestore();
-    await fs.setDoc(fs.doc(db, buildPath(lid, 'fcm-tokens'), token), { ...stamp }, { merge: true });
+    try {
+      await fs.updateDoc(fs.doc(db, buildPath(lid, 'fcm-tokens'), token), { ...stamp });
+    } catch (err) {
+      // The server removed this row on purpose: leave it removed (the stamp stays, so this is not retried every open).
+      if ((err as { code?: unknown } | null)?.code === 'not-found') return;
+      throw err;
+    }
   };
 }
 
@@ -152,6 +168,7 @@ export function browserRefreshDeps(write: RefreshDeps['write']): RefreshDeps {
     tokenOwner: phoneTokenOwner,
     now: () => Date.now(),
     online: () => navigator.onLine !== false,
+    notificationsGranted: () => typeof Notification !== 'undefined' && Notification.permission === 'granted',
     write,
   };
 }

@@ -254,6 +254,13 @@ await wipe();
     batch.set(db.doc(`locations/${lid}/usage/u1`), base(lid, { updatedAt: Timestamp.fromMillis(old(500)) }));
     await batch.commit();
   }
+  // Report-only deletes nothing, so reaching the cap stops nothing: a warning (no error alert every night), and capped says «a floor».
+  const reportLog = recordingLog();
+  const report = byKind(await runRetention({ db, now: NOW, enabled: {}, cap: 5, log: reportLog }));
+  check('report-only at the cap: capped, nothing deleted', report.errors.capped === true && report.errors.deleted === 0 && report.errors.mode === 'report-only', JSON.stringify(report.errors));
+  check('report-only at the cap logs a warning, never an error',
+    reportLog.lines.some(l => l.level === 'warn' && l.data.kind === 'errors' && l.data.cap === 5)
+    && !reportLog.lines.some(l => l.level === 'error' && l.data.cap === 5));
   const log = recordingLog();
   const results = byKind(await runRetention({ db, now: NOW, enabled: ALL_ON, cap: 5, log }));
   const errors = results.errors;
