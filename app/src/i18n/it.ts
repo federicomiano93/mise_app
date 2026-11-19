@@ -3066,6 +3066,7 @@ export const it: Messages = {
   'bookings.form.waiting': 'La prenotazione non è ancora arrivata — si apre appena arriva.',
   'bookings.save.title': 'Vuoi salvare questa prenotazione?',
   'bookings.save.body': '{name}, {date} alle {time}.',
+  'bookings.save.bodySlot': '{name}, {date} tra le {time} e le {end}.',
   'bookings.saved': 'Prenotazione salvata ✓',
   'bookings.discard.title': 'Scartare le modifiche?',
   'bookings.discard.body': 'Quello che hai scritto in questa prenotazione andrà perso.',

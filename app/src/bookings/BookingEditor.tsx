@@ -262,9 +262,12 @@ function EditorForm({ id, booking, refused, settings }: FormProps) {
     try {
       const ok = await confirm({
         title: t('bookings.save.title'),
-        message: t('bookings.save.body', {
-          name: draft.customerName.trim(), date: spellDate(draft.date, locale), time: draft.slotEnd === '' ? draft.time : `${draft.time}–${draft.slotEnd}`,
-        }),
+        // A time slot reads «tra le 10:00 e le 11:00», as in the WhatsApp reminder, never «alle 10:00–11:00».
+        message: draft.slotEnd === ''
+          ? t('bookings.save.body', { name: draft.customerName.trim(), date: spellDate(draft.date, locale), time: draft.time })
+          : t('bookings.save.bodySlot', {
+            name: draft.customerName.trim(), date: spellDate(draft.date, locale), time: draft.time, end: draft.slotEnd,
+          }),
         okLabel: t('ui.save'),
         cancelLabel: t('common.cancel'),
       });

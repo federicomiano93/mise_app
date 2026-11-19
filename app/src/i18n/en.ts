@@ -3309,6 +3309,7 @@ export const en = {
   'bookings.form.waiting': 'The booking hasn’t arrived yet — it opens as soon as it does.',
   'bookings.save.title': 'Save this booking?',
   'bookings.save.body': '{name}, {date} at {time}.',
+  'bookings.save.bodySlot': '{name}, {date} between {time} and {end}.',
   'bookings.saved': 'Booking saved ✓',
   'bookings.discard.title': 'Discard changes?',
   'bookings.discard.body': 'What you typed in this booking will be lost.',

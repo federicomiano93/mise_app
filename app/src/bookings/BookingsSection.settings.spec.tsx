@@ -121,7 +121,10 @@ describe('time slots', () => {
     // Chosen, it counts this booking once.
     expect(options()[2]).toEqual(['10:00–11:00 · full', false]);
     await user.click(screen.getByRole('button', { name: 'Save' }));
-    await user.click(within(await dialog('Save this booking?')).getByRole('button', { name: 'Save' }));
+    const ask = await dialog('Save this booking?');
+    // The slot is read as a slot, never «at 10:00–11:00».
+    expect(ask).toHaveTextContent('between 10:00 and 11:00.');
+    await user.click(within(ask).getByRole('button', { name: 'Save' }));
     await waitFor(() => { expect(source.create).toHaveBeenCalledWith(expect.objectContaining({ time: '10:00', slotEnd: '11:00' })); });
   });
 
