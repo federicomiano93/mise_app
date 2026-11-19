@@ -12,8 +12,8 @@ import { weightPrice } from './bookingModel';
 import { changeWords } from './bookingWords';
 import {
   NO_CHANGES, asksChanges, asksWeight, changesNote, favouritesOf, freeNameOf, removableOf, searchItems, toggleExtra, toggleMark,
-} from './productPicker';
-import type { Changes, IngredientMark } from './productPicker';
+} from './productPickerModel';
+import type { Changes, IngredientMark } from './productPickerModel';
 import styles from './ProductPicker.module.css';
 
 // What the window hands the form: one product, the weight of one piece (or none), and the note its changes make.

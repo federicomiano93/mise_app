@@ -3,7 +3,7 @@ import { priceListOf } from '../testing/fakeBookingsSource';
 import { lineQtyText } from './bookingWords';
 import {
   NO_CHANGES, asksChanges, asksWeight, changesNote, favouritesOf, freeNameOf, removableOf, searchItems, toggleExtra, toggleMark,
-} from './productPicker';
+} from './productPickerModel';
 
 // The product window's pure half (bookings rebuild step 2).
 

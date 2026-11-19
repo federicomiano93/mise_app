@@ -354,7 +354,7 @@ the name bold with «· 1,5 kg» (or the pack's size), a small red bin (44px tar
 off at 1; N can also be typed), the price of one small and grey («24,00 € l’una», «12,00 € al kg» for an old kilo line) above the
 bold line total, and the line's note. A removed card hands the focus to the card now in its place, or to «Aggiungi un prodotto».
 
-**The product window** (`ProductPicker.tsx`, pure half `productPicker.ts`): a modal, one product per opening, «x di 3» and a back
+**The product window** (`ProductPicker.tsx`, pure half `productPickerModel.ts`): a modal, one product per opening, «x di 3» and a back
 arrow from step 2. 1 «Scegli il prodotto»: the favourites as tiles (3 a row on the tablet, 2 on a phone) with their price, then
 «Cerca tra tutti i prodotti» (every word typed, over the whole list) and «Aggiungi “…” (fuori listino)» for a name typed freely —
 the old form's free text. With no favourite the search opens at once. 2 «Scegli il peso»: the item's weights, each with price per
@@ -385,7 +385,7 @@ judged there. No deploy is needed for this step (a comment); deploying it is har
 - N on the stepper can be typed as well as stepped (30 panettoni are not 30 taps).
 - An old line of kilos (before weights) keeps its card in kilos, «kg» after its number and «… al kg» as its price.
 
-**Tests**: `productPicker.spec.ts` (favourites, search, free name, which steps, −/+ exclusive, extras, the note, «3 pz (1,5 kg)»),
+**Tests**: `productPickerModel.spec.ts` (favourites, search, free name, which steps, −/+ exclusive, extras, the note, «3 pz (1,5 kg)»),
 `BookingsSection.form.spec.tsx` (the order, the big labels, the full-width layout, «✓ Ritiro», the window's three steps, «Altro
 peso», a free name with and without weight, Escape, no product, the stepper, renumbering, Italian), `bookingModel.spec.ts` (the
 weighed line: picked, priced, written, read back frozen, old lines unchanged, wrong weights), the editor specs moved to the window
