@@ -15,15 +15,25 @@
 import { PRINTER_HOST_KEY, PRINTER_PLAIN_KEY, isPrinterHost } from './printerHost';
 
 // A line of a slip, as the app composes it (slipText.ts): its words and how they stand out.
-export type SlipStyle = 'normal' | 'bold';
+// 'big' is double size (bookings rebuild step 4): the customer's name, the lab slip's note, «Da pagare» — half as many characters
+// a line (BIG_COLUMNS).
+export type SlipStyle = 'normal' | 'bold' | 'big';
 export type SlipLine = { readonly text: string; readonly style: SlipStyle };
 
 // Characters per line on 80 mm paper at the normal font. 42 is under what the FP-81 II RT prints on 80 mm, so a line is never
 // cut by the printer; the app wraps longer text itself (wrapLines).
 export const COLUMNS = 42;
 
-// Epson's font numbers for printNormal: 1 is the normal font, 2 the bold one.
-const FONT: Readonly<Record<SlipStyle, string>> = { normal: '1', bold: '2' };
+// A double-size line holds half as many characters.
+export const BIG_COLUMNS = Math.floor(COLUMNS / 2);
+
+// Epson's font numbers for printNormal: 1 is the normal font, 2 the bold one, 4 the double-size one.
+// ⚠️ UNVERIFIED ON THE REAL FP-81 II RT (bookings rebuild step 4): 4 is Epson's double height and width in its fiscal XML as far as
+// the documentation goes; whether it is also bold on this model is for the owner's test print. ⚠️ So is reverse print (white on
+// black), which is why the lab slip's note is double size here instead of the highlight the browser's slip draws: a style the
+// printer does not know could make it refuse the whole document. A big line is wrapped at BIG_COLUMNS, which is safe even if 4
+// turns out to be double height only.
+const FONT: Readonly<Record<SlipStyle, string>> = { normal: '1', bold: '2', big: '4' };
 
 // How long the device waits for the printer before saying it did not answer.
 export const PRINT_TIMEOUT_MS = 15_000;
@@ -82,13 +92,15 @@ export function plainText(text: string): string {
     .replace(/[òóôö]/g, "o'").replace(/[ÒÓÔÖ]/g, "O'")
     .replace(/[ùúûü]/g, "u'").replace(/[ÙÚÛÜ]/g, "U'")
     .replace(/[«»“”]/g, '"').replace(/[‘’]/g, "'").replace(/[–—]/g, '-').replace(/·/g, '-')
+    // The slips' «2 × Scacciata» (bookings rebuild step 4): the sign is not ASCII and would be dropped.
+    .replace(/×/g, 'x')
     // Any other accented letter loses its accent («ç» → «c», «ñ» → «n»), «ß» becomes «ss».
     .replace(/ß/g, 'ss').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     // Anything still outside plain ASCII is dropped rather than printed as rubbish.
     .replace(/[^\x20-\x7E]/g, '');
 }
 
-// Lines wrapped at `columns`, on word boundaries where there are any; an empty line stays (it is a gap on paper).
+// Lines wrapped at `columns` (a big line at half of it), on word boundaries where there are any; an empty line stays (a gap on paper).
 export function wrapLines(lines: readonly SlipLine[], columns: number = COLUMNS): SlipLine[] {
   const out: SlipLine[] = [];
   for (const line of lines) {
@@ -100,10 +112,11 @@ export function wrapLines(lines: readonly SlipLine[], columns: number = COLUMNS)
       .replace(/[\u0000-\u001f\u007f]/g, '')
       .trimEnd();
     if (text === '') { out.push({ text: '', style: line.style }); continue; }
+    const width = line.style === 'big' ? Math.floor(columns / 2) : columns;
     let rest = text;
-    while (rest.length > columns) {
-      const cut = rest.lastIndexOf(' ', columns);
-      const at = cut > 0 ? cut : columns;
+    while (rest.length > width) {
+      const cut = rest.lastIndexOf(' ', width);
+      const at = cut > 0 ? cut : width;
       out.push({ text: rest.slice(0, at).trimEnd(), style: line.style });
       rest = rest.slice(at).trimStart();
     }

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { isPrinterHost } from './printerHost';
 import {
-  COLUMNS, nonFiscalXml, plainText, printerUrl, readAnswer, readPrinterSetting, sendToPrinter, testPage, wrapLines, writePrinterSetting,
+  BIG_COLUMNS, COLUMNS, nonFiscalXml, plainText, printerUrl, readAnswer, readPrinterSetting, sendToPrinter, testPage, wrapLines, writePrinterSetting,
 } from './receiptPrinter';
 
 // Bookings step 3: a slip straight to the Epson FP-81 II RT, as a NON-FISCAL document of its own XML protocol. ⚠️ Fake text only.
@@ -72,6 +72,14 @@ describe('the document sent', () => {
     expect(plainText('£3.50 Façade Niño Straße')).toBe('GBP3.50 Facade Nino Strasse');
     const xml = nonFiscalXml([{ text: 'Caffè 1,20 €', style: 'normal' }], { plain: true });
     expect(xml).toContain('data="Caffe&apos; 1,20 EUR"');
+  });
+
+  it('a double-size line (bookings rebuild step 4) is font 4 and wraps at half the width', () => {
+    const xml = nonFiscalXml([{ text: 'senza cipolla e senza acciughe', style: 'big' }]);
+    expect(xml).toContain('<printNormal operator="1" font="4" data="senza cipolla e senza" />');
+    expect(xml).toContain('<printNormal operator="1" font="4" data="acciughe" />');
+    expect(BIG_COLUMNS).toBe(COLUMNS / 2);
+    expect(plainText('2 × Scacciata')).toBe('2 x Scacciata');
   });
 
   it('the test page shows bold, accents and €, and a ruler of the full width', () => {
