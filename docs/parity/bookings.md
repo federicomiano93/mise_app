@@ -416,3 +416,82 @@ value), and when left empty the list's total shows in grey inside the box, follo
 the line under it says what the list would have given. No field says «facoltativo» any more (bookings form; the Calculator's
 «Calcolato da» placeholder is just «Nome»). The notes box no longer carries the line «Non scrivere qui allergie o informazioni
 sulla salute del cliente.» — taken away at the owner's request (the line at the top of this file describes the old form).
+
+## Rebuild step 3 — as built (19 Nov 2026): the calendar list, the booking page, the Home card
+
+Branch `feature/mise2-bookings-list`, a PR stacked on step 2 (`feature/mise2-bookings-form`). Built from the mockups the owner
+approved on the tablet, for 24 December: many bookings, each picked up in a time slot, ticked off at the counter. No saved field,
+no rules change: the status values stay as stored (`todo`, `ready`, `collected`, `cancelled`).
+
+**The list** (`BookingsList.tsx`, `BookingsCalendar.tsx`, `BookingLines.tsx`; left column on the split, the whole screen on a
+phone). The Today / Tomorrow / Later / Past day buttons are gone: a month calendar — the month's name between ‹ and › (44px), the
+weekdays Monday first from `Intl` (L M M G V S D, M T W T F S S), 44px-tall day cells, today ringed, the picked day filled with
+the accent, an orange badge with the day's bookings, cancelled ones NOT counted (`dayCounts`). One Tab stop for the month (the
+picked day), the arrows move between its days, Enter or Space picks; a table, so each day is heard with its weekday column, and its
+name is the full date and the count in hidden text (no aria-label). It opens on today; tapping a day lists that day under it. A
+«Cerca per nome» box at the top of the day's card filters its rows as you type, case and accents folded (`foldForSearch`,
+`dayRows`). Each row: the slot box on the left (the start big and blue, the end small under it; an exact time alone), the
+customer's name (the row's link, its `::after` stretched over the row), the products one per line with a black numbered circle,
+the quantity in normal weight and the name in bold («3 pz (1,5 kg)» for a weighed line, step 2's `lineQtyText`), the mode tag, and
+at the bottom right «✓ Ritirata»: one tap, no question, sets `collected` (name and products greyed and crossed out, the button
+becomes «Annulla», which sets `todo`). A cancelled row has no button, an «Annullata» tag and is crossed out. «Nuova prenotazione»
+pre-fills «Giorno» with the picked day.
+
+**The data** (`bookingsSource.ts`, `bookingsStore.ts`). The listener reads ONE calendar month — `date >= 'YYYY-MM-01'`,
+`date < ` the next month's 1st, by date, at most `READ_LIMIT` = 1500 — instead of «30 days back and every later day, newest first,
+at most 500». A new month is a new query (`store.watchMonth`), the old one dropped first; the store's snapshot carries the month its
+items cover, so another month's bookings never stand in while the new one loads. Single-field range and order: the automatic index,
+no `firestore.indexes.json` change. A month long gone reads empty (the scheduled deletion 30 days after the day). While a form is
+open the listener follows the FORM's days (`useReportFormDay`): the day typed — so a slot's free places and the next short number
+are counted on the month the booking is for — and, for an existing booking, the day it is stored on, in ONE query from the first
+month to the last (`watchMonth(first, through)`), so a booking moved to another month is still found (its status now; a refused
+move opened again UPDATES it instead of making a copy: the refused save keeps `storedDate`). Save waits («Un attimo…») while that
+month is loading; when only this device's copy has answered for it (offline, a month never opened here: the snapshot's
+`confirmed`), the save question adds that the places and the number could not be checked. A booking opened by its address in a
+month the listener does not hold (a typed or shared link) has its day read once (`source.dayOf`, one `getDoc`) and the section
+opens that month. A tap on a status is laid over the listener's copy until the server answers, so the row changes on the tap
+itself; a refusal takes it off — the row is back as the listener has it — and the section says «Non salvato: la prenotazione è
+tornata com’era» (or the no-permission words); an EARLIER tap refused after a later one says the plain «non salvato». Back from a
+booking puts the focus on its row.
+
+**No «Da fare» / «Pronta» anywhere** (`STATUS_WORD`): a booking is open, Ritirata or Annullata; a stored `todo` or `ready` both read
+as open (`isOpen`). The cancel question no longer says «puoi rimetterla “Da fare”».
+
+**The booking page** (`BookingDetail.tsx`) takes the whole width on the split, as the form (the list hidden; Back brings it back
+where it was). Its h1 is the CUSTOMER'S NAME (`FormBar level={1}`, the page drawing no title of its own: `Page ownHeading`; the
+browser tab keeps «Prenotazioni»), «Prenotazione N. x» small and grey under it, Edit the pencil alone (named «Modifica»). Status:
+«Ritirata» / «Annullata» only; a tap on the one on returns the booking to `todo`; «Annullata» still asks first. «Quando» says the
+day and the slot. No «Cliente» group when the venue does not ask for the phone and none is stored; a stored phone is shown (with the
+WhatsApp reminder only where the settings turn it on); a delivery shows its address there. The products are numbered as in the
+list, the price at the right edge, then Totale / Acconto / Da pagare as before. The print buttons read «Laboratorio» / «Cliente»
+with the printer, named «Stampa per laboratorio» / «Stampa per cliente»; what they print is unchanged (step 4 changes the slips).
+The page puts the focus on its h1 whenever the page would have (not on Back, not on a first load).
+
+**The Home card** (`home/BookingsTodayPart.tsx`): only the open bookings, each row «09:00–10:00» blue and bold, the name, «2 prodotti»
+in grey at the right, the chevron; no «— Pronta / — Da fare».
+
+**Choices made for the owner, to hear about:**
+- The short booking number now counts within the MONTH of the booking's day (the listener holds one month): the first booking of an
+  empty month is N. 1 again. A booking moved into a month where its number is already taken gets the next free one there (its slips
+  must be printed again). Two devices offline at once can still give the same number, as before, and so can a month this device
+  has never read while offline (the save question says so).
+- The arrows ‹ › also pick a day: today in today's month, else the 1st of the month shown.
+- A day already gone picked in the calendar gives «Nuova prenotazione» no day (the form refuses a past day for a new booking).
+- «Cerca per nome» empties when another day is picked: a name typed for one day would hide another day's rows without a word.
+- At 296px seven 44px cells cannot fit: the day cells are 44px tall but about 36px wide there (at 360 and on the tablet they are 44+).
+- A row's product notes («senza cipolla») are not in the list: they are on the booking page and the slips.
+- A tap on «Ritirata» / «Annulla» says a short line at the foot («Ritirata: Mario Rossi.»), as the booking page does.
+- A delivery with the phone off keeps a «Cliente» group holding only the address.
+- The open booking's day rides in the history entry, so a reload on a booking of another month opens that month.
+
+**Tests**: `bookingModel.spec.ts` (months, Monday first, counts without cancelled, search folding, `todo`/`ready` open),
+`bookingsStore.spec.ts` (one month, re-query, the tap overlay and its refusal), `BookingsSection.list.spec.tsx` (the calendar, the
+re-query on ‹ ›, search, the rows, one-tap Ritirata / Annulla and a refused tap, the pre-fill, the form's month, the booking page's
+header, status, prints, Italian, no Cliente group, focus, a reload on another month; the review fixes: both months while a move is
+edited, a refused move saved again updates, the number in the new month, the offline warning, an address in another month, the
+focus back on the row, a first load leaving the focus alone), the settings, scroll and form specs moved to
+the new layout, `home/HomeSection.bookings.spec.tsx` (the rows). Driven in Chromium on the emulator, IT (miano@club.test, no phone,
+slots) and EN (manager@club.test) at 1024, 360 and 296: Home card, list, search, a tap on «Ritirata» then «Annulla» (put back), the
+next month and back, the booking page, the keyboard on the calendar — axe-core, sideways scroll, targets, clipped text, one h1,
+console errors: 42/42 (run again after the review fixes). axe was run with React Aria's own live announcer (`[role="log"]`, an empty `role="img"` it leaves after an
+announcement, app-wide) left out. Not done: the real SM-T550 tablet.

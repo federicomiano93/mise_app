@@ -198,8 +198,8 @@ merge, so `createdAt` stays), a status button an updateDoc of `status` + `update
 Read, written and deleted by `usesBookings(lid)` = every member value but `'owner-kitchen'` where `sections.bookings` is not an
 explicit `false` (2 reads, like `canUse`). Hiding the section from employees (`staffHiddenCards.bookings`, the card `bookings`
 of `home-cards`, Mise 2 only: the current app's switch screen never lists it because `bookings` is not one of its sections) is
-display only. The list reads ONE bounded query: `date >= today − 30`, `orderBy(date desc)`, `limit 500`; the Home's card the
-same from today. ⚠️ **PERSONAL DATA (UK/EU GDPR)**: name, phone, address. No allergy or health field (the notes say on screen not
+display only. The list reads ONE bounded query, one calendar month (bookings rebuild step 3): `date >= 'YYYY-MM-01'`, `date <` the next
+month's 1st, `orderBy(date)`, `limit 1500`, a new query when the month changes; the Home's card today's only (`date == today`, `limit 200`). ⚠️ **PERSONAL DATA (UK/EU GDPR)**: name, phone, address. No allergy or health field (the notes say on screen not
 to write one). **Deleted 30 days after the booking's day** by the scheduled function `deleteOldBookings` (`functions/index.js`
 + `functions/booking-cleanup-model.js`, once a day at 03:17 Europe/Rome, the project's FIRST scheduled function — Cloud
 Scheduler's free tier is 3 jobs), a collection-group query on `bookings` by `date < cutoff` in pages of 400, logging counts only.
