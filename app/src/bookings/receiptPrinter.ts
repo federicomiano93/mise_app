@@ -201,12 +201,15 @@ export async function sendToPrinter(
 }
 
 // The test page (step 0 of the bookings plan): what a slip uses — plain and bold lines, accents and €, a ruler of the width.
-export function testPage(words: { readonly title: string; readonly bold: string; readonly accents: string; readonly when: string }): SlipLine[] {
+// Since bookings rebuild step 4 it also prints a double-size line (font 4), which both slips use: a printer that refuses that font
+// refuses the test page too, so the owner finds out here, not with a real booking.
+export function testPage(words: { readonly title: string; readonly bold: string; readonly big: string; readonly accents: string; readonly when: string }): SlipLine[] {
   return [
     { text: words.title, style: 'bold' },
     { text: words.when, style: 'normal' },
     { text: '', style: 'normal' },
     { text: words.bold, style: 'bold' },
+    { text: words.big, style: 'big' },
     { text: words.accents, style: 'normal' },
     { text: '123456789012345678901234567890123456789012'.slice(0, COLUMNS), style: 'normal' },
   ];

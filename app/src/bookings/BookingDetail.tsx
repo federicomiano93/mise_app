@@ -94,7 +94,9 @@ function Shown({ booking, onBack }: { booking: Booking; onBack: () => void }) {
   const { settings } = useBookingSettings();
   // Which products the venue marked «Chiedi per pezzo» (bookings rebuild step 4): the lab slips go one per piece for those. A
   // list not read yet, refused or broken marks none, and the lab slip prints «Tutto insieme» without asking.
-  const { list: priceList } = usePriceList();
+  // ⚠️ «Laboratorio» WAITS FOR THE LIST'S FIRST ANSWER (pending until then): pressed before it, a booking of 3 scacciate would
+  // print one slip «[2]» with no question.
+  const { list: priceList, loaded: priceListLoaded } = usePriceList();
   const perPiece = useMemo(() => perPieceProducts(priceList.items, settings.perPieceSlips), [priceList, settings.perPieceSlips]);
   const [confirm, confirmDialog] = useConfirm();
   const ids = useId();
@@ -192,7 +194,7 @@ function Shown({ booking, onBack }: { booking: Booking; onBack: () => void }) {
     return () => { shown.current = false; };
   }, []);
   async function print(kind: 'lab' | 'customer') {
-    if (sending !== null) return;
+    if (sending !== null || (kind === 'lab' && !priceListLoaded)) return;
     const paperLocale = slipLocale(location, locale);
     const paperUnit = slipUnitWords(location);
 
@@ -410,7 +412,7 @@ function Shown({ booking, onBack }: { booking: Booking; onBack: () => void }) {
             variant="secondary"
             className={styles.print}
             aria-label={t('bookings.print.labFull')}
-            isPending={sending === 'lab'}
+            isPending={sending === 'lab' || !priceListLoaded}
             isDisabled={sending === 'customer'}
             onPress={() => { void print('lab'); }}
           >

@@ -109,6 +109,7 @@ export function PrinterScreen() {
     const result = await sendToPrinter(stored, testPage({
       title: t('bookings.printer.testTitle'),
       bold: t('bookings.printer.testBold'),
+      big: t('bookings.printer.testBig'),
       accents: 'àèéìòù ÀÈÉÌÒÙ € «»',
       when: now.toLocaleString(),
     }));

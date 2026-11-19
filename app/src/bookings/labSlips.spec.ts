@@ -70,6 +70,8 @@ describe('the slips', () => {
     expect(noteParts('senza cipolla, + provola')).toEqual(['senza cipolla', '+ provola']);
     expect(noteParts(' ben cotta ,, ')).toEqual(['ben cotta']);
     expect(noteParts('')).toEqual([]);
+    // A decimal comma stays: «0,5» is one number.
+    expect(noteParts('+ 0,5 kg ricotta, ben cotta')).toEqual(['+ 0,5 kg ricotta', 'ben cotta']);
   });
 });
 

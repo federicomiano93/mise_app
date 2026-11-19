@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { screen, waitFor, within } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import { todayISO } from '@mise/shared/day';
 import { bookingFixture, fakeBookingsSource, priceListOf } from '../testing/fakeBookingsSource';
 import { renderApp } from '../testing/renderApp';
@@ -67,6 +67,26 @@ describe('the question «Slips for the lab»', () => {
     expect(question).not.toHaveAttribute('aria-describedby');
     expect(question.textContent).toBe('Slips for the lab' + 'One per piece' + 'All together' + 'Cancel' + 'Print');
     expect(print).not.toHaveBeenCalled();
+  });
+
+  it('⚠️ «Lab» waits for the price list: pressed before it has answered it does nothing, then asks as usual', async () => {
+    const print = vi.spyOn(window, 'print').mockImplementation(() => undefined);
+    const source = fakeBookingsSource(seed(), PRICES, { ...DEFAULT_SETTINGS, askPhone: false });
+    // The list's first answer held back.
+    let answer: () => void = () => undefined;
+    vi.mocked(source.watchPriceList).mockImplementationOnce((onChange: (list: typeof PRICES) => void) => {
+      answer = () => { onChange(PRICES); };
+      return () => undefined;
+    });
+    const { user } = renderApp('/bookings/S1', { session: { location: { country: 'IT' }, name: 'Panificio Prova' }, data: { bookings: () => source } });
+    const card = await screen.findByRole('region', { name: 'Anna Finta' }, LOAD);
+    const lab = within(card).getByRole('button', { name: 'Print for the lab' });
+    await user.click(lab);
+    expect(print).not.toHaveBeenCalled();
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    act(() => { answer(); });
+    await user.click(within(card).getByRole('button', { name: 'Print for the lab' }));
+    expect(await screen.findByRole('alertdialog', { name: 'Slips for the lab' })).toBeInTheDocument();
   });
 
   it('Cancel prints nothing', async () => {

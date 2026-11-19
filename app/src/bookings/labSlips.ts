@@ -53,7 +53,8 @@ export function pieceCount(booking: Booking, perPiece: ReadonlySet<string>): num
   return booking.lines.reduce((sum, line) => sum + (isPieceLine(line, perPiece) ? line.qty : 1), 0);
 }
 
-// A line's note in its pieces, each highlighted on its own: «senza cipolla, + provola» → «senza cipolla», «+ provola».
+// A line's note in its pieces, each highlighted on its own: «senza cipolla, + provola» → «senza cipolla», «+ provola». ⚠️ A comma
+// between two digits is a decimal one («+ 0,5 kg ricotta») and does not split.
 export function noteParts(note: string): string[] {
-  return note.split(',').map(part => part.trim()).filter(part => part !== '');
+  return note.split(/,(?!\d)|(?<!\d),/).map(part => part.trim()).filter(part => part !== '');
 }

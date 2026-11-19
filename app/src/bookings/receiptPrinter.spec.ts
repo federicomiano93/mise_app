@@ -82,9 +82,11 @@ describe('the document sent', () => {
     expect(plainText('2 × Scacciata')).toBe('2 x Scacciata');
   });
 
-  it('the test page shows bold, accents and €, and a ruler of the full width', () => {
-    const page = testPage({ title: 'MISE', bold: 'Bold', accents: 'àè €', when: 'now' });
+  it('the test page shows bold, double size, accents and €, and a ruler of the full width', () => {
+    const page = testPage({ title: 'MISE', bold: 'Bold', big: 'Big', accents: 'àè €', when: 'now' });
     expect(page.find(l => l.style === 'bold' && l.text === 'Bold')).toBeTruthy();
+    // Font 4, which both slips use since bookings rebuild step 4: tried on the test print first.
+    expect(page.find(l => l.style === 'big' && l.text === 'Big')).toBeTruthy();
     expect(page.some(l => l.text === 'àè €')).toBe(true);
     expect(page.some(l => l.text.length === COLUMNS && /^\d+$/.test(l.text))).toBe(true);
   });
