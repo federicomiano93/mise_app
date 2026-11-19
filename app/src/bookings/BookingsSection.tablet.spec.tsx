@@ -65,11 +65,14 @@ describe('the list on the tablet', () => {
     expect((document.querySelector('[data-view]') as HTMLElement).dataset.view).toBe('list');
   });
 
-  it('the stylesheet: two columns on the tablet, the day on the right, the move animated 350 ms and none under reduced motion', () => {
-    expect(listCss).toMatch(/@media \(min-width: 1000px\)\s*\{\s*\.list\s*\{[^}]*grid-template-columns: 1fr 1fr;[^}]*transition: grid-template-columns 350ms/);
-    expect(listCss).toMatch(/\.list\[data-open="true"\]\s*\{\s*grid-template-columns: 3\.2fr 6\.8fr;/);
-    expect(listCss).toMatch(/\.day\s*\{\s*grid-column: 2;/);
-    expect(listCss).toMatch(/prefers-reduced-motion: reduce\)\s*\{\s*\.list\s*\{\s*transition: none;/);
+  it('the stylesheet: two columns on the tablet, the day on the right, the left column width animated 350 ms and none under reduced motion', () => {
+    expect(listCss).toMatch(/@media \(min-width: 1000px\)\s*\{\s*\.list\s*\{\s*display: flex;/);
+    expect(listCss).toMatch(/\.side\s*\{[^}]*width: calc\(50% - var\(--s6\) \/ 2\);[^}]*transition: width 350ms ease;/);
+    expect(listCss).toMatch(/\.list\[data-open="true"\] > \.side\s*\{\s*width: 300px;/);
+    expect(listCss).toMatch(/\.day\s*\{\s*flex: 1 1 0;\s*min-width: 0;/);
+    expect(listCss).toMatch(/prefers-reduced-motion: reduce\)\s*\{\s*\.side\s*\{\s*transition: none;/);
+    // Never a grid animation: Chrome 101 cannot run it.
+    expect(listCss).not.toMatch(/transition: grid-template-columns/);
     // The booking's own pane is hidden on the tablet: the booking is in the list.
     expect(sectionCss).toMatch(/\.layout\[data-view="booking"\] \.detail\s*\{\s*display: none;/);
   });

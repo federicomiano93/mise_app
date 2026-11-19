@@ -119,47 +119,62 @@ export function BookingsList({ day, onDay, today, selectedId, shown, open = null
   return (
     <section ref={rowsBox} className={styles.list} data-open={open !== null ? 'true' : undefined} aria-labelledby={`${ids}-title`}>
       <h2 id={`${ids}-title`} className="visually-hidden">{t('section.bookings')}</h2>
-      {/* The new booking starts on the day picked in the calendar; a day already gone gives none (it cannot be booked). */}
-      <Button
-        variant="primary"
-        className={styles.add}
-        onPress={() => { void navigate(newBookingPath(), { state: newFromList(day >= today ? day : null) }); }}
-      >
-        <Plus aria-hidden="true" />
-        <span>{t('bookings.new')}</span>
-      </Button>
+      {/* The tablet's left column (it animates its own width, BookingsList.module.css); on a phone it adds no box. */}
+      <div className={styles.side}>
+        {/* The new booking starts on the day picked in the calendar; a day already gone gives none (it cannot be booked). */}
+        <Button
+          variant="primary"
+          className={styles.add}
+          onPress={() => { void navigate(newBookingPath(), { state: newFromList(day >= today ? day : null) }); }}
+        >
+          <Plus aria-hidden="true" />
+          <span>{t('bookings.new')}</span>
+        </Button>
 
-      <div className={styles.calendar}>
-        <BookingsCalendar
-          day={day}
-          today={today}
-          counts={counts}
-          onDay={onDay}
-          onMonth={next => { onDay(dayToShow(next, today)); }}
-        />
-      </div>
-
-      {/* ⚠️ THE LIVE REGIONS ARE ON THE PAGE EMPTY, AND ONLY WHAT IS INSIDE THEM COMES AND GOES: a region inserted already filled
-          is not announced reliably (architecture, «Traps already paid for»). */}
-      <div className={styles.notices}>
-        <div role="alert">
-          {refused !== null ? (
-            <div className={styles.refused}>
-              <span>{t('bookings.refused.text')}</span>
-              <Button
-                variant="secondary"
-                onPress={() => { void navigate(refused.id === null ? newBookingPath() : editBookingPath(refused.id), { state: RESTORE_REFUSED }); }}
-              >
-                {t('bookings.refused.open')}
-              </Button>
-            </div>
-          ) : null}
+        <div className={styles.calendar}>
+          <BookingsCalendar
+            day={day}
+            today={today}
+            counts={counts}
+            onDay={onDay}
+            onMonth={next => { onDay(dayToShow(next, today)); }}
+          />
         </div>
 
-        <div role="status">
-          {status === 'error' ? <p className={styles.broken}>{t('bookings.streamError')}</p> : null}
-          {!loading && monthMayBeCut(held.length, READ_LIMIT) ? <p className={styles.broken}>{t('bookings.monthCut')}</p> : null}
+        {/* ⚠️ THE LIVE REGIONS ARE ON THE PAGE EMPTY, AND ONLY WHAT IS INSIDE THEM COMES AND GOES: a region inserted already filled
+            is not announced reliably (architecture, «Traps already paid for»). */}
+        <div className={styles.notices}>
+          <div role="alert">
+            {refused !== null ? (
+              <div className={styles.refused}>
+                <span>{t('bookings.refused.text')}</span>
+                <Button
+                  variant="secondary"
+                  onPress={() => { void navigate(refused.id === null ? newBookingPath() : editBookingPath(refused.id), { state: RESTORE_REFUSED }); }}
+                >
+                  {t('bookings.refused.open')}
+                </Button>
+              </div>
+            ) : null}
+          </div>
+
+          <div role="status">
+            {status === 'error' ? <p className={styles.broken}>{t('bookings.streamError')}</p> : null}
+            {!loading && monthMayBeCut(held.length, READ_LIMIT) ? <p className={styles.broken}>{t('bookings.monthCut')}</p> : null}
+          </div>
         </div>
+        {/* This device's receipt printer (bookings step 3): at the foot, out of the way of the day's work. */}
+        <Button variant="secondary" className={styles.printer} onPress={() => { void navigate(printerPath(), { state: FROM_LIST }); }}>
+          <Printer aria-hidden="true" />
+          <span>{t('bookings.printer.door')}</span>
+        </Button>
+        {/* The venue's bookings settings (bookings settings, 18 Nov 2026): only for whoever manages bookings (the rules' managesBookings). */}
+        {canManage ? (
+          <Button variant="secondary" className={`${styles.printer} ${styles.settings}`} onPress={() => { void navigate(settingsPath(), { state: FROM_LIST }); }}>
+            <Settings aria-hidden="true" />
+            <span>{t('bookings.settings.door')}</span>
+          </Button>
+        ) : null}
       </div>
 
       <section className={styles.day} aria-labelledby={`${ids}-day`}>
@@ -196,19 +211,6 @@ export function BookingsList({ day, onDay, today, selectedId, shown, open = null
           </ul>
         )}
       </section>
-
-      {/* This device's receipt printer (bookings step 3): at the foot, out of the way of the day's work. */}
-      <Button variant="secondary" className={styles.printer} onPress={() => { void navigate(printerPath(), { state: FROM_LIST }); }}>
-        <Printer aria-hidden="true" />
-        <span>{t('bookings.printer.door')}</span>
-      </Button>
-      {/* The venue's bookings settings (bookings settings, 18 Nov 2026): only for whoever manages bookings (the rules' managesBookings). */}
-      {canManage ? (
-        <Button variant="secondary" className={`${styles.printer} ${styles.settings}`} onPress={() => { void navigate(settingsPath(), { state: FROM_LIST }); }}>
-          <Settings aria-hidden="true" />
-          <span>{t('bookings.settings.door')}</span>
-        </Button>
-      ) : null}
     </section>
   );
 }

@@ -600,9 +600,7 @@ the calendar, the live regions and the doors «Stampante scontrini» / «Imposta
 «Cerca per nome», the rows) on the right; «Scegli una prenotazione per vederla qui.» (`bookings.pick`) is gone. A tap on a booking's
 name (route `/bookings/:id`, unchanged) opens it IN the list: `BookingsSection` hands `BookingsList` the open card (`open`), drawn in
 place of its row (above the rows when its row is not shown: the search hides it, its day is not loaded yet), with a 2px accent border
-(`BookingDetail` `inPlace`) and an X («Chiudi», `FormBar` `backIcon="close"`) in place of Back. The list's grid goes from `1fr 1fr`
-to `3.2fr 6.8fr` (about 300px for the calendar at 1024) in 350 ms, none under `prefers-reduced-motion`. ⚠️ Both are `fr`: a length
-and a flex track do not interpolate; Chrome 107 and later animate it, the lab tablet's Chrome 101 jumps, which is accepted. One
+(`BookingDetail` `inPlace`) and an X («Chiudi», `FormBar` `backIcon="close"`) in place of Back. The list is a flex row whose left column (`.side`) animates its `width` from `calc(50% - gap/2)` to 300px in 350 ms, none under `prefers-reduced-motion`. ⚠️ A width, not `grid-template-columns`: the lab tablet's Chrome 101 cannot animate grid tracks (107 and later can) but has always animated a width. One
 open at a time (another row replaces it). Closing — the X, Escape (only a key pressed inside the card: a dialog's own Escape closes
 the dialog alone), the browser's Back — goes back to `/bookings` and puts the focus on the booking's row; opening puts it on the
 card's h1. Picking another day closes it (a `replace`, never Back: a Back could land on an entry carrying another day) unless the
