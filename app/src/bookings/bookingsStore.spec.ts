@@ -69,7 +69,7 @@ describe('bookingsStore', () => {
     store.save(null, data, draft);
     await flush();
     expect(messages).toEqual(['no-access']);
-    expect(store.getSnapshot().refused).toEqual({ id: null, draft, status: 'todo', number: 1 });
+    expect(store.getSnapshot().refused).toEqual({ id: null, draft, status: 'todo', number: 1, storedDate: null });
     expect(store.takeRefused()?.draft).toBe(draft);
     expect(store.getSnapshot().refused).toBeNull();
     expect(store.takeRefused()).toBeNull();
@@ -169,6 +169,37 @@ describe('bookingsStore', () => {
     await flush();
     expect(store.getSnapshot().items[0]?.status).toBe('ready');
     expect(messages).toEqual([{ kind: 'not-saved', status: true }]);
+  });
+
+  it('⚠️ an earlier tap refused after a later one says the plain «not saved», never «put back»', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const source = fakeBookingsSource([bookingFixture({ id: 'A', status: 'todo' })]);
+    const store = createBookingsStore(source);
+    const messages: unknown[] = [];
+    store.onMessage(message => { messages.push(message); });
+    store.start('2026-11');
+    await flush();
+    let refuse: (err: unknown) => void = () => undefined;
+    vi.mocked(source.setStatus).mockImplementationOnce(() => new Promise((_, reject) => { refuse = reject; }));
+    vi.mocked(source.setStatus).mockImplementationOnce(() => new Promise(() => undefined));
+    store.setStatus('A', 'collected');
+    store.setStatus('A', 'todo');
+    refuse(new Error('unavailable'));
+    await flush();
+    expect(messages).toEqual([{ kind: 'not-saved' }]);
+    expect(store.getSnapshot().items[0]?.status).toBe('todo');
+  });
+
+  it('several months in ONE query while a form spans them; `confirmed` only once the server answered', async () => {
+    const source = fakeBookingsSource([bookingFixture({ id: 'dec', date: '2026-12-31' }), bookingFixture({ id: 'jan', date: '2027-01-02' })]);
+    const store = createBookingsStore(source);
+    store.watchMonth('2026-12', '2027-01');
+    store.start('2026-12');
+    expect(store.getSnapshot().confirmed).toBe(false);
+    await flush();
+    expect(source.watch).toHaveBeenLastCalledWith({ from: '2026-12-01', until: '2027-02-01' }, expect.any(Function), expect.any(Function));
+    expect(store.getSnapshot()).toMatchObject({ month: '2026-12', through: '2027-01', confirmed: true });
+    expect(store.getSnapshot().items.map(b => b.id).sort()).toEqual(['dec', 'jan']);
   });
 
   it('keeps the bookings and says the stream broke, then asks again after 30 s', async () => {

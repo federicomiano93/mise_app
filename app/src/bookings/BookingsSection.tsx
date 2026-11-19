@@ -14,7 +14,9 @@ import { PrinterScreen } from './PrinterScreen';
 import { BookingSettingsScreen } from './BookingSettingsScreen';
 import { BookingsList } from './BookingsList';
 import { monthOf } from './bookingModel';
-import { BookingsProvider, FormDayContext, useBookingsStore } from './BookingsContext';
+import { BookingsProvider, FormDayContext, useBookings, useBookingsStore } from './BookingsContext';
+import { useDataServices } from '../data/DataContext';
+import { useSession } from '../session/SessionContext';
 import { dayOfState, savedDateOf } from './bookingsNav';
 import { BOOKINGS_PATH, parseBookingsPath } from './bookingsPath';
 import type { BookingsView } from './bookingsPath';
@@ -77,11 +79,33 @@ function BookingsScreen() {
   // ⚠️ THE ONE LISTENER READS ONE MONTH (bookingsSource.ts): the picked day's — or, while a form is open, its own day's, so the
   // free places of a slot and the next short number are counted on the month the booking is for.
   const store = useBookingsStore();
-  const [formDay, setFormDay] = useState<string | null>(null);
-  const reportFormDay = useCallback((value: string | null) => { setFormDay(value); }, []);
+  const [formDays, setFormDays] = useState<readonly string[]>([]);
+  const reportFormDays = useCallback((value: readonly string[]) => { setFormDays(value); }, []);
   const formOpenNow = view.kind === 'new' || view.kind === 'edit';
-  const watched = monthOf(formOpenNow && formDay !== null ? formDay : day);
-  useEffect(() => { store.watchMonth(watched); }, [store, watched]);
+  const months = (formOpenNow && formDays.length > 0 ? formDays : [day]).map(monthOf).sort();
+  const first = months[0] ?? monthOf(day);
+  const last = months[months.length - 1] ?? first;
+  useEffect(() => { store.watchMonth(first, last); }, [store, first, last]);
+
+  // ⚠️ A BOOKING OPENED BY ITS ADDRESS IN A MONTH THE LISTENER DOES NOT HOLD (a typed, bookmarked or shared link; a history entry
+  // from before the calendar): once the server has answered for the month held without it, its day is read once and the section
+  // opens that month. A booking that is gone stays «no longer here».
+  const services = useDataServices();
+  const { locationId } = useSession();
+  const { status: heldStatus, confirmed, items } = useBookings();
+  const openId = view.kind === 'booking' || view.kind === 'edit' ? view.id : null;
+  const askedFor = useRef<string | null>(null);
+  const openNow = useRef(openId);
+  openNow.current = openId;
+  const missing = openId !== null && heldStatus === 'ready' && confirmed && !items.some(b => b.id === openId);
+  useEffect(() => {
+    if (!missing || openId === null || askedFor.current === openId || !locationId) return;
+    askedFor.current = openId;
+    services.bookings(locationId).dayOf(openId).then(found => {
+      // Applied only while that booking is still the one open (the section unmounted, or another opened, drops it).
+      if (found !== null && openNow.current === openId) setDay(found);
+    }, () => undefined);
+  }, [missing, openId, services, locationId]);
 
   // ⚠️ BOOKINGS OWN THE SCROLL for the moves inside the section (architecture rule 9, shell/scrollArea.tsx): the list and a booking
   // are separate addresses, and the shell's reset to the top at every address would throw the list back to its top at every booking
@@ -137,11 +161,11 @@ function BookingsScreen() {
     // A booking's page draws its own h1, the customer's name (bookings rebuild step 3); the tab keeps the section's name, never a
     // customer's.
     <Page title={t('section.bookings')} ownHeading={view.kind === 'booking'}>
-      <FormDayContext.Provider value={reportFormDay}>
+      <FormDayContext.Provider value={reportFormDays}>
         <div className={formOpen ? `${styles.layout} ${styles.fullForm}` : styles.layout} data-view={view.kind}>
           <div className={styles.list}>
             <PartBoundary>
-              <BookingsList day={day} onDay={setDay} today={today} selectedId={selectedId} />
+              <BookingsList day={day} onDay={setDay} today={today} selectedId={selectedId} shown={listShown} />
             </PartBoundary>
           </div>
           <div ref={detail} className={styles.detail}>

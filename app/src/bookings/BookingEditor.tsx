@@ -16,7 +16,7 @@ import { useStatusMessage } from '../ui/StatusMessage';
 import { useConfirm } from '../ui/useConfirm';
 import {
   BOOKING_MODES, LIMITS, draftFrom, emptyDraft, fieldId, firstProblem, nextNumber, parseMoney, pickedLine, sameDraft,
-  chosenSlot, draftLineAmount, effectiveTotal, keepsStoredTime, linePrice, listTotal, toBookingData, toPay,
+  chosenSlot, draftLineAmount, effectiveTotal, keepsStoredTime, linePrice, listTotal, toBookingData, toPay, DATE_RE, monthOf,
 } from './bookingModel';
 import type { Booking, BookingMode, BookingStatus, Draft, DraftField, DraftLine, DraftProblem, FormRules } from './bookingModel';
 import { onlyMode, placesLeft, slotFromValue, slotValue, slotsOf } from './bookingSettings';
@@ -135,7 +135,7 @@ function EditorForm({ id, booking, refused, settings }: FormProps) {
   const [problem, setProblem] = useState<DraftProblem | null>(null);
   // The bookings listener follows this form's day (bookings rebuild step 3): a day in another month moves it there, so the free
   // places of its slots and the next short number are counted on that month's bookings.
-  useReportFormDay(draft.date);
+  useReportFormDay(draft.date, booking?.date ?? refused?.storedDate ?? null);
   const dirty = refused !== null || !sameDraft(initial, draft);
   // Read by the router's blocker at the moment of a navigation, when a state value could be a render behind.
   const dirtyRef = useRef(dirty);
@@ -254,10 +254,16 @@ function EditorForm({ id, booking, refused, settings }: FormProps) {
     if (asking.current) return;
     // ⚠️ THE DAY'S MONTH IS STILL BEING READ (the day just moved to another month): its slots' free places and the next short number
     // are not known yet. A moment, never a guess.
-    if (store.getSnapshot().status === 'loading') {
+    const held = store.getSnapshot();
+    const draftMonth = monthOf(draft.date);
+    const covered = held.month !== null && held.through !== null && held.month <= draftMonth && draftMonth <= held.through;
+    if (DATE_RE.test(draft.date) && (held.status === 'loading' || !covered)) {
       say(t('bookings.form.stillReading'));
       return;
     }
+    // ⚠️ NO WORD FROM THE SERVER ABOUT THAT MONTH (offline, a month this device never opened; or the stream broke): its slots' places
+    // and the next short number were counted on what this device holds, maybe nothing. Still saved (local-first, P20), but said.
+    const unchecked = !held.confirmed || held.status === 'error';
     const found = firstProblem(draft, { today, isNew, items, rules });
     if (found !== null) {
       setProblem(found);
@@ -272,11 +278,11 @@ function EditorForm({ id, booking, refused, settings }: FormProps) {
       const ok = await confirm({
         title: t('bookings.save.title'),
         // A time slot reads «tra le 10:00 e le 11:00», as in the WhatsApp reminder, never «alle 10:00–11:00».
-        message: draft.slotEnd === ''
+        message: (draft.slotEnd === ''
           ? t('bookings.save.body', { name: draft.customerName.trim(), date: spellDate(draft.date, locale), time: draft.time })
           : t('bookings.save.bodySlot', {
             name: draft.customerName.trim(), date: spellDate(draft.date, locale), time: draft.time, end: draft.slotEnd,
-          }),
+          })) + (unchecked ? ` ${t('bookings.save.unchecked')}` : ''),
         okLabel: t('ui.save'),
         cancelLabel: t('common.cancel'),
       });
@@ -289,8 +295,12 @@ function EditorForm({ id, booking, refused, settings }: FormProps) {
       // ⚠️ A RESTORED SAVE OF A BOOKING DELETED ON ANOTHER DEVICE IS MADE AGAIN AS A NEW ONE: written to its old id it would be a
       // create without `createdAt`, refused by the rules every time.
       const saveId = id !== null && stored === undefined && refused !== null ? null : id;
-      const data = toBookingData(draft, { status: statusNow, number: number ?? nextNumber(stocked), items });
-      const savedId = store.save(saveId, data, draft);
+      // The short number counts within the month of the booking's day (the listener reads by month). A booking moved into a month
+      // where another one already carries its number takes the next free one there: two of the same month never share a number.
+      const sameMonth = stocked.filter(item => item.id !== id && monthOf(item.date) === monthOf(draft.date));
+      const shortNumber = number !== null && !sameMonth.some(item => item.number === number) ? number : nextNumber(sameMonth);
+      const data = toBookingData(draft, { status: statusNow, number: shortNumber, items });
+      const savedId = store.save(saveId, data, draft, booking?.date ?? refused?.storedDate ?? null);
       leaving.current = true;
       say(t('bookings.saved'));
       // Back to the list, on the booking's day, the focus on its row. Never awaited: the write is in Firestore's queue and reaches

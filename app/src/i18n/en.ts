@@ -3235,6 +3235,7 @@ export const en = {
   'bookings.err.statusNotSaved': 'Not saved — the booking is back as it was. Check your connection.',
   'bookings.err.statusNoAccess': 'Not saved: you can’t change bookings in this venue. The booking is back as it was.',
   'bookings.form.stillReading': 'One moment: reading that month’s bookings.',
+  'bookings.save.unchecked': 'No connection: the bookings of that month could not be checked, so the free places and the number may be wrong.',
   'bookings.print.labShort': 'Lab',
   'bookings.print.labFull': 'Print for the lab',
   'bookings.print.customerShort': 'Customer',

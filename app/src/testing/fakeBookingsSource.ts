@@ -144,6 +144,7 @@ export function fakeBookingsSource(
       queueMicrotask(() => { if (listWatchers.has(onChange)) onChange(source.priceList); });
       return () => { listWatchers.delete(onChange); };
     }),
+    dayOf: vi.fn(async (id: string) => items.get(id)?.date ?? null),
     create: vi.fn((data: BookingData) => {
       counter += 1;
       const id = `new${counter}`;

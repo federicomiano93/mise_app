@@ -2992,6 +2992,7 @@ export const it: Messages = {
   'bookings.err.statusNotSaved': 'Non salvato: la prenotazione è tornata com’era. Controlla la connessione.',
   'bookings.err.statusNoAccess': 'Non salvato: non puoi cambiare le prenotazioni di questo locale. La prenotazione è tornata com’era.',
   'bookings.form.stillReading': 'Un attimo: sto leggendo le prenotazioni di quel mese.',
+  'bookings.save.unchecked': 'Senza connessione non ho potuto controllare le prenotazioni di quel mese: i posti liberi e il numero potrebbero non essere giusti.',
   'bookings.print.labShort': 'Laboratorio',
   'bookings.print.labFull': 'Stampa per laboratorio',
   'bookings.print.customerShort': 'Cliente',

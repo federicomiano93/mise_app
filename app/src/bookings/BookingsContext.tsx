@@ -75,16 +75,20 @@ export function useBookings(): BookingsSnapshot {
   return useSyncExternalStore(store.subscribe, store.getSnapshot);
 }
 
-// ── The open form's day (bookings rebuild step 3) ──
+// ── The open form's days (bookings rebuild step 3) ──
 //
-// The bookings listener reads ONE month. While a form is open its day decides which (the free places of a slot, and the next short
-// number, are counted on that month's bookings), so the editor reports its day here and the section moves the listener. Outside
-// the section, or with no form, nobody listens.
-export const FormDayContext = createContext<(day: string | null) => void>(() => undefined);
+// The bookings listener reads one month. While a form is open ITS days decide which: the day typed (the free places of a slot, and
+// the next short number, are counted on that month's bookings) and, for an existing booking, the day it is stored on (so the stored
+// booking is still found — its status now, whether it still exists — when the form moves it to another month). The editor reports
+// them here and the section moves the listener (one query from the first month to the last). Outside the section nobody listens.
+export const FormDayContext = createContext<(days: readonly string[]) => void>(() => undefined);
 
-export function useReportFormDay(day: string): void {
+const DAY_RE = /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/;
+
+export function useReportFormDay(day: string, storedDay: string | null): void {
   const report = useContext(FormDayContext);
-  const valid = /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(day) ? day : null;
-  useEffect(() => { report(valid); }, [report, valid]);
-  useEffect(() => () => { report(null); }, [report]);
+  const typed = DAY_RE.test(day) ? day : '';
+  const stored = storedDay !== null && DAY_RE.test(storedDay) ? storedDay : '';
+  useEffect(() => { report([typed, stored].filter(value => value !== '')); }, [report, typed, stored]);
+  useEffect(() => () => { report([]); }, [report]);
 }

@@ -58,6 +58,9 @@ export interface BookingsSource {
   // Saves what changed from `previous` to `settings` (merge; a cleared slot or limit is a deleted field), so a setting another
   // device changed meanwhile and this one did not touch is kept. Settles when the server answers.
   saveSettings(settings: BookingSettings, previous: BookingSettings): Promise<void>;
+  // The day of ONE booking ('YYYY-MM-DD'), or null when there is none (one read, never a listener). For a booking opened by its
+  // address whose month the list's listener does not hold (a typed or shared link): the section then opens that month.
+  dayOf(id: string): Promise<string | null>;
   // A new booking. The id is made here, synchronously, so the caller knows it at once.
   create(data: BookingData): { readonly id: string; readonly written: Promise<void> };
   // Every key of an existing booking again (the editor's Save); `createdAt` is left as stored.
@@ -198,6 +201,13 @@ export function createFirestoreBookingsSource(firestore: () => Promise<Firestore
       const write: Record<string, unknown> = { ...fields, bakery: locationId };
       for (const key of cleared) write[key] = fs.deleteField();
       await fs.setDoc(fs.doc(db, configPath, SETTINGS_DOC), write, { merge: true });
+    },
+
+    async dayOf(id) {
+      const { fs, db } = await firestore();
+      const snap = await fs.getDoc(fs.doc(db, path, id));
+      const date: unknown = snap.exists() ? snap.data().date : null;
+      return typeof date === 'string' && /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(date) ? date : null;
     },
 
     // setDoc on a made id rather than addDoc, so the id is known before Firestore has loaded.

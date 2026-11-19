@@ -590,7 +590,8 @@ export function toBookingData(
   };
 }
 
-// The short number of a new booking: one more than the highest the venue holds, back to 1 after 9999. Bookings are deleted 30
+// The short number of a new booking: one more than the highest among the bookings handed in — since bookings rebuild step 3 those
+// of the booking's month (the listener reads by month) — back to 1 after 9999. Bookings are deleted 30
 // days after their day, so the numbers in use at once are few and a number comes round again only months later.
 // ⚠️ TWO DEVICES OFFLINE AT ONCE CAN GIVE THE SAME NUMBER: it is a label on paper, never a key (the id is Firestore's).
 export function nextNumber(bookings: readonly Booking[]): number {
