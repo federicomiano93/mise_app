@@ -2,18 +2,18 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { ChevronLeft, Minus, Plus, Search } from 'lucide-react';
 import { Dialog as AriaDialog, Heading, Modal, ModalOverlay } from 'react-aria-components';
 import { formatMoney } from '@mise/shared/price-model';
-import { formatWeight, parseWeight } from '@mise/shared/price-list';
+import { foldName, formatWeight, parseWeight } from '@mise/shared/price-list';
 import type { PriceItem } from '@mise/shared/price-list';
 import { useT } from '../i18n/useT';
 import { useSession } from '../session/SessionContext';
 import { useMoney } from '../session/useMoney';
 import { Button } from '../ui/Button';
-import { weightPrice } from './bookingModel';
+import { LIMITS, weightPrice } from './bookingModel';
 import { changeWords } from './bookingWords';
 import {
-  NO_CHANGES, asksChanges, asksWeight, changesNote, favouritesOf, freeNameOf, removableOf, searchItems, toggleExtra, toggleMark,
+  NO_CHANGES, asksChanges, asksWeight, changesNote, favouritesOf, freeNameOf, removableOf, searchItems, stepsFor, toggleExtra, toggleMark,
 } from './productPickerModel';
-import type { Changes, IngredientMark } from './productPickerModel';
+import type { Changes, IngredientMark, PickerStep } from './productPickerModel';
 import styles from './ProductPicker.module.css';
 
 // What the window hands the form: one product, the weight of one piece (or none), and the note its changes make.
@@ -36,8 +36,7 @@ type Props = {
   onAdd: (picked: Picked) => void;
 };
 
-type Step = 'product' | 'weight' | 'changes';
-const STEP_NUMBER: Readonly<Record<Step, number>> = { product: 1, weight: 2, changes: 3 };
+type Step = PickerStep;
 
 // The product window of the booking form (bookings rebuild step 2, 19 Nov 2026; the owner's design, approved on the tablet):
 // ONE product per opening. 1 «Scegli il prodotto» — the favourites as tiles, «Cerca tra tutti i prodotti» for the whole list or
@@ -57,6 +56,8 @@ export function ProductPicker({ items, extras, unavailable, loaded, onClose, onA
   // Step 1 shows the search at once when there is no favourite to offer.
   const [searching, setSearching] = useState(favourites.length === 0);
   const [query, setQuery] = useState('');
+  // The person has typed or moved on their own: favourites that arrive late no longer take the window from them.
+  const touched = useRef(false);
   const [chosen, setChosen] = useState<{ item: PriceItem | null; name: string } | null>(null);
   const [weightKg, setWeightKg] = useState<number | null>(null);
   const [askedWeight, setAskedWeight] = useState(false);
@@ -77,6 +78,12 @@ export function ProductPicker({ items, extras, unavailable, loaded, onClose, onA
     // At the opening the dialog takes the focus itself (its name is said); afterwards each step's title takes it.
     else if (!first) headingRef.current?.focus();
   }, [step, searching]);
+  // The favourites can arrive after the window opened (the list loads): start on their tiles then, unless the person has typed or
+  // navigated already.
+  const hasFavourites = favourites.length > 0;
+  useEffect(() => {
+    if (hasFavourites && !touched.current && query === '' && step === 'product') setSearching(false);
+  }, [hasFavourites, query, step]);
   useEffect(() => { if (otherOpen) weightRef.current?.focus(); }, [otherOpen]);
 
   const priceText = (item: PriceItem): string => {
@@ -143,6 +150,12 @@ export function ProductPicker({ items, extras, unavailable, loaded, onClose, onA
   // ⚠️ THE NOTE IS PRINTED ON THE SLIPS: its words follow the venue's COUNTRY (changeWords), never the interface (review).
   const note = changesNote(removable, extras, changes, changeWords(location));
 
+  // «Aggiungi» is refused, never cut: the note the window would write must fit the line.
+  const noteTooLong = note.trim().length > LIMITS.lineNote;
+  // The step counter counts the steps that will be asked for this product (all three before one is picked).
+  const steps = stepsFor(step === 'product' ? null : chosen, extras);
+  const stepNumber = Math.max(1, steps.indexOf(step) + 1);
+
   const title = step === 'product'
     ? t('bookings.picker.product')
     : step === 'weight'
@@ -165,7 +178,7 @@ export function ProductPicker({ items, extras, unavailable, loaded, onClose, onA
               </Button>
             ) : null}
             <Heading ref={headingRef} tabIndex={-1} className={styles.title}>{title}</Heading>
-            <span className={styles.step}>{t('bookings.picker.step', { n: STEP_NUMBER[step] })}</span>
+            <span className={styles.step}>{t('bookings.picker.step', { n: stepNumber, total: steps.length })}</span>
           </div>
 
           {step === 'product' ? (
@@ -182,7 +195,7 @@ export function ProductPicker({ items, extras, unavailable, loaded, onClose, onA
                       </Button>
                     ))}
                   </div>
-                  <Button variant="secondary" className={styles.wide} onPress={() => { setSearching(true); }}>
+                  <Button variant="secondary" className={styles.wide} onPress={() => { touched.current = true; setSearching(true); }}>
                     <Search aria-hidden="true" />
                     <span>{t('bookings.picker.searchAll')}</span>
                   </Button>
@@ -200,13 +213,13 @@ export function ProductPicker({ items, extras, unavailable, loaded, onClose, onA
                       placeholder={t('bookings.picker.searchPlaceholder')}
                       autoComplete="off"
                       maxLength={200}
-                      onChange={event => { setQuery(event.currentTarget.value); }}
+                      onChange={event => { touched.current = true; setQuery(event.currentTarget.value); }}
                       onKeyDown={event => {
                         // Enter takes the product whose name is exactly the one typed, or the name as typed when nothing on the list
                         // matches; anything else stays a choice for a tap (review: «Torta» must not become «Torta della nonna»).
                         if (event.key !== 'Enter') return;
                         event.preventDefault();
-                        const exact = freeName === null ? results.find(item => item.name.trim().toLocaleLowerCase() === query.trim().replace(/\s+/g, ' ').toLocaleLowerCase()) : undefined;
+                        const exact = freeName === null ? results.find(item => foldName(item.name) === foldName(query)) : undefined;
                         if (exact !== undefined) pick(exact, exact.name);
                         else if (results.length === 0 && freeName !== null) pick(null, freeName);
                       }}
@@ -329,13 +342,14 @@ export function ProductPicker({ items, extras, unavailable, loaded, onClose, onA
                 </div>
               ) : null}
               <p className={styles.note} aria-live="polite">{note === '' ? t('bookings.picker.noChanges') : note}</p>
+              {noteTooLong ? <p className={styles.error} role="alert">{t('bookings.picker.noteTooLong', { max: LIMITS.lineNote })}</p> : null}
             </div>
           ) : null}
 
           <div className={styles.actions}>
             <Button variant="secondary" onPress={onClose}>{t('common.cancel')}</Button>
             {step === 'changes' && chosen !== null ? (
-              <Button variant="primary" onPress={() => { finish(chosen.item, chosen.name, weightKg, note); }}>
+              <Button variant="primary" isDisabled={noteTooLong} onPress={() => { finish(chosen.item, chosen.name, weightKg, note); }}>
                 {t('bookings.picker.add')}
               </Button>
             ) : null}

@@ -49,6 +49,18 @@ export function asksChanges(item: PriceItem | null, extras: readonly string[]): 
   return removableOf(item).length > 0 || extras.length > 0;
 }
 
+export type PickerStep = 'product' | 'weight' | 'changes';
+
+// The steps that will be asked for this product, in order: step 1 always, then the weight and the changes only when they have
+// something to ask. Before a product is picked (null) all three are counted.
+export function stepsFor(picked: { readonly item: PriceItem | null } | null, extras: readonly string[]): readonly PickerStep[] {
+  if (picked === null) return ['product', 'weight', 'changes'];
+  const steps: PickerStep[] = ['product'];
+  if (asksWeight(picked.item)) steps.push('weight');
+  if (asksChanges(picked.item, extras)) steps.push('changes');
+  return steps;
+}
+
 // An ingredient of the recipe, changed: left out («senza cipolla») or more of it («+ cipolla»). The two exclude each other.
 export type IngredientMark = 'without' | 'extra';
 

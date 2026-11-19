@@ -324,7 +324,7 @@ describe('the product cards', () => {
     expect(screen.getByText('No product yet: tap “Add a product”.')).toBeInTheDocument();
   });
 
-  it('in Italian: «Togli», «l’una», «Nota (es. senza cipolla)»', async () => {
+  it('in Italian: «Togli», «cad.», «Nota (es. senza cipolla)»', async () => {
     const { user } = show('/bookings/new', DEFAULT_SETTINGS, { lang: 'it' });
     await screen.findByRole('region', { name: 'Nuova prenotazione' }, LOAD);
     await user.click(screen.getByRole('button', { name: 'Aggiungi un prodotto' }));
@@ -334,7 +334,7 @@ describe('the product cards', () => {
     expect(within(win).getByRole('button', { name: 'Cerca tra tutti i prodotti' })).toBeInTheDocument();
     await user.click(within(win).getByRole('button', { name: /^Panettone .* al pezzo$/ }));
     const card = await screen.findByRole('group', { name: '1. Panettone' });
-    expect(card).toHaveTextContent('l’una');
+    expect(card).toHaveTextContent('cad.');
     expect(within(card).getByRole('button', { name: 'Togli Panettone' })).toBeInTheDocument();
     expect(within(card).getByLabelText('Nota per Panettone')).toHaveAttribute('placeholder', 'Nota (es. senza cipolla)');
   });
