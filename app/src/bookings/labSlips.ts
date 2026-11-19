@@ -55,6 +55,27 @@ export function pieceCount(booking: Booking, perPiece: ReadonlySet<string>): num
 
 // A line's note in its pieces, each highlighted on its own: «senza cipolla, + provola» → «senza cipolla», «+ provola». ⚠️ A comma
 // between two digits is a decimal one («+ 0,5 kg ricotta») and does not split.
+// ⚠️ SPLIT BY HAND, NOT BY A REGEX LOOKBEHIND: an older iPad (Safari before 16.4) cannot even parse `(?<!…)`, and one such regex
+// stops the whole bundle from loading. A comma splits unless a digit stands on BOTH sides of it.
 export function noteParts(note: string): string[] {
-  return note.split(/,(?!\d)|(?<!\d),/).map(part => part.trim()).filter(part => part !== '');
+  const isDigit = (char: string | undefined): boolean => char !== undefined && char >= '0' && char <= '9';
+  const parts: string[] = [];
+  let start = 0;
+  for (let at = 0; at < note.length; at += 1) {
+    if (note[at] !== ',' || (isDigit(note[at - 1]) && isDigit(note[at + 1]))) continue;
+    parts.push(note.slice(start, at));
+    start = at + 1;
+  }
+  parts.push(note.slice(start));
+  return parts.map(part => part.trim()).filter(part => part !== '');
 }
+
+// How many slips a mode would make, counted WITHOUT building them (a mistyped quantity of 100000 must not freeze the tablet before
+// the guard can refuse it). The same number as labSlips(…).length.
+export function slipCount(booking: Booking, perPiece: ReadonlySet<string>, mode: LabSlipMode): number {
+  return mode === 'together' ? 1 : pieceCount(booking, perPiece);
+}
+
+// Above the first many slips the person is asked first; above the second, nothing prints.
+export const SLIPS_ASK_ABOVE = 30;
+export const SLIPS_REFUSE_ABOVE = 300;

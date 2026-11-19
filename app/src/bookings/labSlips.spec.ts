@@ -1,8 +1,9 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { priceListOf, bookingFixture } from '../testing/fakeBookingsSource';
 import type { BookingLine } from './bookingModel';
 import { slipDay, slipLineParts, slipUnitWords } from './bookingWords';
-import { asksSlipChoice, isPieceLine, labSlips, noteParts, perPieceProducts, pieceCount } from './labSlips';
+import { asksSlipChoice, isPieceLine, labSlips, noteParts, perPieceProducts, pieceCount, slipCount } from './labSlips';
 
 // Bookings rebuild step 4: which lab slips a booking prints — one per piece of a «Chiedi per pezzo» product, one for any other line,
 // or one with everything — and the [N] after the name. ⚠️ Fake customers and products.
