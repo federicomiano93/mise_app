@@ -174,6 +174,9 @@ describe('toBookingData: what is written', () => {
     const stored: Booking = bookingFixture({ id: 'A', lines: [{ recipeId: 'R1', productId: null, unitPrice: null, packSize: null, packUnit: null, weightKg: null, name: 'Focaccia alta', qty: 1.5, unit: 'kg', note: 'sliced' }], deposit: 5, total: 20 });
     const draft = draftFrom(stored, nextKey, ',');
     expect(sameDraft(draft, draftFrom(stored, nextKey, ','))).toBe(true);
+    // A name differing only by spaces at its ends is no change (a name picked from the suggestions ends in one).
+    expect(sameDraft(draft, { ...draft, customerName: ` ${draft.customerName} ` })).toBe(true);
+    expect(sameDraft(draft, { ...draft, customerName: `${draft.customerName}x` })).toBe(false);
     const data = toBookingData(draft, { status: stored.status, number: stored.number, items });
     expect(data.lines).toEqual([{ recipeId: 'R1', productId: null, unitPrice: null, name: 'Focaccia alta', qty: 1.5, unit: 'kg', note: 'sliced' }]);
     expect(data.deposit).toBe(5);

@@ -310,8 +310,3 @@
 .anchor {
   position: relative;
 }
-
-/* When the keyboard would cover the window the field is scrolled to the top: its label must stay clear of the sticky form bar. */
-.suggestField {
-  scroll-margin-top: calc(var(--hit-lg) + var(--s6) + var(--s4));
-}

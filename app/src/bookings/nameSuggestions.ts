@@ -11,9 +11,17 @@ export type NameRow = { readonly name: string; readonly replaceFrom: number; rea
 export const MAX_ROWS = 5;
 
 // Matching ignores case, accents, apostrophes and spaces, so «pata» finds Patanè, «dag» finds D'Agata and «dima» finds Di Mauro.
+// (The escapes, not the characters themselves: an invisible character in a source file cannot be told from nothing.)
 export function foldName(text: string): string {
-  return text.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/['’‘`\s]/g, '');
+  return text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/['\u2019\u2018`\s]/g, '');
 }
+
+type Entry = { readonly name: string; readonly folded: string; readonly spaced: boolean };
+
+// The two lists folded ONCE, when the module loads: a keystroke then only compares strings.
+const entriesOf = (list: readonly string[]): readonly Entry[] => list.map(name => ({ name, folded: foldName(name), spaced: name.includes(' ') }));
+const FIRST_NAMES = entriesOf(COMMON_FIRST_NAMES);
+const SURNAMES = entriesOf(COMMON_SURNAMES);
 
 // How many characters of `name` hold the first `letters` folded letters (the bold part: «Pata» in «Patanè», «Di M» in «Di Mauro»).
 function boldLength(name: string, letters: number): number {
@@ -25,14 +33,16 @@ function boldLength(name: string, letters: number): number {
   return name.length;
 }
 
-const wordStart = (text: string): number => Math.max(text.lastIndexOf(' '), text.lastIndexOf(' ')) + 1;
+// Where the last word starts: after the last space, a no-break space included (a phone keyboard may type one).
+const wordStart = (text: string): number => Math.max(text.lastIndexOf(' '), text.lastIndexOf('\u00a0')) + 1;
 
 // The rows for the text typed so far, or none. ⚠️ ONLY THE WORD BEING TYPED counts (what follows the last space), from its
-// second letter; a text ending in a space starts a new word and offers nothing until it has two letters.
+// second letter; a text ending in a space starts a new word and offers nothing until it has two letters. Only the word that is
+// IDENTICAL to a list entry is left out («Maria» still offers Mariano).
 // ⚠️ A COMPOUND SURNAME has a space inside («Di Mauro»), so the last TWO words joined are tried too: «Di M» finds it, and the
 // pick then replaces both words. Only entries that really hold a space are tried that way, or «Di M» would offer «Dimartino».
-// The first word typed offers first names first and surnames after (people often write the surname first, «Russo Maria»); any
-// later word offers surnames first. Each list keeps its own order (commonest first); no word is offered twice.
+// The order is the rule as built: the FIRST word typed offers first names first and surnames after; any LATER word offers
+// surnames first and first names after. Each list keeps its own order (commonest first); no word is offered twice.
 export function suggestNames(text: string, max: number = MAX_ROWS): NameRow[] {
   const start = wordStart(text);
   const typed = foldName(text.slice(start));
@@ -45,15 +55,14 @@ export function suggestNames(text: string, max: number = MAX_ROWS): NameRow[] {
   if (typed.length < 1 || (typed.length < 2 && joined === '')) return [];
   const alone = typed.length >= 2;
 
-  const lists = first ? [COMMON_FIRST_NAMES, COMMON_SURNAMES] : [COMMON_SURNAMES, COMMON_FIRST_NAMES];
+  const lists = first ? [FIRST_NAMES, SURNAMES] : [SURNAMES, FIRST_NAMES];
   const rows: NameRow[] = [];
   const seen = new Set<string>();
   for (const list of lists) {
-    for (const name of list) {
+    for (const { name, folded, spaced } of list) {
       if (rows.length >= max) return rows;
       if (seen.has(name)) continue;
-      const folded = foldName(name);
-      if (joined !== '' && name.includes(' ') && folded.startsWith(joined) && folded !== joined) {
+      if (joined !== '' && spaced && folded.startsWith(joined) && folded !== joined) {
         seen.add(name);
         rows.push({ name, replaceFrom: previousStart, typedLetters: boldLength(name, joined.length) });
       } else if (alone && folded.startsWith(typed) && folded !== typed) {

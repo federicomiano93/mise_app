@@ -631,11 +631,17 @@ function TextField({ id, label, value, onChange, error, placeholder, maxLength, 
       aria-invalid={error !== null ? true : undefined}
       aria-describedby={described === '' ? undefined : described}
       onChange={event => { onChange(event.currentTarget.value); }}
-      {...(suggest === null ? {} : { ...suggest.inputProps, onChange: event => { suggest.inputProps.onChange(event.currentTarget.value); } })}
+      {...(suggest === null ? {} : {
+        ...suggest.inputProps,
+        onChange: event => { suggest.inputProps.onChange(event.currentTarget); },
+        onSelect: event => { suggest.inputProps.onSelect(event.currentTarget); },
+        // The keyboard would write «pap» in lower case after a pick; names are capitalised words.
+        autoCapitalize: 'words',
+      })}
     />
   );
   return (
-    <div className={suggest === null ? styles.field : `${styles.field} ${styles.suggestField}`} ref={suggest?.fieldRef}>
+    <div className={styles.field} ref={suggest?.fieldRef}>
       <label className={big ? `${styles.label} ${styles.bigLabel}` : styles.label} htmlFor={id}>{label}</label>
       {suggest === null ? input : <div className={styles.anchor}>{input}{suggest.list}</div>}
       {error !== null ? <p id={`${id}-error`} className={styles.error}>{error}</p> : null}

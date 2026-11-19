@@ -281,7 +281,8 @@ export function draftFrom(booking: Booking, nextKey: () => number, decimal: stri
 // Whether two working copies say the same thing (keys aside): what «unsaved changes» compares.
 export function sameDraft(a: Draft, b: Draft): boolean {
   const lineText = (d: Draft) => JSON.stringify(d.lines.map(({ name, qty, unit, weightKg, note }) => [name, qty, unit, weightKg, note]));
-  return a.customerName === b.customerName && a.phone === b.phone && a.mode === b.mode && a.address === b.address
+  // ⚠️ THE NAME IS COMPARED TRIMMED: a name picked from the suggestions ends in a space, and a space is no change (it is trimmed on save).
+  return a.customerName.trim() === b.customerName.trim() && a.phone === b.phone && a.mode === b.mode && a.address === b.address
     && a.date === b.date && a.time === b.time && a.slotEnd === b.slotEnd && a.deposit === b.deposit && a.total === b.total && a.notes === b.notes
     && lineText(a) === lineText(b);
 }
