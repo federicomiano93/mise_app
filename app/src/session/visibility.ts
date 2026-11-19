@@ -18,7 +18,20 @@ import type { DocData } from './backend';
 // section `orders` but are separate cards, so a venue can hide one from its employees and not
 // the other; and Food cost and Stocktake share `foodcost`, each its own card, both hidden from
 // employees until the venue shows them (shared/src/home-cards.ts).
-const GATES: ReadonlyArray<{ id: SectionId; section: SectionName; card: CardId | 'clients' }> = [
+// The venue's own switch for a section. The five the current app knows are asked through the shared port (`allowedSections`);
+// `bookings` (Mise 2 only, 18 Nov 2026) is not one of them — adding a name there would change the current app's own list
+// (shared/src/sections.ts is paired with js/sections.js) — so it is asked here, EXACTLY as firestore.rules sectionOn() asks it:
+// only an explicit `false` under `sections.bookings` switches it off, and a venue that never heard of it has it on.
+export type VenueSection = SectionName | 'bookings';
+
+export function venueHasSection(location: DocData | null, section: VenueSection): boolean {
+  if (section !== 'bookings') return isSectionAllowed(location, section);
+  const sections = location?.['sections'];
+  if (!sections || typeof sections !== 'object' || Array.isArray(sections)) return true;
+  return (sections as Record<string, unknown>)['bookings'] !== false;
+}
+
+const GATES: ReadonlyArray<{ id: SectionId; section: VenueSection; card: CardId | 'clients' }> = [
   { id: 'orders', section: 'orders', card: 'orders' },
   { id: 'suppliers', section: 'orders', card: 'suppliers' },
   { id: 'recipes', section: 'catalogue', card: 'catalogue' },
@@ -34,6 +47,9 @@ const GATES: ReadonlyArray<{ id: SectionId; section: SectionName; card: CardId |
   { id: 'pastries', section: 'pastries', card: 'pastries' },
   { id: 'stocktake', section: 'foodcost', card: 'inventory' },
   { id: 'foodcost', section: 'foodcost', card: 'foodcost' },
+  // Customer bookings at the counter (Mise 2 only, 18 Nov 2026): every role, employees included, unless the venue hides the card
+  // from them («Sections for employees»); the sales owner has it, the kitchen owner does not (ROLE_CARDS; the rules refuse them too).
+  { id: 'bookings', section: 'bookings', card: 'bookings' },
 ];
 
 // The card that leads to a section, as the page gate asks it (null for Home and Settings, which have none).
@@ -55,7 +71,7 @@ export function cardOfSection(id: SectionId): CardId | 'clients' | null {
 export function visibleSectionIds(location: DocData | null, canManage: boolean, role: unknown): ReadonlySet<SectionId> {
   const visible = new Set<SectionId>(['home', 'settings']);
   for (const gate of GATES) {
-    if (isSectionAllowed(location, gate.section) && cardVisibleTo(location, canManage, gate.card, role)) {
+    if (venueHasSection(location, gate.section) && cardVisibleTo(location, canManage, gate.card, role)) {
       visible.add(gate.id);
     }
   }

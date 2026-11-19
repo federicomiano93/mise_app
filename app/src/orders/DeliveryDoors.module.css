@@ -1,11 +1,6 @@
-/* The debt banner and the two doors under the list's head. Nothing here sets a width in pixels: the doors take half the line each
-   and wrap onto two lines when a 296px phone cannot hold them side by side. Every target is at least --hit tall. */
-
-.doors {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s2);
-}
+/* The debt banner and the two doors. The doors take half the line each, never wider together than the Suppliers / Ingredients tabs
+   (--orders-list-w less its paddings: the same size, centred, on the split), and wrap onto two lines when a 296px phone cannot hold
+   them side by side. Every target is at least --hit tall. */
 
 /* Amber means «to check» (tokens.css): the debt is a question nobody has answered. Text as well as colour says it. */
 .banner {
@@ -14,7 +9,7 @@
   gap: var(--s3);
   width: 100%;
   min-height: var(--hit);
-  padding: var(--s2) var(--s3);
+  padding: var(--s1) var(--s3);
   border: 1px solid var(--warn);
   border-radius: var(--r-md);
   background: var(--warn-tint);
@@ -40,26 +35,34 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--s2);
+  width: 100%;
+  max-width: calc(var(--orders-list-w) - var(--s5) - var(--s6));
+  margin-inline: auto;
 }
 
 .door {
   display: flex;
   flex: 1 1 8rem;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--s2);
+  justify-content: center;
+  gap: 6px;
   min-width: 0;
   min-height: var(--hit);
-  padding: var(--s2) var(--s3);
-  border: 1px solid var(--line);
+  padding: 0 var(--s2);
+  border: 1px solid var(--line-2);
   border-radius: var(--r-md);
   background: var(--surface);
   color: var(--ink);
-  font: inherit;
-  font-weight: 600;
-  text-align: left;
+  font: 500 15px/1.2 var(--font);
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
+}
+
+.door > svg {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  color: var(--ink-2);
 }
 
 .label {
@@ -72,14 +75,14 @@
   flex: none;
   align-items: center;
   justify-content: center;
-  min-width: 24px;
-  height: 24px;
+  min-width: 22px;
+  height: 22px;
   padding: 0 var(--s2);
   border-radius: var(--r-pill);
-  background: var(--accent);
-  color: var(--on-accent);
-  font-size: var(--fs-sm);
-  font-weight: 650;
+  background: var(--accent-tint);
+  color: var(--accent-ink);
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .door[data-pressed] {
@@ -95,5 +98,15 @@
 @media (hover: hover) {
   .door[data-hovered] {
     background: var(--bg);
+  }
+}
+
+/* On the split the banner has one 48px line of the top-right cell: one line, cut with an ellipsis if it must be (it is read whole). */
+@media (min-width: 1000px) {
+  .bannerText {
+    overflow: hidden;
+    overflow-wrap: normal;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 }

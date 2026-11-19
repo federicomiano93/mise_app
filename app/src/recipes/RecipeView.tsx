@@ -4,6 +4,7 @@ import { useLocation, useNavigate } from 'react-router';
 import { Archive, ArchiveRestore, ChartPie, Copy, Download, Import, Maximize2, Pencil, Trash2, Undo2 } from 'lucide-react';
 import { batchWarning, calculatorRefusal, formatWeight, hasDividerAfter, importFailureKey, scaleFromRow, unitOf, weighableTotalGrams } from '@mise/shared/catalogue-model';
 import type { CatalogueRecipe, RowScaleResult } from '@mise/shared/catalogue-model';
+import { titleFileName } from '@mise/shared/recipe-export';
 import { FROM_RECIPE_LINK, foodCostForRecipePath, mayOpenFoodCost, mayOpenOrders, ordersForIngredientPath } from '@mise/shared/recipe-link';
 import { orderTargetOf, rowKeysOf, splitAmount, splitBlockReason } from '@mise/shared/row-actions-model';
 import { isArchivedRecipe } from '@mise/shared/recipe-shelf';
@@ -170,7 +171,7 @@ export function RecipeView({ recipe, titleRef, onBack }: Props) {
         <AllergenCard recipe={recipe} />
         <DeclarationCard recipe={recipe} />
         {/* The mixing procedure (step 3d-8): after the declaration and before Export, the current app's order. */}
-        <ProcedureCard recipe={recipe} target={target} />
+        <ProcedureCard recipe={recipe} target={target} row={row} />
         <ExportAction recipe={recipe} scale={scale} />
         {/* A WRITE, NOT A DOOR: judged by the venue's section only (the Calculator card being hidden from staff does not matter). */}
         {/* ⚠️ NOT ON AN ARCHIVED RECIPE: importing makes a NEW link, and an archived recipe is left out of those. */}
@@ -258,7 +259,12 @@ function ExportAction({ recipe, scale }: { recipe: CatalogueRecipe; scale: Recip
         type="button"
         className={styles.export}
         onClick={() => {
-          openExport({ model: recipeExportModel(recipe, recipeAmounts(recipe, target, t, locale, row)), totalLabel: t('cat.total') });
+          openExport({
+            model: recipeExportModel(recipe, recipeAmounts(recipe, target, t, locale, row)),
+            totalLabel: t('cat.total'),
+            // The recipe's own title, as written (16 Nov 2026): «Torta di prova.pdf», not «Torta_di_prova_4000g.pdf».
+            fileName: (ext, fallback) => titleFileName(recipe.name, ext, fallback),
+          });
         }}
       >
         <Download aria-hidden="true" />
@@ -696,6 +702,16 @@ function IngredientsCard({ recipe, scale }: { recipe: CatalogueRecipe; scale: Re
           </tr>
         </tfoot>
       </table>
+
+      {/* A batch whose rows do not add up to the total typed (all grams: shared applyTargetTotal refused; kg, l or ml rows: the Total
+          is 1 g or more off): said here, under the Total, and nowhere else — the file prints the rows as they are.
+          ⚠️ THE LIVE REGION IS ALWAYS THERE, EMPTY WITHOUT A WARNING: a screen reader announces text that ARRIVES in a region it
+          already knows, not a region that appears with its text, so the line is read out when a new batch brings it. */}
+      <div role="status" aria-live="polite">
+        {amounts.warning === null ? null : (
+          <p className={styles.totalOff}>{t('cat.totalOff', { diff: wholeNumber(Math.abs(amounts.warning.diff)) })}</p>
+        )}
+      </div>
 
       {fromRow === null ? null : (() => {
         const ing = recipe.ingredients[fromRow.index];

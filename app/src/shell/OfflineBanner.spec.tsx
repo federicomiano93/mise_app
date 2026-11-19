@@ -7,8 +7,8 @@ import { OfflineBanner } from './OfflineBanner';
 import bannerCss from './OfflineBanner.module.css?raw';
 
 const css = bannerCss.replace(/\/\*[\s\S]*?\*\//g, '');
-const ENGLISH ='No connection. What you change stays on this phone and is sent when the signal is back.';
-const ITALIAN = 'Nessuna connessione. Quello che cambi resta sul telefono e parte appena torna la rete.';
+const ENGLISH = 'Offline: saved here, sent when the signal is back';
+const ITALIAN = 'Offline: salvo qui e invio appena torna la rete';
 
 let onLine: MockInstance<() => boolean>;
 
@@ -81,13 +81,20 @@ describe('OfflineBanner', () => {
     expect(svg).toHaveAttribute('aria-hidden', 'true');
   });
 
-  // jsdom applies no media query, so the phone-only part is pinned in the stylesheet's text
+  // jsdom applies no media query, so the parts by width are pinned in the stylesheet's text
   // (without its comments, which talk about the very words searched for).
-  it('is drawn by default and hidden from 700px, where the top bar says it', () => {
+  it('is drawn by default, and from 700px hidden on the Home only, where the top bar says it', () => {
     const [phone = '', tablet = ''] = css.split('@media (min-width: 700px)');
     expect(phone).toMatch(/\.banner\s*\{[^}]*display:\s*flex/);
     expect(phone).not.toMatch(/display:\s*none/);
-    expect(tablet).toMatch(/\.banner\s*\{[^}]*display:\s*none/);
+    expect(tablet).toMatch(/\.banner\[data-home="true"\]\s*\{[^}]*display:\s*none/);
+    expect(tablet).not.toMatch(/\.banner\s*\{[^}]*display:\s*none/);
+  });
+
+  it('marks itself as the Home\'s only on the Home', () => {
+    onLine.mockReturnValue(false);
+    renderApp('/home');
+    expect(screen.getByText(ENGLISH).closest('[data-home]')).toHaveAttribute('data-home', 'true');
   });
 
   it('sits in a row with its icon, centred on each other', () => {
@@ -95,42 +102,41 @@ describe('OfflineBanner', () => {
   });
 });
 
-describe('OfflineBanner in the shell', () => {
-  it('is drawn at the top of the content, above the screen', () => {
+describe('OfflineBanner under the title of every screen', () => {
+  it('is drawn right under the h1, never above it', () => {
     onLine.mockReturnValue(false);
     renderApp('/orders');
 
     const main = within(screen.getByRole('main'));
     const banner = main.getByText(ENGLISH);
     const heading = main.getByRole('heading', { level: 1, name: 'Orders' });
-    expect(banner.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(heading.compareDocumentPosition(banner) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(banner.closest('[data-home]')).toBeNull();
   });
 
-  it('keeps its empty live region at the top of the content while online', () => {
+  it('keeps its empty live region under the title while online', () => {
     renderApp('/orders');
 
     const main = screen.getByRole('main');
-    const region = main.querySelector('[role="status"]');
-    expect(region).not.toBeNull();
-    expect(region).toBeEmptyDOMElement();
     const heading = within(main).getByRole('heading', { level: 1, name: 'Orders' });
-    expect((region?.compareDocumentPosition(heading) ?? 0) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const region = heading.closest('header')?.nextElementSibling;
+    expect(region).toHaveAttribute('role', 'status');
+    expect(region).toBeEmptyDOMElement();
   });
 
-  it('follows the connection while a screen is open, and the top bar still says it too', () => {
+  it('follows the connection while a screen is open; off the Home there is no top bar to say it', () => {
     renderApp('/orders');
     expect(within(screen.getByRole('main')).queryByText(ENGLISH)).not.toBeInTheDocument();
 
     goOffline();
     expect(within(screen.getByRole('main')).getByText(ENGLISH)).toBeInTheDocument();
-    // The top bar's own words, for the tablet.
-    expect(screen.getByText('No connection')).toBeInTheDocument();
+    expect(screen.queryByText('No connection')).not.toBeInTheDocument();
 
     goOnline();
     expect(within(screen.getByRole('main')).queryByText(ENGLISH)).not.toBeInTheDocument();
   });
 
-  it('is in Italian in the shell of an Italian venue', () => {
+  it('is in Italian in an Italian venue', () => {
     onLine.mockReturnValue(false);
     renderApp('/orders', { lang: 'it' });
     expect(within(screen.getByRole('main')).getByText(ITALIAN)).toBeInTheDocument();

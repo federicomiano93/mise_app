@@ -1,0 +1,12 @@
+/* The page a booking's slip prints on (18 Nov 2026): 80 mm receipt paper.
+
+   ⚠️⚠️ SWITCHED ON ONLY WHILE A SLIP PRINTS. slipHost.tsx links this file with media="not all" when it first loads and sets
+   media="print" for exactly as long as the slip host lives — the label's way (recipes/printHost.tsx, label-page.css): this
+   single-page app cannot keep a page size in a stylesheet that is always on, or every other print it makes would come out on
+   receipt paper.
+
+   297 mm tall on purpose: on a receipt printer the width is what matters (the slip is 72 mm of text inside the 4 mm margins),
+   and on an A4 printer a page of A4's own height is printed at its true size, a readable strip down the left of the sheet,
+   instead of being blown up to fill it. A longer slip simply runs onto a second page. Whether the counter's printer feeds the
+   whole 297 mm is step 0's test (the printer trial), not this file's. */
+@page { size: 80mm 297mm; margin: 4mm; }

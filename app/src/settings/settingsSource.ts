@@ -17,9 +17,15 @@
 // the code, its shape and its lifetime, and it answers with the plain code ONCE (only a fingerprint is stored). Nothing here writes it
 // down or logs it: the answer goes straight back to the screen that asked.
 //
+// ⚠️ THE PEOPLE LIST (staff slice 4) IS READ LIVE AND CHANGED ONLY THROUGH CLOUD FUNCTIONS. `locations/{lid}/members` is the roster, a
+// DISPLAY copy that grants nothing (the role that counts is `users/{uid}.locations.<lid>`); every member may read it and no client may
+// write it or `users/{uid}` (firestore.rules). A change of role, a removal (`setMemberRole`, role null) and a new name
+// (`setMemberName`) are the live functions both apps share, which ask for the full owner themselves.
+//
 // ⚠️ FIRESTORE COMES FROM THE SESSION'S BACKEND (`firestore()`), never from getFirestore() (src/firestore-access.spec.ts).
 
 import { buildAwayDoc } from '@mise/shared/away-model';
+import { cleanName } from '@mise/shared/credentials';
 import { isWellFormed } from '@mise/shared/join-code';
 import type { JoinCodeKind } from '@mise/shared/join-code';
 import { isValidRole } from '@mise/shared/membership';
@@ -31,6 +37,7 @@ import type { DocData } from '../session/backend';
 import type { FirestoreKit } from '../session/firebaseBackend';
 
 const AWAY = 'away';
+const MEMBERS = 'members';
 
 // How long the phone waits for a Cloud Function. ⚠️ NOT SHORT: a function that has not run for a while starts cold, and the
 // emulator's first call took longer than 15 s (driven, 7 Nov 2026) — the phone said «not saved» while the server went on and
@@ -77,6 +84,36 @@ export function invitationOf(answer: unknown): Invitation | null {
   return { code, kind, role, title: managerTitle, expiresAt };
 }
 
+// One row of the roster (`locations/{lid}/members/{uid}`), as the screen reads it. ⚠️ A LABEL, NEVER AN IDENTITY: the role here is the
+// display copy the functions write beside the real one, and it decides only what the screen draws.
+export type Member = {
+  readonly uid: string;
+  // '' when the row has none (accounts made by hand in the Firebase console).
+  readonly email: string;
+  readonly firstName: string;
+  readonly lastName: string;
+  // null when the row holds no role this app knows (an old console edit): drawn as an employee, as the current app does, but no
+  // choice is marked as the current one, so every choice can still be made.
+  readonly role: Role | null;
+  // The manager level's job title; null for every other role.
+  readonly title: ManagerTitle | null;
+};
+
+// A roster document, read defensively: a field of the wrong type is read as missing, never trusted.
+export function memberOf(uid: string, data: unknown): Member {
+  const raw = data && typeof data === 'object' ? data as Record<string, unknown> : {};
+  const role = isValidRole(raw.role) ? raw.role : null;
+  const title: ManagerTitle | null = role === 'manager' ? (raw.title === 'head-chef' ? 'head-chef' : 'manager') : null;
+  return {
+    uid,
+    email: typeof raw.email === 'string' ? raw.email.trim() : '',
+    firstName: cleanName(raw.firstName),
+    lastName: cleanName(raw.lastName),
+    role,
+    title,
+  };
+}
+
 export interface SettingsSource {
   // This person's own holiday document, read ONCE (the phone's copy is allowed offline). null when there is none, or when it could
   // not be read: the button still works, it simply starts from nothing.
@@ -93,6 +130,14 @@ export interface SettingsSource {
   // Mints one invitation into this venue (the full owner only: the function refuses anybody else). REJECTS when refused, offline, past
   // the timeout, or when the answer is not a whole invitation.
   createInvitation(role: Role, title: ManagerTitle | null, kind: JoinCodeKind): Promise<Invitation>;
+  // Everybody in this venue's roster, live. Returns the unsubscribe function at once (Firestore may still be loading); after it is
+  // called neither callback runs again. `onError` once when the stream fails (Firestore does not listen again by itself).
+  watchMembers(onChange: (members: readonly Member[]) => void, onError: (error: unknown) => void): () => void;
+  // Gives a member another role, or removes them from the venue with `role` null (the full owner only: the function refuses anybody
+  // else, and the last owner). REJECTS when refused, offline or past the timeout.
+  setMemberRole(uid: string, role: Role | null, title: ManagerTitle | null): Promise<void>;
+  // Gives a member another first and last name on the roster (a label: it changes nothing they may do). REJECTS likewise.
+  setMemberName(uid: string, firstName: string, lastName: string): Promise<void>;
 }
 
 export type CallFunction = (name: string, data: unknown, timeoutMs: number) => Promise<unknown>;
@@ -105,6 +150,7 @@ export function createFirestoreSettingsSource(
 ): SettingsSource {
   // Throw on a venue id that could point a write anywhere else (@mise/shared/location-id).
   const awayPath = buildPath(locationId, AWAY);
+  const membersPath = buildPath(locationId, MEMBERS);
   const venuePath = locationDocPath(locationId);
 
   async function venueFromServer(): Promise<DocData | null> {
@@ -169,6 +215,43 @@ export function createFirestoreSettingsSource(
       const invitation = invitationOf(answer);
       if (!invitation) throw new Error('The invitation answer was not an invitation.');
       return invitation;
+    },
+
+    // ⚠️ onSnapshot does NOT listen again after an error: onError lets the screen say so instead of looking like an empty venue.
+    // ⚠️ NOTHING HERE WRITES TO THE CONSOLE: a roster row holds an email address and a surname, and the stream's error is the caller's
+    // to report (by its code only).
+    watchMembers(onChange, onError) {
+      let stopped = false;
+      let unsubscribe: (() => void) | null = null;
+      firestore().then(({ fs, db }) => {
+        if (stopped) return;
+        unsubscribe = fs.onSnapshot(
+          fs.collection(db, membersPath),
+          snap => {
+            if (stopped) return;
+            onChange(snap.docs.map(d => memberOf(d.id, d.data())));
+          },
+          err => {
+            if (!stopped) onError(err);
+          },
+        );
+      }).catch(err => {
+        if (!stopped) onError(err);
+      });
+      return () => {
+        stopped = true;
+        unsubscribe?.();
+        unsubscribe = null;
+      };
+    },
+
+    async setMemberRole(uid, role, title) {
+      await callFunction('setMemberRole', { locationId, uid, role, title: role === 'manager' ? title : null }, FUNCTION_TIMEOUT_MS);
+    },
+
+    async setMemberName(uid, firstName, lastName) {
+      await callFunction('setMemberName', { locationId, uid, firstName: cleanName(firstName), lastName: cleanName(lastName) },
+        FUNCTION_TIMEOUT_MS);
     },
   };
 }

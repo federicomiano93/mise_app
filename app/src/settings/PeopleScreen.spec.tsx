@@ -311,7 +311,8 @@ describe('while the invitation is made', () => {
     source.createInvitation = vi.fn(() => new Promise<Invitation>(done => { answer = done; }));
     const { user } = await open({}, source);
     await user.click(radio('Employee'));
-    const status = within(screen.getByRole('heading', { level: 2, name: 'Who can get in' }).closest('section') as HTMLElement).getByRole('status');
+    // The invite card's own status line: the first of the screen (the people list under it has its own).
+    const status = within(screen.getByRole('heading', { level: 2, name: 'Who can get in' }).closest('section') as HTMLElement).getAllByRole('status')[0] as HTMLElement;
     expect(status).toHaveTextContent('');
 
     await user.click(main().getByRole('button', { name: 'Read out a code' }));
@@ -381,7 +382,9 @@ describe('while the invitation is made', () => {
     expect(await main().findByText(/^Joins as employee · 1 minute left ·/)).toBeInTheDocument();
     expect(isBusy()).toBe(true);
     expect(await main().findByText(/^Joins as employee · expired ·/, {}, { timeout: 2000 })).toBeInTheDocument();
-    expect(isBusy()).toBe(false);
+    // ⚠️ THE MARKER IS LET GO IN A PASSIVE EFFECT (InviteCard's useEffect cleanup), which React may run a tick after the DOM shows
+    // «expired»: read straight after the text it raced, and lost on a loaded CI runner (PR #564's push run).
+    await waitFor(() => { expect(isBusy()).toBe(false); });
   });
 
   it('lets go of the busy marker after a code\'s whole life on THIS phone\'s clock, even when the server says it dies later (a phone set behind)', async () => {

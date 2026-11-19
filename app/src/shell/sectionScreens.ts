@@ -19,6 +19,7 @@ export function lazyScreen(load: () => Promise<{ default: ComponentType }>): Laz
 // what to show from the rest of the address itself.
 export const SECTION_SCREENS: Readonly<Partial<Record<SectionId, LazyExoticComponent<ComponentType>>>> = {
   home: lazyScreen(() => import('../home/HomeSection')),
+  bookings: lazyScreen(() => import('../bookings/BookingsSection')),
   pastries: lazyScreen(() => import('../pastries/PastriesSection')),
   stocktake: lazyScreen(() => import('../stocktake/StocktakeSection')),
   foodcost: lazyScreen(() => import('../foodcost/FoodcostSection')),

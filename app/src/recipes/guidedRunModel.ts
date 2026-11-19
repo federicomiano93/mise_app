@@ -1,4 +1,4 @@
-import { unitOf } from '@mise/shared/catalogue-model';
+import { scaledAmounts, unitOf } from '@mise/shared/catalogue-model';
 import type { CatalogueRow } from '@mise/shared/catalogue-model';
 import { amountsFor, stepRows, timerState, unassignedRows } from '@mise/shared/guided-model';
 import type { GuidedStep, StepRow, TimerState } from '@mise/shared/guided-model';
@@ -121,7 +121,14 @@ export function lineOf(row: StepRow, t: Translate, locale: string): RunLine {
 }
 
 // The amounts of the whole snapshot at the batch it was started with: the recipe screen's own scaling (shared amountsFor).
+// ⚠️ A BATCH WORKED OUT FROM ONE ROW is drawn from that row (shared scaledAmounts, the rule the table, the export and «Use as base
+// recipe» draw with): by its total it would be corrected to the total and read a few grams off the screen, the chosen row included.
+// A row that can no longer be scaled from (a snapshot written by hand, junk) falls back to the total, as the screen does.
 export function snapshotAmounts(snapshot: GuidedSnapshot): (number | null)[] {
+  const row = snapshot.fromRow;
+  if (row !== undefined && row !== null && typeof row === 'object' && Number(snapshot.targetGrams) > 0) {
+    return scaledAmounts(snapshot, snapshot.targetGrams, { index: row.index, amount: row.amount });
+  }
   return amountsFor(snapshot, snapshot.targetGrams);
 }
 

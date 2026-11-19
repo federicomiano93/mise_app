@@ -1,0 +1,54 @@
+/* The frame of Bookings, as Pastries': a phone (or a tablet held upright) shows the list, or one booking in its place; from
+   1000px (the counter tablet held sideways is 1024 wide) the list is the whole screen and a booking opens in it. */
+
+.layout {
+  display: grid;
+  gap: var(--s4);
+}
+
+.list,
+.detail {
+  min-width: 0;
+}
+
+/* On a phone one pane at a time: the list alone, or the booking (its editor) alone with Back as the way out. */
+@media (max-width: 999.98px) {
+  .layout[data-view="list"] .detail {
+    display: none;
+  }
+
+  .layout:not([data-view="list"]) .list {
+    display: none;
+  }
+}
+
+@media (min-width: 1000px) {
+  /* The list is the whole screen (19 Nov 2026, the owner's tablet design): it holds its own two columns (BookingsList.module.css)
+     and a booking opens in it. The pane is for the screens that take the whole width: the form, the printer, the settings. */
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--s6);
+    align-items: start;
+  }
+
+  .layout[data-view="list"] .detail,
+  .layout[data-view="booking"] .detail {
+    display: none;
+  }
+
+  /* ⚠️ THE SCREEN STICKS TO THE TOP OF THE SCROLL AREA AND SCROLLS ON ITS OWN (the Stocktake trap, paid for): opened from far
+     down a long list, it would otherwise open out of sight, and its title taking the focus would scroll the list away. Never
+     taller than the scroll area, so the form bar sticks to ITS top. No overscroll containment (StocktakeSection.module.css
+     says why). */
+  .detail {
+    position: sticky;
+    top: var(--s4);
+    max-height: calc(var(--vh100) - var(--topbar-h) - 2 * var(--s4));
+    overflow-y: auto;
+  }
+
+  /* The form, the printer and the settings take the whole width; the list is hidden while they are open, and Back brings it back. */
+  .layout.fullForm .list {
+    display: none;
+  }
+}

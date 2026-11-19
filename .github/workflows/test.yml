@@ -205,13 +205,14 @@ jobs:
         run: node sw/verify-build.mjs dist
         working-directory: app
 
-      # Same level and reasoning as the two audits in the `test` job.
+      # The same judge as the `test` job's gate on CI's own tools (scripts/audit-ci-*.mjs), not plain `npm audit --audit-level=high`: since
+      # 17 Nov 2026 both trees carry a high with no fix (picomatch, through vite and vitest), and
+      # plain npm audit cannot accept one advisory. Any other high or critical still fails; why the
+      # accepted one is harmless is written in scripts/audit-vite-trees.mjs. Reads the lockfile only.
       - name: Vulnerability check of shared/ (P11)
-        run: npm audit --audit-level=high
-        working-directory: shared
+        run: node scripts/audit-vite-trees.mjs shared
       - name: Vulnerability check of app/ (P11)
-        run: npm audit --audit-level=high
-        working-directory: app
+        run: node scripts/audit-vite-trees.mjs app
 
   # ── The server half of the notifications ────────────────────────────────────
   #

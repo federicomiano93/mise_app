@@ -1,6 +1,7 @@
 import {
   BookOpen,
   Calculator,
+  CalendarCheck,
   ChartPie,
   Croissant,
   House,
@@ -15,6 +16,7 @@ import {
 import type { LucideIcon } from 'lucide-react';
 import { isMonthId } from '@mise/shared/inventory-model';
 import { isWeekday } from '@mise/shared/pastries-model';
+import { bookingsScreenName } from '../bookings/bookingsPath';
 import { clientsScreenName } from '../clients/clientsPath';
 import type { MessageKey } from '../i18n/en';
 import { labelsScreenName } from '../labels/labelsPath';
@@ -25,6 +27,7 @@ import { suppliersScreenName } from '../suppliers/suppliersPath';
 
 export type SectionId =
   | 'home'
+  | 'bookings'
   | 'orders'
   | 'suppliers'
   | 'recipes'
@@ -54,6 +57,10 @@ export type Section = {
 // session/visibility.ts) — and a shown section is a gate on everything later put behind it.
 export const SECTIONS: readonly Section[] = [
   { id: 'home', path: '/home', label: 'section.home', icon: House, inRail: 'top', inTabs: true },
+  // «Bookings» (18 Nov 2026, Mise 2 only): customers' orders taken at the counter, for pickup or delivery. Right after the Home
+  // because it is the counter's daily work; shown to every role that the venue does not hide it from (session/visibility.ts).
+  // No tab: the phone's five tabs are fixed, so on a phone it is under «More».
+  { id: 'bookings', path: '/bookings', label: 'section.bookings', icon: CalendarCheck, inRail: 'top', inTabs: false },
   { id: 'orders', path: '/orders', label: 'section.orders', icon: ShoppingCart, inRail: 'top', inTabs: true },
   { id: 'suppliers', path: '/suppliers', label: 'section.suppliers', icon: Truck, inRail: 'top', inTabs: false },
   { id: 'recipes', path: '/recipes', label: 'section.recipes', icon: BookOpen, inRail: 'top', inTabs: true },
@@ -151,6 +158,8 @@ export function screenNameFor(pathname: string): string | null {
   if (section.id === 'labels') return labelsScreenName(pathname.slice(section.path.length));
   // «Ingredients & suppliers» (step 3e): the names of docs/parity/suppliers.md, decision T1.
   if (section.id === 'suppliers') return suppliersScreenName(pathname.slice(section.path.length));
+  // Bookings (18 Nov 2026): the list by day, one booking, and its editor (new or existing).
+  if (section.id === 'bookings') return bookingsScreenName(pathname.slice(section.path.length));
   // Orders (step 3f-1): the list, a supplier's order and its «What they sell».
   if (section.id === 'orders') return ordersScreenName(pathname.slice(section.path.length));
   return section.id;

@@ -1,0 +1,15 @@
+/* The tinted box a setting's «?» opens under its row. */
+.help {
+  margin: 0;
+  padding: var(--s2) var(--s3);
+  border-radius: var(--r-md);
+  background: var(--accent-tint);
+  color: var(--ink);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+  overflow-wrap: break-word;
+}
+
+.help[hidden] {
+  display: none;
+}

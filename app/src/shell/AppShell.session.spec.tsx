@@ -15,13 +15,13 @@ const linkNames = (scope: { getAllByRole: (role: string) => HTMLElement[] }) =>
 const EMPLOYEE = { canManage: false, isOwner: false, role: 'staff' as const, location: {} };
 // Straight from production: a restaurant that bought Orders and nothing else.
 const RESTAURANT = {
-  location: { sections: { calculator: false, catalogue: false, pastries: false, foodcost: false } },
+  location: { sections: { calculator: false, catalogue: false, pastries: false, foodcost: false, bookings: false } },
 };
 
 describe('the shell for an employee', () => {
   it('keeps Food cost and Stocktake out of the rail', () => {
     renderApp('/orders', { session: EMPLOYEE });
-    expect(linkNames(rail())).toEqual(['Home', 'Orders', 'Suppliers', 'Recipes', 'Labels', 'Calculator', 'Pastries', 'Settings']);
+    expect(linkNames(rail())).toEqual(['Home', 'Bookings', 'Orders', 'Suppliers', 'Recipes', 'Labels', 'Calculator', 'Pastries', 'Settings']);
   });
 
   it('keeps Stocktake out of the tab bar and both out of «More»', async () => {
@@ -31,7 +31,7 @@ describe('the shell for an employee', () => {
     await user.click(tabs().getByRole('link', { name: 'More' }));
 
     const list = within(await screen.findByRole('list'));
-    expect(list.getAllByRole('link').map(link => link.textContent)).toEqual(['Suppliers', 'Labels', 'Pastries', 'Settings']);
+    expect(list.getAllByRole('link').map(link => link.textContent)).toEqual(['Bookings', 'Suppliers', 'Labels', 'Pastries', 'Settings']);
   });
 
   it('shows Food cost when the venue chose to show it to staff, but not Stocktake', () => {
@@ -42,7 +42,7 @@ describe('the shell for an employee', () => {
 
   it('shows a manager everything the venue bought', () => {
     renderApp('/orders', { session: { ...EMPLOYEE, canManage: true, role: 'manager' } });
-    expect(linkNames(rail())).toHaveLength(10);
+    expect(linkNames(rail())).toHaveLength(11);
   });
 
   it('says «not available» for an address typed by hand', async () => {
@@ -53,7 +53,7 @@ describe('the shell for an employee', () => {
     // Not the placeholder a shown section has.
     expect(screen.queryByText(/will arrive in one of the next steps/)).not.toBeInTheDocument();
     // The navigation is still around it, and «More» does not claim a section it does not hold.
-    expect(rail().getAllByRole('link')).toHaveLength(8);
+    expect(rail().getAllByRole('link')).toHaveLength(9);
     expect(tabs().getByRole('link', { name: 'More' })).not.toHaveAttribute('aria-current');
 
     await user.click(screen.getByRole('link', { name: 'Go to the start' }));
@@ -87,7 +87,7 @@ describe('the shell for a venue that bought less', () => {
   });
 
   it('keeps Home and Settings open when nothing else is', async () => {
-    const nothing = { location: { sections: { orders: false, calculator: false, catalogue: false, pastries: false, foodcost: false } } };
+    const nothing = { location: { sections: { orders: false, calculator: false, catalogue: false, pastries: false, foodcost: false, bookings: false } } };
     renderApp('/settings', { session: nothing });
     expect(await screen.findByRole('heading', { level: 1, name: 'Settings' })).toBeInTheDocument();
     expect(linkNames(rail())).toEqual(['Home', 'Settings']);
@@ -114,7 +114,7 @@ describe('where the address with no section in it lands', () => {
   });
 
   it('is Home when nothing else is shown, with the to-do card on it', async () => {
-    const nothing = { location: { sections: { orders: false, calculator: false, catalogue: false, pastries: false, foodcost: false } } };
+    const nothing = { location: { sections: { orders: false, calculator: false, catalogue: false, pastries: false, foodcost: false, bookings: false } } };
     const { router } = renderApp('/', { session: nothing });
     expect(await screen.findByRole('heading', { level: 1, name: 'Home' })).toBeInTheDocument();
     expect(await screen.findByRole('heading', { level: 2, name: 'To do' })).toBeInTheDocument();
@@ -173,19 +173,19 @@ describe('the venue in the top bar', () => {
   };
 
   it('is just its name when the account has one venue', () => {
-    renderApp('/orders', { session: { name: 'The Bakery' } });
+    renderApp('/home', { session: { name: 'The Bakery' } });
     const header = topBar();
     expect(header.getByText('The Bakery')).toBeInTheDocument();
     expect(header.queryByRole('button')).not.toBeInTheDocument();
   });
 
   it('shows the venue\'s first letter in a small square', () => {
-    renderApp('/orders', { session: { name: 'the bakery' } });
+    renderApp('/home', { session: { name: 'the bakery' } });
     expect(topBar().getByText('T')).toBeInTheDocument();
   });
 
   it('is a button that opens the other venues when the account has several', async () => {
-    const { user } = renderApp('/orders', { session: TWO });
+    const { user } = renderApp('/home', { session: TWO });
 
     const chip = topBar().getByRole('button', { name: 'The Bakery, switch venue' });
     expect(chip).toHaveAttribute('aria-haspopup', 'dialog');
@@ -196,7 +196,7 @@ describe('the venue in the top bar', () => {
   });
 
   it('switches to the venue picked, after asking whether anything is waiting to be sent', async () => {
-    const { store, user } = renderApp('/orders', { session: TWO });
+    const { store, user } = renderApp('/home', { session: TWO });
     await user.click(topBar().getByRole('button', { name: 'The Bakery, switch venue' }));
     await user.click(await screen.findByRole('button', { name: 'The Restaurant' }));
 
@@ -205,7 +205,7 @@ describe('the venue in the top bar', () => {
   });
 
   it('warns first, and does not switch, when something has not reached the server', async () => {
-    const { store, user } = renderApp('/orders', { session: TWO });
+    const { store, user } = renderApp('/home', { session: TWO });
     store.changesStillWaiting.mockResolvedValue(true);
     await user.click(topBar().getByRole('button', { name: 'The Bakery, switch venue' }));
     await user.click(await screen.findByRole('button', { name: 'The Restaurant' }));

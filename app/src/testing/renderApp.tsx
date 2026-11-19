@@ -16,6 +16,7 @@ import { fakeImportSource } from '../suppliers/invoiceImport/testing/fakeImportS
 import { fakeMergeSource } from '../suppliers/merge/testing/fakeMergeSource';
 import { fakePriceChangesSource } from '../suppliers/priceChanges/testing/fakePriceChangesSource';
 import type { Session } from '../session/session';
+import { fakeBookingsSource } from './fakeBookingsSource';
 import { fakeCalculatorSource } from './fakeCalculatorSource';
 import { fakeClientOrdersSource } from './fakeClientOrdersSource';
 import { fakeFoodcostSource } from './fakeFoodcostSource';
@@ -25,6 +26,7 @@ import { fakePastriesSource } from './fakePastriesSource';
 import { fakeStocktakeSource } from './fakeStocktakeSource';
 import { fakeSettingsSource } from './fakeSettingsSource';
 import { fakeTodosSource } from './fakeTodosSource';
+import { fakeOrdersDueSource } from './fakeOrdersDueSource';
 import { fakeSuppliersSource } from './fakeSuppliersSource';
 import { fakeStore } from './fakeSession';
 
@@ -60,8 +62,8 @@ export function renderApp(path: string, { lang = 'en', routes = appRoutes, sessi
     photo: () => ({ readRecipe: () => Promise.reject(new Error('no photo reader in this spec')), setRecipePhoto: () => Promise.reject(new Error('no photo switch in this spec')) }),
     suppliers: () => fakeSuppliersSource(), invoiceImport: () => fakeImportSource(),
     priceChanges: () => fakePriceChangesSource(), merge: () => fakeMergeSource(),
-    orders: () => fakeOrdersSource(), todos: () => fakeTodosSource(),
-    settings: () => fakeSettingsSource(), ...data };
+    orders: () => fakeOrdersSource(), todos: () => fakeTodosSource(), ordersDue: () => fakeOrdersDueSource(),
+    settings: () => fakeSettingsSource(), bookings: () => fakeBookingsSource(), ...data };
 
   render(
     <I18nProvider initialLanguage={lang} initialMessages={messages}>

@@ -30,40 +30,86 @@ function railNeeds(itemHeight: number, { withMark = true }: { withMark?: boolean
   return 2 * s4 + (withMark ? 44 + markMargin : 0) + items * itemHeight + (items + 1) * 4 + 4 + 56;
 }
 
+// The content of an item at a step: the 27px icon, the gap, one 13.5px label line (line-height 1.15) and the padding above and
+// below. min-height only holds when the content is not taller (16 Nov 2026: bigger icons and labels).
+const ICON = 27;
+const LABEL_LINE = 13.5 * 1.15;
+function contentAt(block: string | undefined, base: string | undefined): number {
+  const gap = px(/gap:\s*([^;]+);/.exec(block ?? '')?.[1] ?? /gap:\s*([^;]+);/.exec(base ?? '')?.[1]);
+  const padding = /padding:\s*([^;]+);/.exec(block ?? '')?.[1] ?? /padding:\s*([^;]+);/.exec(base ?? '')?.[1] ?? '';
+  const vertical = padding.startsWith('var(--s2)') ? token('--s2') : px(padding);
+  return ICON + gap + LABEL_LINE + 2 * vertical;
+}
+
 describe('the rail on a short window', () => {
-  it('has ten items at most (the sum below counts that many)', () => {
-    // Since 13 Nov 2026 «Labels» follows Recipes in the rail.
-    expect(mostItems()).toBe(10);
-    // …and the sales owner's rail, with Clients, is shorter than that: Home, Clients, Food cost, Settings.
-    expect(SECTIONS.length).toBe(11);
+  const base = /\.railItem\s*\{([^}]*)\}/.exec(css)?.[1];
+
+  it('has eleven items at most (the sum below counts that many)', () => {
+    // Since 13 Nov 2026 «Labels» follows Recipes in the rail; since 18 Nov 2026 «Bookings» follows the Home.
+    expect(mostItems()).toBe(11);
+    // …and the sales owner's rail, with Clients, is shorter than that: Home, Bookings, Clients, Food cost, Settings.
+    expect(SECTIONS.length).toBe(12);
   });
 
-  it('gives 64px above 835px, which fits any window from 836px', () => {
-    const base = /\.railItem\s*\{([^}]*)\}/.exec(css)?.[1];
+  it('gives 64px above 903px, which fits any window from 904px', () => {
     expect(minHeight(base)).toBe(64);
-    expect(railNeeds(64)).toBeLessThanOrEqual(836);
+    expect(contentAt(base, base)).toBeLessThanOrEqual(64);
+    expect(railNeeds(64)).toBeLessThanOrEqual(904);
   });
 
-  it('gives 56px up to 835px, which fits any window from 756px', () => {
-    expect(minHeight(itemAt(835))).toBe(56);
-    expect(railNeeds(56)).toBeLessThanOrEqual(756);
+  it('gives 56px up to 903px, which fits any window from 816px', () => {
+    expect(minHeight(itemAt(903))).toBe(56);
+    expect(contentAt(itemAt(903), base)).toBeLessThanOrEqual(56);
+    expect(railNeeds(56)).toBeLessThanOrEqual(816);
   });
 
-  it('gives each item 48px up to 755px — the touch target of every other control — which fits any window from 676px', () => {
-    const block = itemAt(755);
-    expect(minHeight(block)).toBe(48);
-    // The padding shrinks too, or the icon and the label would hold the item at 55px whatever min-height says.
-    expect(px(/padding:\s*([^;]+);/.exec(block ?? '')?.[1])).toBeLessThanOrEqual(3);
-    expect(railNeeds(48)).toBeLessThanOrEqual(676);
+  it('gives 52px up to 815px without the brand letter, which fits any window from 716px', () => {
+    expect(minHeight(itemAt(815))).toBe(52);
+    expect(contentAt(itemAt(815), base)).toBeLessThanOrEqual(52);
+    expect(/@media\s*\(max-height:\s*815px\)\s*\{[^@]*\.mark\s*\{\s*display:\s*none;\s*\}/.test(css)).toBe(true);
+    expect(railNeeds(52, { withMark: false })).toBeLessThanOrEqual(716);
   });
 
-  it('then fits the lab tablet (648px) by leaving out the brand letter, never by shrinking an item below 48px', () => {
+  it('then fits the lab tablet (648px) with the rail tightened, Settings and the account included, never an item below 48px', () => {
     expect(token('--s4')).toBe(16);
-    expect(railNeeds(48)).toBeGreaterThan(648);
-    expect(/@media\s*\(max-height:\s*675px\)\s*\{\s*\.mark\s*\{\s*display:\s*none;\s*\}/.test(css)).toBe(true);
-    expect(railNeeds(48, { withMark: false })).toBe(616);
-    expect(railNeeds(48, { withMark: false })).toBeLessThanOrEqual(648);
+    expect(token('--s2')).toBe(8);
+    const step = /@media\s*\(max-height:\s*715px\)\s*\{([\s\S]*?)\n\}/.exec(css)?.[1] ?? '';
+    const rule = (selector: string): string => new RegExp(`(?:^|\\s)${selector.replace('.', '\\.')}\\s*\\{([^}]*)\\}`).exec(step)?.[1] ?? '';
+    const rail = rule('.rail');
+    const nav = rule('.railNav');
+    const item = rule('.railItem');
+    expect(rail).toMatch(/padding-top:\s*var\(--s2\)/);
+    expect(rail).toMatch(/padding-bottom:\s*var\(--s2\)/);
+    expect(px(/gap:\s*([^;]+);/.exec(rail)?.[1])).toBe(2);
+    expect(px(/gap:\s*([^;]+);/.exec(nav)?.[1])).toBe(2);
+    const height = minHeight(item);
+    expect(height).toBe(49);
+    expect(contentAt(item, item)).toBeLessThanOrEqual(height);
+    // Padding (8 + 8), the items with a 2px gap more than there are items, the 2px gap to the account nav, the account nav (56).
+    const items = mostItems();
+    const needs = 2 * token('--s2') + items * height + (items + 1) * 2 + 2 + 56;
+    expect(needs).toBe(637);
+    expect(needs).toBeLessThanOrEqual(648);
     // No step of the rail draws an item under 48px.
-    for (const block of css.matchAll(/\.railItem\s*\{([^}]*)\}/g)) expect(minHeight(block[1])).toBeGreaterThanOrEqual(48);
+    for (const block of css.matchAll(/\.railItem\s*\{([^}]*)\}/g)) {
+      if (/min-height/.test(block[1] ?? '')) expect(minHeight(block[1])).toBeGreaterThanOrEqual(48);
+    }
+  });
+});
+
+describe('the rail made more visible (16 Nov 2026)', () => {
+  it('is 104px wide, with 27px icons drawn at a 2px stroke', () => {
+    expect(token('--rail-w')).toBe(104);
+    const icon = /\.railItem \.railIcon\s*\{([^}]*)\}/.exec(css)?.[1] ?? '';
+    expect(icon).toMatch(/width:\s*27px/);
+    expect(icon).toMatch(/height:\s*27px/);
+    expect(icon).toMatch(/stroke-width:\s*2;/);
+  });
+
+  it('writes its labels at 13.5px, weight 500, in the near-white ink', () => {
+    const base = /\.railItem\s*\{([^}]*)\}/.exec(css)?.[1] ?? '';
+    expect(base).toMatch(/font-size:\s*13\.5px/);
+    expect(base).toMatch(/font-weight:\s*500/);
+    expect(base).toMatch(/color:\s*var\(--rail-ink-strong\)/);
   });
 });

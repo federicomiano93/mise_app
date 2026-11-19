@@ -9,7 +9,6 @@
 // ⚠️ THE LENS IS THE ONE PLACE THAT DECIDES AN INGREDIENT'S SUPPLIER (no-supplier.js resolveSuppliers): which screen it is
 // on, which order it will be recorded in and which lines a clear removes all read it, so they can never disagree.
 
-import { favouriteGroups } from '@mise/shared/favourite-suppliers';
 import { filterSuppliers } from '@mise/shared/ingredient-search';
 import { NO_SUPPLIER_ID, orderSuppliers, resolveSuppliers } from '@mise/shared/no-supplier';
 import { sortByLabel, wholeNumber } from '@mise/shared/archive';
@@ -135,19 +134,36 @@ export function buildOrdersLens(input: LensInput): OrdersLens {
   };
 }
 
-// The supplier list as the screen draws it: «All» or only the suppliers being ordered from, then the search (name and
-// category, ignoring accents and capitals — parity L14, L15), then Favourites first under their headings when the venue
-// starred some (favourite-suppliers.js; each group keeps the venue's order).
-export function supplierListGroups(
+// The three groups of the supplier list (the Orders redesign of 16 Nov 2026, item 4): «To order» first, then the favourites, then
+// everybody else.
+export type SupplierGroupKey = 'due' | 'favourites' | 'others';
+
+// ⚠️ EACH SUPPLIER ONCE, in the FIRST group it matches; a group with nobody in it is left out (it draws no heading).
+//  - «To order» (`due`): still to order TODAY (`due`, the reminders' dueTodayIds: an order day today, not placed, not closed) OR with
+//    quantities typed — but never one closed today as «not needed» (`closedToday`): placing or closing takes a supplier out of it.
+//  - «Favourites»: the venue's starred suppliers (config/orders.favouriteSuppliers) that are not to order.
+//  - «Other suppliers»: the rest.
+// Each group keeps the list's usual order (the venue's supplier order, then A→Z). The search (name and category, ignoring accents
+// and capitals — parity L14, L15) filters before the grouping.
+// `heading` is false when only ONE group is drawn: a single list under «Other suppliers» would name a difference that is not there.
+export function supplierGroups(
   lens: OrdersLens,
-  { query, orderingOnly, favourites }: { query: string; orderingOnly: boolean; favourites: readonly string[] },
-): ReadonlyArray<{ readonly headingKey: string | null; readonly suppliers: readonly StoredDoc[] }> {
-  const inScope = orderingOnly ? lens.suppliers.filter(s => lens.filledFor(s.id) > 0) : lens.suppliers;
-  const rows = filterSuppliers(inScope, query);
-  return favouriteGroups(rows, favourites).map(group => ({
-    headingKey: group.headingKey ?? null,
-    suppliers: group.suppliers as StoredDoc[],
-  }));
+  { query, favourites, due, closedToday }: {
+    query: string;
+    favourites: readonly string[];
+    due: ReadonlySet<string>;
+    closedToday: ReadonlySet<string>;
+  },
+): ReadonlyArray<{ readonly key: SupplierGroupKey; readonly heading: boolean; readonly suppliers: readonly StoredDoc[] }> {
+  const starred = new Set(favourites);
+  const groups: Record<SupplierGroupKey, StoredDoc[]> = { due: [], favourites: [], others: [] };
+  for (const supplier of filterSuppliers(lens.suppliers, query) as StoredDoc[]) {
+    const id = supplier.id;
+    const toOrder = !closedToday.has(id) && (due.has(id) || lens.filledFor(id) > 0);
+    groups[toOrder ? 'due' : starred.has(id) ? 'favourites' : 'others'].push(supplier);
+  }
+  const drawn = (['due', 'favourites', 'others'] as const).filter(key => groups[key].length > 0);
+  return drawn.map(key => ({ key, heading: drawn.length > 1, suppliers: groups[key] }));
 }
 
 // How many suppliers have something typed (the «Ordering (N)» filter; parity L14).

@@ -351,7 +351,7 @@ describe('Edit dough', () => {
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
     expect(await main().findByRole('heading', { level: 3, name: 'Focaccia by hand' }, LOAD)).toBeInTheDocument();
     expect(main().getByLabelText('Calculated by')).toHaveValue('Marco');
-    expect(main().getByLabelText('Calculated by')).toHaveAttribute('placeholder', 'Name (optional)');
+    expect(main().getByLabelText('Calculated by')).toHaveAttribute('placeholder', 'Name');
     const roma = within(region('Cafe Roma'));
     expect(roma.getByLabelText('Focaccia tray (500g)')).toHaveValue(4);
     // A product that is no longer in the address book keeps its saved line.
@@ -527,7 +527,7 @@ describe('Edit dough', () => {
   it('is the same in Italian', async () => {
     const view = await open('/calculator/log/hand/edit', { logs: [withLines], lang: 'it' });
     expect(await main().findByLabelText('Calcolato da', undefined, LOAD)).toHaveValue('Marco');
-    expect(main().getByLabelText('Calcolato da')).toHaveAttribute('placeholder', 'Nome (facoltativo)');
+    expect(main().getByLabelText('Calcolato da')).toHaveAttribute('placeholder', 'Nome');
     expect(main().getByText('Prodotti — solo quantità')).toBeInTheDocument();
     await view.user.type(main().getByLabelText('Calcolato da'), '!');
     await view.user.click(main().getAllByRole('button', { name: 'Salva' }).at(-1)!);

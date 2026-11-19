@@ -1,15 +1,14 @@
-/* The phone's «no connection» notice (the design's `.banner .banner-warn`): amber, a cloud with a
-   line through it, and one sentence. It is drawn on a phone only — from 700px the top bar says
-   the same with its dot, and the tablet has room for nothing more at the top of a screen. The
-   phone shows it by default and the tablet query hides it, so there is no phone-side
-   `display: none` waiting for a tablet-side `display`. */
+/* The «Offline» strip under a screen's title: amber, a cloud with a line through it, one short sentence, thin. Drawn by default;
+   from 700px the Home hides it, because its top bar says the same with its dot. There is no phone-side `display: none` waiting for
+   a tablet-side `display`. */
 
 .banner {
   display: flex;
   align-items: center;
-  gap: var(--s3);
+  gap: var(--s2);
   margin: var(--s3) var(--s4) 0;
-  padding: var(--s3) var(--s4);
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--warn);
   border-radius: var(--r-md);
   background: var(--warn-tint);
   color: var(--warn-ink);
@@ -17,8 +16,18 @@
   font-weight: 500;
 }
 
+.banner svg {
+  flex: none;
+  width: 18px;
+  height: 18px;
+}
+
 @media (min-width: 700px) {
   .banner {
+    margin: 0 calc(var(--s8) + env(safe-area-inset-right)) var(--s3) var(--s8);
+  }
+
+  .banner[data-home="true"] {
     display: none;
   }
 }

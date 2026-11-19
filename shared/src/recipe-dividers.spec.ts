@@ -228,9 +228,41 @@ describe('the port equals the original', () => {
     [{ name: 'A very long ingredient name that will not fit at all on one line', text: '1.250 kg', dividerAfter: true },
       { name: 'Salt', text: '2 g' }],
   ];
-  test.each(cases.map((rows, i) => [i, rows] as const))('pdfLayout case %i', (_i, rows) => {
-    expect(portedExport.pdfLayout({ title: 'Sample loaf', rows }, measure))
-      .toStrictEqual(legacyExport.pdfLayout({ title: 'Sample loaf', rows }, measure));
+  // pdfLayout is no longer compared output for output: Mise 2's first row sits lower (FIRST_ROW_GAP 88 for the original's 48, the
+  // owner's decision of 16 Nov 2026; js/ is the rollback copy). The same lines, at the same places RELATIVE to their rows, are pinned
+  // above for both files; here the port's answer is the original's moved down by those 40 pt, item for item and line for line.
+  test.each(cases.map((rows, i) => [i, rows] as const))('pdfLayout case %i: the original\'s answer, 40 pt lower', (_i, rows) => {
+    const mine = portedExport.pdfLayout({ title: 'Sample loaf', rows }, measure);
+    const theirs = legacyExport.pdfLayout({ title: 'Sample loaf', rows }, measure);
+    expect(mine.titleSize).toBe(theirs.titleSize);
+    expect(mine.items.length).toBe(theirs.items.length);
+    expect(mine.lines.length).toBe(theirs.lines.length);
+    expect(mine.items[0]).toStrictEqual(theirs.items[0]);
+    // The room below the title is 40 pt shorter, so a list long enough to shrink shrinks a little more: compared only where it did not.
+    if (theirs.leading === 30 && mine.leading === 30) {
+      mine.items.slice(1).forEach((item, i) => {
+        const was = theirs.items[i + 1]!;
+        expect({ ...item, y: item.y - 40 }).toStrictEqual(was);
+      });
+      mine.lines.forEach((line, i) => { expect(line.y - 40).toBeCloseTo(theirs.lines[i]!.y, 9); });
+      return;
+    }
+    // Where the list had to shrink, the port's own page is pinned instead: every row on ONE page above the bottom margin, one size for
+    // every row, the leading never tighter than 1.25 × that size unless the size is already the smallest, the leading no looser than
+    // the original's (it has 40 pt less room), each line under the row that asked for it and above the next, the air never more than 14.
+    const ys = mine.items.slice(1).filter(i => i.bold).map(i => i.y);
+    expect(Math.max(...ys)).toBeLessThanOrEqual(portedExport.PAGE_H - 60 + EPS);
+    expect(new Set(mine.items.slice(1).map(i => i.size)).size).toBe(1);
+    expect(mine.leading >= 1.25 * mine.fontSize - EPS || mine.fontSize === 6).toBe(true);
+    expect(mine.leading).toBeLessThanOrEqual(theirs.leading + EPS);
+    const withLine = rows.map((r, i) => (i < rows.length - 1 && r.dividerAfter === true ? i : -1)).filter(i => i >= 0);
+    expect(mine.lines).toHaveLength(withLine.length);
+    // Past about 89 rows (83 with the Total row) the rows are packed tighter than the smallest font, as in the original: a line's
+    // place between its rows is pinned only while they do not overlap.
+    if (mine.leading >= 1.25 * mine.fontSize - EPS) {
+      expect(mine.lines.map(line => line.y).every((y, k) => y > ys[withLine[k]!]! && y < ys[withLine[k]! + 1]!)).toBe(true);
+    }
+    ys.slice(1).forEach((y, i) => { expect(y - ys[i]!).toBeLessThanOrEqual(mine.leading + 14 + EPS); });
   });
 
   test('moveRow, removeRow, keepRows, withoutTrailingDivider on every small case', () => {

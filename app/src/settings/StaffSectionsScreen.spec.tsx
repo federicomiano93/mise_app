@@ -40,7 +40,8 @@ describe('Sections for employees', () => {
 
   it('has one switch per section the venue has, named like the sections of the app', async () => {
     await open();
-    expect(switchNames()).toEqual(['Calculator', 'Recipes', 'Orders', 'Suppliers', 'Pastries', 'Food cost', 'Stocktake']);
+    // Bookings (18 Nov 2026): Mise 2's own card, last.
+    expect(switchNames()).toEqual(['Calculator', 'Recipes', 'Orders', 'Suppliers', 'Pastries', 'Food cost', 'Stocktake', 'Bookings']);
   });
 
   it('reads a switch as one: the section, its state in words, switch, on', async () => {
@@ -59,16 +60,21 @@ describe('Sections for employees', () => {
 
   it('leaves out the sections the venue does not have, money ones included', async () => {
     await open({ session: { location: { sections: { foodcost: false, pastries: false } } } });
-    expect(switchNames()).toEqual(['Calculator', 'Recipes', 'Orders', 'Suppliers']);
+    expect(switchNames()).toEqual(['Calculator', 'Recipes', 'Orders', 'Suppliers', 'Bookings']);
   });
 
   it('keeps Orders and Suppliers together: both come with the Orders part of the business', async () => {
     await open({ session: { location: { sections: { orders: false } } } });
-    expect(switchNames()).toEqual(['Calculator', 'Recipes', 'Pastries', 'Food cost', 'Stocktake']);
+    expect(switchNames()).toEqual(['Calculator', 'Recipes', 'Pastries', 'Food cost', 'Stocktake', 'Bookings']);
+  });
+
+  it('leaves out Bookings where the venue switched them off', async () => {
+    await open({ session: { location: { sections: { bookings: false } } } });
+    expect(switchNames()).not.toContain('Bookings');
   });
 
   it('says so when the venue has no section to choose from', async () => {
-    await open({ session: { location: { sections: { orders: false, calculator: false, catalogue: false, pastries: false, foodcost: false } } } });
+    await open({ session: { location: { sections: { orders: false, calculator: false, catalogue: false, pastries: false, foodcost: false, bookings: false } } } });
     expect(main().getByText('This business has no sections to choose from.')).toBeInTheDocument();
     expect(screen.queryAllByRole('switch')).toHaveLength(0);
   });
@@ -343,7 +349,7 @@ describe('Sections for employees', () => {
 
     it('lets a manager in', async () => {
       await open({ session: { role: 'manager', canManage: true, isOwner: false } });
-      expect(screen.getAllByRole('switch')).toHaveLength(7);
+      expect(screen.getAllByRole('switch')).toHaveLength(8);
     });
   });
 

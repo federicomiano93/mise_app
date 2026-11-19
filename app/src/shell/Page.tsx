@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { useLocation, useNavigationType } from 'react-router';
 import { useT } from '../i18n/useT';
+import { OfflineBanner } from './OfflineBanner';
 import styles from './Page.module.css';
 
 // Put in a navigation's `state` to say «this move is the app arranging itself, not the person
@@ -17,11 +18,17 @@ type Props = {
   children: ReactNode;
   // A small control on the title's own line, at the far right (Settings' «Log out»).
   action?: ReactNode;
+  // A section's own title BAND (Orders, 16 Nov 2026): the controls drawn right after the title on its line, the bar white, with no
+  // line under it, and stuck to the top of the scroll area on the split. Instead of `action`, never with it.
+  band?: ReactNode;
+  // The screen draws its OWN h1 (a booking, whose h1 is the customer's name: bookings rebuild step 3) and moves the focus to it
+  // itself: the page then draws no title bar, and `title` names only the browser tab.
+  ownHeading?: boolean;
 };
 
 // Every screen is a Page: one h1 (the screen's name), the browser tab's title, and the
 // focus moved onto the new screen after a client-side navigation.
-export function Page({ title, children, action }: Props) {
+export function Page({ title, children, action, band, ownHeading = false }: Props) {
   const { t } = useT();
   const location = useLocation();
   const navigationType = useNavigationType();
@@ -43,12 +50,18 @@ export function Page({ title, children, action }: Props) {
     headingRef.current?.focus();
   }, [location.key]);
 
+  const headClass = band !== undefined ? `${styles.head} ${styles.band}` : action ? `${styles.head} ${styles.withAction}` : styles.head;
   return (
     <>
-      <header className={action ? `${styles.head} ${styles.withAction}` : styles.head}>
-        <h1 ref={headingRef} tabIndex={-1} className={styles.title}>{title}</h1>
-        {action ? <div className={styles.action}>{action}</div> : null}
-      </header>
+      {ownHeading ? null : (
+        <header className={headClass}>
+          <h1 ref={headingRef} tabIndex={-1} className={styles.title}>{title}</h1>
+          {band ?? null}
+          {action && band === undefined ? <div className={styles.action}>{action}</div> : null}
+        </header>
+      )}
+      {/* Under the title of every screen while the device is offline (the top bar that used to say it is the Home's only). */}
+      <OfflineBanner onHome={location.pathname.split('/')[1] === 'home'} />
       <div className={styles.body}>{children}</div>
     </>
   );

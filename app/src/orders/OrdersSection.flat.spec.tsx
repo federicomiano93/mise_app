@@ -44,48 +44,71 @@ const letters = () => screen.getAllByRole('heading', { level: 2 }).map(heading =
 const lineOf = (name: string) => screen.getByText(name, { selector: 'span' }).closest('li') as HTMLElement;
 const count = (text: string) => screen.getByText(text);
 
-describe('the swap button', () => {
-  it('goes from the supplier list to the flat view and back, REPLACING the entry, with the focus on the swap button of the new view', async () => {
+// The two tabs over the list (the redesign of 16 Nov 2026, item 4): «Suppliers» / «Ingredients», always drawn, the current one pressed.
+describe('the tabs', () => {
+  const tab = (name: string) => screen.getByRole('button', { name });
+
+  it('go from the supplier list to the flat view and back, REPLACING the entry, with the focus on the tab of the new view', async () => {
     const view = renderOrders('/orders', { source: seeded() });
     const toFlat = await screen.findByRole('button', { name: 'Ingredients' }, LOAD);
-    expect(toFlat).toHaveTextContent('Ingredients');
+    expect(tab('Suppliers')).toHaveAttribute('aria-pressed', 'true');
+    expect(toFlat).toHaveAttribute('aria-pressed', 'false');
+    await waitFor(() => { expect(toFlat).not.toHaveAttribute('aria-disabled'); }, LOAD);
     await view.user.click(toFlat);
     expect(path(view)).toBe('/orders/ingredients');
     expect(view.router.state.historyAction).toBe('REPLACE');
-    const toSuppliers = await screen.findByRole('button', { name: 'Suppliers' });
-    await waitFor(() => { expect(toSuppliers).toHaveFocus(); });
-    expect(screen.queryByRole('button', { name: 'Ingredients' })).not.toBeInTheDocument();
-    await view.user.click(toSuppliers);
+    await waitFor(() => { expect(tab('Ingredients')).toHaveFocus(); });
+    expect(tab('Ingredients')).toHaveAttribute('aria-pressed', 'true');
+    await view.user.click(tab('Suppliers'));
     expect(path(view)).toBe('/orders');
     expect(view.router.state.historyAction).toBe('REPLACE');
-    await waitFor(() => { expect(screen.getByRole('button', { name: 'Ingredients' })).toHaveFocus(); });
+    await waitFor(() => { expect(tab('Suppliers')).toHaveFocus(); });
   });
 
-  it('names the other view in Italian too', async () => {
+  it('are a group named «View», in Italian too', async () => {
     const view = renderOrders('/orders', { source: seeded(), lang: 'it' });
-    await view.user.click(await screen.findByRole('button', { name: 'Ingredienti' }, LOAD));
+    expect(await screen.findByRole('group', { name: 'Vista' }, LOAD)).toBeInTheDocument();
+    const toFlat = await screen.findByRole('button', { name: 'Ingredienti' }, LOAD);
+    await waitFor(() => { expect(toFlat).not.toHaveAttribute('aria-disabled'); }, LOAD);
+    await view.user.click(toFlat);
     expect(await screen.findByRole('button', { name: 'Fornitori' })).toHaveTextContent('Fornitori');
     expect(screen.getByRole('searchbox', { name: 'Cerca un ingrediente…' })).toBeInTheDocument();
   });
 
-  it('is not drawn until the lists have arrived, nor when there is no supplier', async () => {
-    renderOrders('/orders', { source: fakeOrdersSource() });
+  it('answer nothing until the lists have arrived, nor when there is no supplier', async () => {
+    const view = renderOrders('/orders', { source: fakeOrdersSource() });
     await screen.findByText('No suppliers yet', undefined, LOAD);
-    expect(screen.queryByRole('button', { name: 'Ingredients' })).not.toBeInTheDocument();
+    expect(tab('Ingredients')).toHaveAttribute('aria-disabled', 'true');
+    await view.user.click(tab('Ingredients'));
+    expect(path(view)).toBe('/orders');
   });
 
-  it('is not drawn on the flat view while the data is still loading', async () => {
+  it('answer nothing on the flat view while the data is still loading', async () => {
     const source = seeded();
     const watchDraft = source.watchDraft.bind(source);
     source.watchDraft = (onChange, onError) => watchDraft(() => undefined, onError);
-    renderOrders('/orders/ingredients', { source });
+    const view = renderOrders('/orders/ingredients', { source });
     expect(await screen.findByText('Loading…', undefined, LOAD)).toBeInTheDocument();
     await act(async () => { await new Promise(resolve => setTimeout(resolve, 50)); });
     expect(screen.getByText('Loading…')).toBeInTheDocument();
     expect(screen.queryByText('No ingredients yet — add them in Ingredients & suppliers.')).not.toBeInTheDocument();
     expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Suppliers' })).not.toBeInTheDocument();
+    expect(tab('Suppliers')).toHaveAttribute('aria-disabled', 'true');
+    await view.user.click(tab('Suppliers'));
+    expect(path(view)).toBe('/orders/ingredients');
     expect(screen.getByRole('searchbox', { name: 'Search an ingredient…' })).toBeInTheDocument();
+  });
+
+  it('stay on screen with a supplier open beside the list, and a tab closes it for the other view', async () => {
+    split();
+    const view = renderOrders('/orders', { source: seeded() });
+    await screen.findAllByRole('listitem', undefined, LOAD);
+    await view.user.click(screen.getAllByRole('button', { name: /^Alpine Mills/ })[0] as HTMLElement);
+    await waitFor(() => { expect(path(view)).toBe('/orders/supplier/s-alp'); });
+    await waitFor(() => { expect(tab('Ingredients')).not.toHaveAttribute('aria-disabled'); }, LOAD);
+    await view.user.click(tab('Ingredients'));
+    expect(path(view)).toBe('/orders/ingredients');
+    expect(view.router.state.historyAction).toBe('REPLACE');
   });
 });
 
@@ -375,9 +398,10 @@ describe('the sticky head (L21)', () => {
     }
     vi.stubGlobal('ResizeObserver', FakeObserver);
     const view = await flat();
-    // The column names stick under the head, the letters under both: their `top` is set inline from the measured heights.
-    expect(screen.getByText('Order').parentElement).toHaveStyle({ top: '0px' });
-    expect(screen.getAllByRole('heading', { level: 2 })[0]).toHaveStyle({ top: '0px' });
+    // The column names stick under the head, the letters under both: their `top` is set inline from the measured heights, under the
+    // title band where it sticks (--band-h).
+    expect((screen.getByText('Order').parentElement as HTMLElement).style.top).toBe('calc(var(--band-h) + 0px)');
+    expect((screen.getAllByRole('heading', { level: 2 })[0] as HTMLElement).style.top).toBe('calc(var(--band-h) + 0px)');
     expect(watched.filter(w => w.node !== null)).toHaveLength(2);
     await view.user.click(screen.getByRole('button', { name: 'Suppliers' }));
     await screen.findByRole('searchbox', { name: 'Search a supplier…' });
@@ -394,22 +418,16 @@ describe('the swap and the history entries', () => {
     expect(path(view)).toBe('/more');
   });
 
-  it('is drawn only at list level: with History open beside the list its place is kept, empty, and Back brings it back', async () => {
+  it('stays drawn with History open beside the list (since 16 Nov 2026), and Back from History keeps the flat view', async () => {
     split();
     const view = renderOrders('/', { source: seeded(), entries: ['/more', '/orders/ingredients'] });
     await screen.findAllByRole('spinbutton', undefined, LOAD);
-    const words = screen.getByRole('button', { name: 'History' }).parentElement as HTMLElement;
-    const before = words.children.length;
-    expect(screen.getByRole('button', { name: 'Suppliers' })).toBeInTheDocument();
     await view.user.click(screen.getByRole('button', { name: 'History' }));
     await screen.findByRole('region', { name: 'History' }, LOAD);
-    expect(screen.queryByRole('button', { name: 'Suppliers' })).not.toBeInTheDocument();
-    // The row did not move: the same children, the swap's one an empty place of its size.
-    expect(words.children.length).toBe(before);
+    expect(screen.getByRole('button', { name: 'Suppliers' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Ingredients' })).toHaveAttribute('aria-pressed', 'true');
     await view.user.click(within(screen.getByRole('region', { name: 'History' })).getByRole('button', { name: 'Back' }));
     expect(path(view)).toBe('/orders/ingredients');
-    expect(await screen.findByRole('button', { name: 'Suppliers' })).toBeInTheDocument();
-    expect(words.children.length).toBe(before);
   });
 });
 
@@ -434,19 +452,17 @@ describe('the bell with the flat view in the column', () => {
 });
 
 describe('the head', () => {
-  it('puts the words (Send, swap, History) before the search box, which sticks with the gear; the view carries the drivers’ hook', async () => {
+  it('puts the tabs before the search box, which sticks alone; the tools are in the title band; the view carries the drivers’ hook', async () => {
     await flat();
     expect(screen.getByRole('main').querySelector('[data-flat-view]')).not.toBeNull();
     const search = screen.getByRole('searchbox');
     const before = (node: HTMLElement) => Boolean(node.compareDocumentPosition(search) & Node.DOCUMENT_POSITION_FOLLOWING);
-    expect(before(screen.getByRole('button', { name: 'Send' }))).toBe(true);
     expect(before(screen.getByRole('button', { name: 'Suppliers' }))).toBe(true);
-    expect(before(screen.getByRole('button', { name: 'History' }))).toBe(true);
-    expect(search.compareDocumentPosition(screen.getByRole('button', { name: 'Orders settings' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    // The sticky part is the search box and the gear alone: the words are not inside it.
     const sticky = search.closest('[class*="head"]') as HTMLElement;
-    expect(sticky).not.toContainElement(screen.getByRole('button', { name: 'History' }));
-    expect(sticky).toContainElement(screen.getByRole('button', { name: 'Orders settings' }));
+    expect(sticky).not.toContainElement(screen.getByRole('button', { name: 'Suppliers' }));
+    // Settings, History and Send are in the title band, beside the h1, not in the column.
+    const band = screen.getByRole('heading', { level: 1 }).closest('header') as HTMLElement;
+    for (const name of ['Orders settings', 'History', 'Send']) expect(band).toContainElement(screen.getByRole('button', { name }));
   });
 });
 

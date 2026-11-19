@@ -19,17 +19,23 @@ const report = (vulnerabilities) => ({
   metadata: { vulnerabilities: {}, dependencies: { prod: 1, dev: 673, optional: 30, peer: 0, peerOptional: 0, total: 673 } },
 });
 
-// Today's tree, in short: the moderate that proves the audit looked, the chain that carries it, another moderate.
+// Today's tree, in short: the moderate that proves the audit looked, the chain that carries it, and another
+// moderate. (picomatch's high, accepted on 17 Nov 2026, was withdrawn by npm on 18 Nov.)
 const today = () => ({
   uuid: { severity: 'moderate', via: [advisory('GHSA-w5hq-g745-h8pq', 'moderate', ['CWE-787'])] },
   gaxios: { severity: 'moderate', via: ['uuid'] },
   glob: { severity: 'moderate', via: [advisory('GHSA-3g3m-2fjr-6pw4', 'moderate', ['CWE-400'])] },
 });
 
-test('today\'s tree passes, and says which advisory it accepted', () => {
+test('today\'s tree passes, and says which advisories it accepted', () => {
   const v = judge(report(today()));
   assert.equal(v.ok, true, v.problems.join('\n'));
   assert.deepEqual(v.accepted.sort(), ['GHSA-w5hq-g745-h8pq']);
+});
+
+test('picomatch\'s withdrawn high is accepted no more: should npm raise it again, it fails until somebody looks', () => {
+  const v = judge(report({ ...today(), picomatch: { severity: 'high', via: [advisory('GHSA-fc5q-39xc-vjpf', 'high', ['CWE-1333'])] } }));
+  assert.equal(v.ok, false);
 });
 
 test('a hijacked package fails even though it is only HIGH (debug@4.4.2, September 2025)', () => {
@@ -66,7 +72,7 @@ test('a high with no GHSA link cannot slip through the allowlist', () => {
 test('an audit that saw nothing fails: the accepted advisory must be reported every run', () => {
   const blind = judge(report({}));
   assert.equal(blind.ok, false);
-  assert.equal(blind.problems.filter((p) => /was not reported: the audit checked nothing/.test(p)).length, 1);
+  assert.equal(blind.problems.filter((p) => /was not reported: the audit checked nothing/.test(p)).length, ALLOWED.size);
   const tree = today();
   delete tree.uuid;
   assert.deepEqual(judge(report(tree)).problems,
@@ -115,7 +121,7 @@ test('the script exits 1 on a problem, 0 on today\'s tree, and says why npm fail
   assert.match(source, /'npm audit --json --include=dev --offline=false'/);
 });
 
-test('the allowlist is exactly the measured advisory, with its severity and its reason', () => {
+test('the allowlist is exactly the measured advisories, each with its severity and its reason', () => {
   assert.deepEqual([...ALLOWED.keys()].sort(), ['GHSA-w5hq-g745-h8pq']);
   for (const [id, { upTo, why }] of ALLOWED) {
     assert.ok(['low', 'moderate', 'high', 'critical'].includes(upTo), `${id}: say the severity it was measured at`);
