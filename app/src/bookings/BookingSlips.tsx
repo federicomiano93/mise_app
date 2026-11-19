@@ -42,7 +42,8 @@ type Paper = {
 // they have), a dashed line, then each product — the quantity when more than one, the name bold, the weight — and under it the
 // line's note, each comma-separated piece highlighted white on black around its words only. ⚠️ NO DATE, NO TIME, NO NUMBER, NO
 // PRICE, NO PHONE, NO ADDRESS: it is stuck on the piece in the oven, and only has to say whose it is and how it is made.
-function LabSlip({ who, lines, locale, unitWord }: Paper & { who: string; lines: readonly BookingLine[] }) {
+function LabSlip({ who, lines, locale, unitWord, generalNote }: Paper & { who: string; lines: readonly BookingLine[]; generalNote: string }) {
+  const general = noteParts(generalNote);
   return (
     <div className="bk-slip bk-slip--lab">
       <p className="bk-slip-who">{who}</p>
@@ -72,16 +73,29 @@ function LabSlip({ who, lines, locale, unitWord }: Paper & { who: string; lines:
           );
         })}
       </ul>
+      {/* The booking's general note at the foot of EVERY lab slip (the owner's decision, 19 Nov 2026), highlighted like a line's. */}
+      {general.length > 0 ? (
+        <p className="bk-slip-changes bk-slip-general">
+          {general.map((note, n) => (
+            <span key={n}>
+              {n > 0 ? ' ' : null}
+              <span className="bk-slip-hl">{note}</span>
+            </span>
+          ))}
+        </p>
+      ) : null}
     </div>
   );
 }
 
 // Every lab slip of one print, each on a page of its own (booking-slip.css breaks the page between them), so «Uno per pezzo»
-// comes out of the printer as separate slips. `who` is «Anna Finta [3]», the same on every slip.
-export function LabSlips({ who, slips, locale, unitWord }: Paper & { who: string; slips: readonly (readonly BookingLine[])[] }) {
+// comes out of the printer as separate slips. `who` is «Anna Finta [3]», the same on every slip; `generalNote` the booking's note.
+export function LabSlips({ who, slips, locale, unitWord, generalNote = '' }: Paper & {
+  who: string; slips: readonly (readonly BookingLine[])[]; generalNote?: string;
+}) {
   return (
     <>
-      {slips.map((lines, index) => <LabSlip key={index} who={who} lines={lines} locale={locale} unitWord={unitWord} />)}
+      {slips.map((lines, index) => <LabSlip key={index} who={who} lines={lines} locale={locale} unitWord={unitWord} generalNote={generalNote} />)}
     </>
   );
 }
@@ -122,6 +136,8 @@ export function CustomerSlip({ booking, words, locale, unitWord, venueName, mone
           );
         })}
       </ol>
+      {/* The booking's general note, plain, after the lines and before the money. */}
+      {booking.notes.trim() !== '' ? <p className="bk-slip-notes">{booking.notes.trim()}</p> : null}
       {booking.total !== null || booking.deposit !== null ? (
         <>
           <hr className="bk-slip-rule" />

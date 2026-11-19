@@ -19,9 +19,10 @@ import type { CustomerSlipWords } from './BookingSlips';
 import { slipLineParts } from './bookingWords';
 import type { SlipLineParts, UnitWords } from './bookingWords';
 import { noteParts } from './labSlips';
-import { BIG_COLUMNS, COLUMNS, plainText } from './receiptPrinter';
+import { BIG_COLUMNS, COLUMNS, plainText, wrapLines } from './receiptPrinter';
 import type { SlipLine, SlipStyle } from './receiptPrinter';
 
+const INDENT = '   ';
 const RULE = '-'.repeat(COLUMNS);
 const line = (text: string, style: SlipStyle = 'normal'): SlipLine => ({ text, style });
 
@@ -49,20 +50,24 @@ const productText = (parts: SlipLineParts): string => [parts.qty, parts.name, pa
 // ── The lab ──
 
 // ONE lab slip: «Anna Finta [3]» double size, a dashed line, each product in bold (the quantity only when more than one) and
-// under it each piece of its note double size. ⚠️ NOTHING ELSE: no date, no time, no number, no price, no phone, no address.
-export function labSlipLines(input: Paper & { readonly who: string; readonly lines: readonly BookingLine[] }): SlipLine[] {
-  const { who, lines, locale, units } = input;
+// under it each piece of its note double size, then the booking's general note, each piece double size, at the foot of EVERY slip
+// (the owner's decision, 19 Nov 2026). ⚠️ NOTHING ELSE: no date, no time, no number, no price, no phone, no address.
+export function labSlipLines(input: Paper & {
+  readonly who: string; readonly lines: readonly BookingLine[]; readonly generalNote?: string;
+}): SlipLine[] {
+  const { who, lines, locale, units, generalNote = '' } = input;
   const p = lettersOf(input.plain);
   const out: SlipLine[] = [line(p(who), 'big'), line(RULE)];
   for (const item of lines) {
     out.push(line(p(productText(slipLineParts(item, locale, units, 'many'))), 'bold'));
     for (const note of noteParts(item.note)) out.push(line(p(note), 'big'));
   }
+  for (const note of noteParts(generalNote)) out.push(line(p(note), 'big'));
   return out;
 }
 
 // Every lab slip of one print, each its own document: the printer cuts after each, so «Uno per pezzo» comes out as separate slips.
-export function labSlipDocuments(input: Paper & { readonly who: string; readonly slips: readonly (readonly BookingLine[])[] }): SlipLine[][] {
+export function labSlipDocuments(input: Paper & { readonly who: string; readonly slips: readonly (readonly BookingLine[])[]; readonly generalNote?: string }): SlipLine[][] {
   const { slips, ...rest } = input;
   return slips.map(lines => labSlipLines({ ...rest, lines }));
 }
@@ -89,8 +94,13 @@ export function customerSlipLines(input: Paper & {
     const left = p(`${index + 1}. ${productText(slipLineParts(item, locale, units, 'always'))}`);
     const right = item.unitPrice !== null ? p(formatMoney(lineAmount(item.qty, item.unitPrice), money)) : '';
     out.push(...twoColumns(left, right));
-    if (item.note !== '') out.push(line(p(`   ${item.note}`)));
+    // ⚠️ A NOTE LONGER THAN THE PAPER KEEPS ITS INDENT on every wrapped line (wrapped later, the rest would start at the edge).
+    if (item.note !== '') {
+      for (const wrapped of wrapLines([line(p(item.note))], COLUMNS - INDENT.length)) out.push(line(`${INDENT}${wrapped.text}`));
+    }
   });
+  // The booking's general note, plain, after the lines and before the money.
+  if (booking.notes.trim() !== '') out.push(line(p(booking.notes.trim())));
   const due = toPay(booking.total, booking.deposit);
   if (booking.total !== null || booking.deposit !== null) {
     out.push(line(RULE));

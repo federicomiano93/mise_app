@@ -110,7 +110,7 @@ export function PrinterScreen() {
       title: t('bookings.printer.testTitle'),
       bold: t('bookings.printer.testBold'),
       big: t('bookings.printer.testBig'),
-      accents: 'àèéìòù ÀÈÉÌÒÙ € «»',
+      accents: 'àèéìòù ÀÈÉÌÒÙ € «» ×',
       when: now.toLocaleString(),
     }));
     setOutcome(result);

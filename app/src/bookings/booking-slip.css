@@ -171,6 +171,16 @@
   font-weight: 700;
 }
 
+.bk-slip-general {
+  margin-top: 2mm;
+}
+
+.bk-slip-notes {
+  margin: 2mm 0 0;
+  font-size: 9.5pt;
+  white-space: pre-line;
+}
+
 .bk-slip-privacy {
   font-size: 7.5pt;
 }

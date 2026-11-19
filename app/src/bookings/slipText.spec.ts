@@ -58,6 +58,37 @@ describe('the lab slips for the receipt printer', () => {
   });
 });
 
+describe('the booking\x27s general note on the receipt printer', () => {
+  it('⚠️ is at the foot of EVERY lab slip, each comma piece double size, in both modes; blank prints nothing', () => {
+    const generalNote = 'Suonare due volte, 0,5 kg extra';
+    const one = labSlipLines({ ...paper, who: 'Anna Finta [3]', lines: [{ ...SCACCIATA, qty: 1 }], generalNote });
+    expect(one.slice(-2)).toEqual([{ text: 'Suonare due volte', style: 'big' }, { text: '0,5 kg extra', style: 'big' }]);
+    const docs = labSlipDocuments({ ...paper, who: 'Anna Finta [3]', slips: [[{ ...SCACCIATA, qty: 1 }], [CANNOLI]], generalNote });
+    for (const doc of docs) expect(doc.slice(-2).map(l => l.text)).toEqual(['Suonare due volte', '0,5 kg extra']);
+    const [together] = labSlipDocuments({ ...paper, who: 'x', slips: [[SCACCIATA, CANNOLI]], generalNote });
+    expect(together?.at(-1)).toEqual({ text: '0,5 kg extra', style: 'big' });
+    expect(labSlipLines({ ...paper, who: 'x', lines: [CANNOLI], generalNote: '  ' })).toEqual(labSlipLines({ ...paper, who: 'x', lines: [CANNOLI] }));
+  });
+
+  it('is on the customer slip as plain text, after the lines and before the money', () => {
+    const lines = customerSlipLines({ ...paper, booking, words, venueName: 'Panificio Prova', money });
+    const at = lines.findIndex(l => l.text === 'Suonare due volte');
+    expect(lines[at]?.style).toBe('normal');
+    expect(lines[at - 1]?.text).toMatch(/Cannoli siciliani/);
+    expect(lines.findIndex(l => l.text.startsWith('Totale'))).toBeGreaterThan(at);
+    expect(customerSlipLines({ ...paper, booking: { ...booking, notes: ' ' }, words, venueName: '', money }).map(l => l.text)).not.toContain('Suonare due volte');
+  });
+
+  it('⚠️ a product note longer than the paper keeps its 3-space indent on every wrapped line', () => {
+    const note = 'senza cipolla, con molta provola affumicata e un po\x27 di origano fresco';
+    const lines = customerSlipLines({ ...paper, booking: { ...booking, lines: [{ ...SCACCIATA, note }] }, words, venueName: '', money });
+    const noteLines = lines.filter(l => l.text.startsWith('   '));
+    expect(noteLines.length).toBeGreaterThan(1);
+    expect(noteLines.every(l => l.text.length <= COLUMNS && /^ {3}[^ ]/.test(l.text))).toBe(true);
+    expect(noteLines.map(l => l.text.trim()).join(' ')).toBe(note);
+  });
+});
+
 describe('the customer slip for the receipt printer', () => {
   const lines = customerSlipLines({ ...paper, booking, words, venueName: 'Panificio Prova', money });
   const customer = text(lines);
@@ -85,7 +116,7 @@ describe('the customer slip for the receipt printer', () => {
     expect(due).toMatchObject({ style: 'big' });
     expect(due?.text).toHaveLength(BIG_COLUMNS);
     expect(customer.endsWith(words.privacy)).toBe(true);
-    for (const secret of ['333', 'Suonare']) expect(customer).not.toContain(secret);
+    expect(customer).not.toContain('333');
     // Padded lines never pass the paper's width.
     expect(lines.filter(l => / {2,}\S/.test(l.text)).every(l => l.text.length <= COLUMNS)).toBe(true);
   });

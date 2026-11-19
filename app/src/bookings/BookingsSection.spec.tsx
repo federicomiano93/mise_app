@@ -204,7 +204,9 @@ describe('the two slips', () => {
     expect(host).toHaveTextContent('1,5 kg Focaccia');
     expect(host).toHaveTextContent('2 × Panettone');
     expect(host.querySelector('.bk-slip-hl')).toHaveTextContent('sliced');
-    for (const secret of ['No. 4', '09:00', 'Delivery', 'Ring twice', '€', '333', 'Via Finta']) expect(host, secret).not.toHaveTextContent(secret);
+    // The booking's general note («Ring twice») IS on every lab slip, highlighted (the owner's decision, 19 Nov 2026).
+    expect([...host.querySelectorAll('.bk-slip-hl')].map(mark => mark.textContent)).toEqual(['sliced', 'Ring twice']);
+    for (const secret of ['No. 4', '09:00', 'Delivery', '€', '333', 'Via Finta']) expect(host, secret).not.toHaveTextContent(secret);
   });
 
   it('⚠️ both slips and the booking say a pack as «3 confezioni (250 g)», never as pieces', async () => {
