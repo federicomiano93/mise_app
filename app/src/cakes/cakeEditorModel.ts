@@ -197,3 +197,16 @@ export function takeReference(cake: Cake, venueRef: ReferenceGrams | null): Cake
 export function referenceChanged(cake: Cake, venueRef: ReferenceGrams | null): boolean {
   return venueRef !== null && !sameReference(cake.ref, venueRef);
 }
+
+// The cake as the cost engine may read it: a price, a VAT rate or a target that is half-typed (NaN) counts as «not said», never as a
+// number, so a box in the middle of typing never throws the figures into NaN. Save refuses the real thing (firstInvalidNumber).
+export function costable(cake: Cake): Cake {
+  const clean = (value: number | null): number | null => (value !== null && Number.isFinite(value) ? value : null);
+  return {
+    ...cake,
+    sellingPrice: clean(cake.sellingPrice),
+    vatRate: clean(cake.vatRate),
+    foodCostTarget: clean(cake.foodCostTarget),
+    assemblyMinutes: clean(cake.assemblyMinutes),
+  };
+}
