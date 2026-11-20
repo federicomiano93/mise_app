@@ -35,6 +35,8 @@ export function productRows(
   const rows: ProductRow[] = [];
   const unpriced: string[] = [];
   for (const product of products) {
+    // A semi-finished card is not a product the counter could book: neither listed nor named as «without a price».
+    if (product.kind === 'semi') continue;
     const item = priceItemOf({
       id: product.id,
       name: typeof product.name === 'string' ? product.name : '',
@@ -42,6 +44,7 @@ export function productRows(
       sellingPrice: product.sellingPrice,
       packSize: product.packSize,
       packUnit: product.packUnit,
+      kind: product.kind,
     });
     if (item !== null) rows.push({ item, prefill: recipeIngredientNames(product, recipeById) });
     else if (typeof product.name === 'string' && product.name.trim() !== '') unpriced.push(product.name.trim());

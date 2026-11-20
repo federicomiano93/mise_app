@@ -282,7 +282,7 @@ const PORT_OWED = new Set<string>([]);
 // these names — the product's own weighing (rawGrams, cookedGrams), the batch weighing every line whose weight is known,
 // the recipe lines being raw kilos (foodcost-model.ts says it all). A strict comparison would fail on every product with
 // a partial cost, so each name is held to what must still be true:
-//   'lens'     the answer is the original's once the two new fields are taken off (and they are null or a positive number)
+//   'lens'     the answer is the original's once the new fields are taken off (the two weights null or a positive number; since model 4 also kind and categoryId)
 //   'guards'   the port throws exactly where the original throws (the same error name), and its answer holds no NaN that
 //              the original's answer for the same input does not hold at the same place
 // What must NOT move, the cost of every product saved before the switch, is proved by foodcost-product-loss.spec.ts.
@@ -301,7 +301,14 @@ const POST_SWITCH = new Map<string, 'lens' | 'guards'>([
 function takeOffOwnWeighing(value: unknown, problems: string[]): unknown {
   if (Array.isArray(value)) return value.map(item => takeOffOwnWeighing(item, problems));
   if (!value || typeof value !== 'object') return value;
-  const { rawGrams, cookedGrams, ...rest } = value as Record<string, unknown>;
+  // Model 4 (20 Nov 2026): a card (an object with its lines) is finished or semi, and sits in a category or none. A line's own
+  // `kind` (ingredient, semi) is not this field.
+  const isCard = 'components' in (value as object);
+  const { rawGrams, cookedGrams, ...withKind } = value as Record<string, unknown>;
+  const { kind, categoryId, ...cardRest } = withKind;
+  const rest = isCard ? cardRest : withKind;
+  if (isCard && kind !== 'finished' && kind !== 'semi') problems.push(`kind is ${show(kind)}`);
+  if (isCard && categoryId !== null && !(typeof categoryId === 'string' && categoryId.length > 0)) problems.push(`categoryId is ${show(categoryId)}`);
   for (const [field, grams] of [['rawGrams', rawGrams], ['cookedGrams', cookedGrams]] as const) {
     if (grams !== null && !(typeof grams === 'number' && grams > 0)) problems.push(`${field} is ${show(grams)}`);
   }

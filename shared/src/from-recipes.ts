@@ -83,6 +83,9 @@ export interface ProductFromRecipe {
   readonly rawGrams: number | null;
   readonly cookedGrams: number | null;
   readonly model: number;
+  // Mise 2, model 4: finished or semi-finished (chosen by the person, in «Cards from the recipe book»), and no category yet.
+  readonly kind: 'finished' | 'semi';
+  readonly categoryId: null;
 }
 
 // The product a recipe starts: its name, and the whole recipe on the first line — the two things a recipe knows. ⚠️ Nothing
@@ -90,7 +93,7 @@ export interface ProductFromRecipe {
 // ⚠️ MISE 2 (post-switch): the line is the whole recipe RAW, to the gram, and the cooked weight is that raw weight less the
 // recipe's own loss, to a tenth of a gram — so the product costs a kilo of what comes out exactly as the recipe's price per kilo
 // did before the switch, and «Cottura» shows the recipe's loss.
-export function productFromRecipe(recipe: unknown): ProductFromRecipe | null {
+export function productFromRecipe(recipe: unknown, kind: 'finished' | 'semi' = 'finished'): ProductFromRecipe | null {
   const card = recipe as Loose | null | undefined;
   const recipeId = idText(card && card['id']);
   const id = recipeProductId(recipeId);
@@ -115,6 +118,8 @@ export function productFromRecipe(recipe: unknown): ProductFromRecipe | null {
     rawGrams: weighing.rawGrams,
     cookedGrams: weighing.cookedGrams,
     model: PRODUCT_MODEL,
+    kind: kind === 'semi' ? 'semi' : 'finished',
+    categoryId: null,
   };
 }
 

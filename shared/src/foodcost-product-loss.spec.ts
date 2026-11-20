@@ -348,7 +348,7 @@ describe('a product the current app saved, converted on read', () => {
     // Exactly 1 kg, the plan's own example: the exact cost-keeping weight is 0.99999 kg (the recipe's price per kilo is
     // rounded), which the gram box would show as «999.99»; 1 kg costs the same to the fourth decimal.
     expect((p.components[0] as ported.RecipeLine).qtyKg).toBe(1);
-    expect([p.cookedGrams, p.rawGrams, p.model, p.noWeightLoss]).toStrictEqual([900, null, 3, false]);
+    expect([p.cookedGrams, p.rawGrams, p.model, p.noWeightLoss]).toStrictEqual([900, null, 4, false]);
     expect(ported.productCooking(p, TABLES).lossPct).toBe(10);
     // The money is the current app's: 0.9 kg × 2.2222 = 2.0000, and 2.0000 ÷ 0.9 kg a kilo.
     expect(ported.costProduct(old(), TABLES).unitCost).toBe(legacy.costProduct(old(), TABLES).unitCost);
@@ -394,7 +394,7 @@ describe('a product the current app saved, converted on read', () => {
   test('a product made from a recipe starts with the whole recipe raw and the recipe\'s loss as its own', () => {
     const recipe: Doc = { id: 'PANE', name: 'Pane', lossPct: 12, ingredients: [flour(1000)] };
     const made = productFromRecipe(recipe);
-    expect(made).toMatchObject({ components: [{ recipeId: 'PANE', qtyKg: 1 }], rawGrams: null, cookedGrams: 880, model: 3 });
+    expect(made).toMatchObject({ components: [{ recipeId: 'PANE', qtyKg: 1 }], rawGrams: null, cookedGrams: 880, model: 4 });
     // A kilo of it costs what a kilo out of the recipe's oven cost before the switch: 2.00 ÷ 0.88 kg.
     const asProduct = { ...(made as object), sellingMode: 'weight' };
     expect(ported.productionCost(asProduct, { ingredients: ING, recipes: { PANE: recipe } }).unitCost)

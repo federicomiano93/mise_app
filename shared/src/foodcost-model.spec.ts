@@ -613,10 +613,10 @@ describe.each([
     expect(draft.packUnit).toBe(null);
   });
 
-  test('the product model is 2 (3 in the port), and the units are the closed lists the rules know', () => {
+  test('the product model is 2 (4 in the port), and the units are the closed lists the rules know', () => {
     // POST-SWITCH (10 Nov 2026, «il calo è del prodotto»): change D. A model-3 product holds RAW recipe kilos, which the
-    // current app would read as finished ones; the port writes 3 and the rules refuse the old app's save over it.
-    expect(m.PRODUCT_MODEL).toBe(m === ported ? 3 : 2);
+    // current app would read as finished ones; the port writes 3 (4 since the cakes plan: a card may carry kind, categoryId and semi lines) and the rules refuse the old app's save over it.
+    expect(m.PRODUCT_MODEL).toBe(m === ported ? 4 : 2);
     expect(Object.isFrozen(m.SELLING_MODES) && Object.isFrozen(m.PACK_UNITS) && Object.isFrozen(m.LINE_UNITS)).toBe(true);
   });
 
@@ -1134,6 +1134,8 @@ describe('the port against the original', () => {
   // POST-SWITCH (10 Nov 2026, «il calo è del prodotto»): change D. Names that exist in the port only: the product's own
   // weighing and the conversion of a product saved before the switch. foodcost-product-loss.spec.ts proves them.
   const POST_SWITCH_NAMES = ['lineRawKg', 'productLossPct', 'productCooking', 'isLegacyProduct', 'fromLegacyProduct', 'currentProduct',
+    // MODEL 4 (20 Nov 2026, the cakes plan, step 1): semi-finished cards. semi-finished.spec.ts proves them.
+    'PRODUCT_KINDS', 'MAX_SEMI_DEPTH', 'totalLabourBatchCost', 'semiCardCost', 'semiReachable', 'wouldLoop', 'cardsUsing',
     'fittedWeighing', 'weighingAllowed'];
   const original = legacyJs as unknown as Record<string, unknown>;
   const port = ported as unknown as Record<string, unknown>;
@@ -1157,9 +1159,9 @@ describe('the port against the original', () => {
     }
   });
 
-  test('POST-SWITCH: PRODUCT_MODEL is 3 in the port and 2 in the original; BLOCKER_TEXT has exactly one more entry', () => {
+  test('POST-SWITCH: PRODUCT_MODEL is 4 in the port and 2 in the original; BLOCKER_TEXT has exactly one more entry', () => {
     // Change D (10 Nov 2026, «il calo è del prodotto»).
-    expect([ported.PRODUCT_MODEL, legacy.PRODUCT_MODEL]).toStrictEqual([3, 2]);
+    expect([ported.PRODUCT_MODEL, legacy.PRODUCT_MODEL]).toStrictEqual([4, 2]);
     const { 'cooked-heavier': extra, ...rest } = { ...ported.BLOCKER_TEXT } as Record<string, string>;
     expect(extra).toBe('fc.cooking.blockHeavier');
     expect(rest).toStrictEqual({ ...legacy.BLOCKER_TEXT });

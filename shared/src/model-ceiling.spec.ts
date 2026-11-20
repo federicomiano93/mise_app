@@ -7,8 +7,8 @@
 // ⚠️ Mise 2 and the current app share ONE firestore.rules, so the number must be the same in all four places
 // (rules, js/, shared/). The editor and save parts of the original file (the config write itself) belong to
 // step 3c-2.
-// ⚠️ POST-SWITCH, PRODUCTS ONLY (10 Nov 2026): Mise 2's PRODUCT_MODEL is 3 — its recipe lines are RAW kilos and
-// the product owns its oven loss — while the current app still writes 2. The ceiling is Mise 2's number exactly;
+// ⚠️ POST-SWITCH, PRODUCTS ONLY (10 Nov 2026): Mise 2's PRODUCT_MODEL is 4 (3 until 20 Nov 2026: recipe lines in RAW kilos and
+// the product owns its oven loss; 4: a card may carry kind, categoryId and semi lines) — while the rollback copy (js/) still writes 2. The ceiling is Mise 2's number exactly;
 // the current app's must only sit at or under it, so the rules keep accepting its saves.
 
 import { describe, expect, test } from 'vitest';
