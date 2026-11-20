@@ -13,7 +13,7 @@
 import { describe, expect, test } from 'vitest';
 import {
   MAX_SEMI_DEPTH, PRODUCT_MODEL, batchTotals, cardsUsing, componentLineCost, costProduct, currentProduct, normalizeProduct, productSnapshot,
-  productionCost, semiCardCost, semiReachable, snapshotWorthTaking, totalLabourBatchCost, unpricedParts, wouldLoop,
+  productionCost, semiCardCost, semiReachable, snapshotWorthTaking, totalLabourBatchCost, unpricedParts, wouldBeTooDeep, wouldLoop,
 } from './foodcost-model';
 import type { CostTables } from './foodcost-model';
 import { costPerKg } from './per-kg-model';
@@ -171,7 +171,7 @@ describe('what cannot be costed is said, never a cost of 0', () => {
     expect(costPerKg(a, tables, { packaging: false }).rows.some(row => row.reason === 'no-recipe')).toBe(true);
   });
 
-  test(`a chain deeper than ${MAX_SEMI_DEPTH} cards reads as a loop; exactly ${MAX_SEMI_DEPTH} deep is costed`, () => {
+  test(`a chain deeper than ${MAX_SEMI_DEPTH} cards is "too deep", not a loop; exactly ${MAX_SEMI_DEPTH} deep is costed`, () => {
     const chain = (length: number): CostTables => {
       const cards: Doc[] = [];
       for (let i = 0; i < length; i++) {
@@ -179,9 +179,49 @@ describe('what cannot be costed is said, never a cost of 0', () => {
       }
       return tablesOf(...cards);
     };
-    // L0 → L1 → L2 → L3 → L4: the line from L0 reaches four cards.
+    // L0 → L1 → L2 → L3 → L4: the line from L1 reaches four cards.
     expect(componentLineCost(semi('L1', 1), chain(5)).cost).toBe(3);
-    expect(componentLineCost(semi('L0', 1), chain(6))).toMatchObject({ cost: null, reason: 'card-loop' });
+    expect(componentLineCost(semi('L0', 1), chain(6))).toMatchObject({ cost: null, reason: 'card-too-deep' });
+    // A real loop stays a loop, even a long one.
+    const ring: Doc[] = [0, 1, 2, 3, 4].map(i => ({ id: `R${i}`, name: `R${i}`, kind: 'semi', model: 4, components: [semi(`R${(i + 1) % 5}`, 1)] }));
+    expect(componentLineCost(semi('R0', 1), tablesOf(...ring))).toMatchObject({ cost: null, reason: 'card-loop' });
+  });
+
+  test('the card’s own «Cost per kg» and its «Made of» total count depth the same way', () => {
+    // S holds four cards inside each other (D1 → D2 → D3 → D4): batchTotals(S) and semiCardCost(S) must both cost it, or both refuse.
+    const deep = (levels: number): { tables: CostTables; top: Doc } => {
+      const cards: Doc[] = [];
+      for (let i = 1; i <= levels; i++) {
+        cards.push({ id: `D${i}`, name: `D${i}`, kind: 'semi', model: 4, components: i === levels ? [gram('SUGAR', 1000)] : [semi(`D${i + 1}`, 1)] });
+      }
+      const top: Doc = { id: 'S', name: 'S', kind: 'semi', model: 4, components: [semi('D1', 1)] };
+      return { tables: tablesOf(top, ...cards), top };
+    };
+    const four = deep(4);
+    expect(batchTotals(four.top, four.tables).cost).toBe(3);
+    expect(semiCardCost(four.top, four.tables)).toMatchObject({ materialsPerKg: 3, reason: null });
+    const five = deep(5);
+    expect(batchTotals(five.top, five.tables).rows[0]).toMatchObject({ cost: null, reason: 'card-too-deep' });
+    expect(semiCardCost(five.top, five.tables)).toMatchObject({ materialsPerKg: null, reason: 'card-too-deep' });
+  });
+
+  test('wouldBeTooDeep: the choice that would pile up more than the limit, for the card and for the cards above it', () => {
+    const mk = (id: string, ...inside: string[]): Doc => ({ id, name: id, kind: 'semi', components: inside.map(x => semi(x, 1)) });
+    // C0 holds C1 holds C2 holds C3 holds C4: C0 is already four levels deep. X is free-standing.
+    const base: [string, unknown][] = [['C0', mk('C0', 'C1')], ['C1', mk('C1', 'C2')], ['C2', mk('C2', 'C3')], ['C3', mk('C3', 'C4')], ['C4', mk('C4')], ['X', mk('X')]];
+    const table = new Map<string, unknown>(base);
+    // One more under C4 would make C0's chain five: refused, though C4 itself would only be one deep.
+    expect(wouldBeTooDeep(table, 'C4', 'X')).toBe(true);
+    expect(wouldBeTooDeep(table, 'C0', 'X')).toBe(false); // one more branch beside C1
+    expect(wouldBeTooDeep(table, 'X', 'C1')).toBe(false); // X → C1 → C2 → C3 → C4 is four
+    expect(wouldBeTooDeep(table, 'X', 'C0')).toBe(true); // X → C0 → … → C4 is five
+    // A loop is wouldLoop's business, not this one's.
+    expect(wouldBeTooDeep(table, 'C4', 'C0')).toBe(false);
+    expect(wouldLoop(table, 'C4', 'C0')).toBe(true);
+    // A new card (no id) is measured by what it would hold only.
+    expect(wouldBeTooDeep(table, '', 'C0')).toBe(true);
+    expect(wouldBeTooDeep(table, '', 'C1')).toBe(false);
+    expect(wouldBeTooDeep(table, '', 'X')).toBe(false);
   });
 
   test('«Which?» names the card inside that has no price, and the one that is gone', () => {
@@ -278,6 +318,8 @@ describe('the margin history can explain a change from inside a semi-finished ca
     expect(snapshotWorthTaking(CAKE, { ...CAKE, kind: 'semi' }, TABLES)).toBe(false);
     expect(snapshotWorthTaking(CAKE, { ...CAKE, categoryId: 'cat-1' }, TABLES)).toBe(false);
     expect(snapshotWorthTaking(CAKE, { ...CAKE, categoryId: null }, TABLES)).toBe(false);
+    // Semi → finished starts the margin history; finished → semi (above) takes none.
+    expect(snapshotWorthTaking({ ...CAKE, kind: 'semi' }, CAKE, TABLES)).toBe(true);
   });
 });
 

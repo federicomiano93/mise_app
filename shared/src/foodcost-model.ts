@@ -205,9 +205,9 @@ export interface CostTables {
 
 export type IngredientLineReason = 'no-ingredient-price' | 'no-piece-price' | 'no-piece-weight';
 
-// Why a semi-finished line has no (complete) cost: the card is gone, it has no complete price yet, or it holds itself (a loop, or
-// deeper than MAX_SEMI_DEPTH).
-export type SemiLineReason = 'no-card' | 'card-no-price' | 'card-loop';
+// Why a semi-finished line has no (complete) cost: the card is gone, it has no complete price yet, it holds itself (a loop), or it
+// sits deeper than MAX_SEMI_DEPTH cards inside each other (too deep: not a loop, told apart so the words are true).
+export type SemiLineReason = 'no-card' | 'card-no-price' | 'card-loop' | 'card-too-deep';
 
 // What ONE line of «Made of» is priced at and costs (componentLineCost).
 export interface ComponentLineCost {
@@ -630,7 +630,7 @@ export function componentLineCost(
 // kilo is the card's TOTAL labour (its own minutes, plus the labour of ITS semi-finished lines) ÷ the same kilos, and stays beside
 // the materials, never inside them (labour never enters the food cost %). No labour rate handed in → every labour figure is null.
 //   no card in tables.products         → no cost, reason 'no-card'
-//   the card holds this one, or is deeper than MAX_SEMI_DEPTH → no cost, reason 'card-loop'
+//   the card holds this one → no cost, reason 'card-loop'; deeper than MAX_SEMI_DEPTH → no cost, reason 'card-too-deep'
 //   the card has no price (cost per kilo null) → no cost, reason 'card-no-price'; partly priced → costed and `partial`
 function semiLineCostIn(line: Loose, tables: CostTables, ctx: SemiContext): ComponentLineCost {
   const productId = line.productId != null ? String(line.productId) : '';
@@ -642,12 +642,18 @@ function semiLineCostIn(line: Loose, tables: CostTables, ctx: SemiContext): Comp
   const card = lookup(tables.products, productId) as Loose | null;
   if (!card) return none('no-card');
   const name = String(card.name != null ? card.name : '').trim();
-  if (ctx.chain.includes(productId) || ctx.depth >= MAX_SEMI_DEPTH) return none('card-loop', name);
+  // The loop test comes FIRST: a card that holds itself is a loop however deep the walk has gone.
+  if (ctx.chain.includes(productId)) return none('card-loop', name);
+  if (ctx.depth >= MAX_SEMI_DEPTH) {
+    // Too deep, or a ring long enough to run out the depth before it closes: a card that can reach itself is a loop.
+    return none(semiReachable(tables.products, productId).has(productId) ? 'card-loop' : 'card-too-deep', name);
+  }
 
   const inner = currentProduct({ ...card, id: productId }, tables);
   const next: SemiContext = { depth: ctx.depth + 1, chain: [...ctx.chain, productId] };
   const batch = batchTotalsIn(inner, tables, next);
   if (batch.rows.some(row => row.kind === 'semi' && row.reason === 'card-loop')) return none('card-loop', name);
+  if (batch.rows.some(row => row.kind === 'semi' && row.reason === 'card-too-deep')) return none('card-too-deep', name);
 
   if (!(batch.cost > 0) || !(batch.kg > 0)) return { ...none('card-no-price', name), partial: true };
   const materialsPerKg = roundTo(batch.cost * (1 / batch.kg), 4);
@@ -1145,7 +1151,7 @@ export function productionCost(product: unknown, tables: CostTables = {}): Produ
 //   labourPerKg      its total labour (own + its semi-finished cards') ÷ the same kilos; null without a rate or without minutes
 //   totalPerKg       materials + labour where labour is known, the materials alone otherwise; null with no materials
 //   partial          something in it has no price yet
-//   reason           'card-loop' | 'card-no-price' when there is no cost per kilo at all
+//   reason           'card-loop' | 'card-too-deep' | 'card-no-price' when there is no cost per kilo at all
 export interface SemiCardCost {
   materialsPerKg: number | null;
   labourPerKg: number | null;
@@ -1161,7 +1167,9 @@ export function semiCardCost(product: unknown, tables: CostTables = {}): SemiCar
   // The card is costed exactly as a line holding one kilo of it would be, FROM THE CARD GIVEN (a draft being edited included): it
   // takes its own id's place in the table, so what it holds is read as it stands now and a loop back to it is seen.
   const key = id || '__draft__';
-  const line = semiLineCostIn({ kind: 'semi', productId: key, qtyKg: 1 }, withDraft(tables, key, doc), { depth: 0, chain: [] });
+  // ⚠️ DEPTH -1: the card itself is not a level, so ITS lines start at 0 exactly as batchTotals(card) starts them — the «Made of»
+  // total, the «Cost per kg» and the list's pill always agree on how deep is too deep.
+  const line = semiLineCostIn({ kind: 'semi', productId: key, qtyKg: 1 }, withDraft(tables, key, doc), { depth: -1, chain: [] });
   const materialsPerKg = line.materialsPerKg ?? null;
   const labourPerKg = line.labourPerKg ?? null;
   return {
@@ -1214,6 +1222,44 @@ export function wouldLoop(products: Table | null | undefined, productId: unknown
   if (!candidate) return false;
   if (candidate === id) return true;
   return id !== '' && semiReachable(products, candidate).has(id);
+}
+
+// How many cards sit inside each other below this one: 0 for a card with no semi-finished line, else 1 + the deepest card it holds.
+// Cycle-safe (a card already on the way down counts 0), so a loop in the data ends.
+function semiHeight(products: Table | null | undefined, id: string, way: readonly string[]): number {
+  if (way.includes(id)) return 0;
+  const card = normalizeProduct(lookup(products, id));
+  if (!card) return 0;
+  let height = 0;
+  for (const component of card.components) {
+    if (component.kind === 'semi') height = Math.max(height, 1 + semiHeight(products, component.productId, [...way, id]));
+  }
+  return height;
+}
+
+// The longest run of semi-finished lines from any card down to `id` (0 for the card itself): how far above it the cards that use it go.
+function semiDepthAbove(products: Table | null | undefined, id: string, way: readonly string[]): number {
+  if (way.includes(id) || !products) return 0;
+  let above = 0;
+  const all: unknown[] = products instanceof Map ? [...products.values()] : Object.values(products as object);
+  for (const raw of all) {
+    const card = normalizeProduct(raw);
+    if (!card || card.id === id || way.includes(card.id)) continue;
+    if (card.components.some(c => c.kind === 'semi' && c.productId === id)) above = Math.max(above, 1 + semiDepthAbove(products, card.id, [...way, id]));
+  }
+  return above;
+}
+
+// Would putting card `candidateId` inside card `productId` stack more than MAX_SEMI_DEPTH cards: for the card itself, and for every
+// card that already holds it (they gain the same levels). The picker greys these out; costing refuses them anyway ('card-too-deep').
+// A loop is wouldLoop's: this answers false for it.
+export function wouldBeTooDeep(products: Table | null | undefined, productId: unknown, candidateId: unknown): boolean {
+  const id = productId == null ? '' : String(productId).trim();
+  const candidate = candidateId == null ? '' : String(candidateId).trim();
+  if (!candidate || wouldLoop(products, id, candidate)) return false;
+  const below = 1 + semiHeight(products, candidate, id ? [id] : []);
+  const above = id === '' ? 0 : semiDepthAbove(products, id, []);
+  return above + below > MAX_SEMI_DEPTH;
 }
 
 // The cards that hold card `cardId` on a semi-finished line, with the kilos each uses — «Used in» on the card. In the order given.
@@ -1488,6 +1534,7 @@ const UNPRICED_REASON_TEXT = Object.freeze({
   // Model 4: a semi-finished card inside this one.
   'card-no-price': 'fc.unpriced.cardNoPrice',
   'card-loop': 'fc.unpriced.cardLoop',
+  'card-too-deep': 'fc.unpriced.cardTooDeep',
 } as const);
 
 // The one place an unpriced reason becomes words. ADAPTED: the translator is the last argument. The original
@@ -1642,6 +1689,8 @@ export function snapshotWorthTaking(before: unknown, after: unknown, tables: Cos
   const b = currentProduct(after, tables);
   if (!b) return false;
   if (!a) return true;                                  // the first save is a point
+  // A semi-finished card taking its first step as a finished product starts its history here (finished → semi does not: it takes none).
+  if (a.kind === 'semi' && b.kind !== 'semi') return true;
   if (a.sellingPrice !== b.sellingPrice) return true;
   if (a.vatRate !== b.vatRate) return true;             // it changes the net price
   if (a.sellingMode !== b.sellingMode) return true;

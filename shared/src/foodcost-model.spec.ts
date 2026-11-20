@@ -1135,7 +1135,7 @@ describe('the port against the original', () => {
   // weighing and the conversion of a product saved before the switch. foodcost-product-loss.spec.ts proves them.
   const POST_SWITCH_NAMES = ['lineRawKg', 'productLossPct', 'productCooking', 'isLegacyProduct', 'fromLegacyProduct', 'currentProduct',
     // MODEL 4 (20 Nov 2026, the cakes plan, step 1): semi-finished cards. semi-finished.spec.ts proves them.
-    'PRODUCT_KINDS', 'MAX_SEMI_DEPTH', 'totalLabourBatchCost', 'semiCardCost', 'semiReachable', 'wouldLoop', 'cardsUsing',
+    'PRODUCT_KINDS', 'MAX_SEMI_DEPTH', 'totalLabourBatchCost', 'semiCardCost', 'semiReachable', 'wouldLoop', 'wouldBeTooDeep', 'cardsUsing',
     'fittedWeighing', 'weighingAllowed'];
   const original = legacyJs as unknown as Record<string, unknown>;
   const port = ported as unknown as Record<string, unknown>;
