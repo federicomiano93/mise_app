@@ -8,6 +8,8 @@
 }
 
 .bigLabel {
+  /* One unit: it wraps whole under the figure, never in the middle of «materials + labour». */
+  display: inline-block;
   color: var(--ink-2);
   font-size: var(--fs-md);
   font-weight: 600;
