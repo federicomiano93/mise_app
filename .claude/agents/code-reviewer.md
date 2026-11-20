@@ -103,15 +103,15 @@ interaction between the change and the lines around it, not in the diff hunk.
 - New behaviour has a test (P15). A guard that pins HOW a call is shaped is satisfied
   by DELETING the call — something must also pin that the call exists.
 
-**Mise 2 (`app/`, `shared/`, on its own branches until the switch) — read `docs/architecture.md` first, never whole:** list its headings
+**Mise 2 (`app/`, `shared/`; what phones run since v2.0.0, so most diffs are here; review the old app only when the diff touches it) — read `docs/architecture.md` first, never whole:** list its headings
 with `grep -n '^## '`, read every section EXCEPT «`app/src`, folder by folder», and from that one
 only the folders the diff touches; the same for `docs/parity/<section>.md` («Already in Mise 2», the
 topic sections, the slice's Decisions). The defects found there so far:
-- **One origin with the current app.** A storage key outside `KEEP_PREFIXES` (in BOTH
+- **One origin with the rollback copy.** A storage key outside `KEEP_PREFIXES` (in BOTH
   `js/local-data.js` and `shared/src/local-data.ts`) is wiped by the other app's sign-out; a
   different Firebase SDK version, persistence list or Firestore cache setting breaks the other
   app's IndexedDB or signs every phone out (`tests/mise2-ci.test.mjs`, `tests/auth-start.test.mjs`).
-- **One page that never reloads.** What the current app fixes on the next page load (a different
+- **One page that never reloads.** What the old app fixed on the next page load (a different
   person's cached data, a day rolling over, a device ping) Mise 2 must do while open: check every
   "at boot" decision ported from `js/`.
 - **Firestore only through the backend** (`backend.firestore()`), never `getFirestore()`; an

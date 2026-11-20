@@ -360,24 +360,21 @@ to its markers, with his decision in the line.
 
 What each one means for the people using Mise 2 until it is ported:
 - 16. Suppliers: verified and fixed (13 Nov 2026). Still different: no Disattiva/Riattiva on a row (only on the card), no hand-made pencil
-  (Mise 2 shows «Da fattura» on the invoice ones instead), and a reactivated row leaves the «Non in uso» group at once.
-- 26. Food cost step B (the cost on every «Made of» line, «No price», the «Which?» list of what has no price), and the two
-  decimals on those screens when they are built: Mise 2's lines keep their own notes (a recipe or an item with no price is
-  said, no money under a recipe or ingredient line; packaging shows its price each and total).
-  (Items 21, 22, 24, 25 and 28 are done: weighing units, the «Cost per 1 kg» block, the list search and the phone preview, the
-  read-first card with four figures and «Details», and two decimals on the screens Mise 2 has.)
-- 23. Food cost recipe link with several products (a check).
+  (Mise 2 shows «Da fattura» on the invoice ones instead), and a reactivated row leaves the «Non in uso» group at once. The price-model pairing (keepPriceDate, samePriceMaps) is done on 20 Nov 2026
+  (PR `test/mise2-price-date-parity`) and no spec marker names 16 any more.
+  (Items 21-26 and 28 are done: weighing units, the «Cost per 1 kg» block, the recipe link with several products (23, 10 Nov 2026),
+  the list search and the phone preview, the read-first card with four figures and «Details», the line costs and «Which?» (26,
+  10 Nov 2026), and two decimals on the screens Mise 2 has.)
 
 Deferred too, with no item number:
-- Reminder notifications: order reminders stop arriving with the switch, also for The Italian Club (warn them first: a
-  line of the checklist above).
+- Reminder notifications: order reminders have not arrived since the switch (15 Nov 2026), for every venue.
 - The sales owner's «tell me when a client orders» notification switch (the current app's Clients page has it): Mise 2 has no
   push switch yet, deferred with the reminders above. A phone that already registered in the current app keeps receiving the
   pushes, and the tap lands on Orders received (`/calculator` is replaced for that role by `/clients/orders`, `SectionRoute`); a
   phone that did not register cannot do it from Mise 2 until the switch exists.
 - `order.html` stays served as it is (client links already sent): the Pages build keeps it, see `docs/switch-runbook.md`.
 - The 3-month order-list clean-up function (F9, a separate task): until it exists nothing is deleted, as today.
-- The app-admin hub (create a customer business, its owner link, re-send, delete) stops with the switch until ported: no new business from the app meanwhile (existing ones unaffected; a one-off script if needed). Its own slice after 41-43 (his decision D10, 13 Nov 2026, `docs/parity/staff-plan.md`).
+- The app-admin hub (create a customer business, its owner link, re-send, delete) has not been in the app since the switch (15 Nov 2026): no new business from the app meanwhile (existing ones unaffected; a one-off script if needed). Its own slice after 41-43 (his decision D10, 13 Nov 2026, `docs/parity/staff-plan.md`).
 
 ## Settings 3g-2 (was the WIP branch left out of the release branch)
 

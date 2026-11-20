@@ -1,11 +1,11 @@
 ---
 name: ui-check
-description: The CURRENT app only (for app/ and shared/ use mise2-check; this driver does not know Mise 2's screens). Measure every Mise screen for interface and accessibility faults — axe-core (contrast, button names, labels, WCAG 2.2 target size), touch targets under 44px, sideways scroll, clipped text, icons off their label, titles off centre, console errors — at 296px, 360px and tablet width, in English and Italian. Use after ANY change to a screen, a stylesheet or tokens.css, before opening a PR that touches the UI, before showing Federico a mockup built from the app, and whenever asked to "check the interface", "improve the UX" or "audit accessibility". It measures; it never judges whether a screen reads well — that is Federico, on a phone.
+description: The ROLLBACK copy only (the old plain-JS app in js/, dist/, the root sw.js and root pages — phones run Mise 2 since v2.0.0) (for app/ and shared/ use mise2-check; this driver does not know Mise 2's screens). Measure every Mise screen for interface and accessibility faults — axe-core (contrast, button names, labels, WCAG 2.2 target size), touch targets under 44px, sideways scroll, clipped text, icons off their label, titles off centre, console errors — at 296px, 360px and tablet width, in English and Italian. Use after ANY change to a screen, a stylesheet or tokens.css, before opening a PR that touches the UI, before showing Federico a mockup built from the app, and whenever asked to "check the interface", "improve the UX" or "audit accessibility". It measures; it never judges whether a screen reads well — that is Federico, on a phone.
 ---
 
 # UI check — measure, don't eyeball
 
-> **Current app only.** `ui-check.mjs` lists the old pages and none of Mise 2's. For a change in
+> **Rollback copy only.** `ui-check.mjs` lists the old pages and none of Mise 2's. For a change in
 > `app/` or `shared/` use the `mise2-check` skill: every `drive-mise2-*` driver runs axe itself.
 
 Every serious UI defect in this app was found by Federico opening a phone, never by
