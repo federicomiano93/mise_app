@@ -1,0 +1,227 @@
+/* The left column of Cakes: «New cake», the search, the cakes as one card of rows, and the reference grams at the foot. The card does
+   not clip (no `overflow`), so nothing that sticks inside the section is ever cut. */
+
+.column {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+}
+
+.add {
+  flex: 1 1 160px;
+}
+
+.foot {
+  align-self: stretch;
+}
+
+.loading {
+  padding: var(--s6);
+  color: var(--ink-2);
+}
+
+.group {
+  padding: 0 var(--s1) var(--s2);
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  font-weight: 650;
+}
+
+.rows {
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  list-style: none;
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s3);
+  padding: var(--s6);
+  border: 1px dashed var(--line-2);
+  border-radius: var(--r-lg);
+}
+
+.emptyTitle {
+  font-size: var(--fs-lg);
+  font-weight: 650;
+}
+
+.emptySub {
+  color: var(--ink-2);
+}
+
+.search {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  min-height: var(--hit);
+  padding: 0 var(--s3);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink-3);
+}
+
+.search:focus-within {
+  border-color: var(--accent);
+}
+
+.search svg {
+  flex: none;
+  width: 18px;
+  height: 18px;
+}
+
+.input {
+  flex: 1;
+  min-width: 0;
+  min-height: var(--hit);
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: none;
+  color: var(--ink);
+  font: var(--fs-md)/1.2 var(--font);
+}
+
+.input::placeholder {
+  color: var(--ink-3);
+}
+
+.nothing {
+  padding: var(--s3);
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+}
+
+/* One cake: the name and ONE line on the left, the traffic light and the food cost on the right. The whole row is the button
+   (72px, never under the 48px target), so a tap anywhere on it opens the cake. */
+.item {
+  border-bottom: 1px solid var(--line);
+}
+
+.item:last-child {
+  border-bottom: 0;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  width: 100%;
+  min-height: 72px;
+  padding: var(--s2) var(--s3);
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.row:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
+}
+
+.row[data-open="true"] {
+  background: var(--accent-tint);
+}
+
+@media (hover: hover) {
+  .row[data-open="false"]:hover {
+    background: var(--sunken);
+  }
+}
+
+.main {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.name {
+  overflow-wrap: anywhere;
+  font-size: var(--fs-lg);
+  font-weight: 600;
+}
+
+.sub {
+  overflow-wrap: anywhere;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+/* A cake whose cost is not complete: the to-do colour, with the words saying so. */
+.sub[data-todo="true"] {
+  color: var(--warn-ink);
+}
+
+.figure {
+  position: relative;
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.dot {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border-radius: var(--r-pill);
+  background: var(--line-2);
+}
+
+.dot[data-status="green"] {
+  background: var(--ok);
+}
+
+.dot[data-status="amber"] {
+  background: var(--warn);
+}
+
+.dot[data-status="red"] {
+  background: var(--danger);
+}
+
+.pct {
+  min-width: 3.5em;
+  font-size: var(--fs-lg);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.pct[data-costed="false"] {
+  color: var(--ink-2);
+  font-weight: 500;
+}
+
+/* Visually hidden, still read aloud: the light's word (the dot alone is colour). */
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
