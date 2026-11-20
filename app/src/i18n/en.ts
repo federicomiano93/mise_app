@@ -561,6 +561,7 @@ export const en = {
   'fc.cat.problem.duplicate': 'There is already a category called “{name}”.',
   'fc.cat.couldNotSave': 'Could not save the category “{name}”. It is back as it was.',
   'fc.cat.couldNotRemove': 'Could not remove the category “{name}”. It is back.',
+'cakes.liveSyncInterrupted': 'Live sync interrupted — cakes may be out of date.',  'cakes.referenceNotSaved': 'The reference grams were not saved — only an owner or a manager can change them. They are back as they were.',
   'fc.kind.label': 'Card type',
   'fc.kind.finished': 'Finished product',
   'fc.kind.semi': 'Semi-finished',

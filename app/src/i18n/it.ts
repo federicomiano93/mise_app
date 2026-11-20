@@ -518,6 +518,7 @@ export const it: Messages = {
   'fc.cat.problem.duplicate': 'Esiste già una categoria chiamata «{name}».',
   'fc.cat.couldNotSave': 'Non sono riuscito a salvare la categoria «{name}». È tornata com’era.',
   'fc.cat.couldNotRemove': 'Non sono riuscito a togliere la categoria «{name}». È tornata.',
+'cakes.liveSyncInterrupted': 'Sincronizzazione interrotta — le torte potrebbero non essere aggiornate.',  'cakes.referenceNotSaved': 'I grammi di riferimento non sono stati salvati — possono cambiarli solo un titolare o un responsabile. Sono tornati com’erano.',
   'fc.kind.label': 'Tipo di scheda',
   'fc.kind.finished': 'Prodotto finito',
   'fc.kind.semi': 'Semilavorato',

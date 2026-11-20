@@ -8,6 +8,8 @@ import { createFirestoreCalculatorSource } from '../calculator/calculatorSource'
 import type { CalculatorSource } from '../calculator/calculatorSource';
 import { browserRandomBytes, createFirestoreClientOrdersSource } from '../calculator/clientOrdersSource';
 import type { ClientOrdersSource } from '../calculator/clientOrdersSource';
+import { createFirestoreCakesSource } from '../cakes/cakesSource';
+import type { CakesSource } from '../cakes/cakesSource';
 import { createFirestoreFoodcostSource } from '../foodcost/foodcostSource';
 import type { FoodcostSource } from '../foodcost/foodcostSource';
 import { createFirestoreSettingsSource } from '../settings/settingsSource';
@@ -49,6 +51,8 @@ export interface DataServices {
   pastries(locationId: string): PastriesSource;
   stocktake(locationId: string): StocktakeSource;
   foodcost(locationId: string): FoodcostSource;
+  // Cakes (20 Nov 2026): the cakes and the reference grams, read live. A cake is SAVED through foodcost() (one batch with its card).
+  cakes(locationId: string): CakesSource;
   calculator(locationId: string): CalculatorSource;
   // The clients' own orders, the deadline, the menus and the ordering links (hosted by the Calculator).
   clientOrders(locationId: string): ClientOrdersSource;
@@ -100,6 +104,7 @@ export function createDataServices(
     pastries: locationId => createFirestorePastriesSource(firestore, locationId),
     stocktake: locationId => createFirestoreStocktakeSource(firestore, locationId),
     foodcost: locationId => createFirestoreFoodcostSource(firestore, locationId),
+    cakes: locationId => createFirestoreCakesSource(firestore, locationId),
     calculator: locationId => createFirestoreCalculatorSource(firestore, locationId),
     clientOrders: locationId => createFirestoreClientOrdersSource(firestore, locationId, {
       createLinkAccount: (email, password) => auth.createLinkAccount(email, password),
