@@ -14,6 +14,9 @@ type Props = {
   // This product's own screen is the one open on the right (the tablet's split).
   isOpen: boolean;
   onOpen: () => void;
+  // Model 4: a semi-finished card shows its cost per kilo as the figure and «materials X · labour Y» under its name (semiWords.ts),
+  // not a food cost % — it has no selling price. null: a finished product, as before.
+  semi?: { pill: string; sub: string } | null;
 };
 
 // One product on the list: its name, ONE line under it (what it earns, or the first thing still
@@ -23,7 +26,7 @@ type Props = {
 // line under the name («On target · £0.35 cost · £1.15 margin»), and the dot is hidden from a
 // screen reader because that word already says it. A product that cannot be costed has no dot
 // colour and no figure («—»): the line says what is missing instead.
-export function ProductRow({ id, name, result, money, isOpen, onOpen }: Props) {
+export function ProductRow({ id, name, result, money, isOpen, onOpen, semi = null }: Props) {
   const { t } = useT();
   const handBack = useHandBack();
   // Back from this product's screen hands the focus back to this button.
@@ -44,12 +47,20 @@ export function ProductRow({ id, name, result, money, isOpen, onOpen }: Props) {
       >
         <span className={styles.main}>
           <span className={styles.name}>{name === '' ? t('fc.untitledProduct') : name}</span>
-          <span className={styles.sub} data-todo={!costed}>{subLine(t, result, money)}</span>
+          {semi === null
+            ? <span className={styles.sub} data-todo={!costed}>{subLine(t, result, money)}</span>
+            : <span className={styles.sub}>{semi.sub === '' ? t('fc.semi.tag') : semi.sub}</span>}
         </span>
-        <span className={styles.figure}>
-          <span className={styles.dot} data-status={result.status ?? 'none'} aria-hidden="true" />
-          <span className={styles.pct} data-costed={costed}>{figureText(result, money)}</span>
-        </span>
+        {semi === null ? (
+          <span className={styles.figure}>
+            <span className={styles.dot} data-status={result.status ?? 'none'} aria-hidden="true" />
+            <span className={styles.pct} data-costed={costed}>{figureText(result, money)}</span>
+          </span>
+        ) : (
+          <span className={styles.figure}>
+            <span className={styles.perKg}>{semi.pill}</span>
+          </span>
+        )}
       </button>
     </li>
   );

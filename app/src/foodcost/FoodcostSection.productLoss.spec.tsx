@@ -225,7 +225,7 @@ describe('a product saved before model 3 (production today)', () => {
 
     const now = converted();
     expect(fake.saved.map(write => write.kind)).toEqual(['product']);
-    expect(fake.saved[0]).toMatchObject({ snapshot: null, data: { model: 3, components: now.components, cookedGrams: now.cookedGrams } });
+    expect(fake.saved[0]).toMatchObject({ snapshot: null, data: { model: 4, components: now.components, cookedGrams: now.cookedGrams } });
     expect(fake.saved[0]?.data).not.toHaveProperty('noWeightLoss');
     expect(fake.saved[0]?.data).not.toHaveProperty('rawGrams');
 

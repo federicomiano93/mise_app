@@ -38,6 +38,7 @@ const isTyped = (value: unknown): value is string => typeof value === 'string' &
 function readRef(value: unknown): LabLineRef | null {
   if (!isRecord(value)) return null;
   if (value.kind === 'recipe' && isId(value.recipeId)) return { kind: 'recipe', recipeId: value.recipeId };
+  if (value.kind === 'semi' && isId(value.productId)) return { kind: 'semi', productId: value.productId };
   if (value.kind === 'ingredient' && isId(value.ingredientId) && (value.unit === 'g' || value.unit === 'kg' || value.unit === 'pcs')) {
     return { kind: 'ingredient', ingredientId: value.ingredientId, unit: value.unit };
   }

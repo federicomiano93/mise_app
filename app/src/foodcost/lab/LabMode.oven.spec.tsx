@@ -17,7 +17,7 @@ const MIN = 60_000;
 const CARD: Product = {
   id: 'Green', name: 'Green', components: [], packaging: [], sellingMode: 'piece', piecesPerBatch: 10, packSize: null, packUnit: null,
   sellingPrice: null, vatRate: null, foodCostTarget: null, labourMinutes: null, labourPeople: null, noWeightLoss: false,
-  rawGrams: null, cookedGrams: null, model: 3,
+  rawGrams: null, cookedGrams: null, model: 3, kind: 'finished', categoryId: null,
 };
 
 // A production started `startedAgo` ago, in the oven since `ovenAgo` ago (or not in it).

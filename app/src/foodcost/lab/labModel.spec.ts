@@ -50,7 +50,7 @@ function product(fields: Partial<Product> = {}): Product {
     noWeightLoss: false,
     rawGrams: null,
     cookedGrams: null,
-    model: 3,
+    model: 3, kind: 'finished', categoryId: null,
     ...fields,
   };
 }

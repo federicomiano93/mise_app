@@ -21,5 +21,9 @@ export function messageText(
       return t('fc.settings.couldNotSave');
     case 'products-stream-broken':
       return t('fc.liveSyncInterruptedProducts');
+    case 'category-not-saved':
+      return t('fc.cat.couldNotSave', { name: message.name });
+    case 'category-not-deleted':
+      return t('fc.cat.couldNotRemove', { name: message.name });
   }
 }

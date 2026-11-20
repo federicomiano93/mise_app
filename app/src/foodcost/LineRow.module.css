@@ -144,3 +144,23 @@
   text-align: right;
   overflow-wrap: anywhere;
 }
+
+/* The tag of a semi-finished line (model 4): a small label on its own line above the name, so the row fits beside the list at 1024px. */
+.tag {
+  align-self: flex-start;
+  margin: 0;
+  padding: 2px var(--s2);
+  border-radius: var(--r-sm);
+  background: var(--accent-tint);
+  color: var(--accent-ink);
+  font-size: var(--fs-sm);
+  font-weight: 650;
+}
+
+/* Under the line's cost: what it is made of, materials and labour, smaller and secondary. */
+.split {
+  display: block;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  font-weight: 450;
+}

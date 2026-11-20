@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { fcNumber } from '@mise/shared/fc-number';
 import { recipeProductId, recipesWithoutProducts } from '@mise/shared/from-recipes';
 import type { MaybeProduct, MissingProduct } from '@mise/shared/from-recipes';
+import type { ProductKind } from '@mise/shared/foodcost-model';
 import { useT } from '../i18n/useT';
 import { useMoney } from '../session/useMoney';
 import { Button } from '../ui/Button';
@@ -44,6 +45,11 @@ export function FromBookDialog({ onClose }: Props) {
   const [lists] = useState(() => recipesWithoutProducts<StoredDoc>(recipes, products));
   const { create, maybe } = lists;
   const [ticked, setTicked] = useState<ReadonlySet<string>>(() => new Set(create.map(keyOf)));
+  // Model 4: each recipe becomes a finished product or a semi-finished one, and NOTHING is chosen for him — only the ticked ones need an
+  // answer. `missing` is the first ticked row that has none when he pressed Create: outlined, said, and focused.
+  const [kinds, setKinds] = useState<Readonly<Record<string, ProductKind>>>({});
+  const [missing, setMissing] = useState<string | null>(null);
+  const kindGroups = useRef(new Map<string, HTMLDivElement>());
   const [busy, setBusy] = useState(false);
   const createRef = useRef<HTMLButtonElement>(null);
   const refocus = useRef(false);
@@ -77,6 +83,44 @@ export function FromBookDialog({ onClose }: Props) {
     return item.kg > 0 ? t('fc.fromBook.wholeRecipe', { kg: fcNumber(item.kg, money) }) : t('fc.fromBook.noWeight');
   };
 
+  const chooseKind = (item: Item, kind: ProductKind) => {
+    setKinds(before => ({ ...before, [keyOf(item)]: kind }));
+    if (missing === keyOf(item)) setMissing(null);
+  };
+
+  const kindControl = (item: Item) => {
+    const key = keyOf(item);
+    const name = String(item.recipe['name'] ?? '').trim();
+    const errorId = `${createId}-kind-error-${key}`;
+    return (
+      <div
+        ref={node => { if (node) kindGroups.current.set(key, node); else kindGroups.current.delete(key); }}
+        className={styles.kind}
+        data-missing={missing === key}
+        role="radiogroup"
+        aria-label={t('fc.fromBook.kindOf', { name })}
+        aria-describedby={missing === key ? errorId : undefined}
+      >
+        <div className={styles.segments}>
+          {(['finished', 'semi'] as const).map(kind => (
+            <label key={kind} className={styles.segment} data-on={kinds[key] === kind}>
+              <input
+                type="radio"
+                name={`${createId}-kind-${key}`}
+                className={styles.radio}
+                checked={kinds[key] === kind}
+                disabled={busy}
+                onChange={() => { chooseKind(item, kind); }}
+              />
+              {t(kind === 'finished' ? 'fc.fromBook.kindFinished' : 'fc.fromBook.kindSemi')}
+            </label>
+          ))}
+        </div>
+        {missing === key ? <p id={errorId} className={styles.kindError}>{t('fc.fromBook.kindMissing')}</p> : null}
+      </div>
+    );
+  };
+
   const row = (item: Item) => (
     <li key={keyOf(item)} className={styles.item}>
       <label className={styles.tick}>
@@ -93,12 +137,24 @@ export function FromBookDialog({ onClose }: Props) {
           <span className={styles.meta}>{meta(item)}</span>
         </span>
       </label>
+      {kindControl(item)}
     </li>
   );
 
   const createChosen = async () => {
     const picked = chosen;
     if (picked.length === 0 || busy) return;
+    // ⚠️ BLOCK, JUMP TO AND HIGHLIGHT (P20): a ticked recipe with no choice stops the create, nothing is made, and the first such row is
+    // scrolled to, focused and outlined with its reason under it.
+    const unchosen = picked.find(item => kinds[keyOf(item)] === undefined);
+    if (unchosen !== undefined) {
+      const key = keyOf(unchosen);
+      setMissing(key);
+      const group = kindGroups.current.get(key);
+      group?.scrollIntoView?.({ block: 'center' });
+      group?.querySelector('input')?.focus();
+      return;
+    }
     const yes = await confirm({
       title: t('fc.fromBook.confirmTitle', { n: picked.length }),
       message: t('fc.fromBook.confirmMsg'),
@@ -112,7 +168,10 @@ export function FromBookDialog({ onClose }: Props) {
     setBusy(true);
     let result = { made: 0, skipped: 0, failed: picked.length };
     try {
-      result = await store.createProductsFromRecipes(picked.map(item => item.recipe));
+      result = await store.createProductsFromRecipes(
+        picked.map(item => item.recipe),
+        Object.fromEntries(picked.map(item => [String(item.recipe['id'] ?? ''), kinds[keyOf(item)] as ProductKind])),
+      );
     } catch {
       // The store counts a refusal itself; anything else reads as «none created», never as a silent close.
     }
@@ -145,7 +204,7 @@ export function FromBookDialog({ onClose }: Props) {
         // the ticks on it stay. While the products are being made nothing closes it.
         onClose={() => { if (!busy) onClose(false); }}
         title={t('fc.fromBook.title')}
-        message={t('fc.fromBook.intro')}
+        message={[t('fc.fromBook.intro'), t('fc.fromBook.chooseIntro')]}
         actions={
           <>
             <Button isDisabled={busy} onPress={() => { onClose(false); }}>{t('ui.back')}</Button>

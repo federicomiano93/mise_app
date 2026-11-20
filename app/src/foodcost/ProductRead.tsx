@@ -2,7 +2,7 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { Ref } from 'react';
 import { Pencil } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router';
-import { currentProduct, productionCost } from '@mise/shared/foodcost-model';
+import { currentProduct, labourBatchCost, productionCost, totalLabourBatchCost } from '@mise/shared/foodcost-model';
 import type { CostTables, Product } from '@mise/shared/foodcost-model';
 import { countryOf } from '@mise/shared/market';
 import { useT } from '../i18n/useT';
@@ -15,12 +15,13 @@ import { useConfirm } from '../ui/useConfirm';
 import { useMediaQuery } from '../ui/useMediaQuery';
 import { useFoodcost, useFoodcostStore } from './FoodcostContext';
 import { CardSection, CardStack } from './CardSection';
-import { historyPath } from './foodcostPath';
+import { historyPath, productPath } from './foodcostPath';
 import type { Origin } from './foodcostPath';
 import { FROM_PRODUCT, pushDepth } from './foodcostNav';
 import { LabEntry } from './lab/LabEntry';
 import { LabMode } from './lab/LabMode';
 import { PerKgBlock } from './PerKgBlock';
+import { SemiCostBlock, UsedInBlock } from './SemiSections';
 import { ProductActions } from './ProductActions';
 import { SuggestedPrice } from './SuggestedPrice';
 import { workingFrom } from './productEditorModel';
@@ -88,7 +89,18 @@ export function ProductRead({ id, product: stored, gone, origin, titleRef, onEdi
   const product = useMemo(() => currentProduct(stored, snap.tables) ?? stored, [stored, snap.tables]);
   // The product as the form would open it: it gives each line the name and the note the form shows under it.
   const working = useMemo(() => workingFrom(product, country), [product, country]);
-  const loaded = { recipes: snap.recipesLoaded, ingredients: snap.ingredientsLoaded };
+  const loaded = { recipes: snap.recipesLoaded, ingredients: snap.ingredientsLoaded, products: snap.productsLoaded };
+  const semiCard = product.kind === 'semi';
+  // Model 4: the labour of the semi-finished cards inside, apart from the card's own work (said only when both exist).
+  const ownLabour = labourBatchCost(product, snap.tables);
+  const allLabour = totalLabourBatchCost(product, snap.tables);
+  const labourSplit = ownLabour !== null && allLabour !== null && ownLabour > 0 && allLabour - ownLabour > 0.00005
+    ? { own: ownLabour, semi: allLabour - ownLabour }
+    : null;
+  // «Used in» opens another card the way the history button does: replacing on the split, one level down on a phone.
+  const openCard = (cardId: string) => {
+    void navigate(productPath(cardId), split ? { replace: true, state } : { state: { ...FROM_PRODUCT, ...pushDepth(state) } });
+  };
   const leaving = useRef(false);
   const asking = useRef(false);
   const mounted = useRef(true);
@@ -159,10 +171,10 @@ export function ProductRead({ id, product: stored, gone, origin, titleRef, onEdi
       />
 
       <div className={shell.body}>
-        <ProductSummary product={product} tables={snap.tables} />
+        {semiCard ? null : <ProductSummary product={product} tables={snap.tables} />}
         <LabEntry productId={id} held={waitNote} onHeld={() => say(waitNote)} onOpen={() => { setLabOpen(true); }} />
         <CardSection title={t('fc.section.product')} help={t('fc.help.prod')}>
-          <ReadProduct product={product} working={working} />
+          <ReadProduct product={product} working={working} categories={snap.categories} />
         </CardSection>
         <CardSection title={t('fc.madeOf')} help={t('fc.help.madeRead')}>
           <ReadMadeOf product={product} working={working} tables={snap.tables} loaded={loaded} />
@@ -175,18 +187,30 @@ export function ProductRead({ id, product: stored, gone, origin, titleRef, onEdi
             <ReadCooking product={product} tables={snap.tables} />
           </CardSection>
         ) : null}
-        <CardSection title={t('fc.packaging')} help={t('fc.help.pack')}>
-          <ReadPackaging product={product} working={working} tables={snap.tables} loaded={loaded} />
-        </CardSection>
+        {semiCard ? null : (
+          <CardSection title={t('fc.packaging')} help={t('fc.help.pack')}>
+            <ReadPackaging product={product} working={working} tables={snap.tables} loaded={loaded} />
+          </CardSection>
+        )}
         <CardSection title={t('fc.labour')} help={t('fc.help.workRead')}>
-          <ReadLabour product={product} note={labourNeedsRate ? t('fc.labourSetRate') : ''} />
+          <ReadLabour product={product} note={labourNeedsRate ? t('fc.labourSetRate') : ''} split={labourSplit} />
         </CardSection>
-        <CardSection title={t('fc.section.price')} help={t('fc.help.price')}>
-          <CardStack>
-            <ReadPrice product={product} />
-            <SuggestedPrice product={product} tables={snap.tables} sellingPrice={product.sellingPrice} onUse={null} />
-          </CardStack>
-        </CardSection>
+        {semiCard ? (
+          <>
+            <SemiCostBlock product={product} tables={snap.tables} labourNote={labourNeedsRate ? t('fc.labourSetRate') : ''} />
+            <UsedInBlock cardId={id} onOpen={openCard} />
+            <CardSection title={t('fc.section.price')} help={t('fc.help.price')}>
+              <p>{t('fc.semi.noPriceSection')}</p>
+            </CardSection>
+          </>
+        ) : (
+          <CardSection title={t('fc.section.price')} help={t('fc.help.price')}>
+            <CardStack>
+              <ReadPrice product={product} />
+              <SuggestedPrice product={product} tables={snap.tables} sellingPrice={product.sellingPrice} onUse={null} />
+            </CardStack>
+          </CardSection>
+        )}
         <PerKgBlock product={product} tables={snap.tables} />
         <ProductActions
           onHistory={() => {

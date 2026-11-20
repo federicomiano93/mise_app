@@ -3,6 +3,7 @@ import { normalizeSearchText } from '@mise/shared/catalogue-model';
 import { isFood, isPackaging } from '@mise/shared/ingredient-kind';
 import { ingredientDisplayName } from '@mise/shared/ingredient-name';
 import { fcMoney } from '@mise/shared/fc-number';
+import { semiCardCost, wouldLoop } from '@mise/shared/foodcost-model';
 import { pricePerKg } from '@mise/shared/price-model';
 import { withoutArchived } from '@mise/shared/recipe-shelf';
 import type { MessageKey } from '../i18n/en';
@@ -10,20 +11,27 @@ import { useT } from '../i18n/useT';
 import { useMoney } from '../session/useMoney';
 import { Button } from '../ui/Button';
 import { Dialog } from '../ui/Dialog';
+import { categoryIdOf } from './categoriesModel';
 import { useFoodcost } from './FoodcostContext';
+import { semiFigures } from './semiWords';
 import { supplierOf } from './supplierOf';
 import styles from './PickDialog.module.css';
 
-// What the chooser offers: recipes, ingredients, both (a line of «Made of»), or packaging.
-export type PickMode = 'recipe' | 'ingredient' | 'line' | 'packaging';
+// What the chooser offers: recipes, ingredients, both (a line of «Made of», with the semi-finished cards beside them), packaging, or
+// the semi-finished cards alone (changing a semi-finished line).
+export type PickMode = 'recipe' | 'ingredient' | 'line' | 'packaging' | 'semi';
 
-export type Choice = { kind: 'recipe' | 'ingredient' | 'packaging'; id: string };
+export type Choice = { kind: 'recipe' | 'ingredient' | 'packaging' | 'semi'; id: string };
 
 type Props = {
   mode: PickMode;
   // Opened already searching (the name's «See all»).
   initialQuery?: string;
   onChoose: (choice: Choice) => void;
+  // The card being edited ('' for a new one) and the semi-finished cards it already holds: a card cannot hold itself, one that
+  // would hold it again (a loop), or the same card twice. Only the semi-finished choices read them.
+  cardId?: string;
+  usedSemiIds?: readonly string[];
   // Escape, Back: nothing was chosen.
   onClose: () => void;
 };
@@ -33,10 +41,16 @@ const TITLE = {
   ingredient: 'fc.pickIngredient',
   line: 'fc.pickRecipeOrIngredient',
   packaging: 'fc.pickPackaging',
+  semi: 'fc.pickSemi',
 } as const satisfies Record<PickMode, MessageKey>;
 
 // `supplier`: whom an ingredient is bought from (supplierOf), '' for a recipe, for packaging and for an ingredient with none.
-type Option = { id: string; name: string; invoiceName: string; meta: string; supplier: string };
+// `off`: a semi-finished card that cannot be chosen, and why (the words replace the second line).
+type Option = { id: string; name: string; invoiceName: string; meta: string; supplier: string; off?: boolean };
+
+// The semi-finished cards' filter: every category, or one, or none.
+const NO_CATEGORY = '';
+type KindFilter = 'recipe' | 'ingredient' | 'semi' | null;
 
 const byName = (a: { name: string }, b: { name: string }): number => a.name.localeCompare(b.name);
 
@@ -53,11 +67,29 @@ const byName = (a: { name: string }, b: { name: string }): number => a.name.loca
 // ingredient says its supplier on a second, smaller line under its name, so two packs of the same flour from two suppliers can be
 // told apart. Not a recipe (bought from nobody) and not packaging (its line already says its price). An ingredient with no
 // supplier, or whose supplier has not arrived yet, has no second line at all: the chooser never waits for the suppliers.
-export function PickDialog({ mode, initialQuery = '', onChoose, onClose }: Props) {
+export function PickDialog({ mode, initialQuery = '', cardId = '', usedSemiIds = [], onChoose, onClose }: Props) {
   const { t } = useT();
   const money = useMoney();
-  const { recipes, ingredients, suppliers } = useFoodcost();
+  const { recipes, ingredients, suppliers, products, categories, tables } = useFoodcost();
   const [query, setQuery] = useState(initialQuery);
+  const [kindFilter, setKindFilter] = useState<KindFilter>(null);
+  // undefined: every category.
+  const [categoryFilter, setCategoryFilter] = useState<string | undefined>(undefined);
+
+  // ⚠️ MODEL 4: ONLY SEMI-FINISHED CARDS ARE OFFERED, grouped by category, each with its cost per kilo (semiCardCost: the figure a line
+  // holding it is costed by). The card itself, one already on this card and one that would hold this card again are shown, said,
+  // and cannot be chosen.
+  const semi = useMemo(() => products
+    .filter(card => card.kind === 'semi' && card.name.trim() !== '')
+    .map(card => {
+      const reason = card.id === cardId ? 'fc.pick.itself' as const
+        : usedSemiIds.includes(card.id) ? 'fc.pick.alreadyHere' as const
+          : wouldLoop(tables.products, cardId, card.id) ? 'fc.pick.loops' as const
+            : null;
+      const figures = semiFigures(t, money, semiCardCost(card, tables));
+      return { card, categoryId: categoryIdOf(card, categories), reason, figures };
+    })
+    .sort((a, b) => a.card.name.localeCompare(b.card.name)), [products, categories, tables, cardId, usedSemiIds, t, money]);
 
   const options = useMemo(() => {
     const named = (item: (typeof ingredients)[string]): boolean => String(item.name ?? '').trim() !== '';
@@ -115,7 +147,10 @@ export function PickDialog({ mode, initialQuery = '', onChoose, onClose }: Props
 
   const both = mode === 'line';
   const sections: { key: string; heading: string; kind: Choice['kind']; items: Option[] }[] = [];
-  if (mode === 'recipe' || both) {
+  const showRecipes = mode === 'recipe' || (both && (kindFilter === null || kindFilter === 'recipe'));
+  const showIngredients = mode === 'ingredient' || (both && (kindFilter === null || kindFilter === 'ingredient'));
+  const showSemi = mode === 'semi' || (both && (kindFilter === null || kindFilter === 'semi'));
+  if (showRecipes) {
     sections.push({
       key: 'recipe',
       heading: both ? t('ui.recipes') : '',
@@ -123,8 +158,29 @@ export function PickDialog({ mode, initialQuery = '', onChoose, onClose }: Props
       items: options.recipeOptions.filter(matches).map(option => ({ ...option, meta: both ? t('fc.recipeWord') : '' })),
     });
   }
-  if (mode === 'ingredient' || both) {
+  if (showIngredients) {
     sections.push({ key: 'ingredient', heading: both ? t('fc.ingredients') : '', kind: 'ingredient', items: options.ingredientOptions.filter(matches) });
+  }
+  // The semi-finished cards: one section per category that has some (the venue's order), then the ones with none. A venue with no
+  // category at all has one plain section.
+  const semiShown = semi.filter(row => matches({ id: row.card.id, name: row.card.name, invoiceName: '', meta: '', supplier: '' })
+    && (categoryFilter === undefined || (categoryFilter === NO_CATEGORY ? row.categoryId === null : row.categoryId === categoryFilter)));
+  if (showSemi) {
+    const toOption = (row: (typeof semi)[number]): Option => ({
+      id: row.card.id,
+      name: row.card.name.trim(),
+      invoiceName: '',
+      meta: row.figures.pill,
+      supplier: row.reason !== null ? t(row.reason) : row.figures.sub,
+      off: row.reason !== null,
+    });
+    const groups = categories.length === 0
+      ? [{ key: 'semi', heading: both ? t('fc.pick.semiTab') : '', rows: semiShown }]
+      : [
+        ...categories.map(category => ({ key: `semi-${category.id}`, heading: category.name, rows: semiShown.filter(row => row.categoryId === category.id) })),
+        { key: 'semi-none', heading: t('fc.cat.none'), rows: semiShown.filter(row => row.categoryId === null) },
+      ];
+    for (const group of groups) sections.push({ key: group.key, heading: group.heading, kind: 'semi', items: group.rows.map(toOption) });
   }
   if (mode === 'packaging') {
     sections.push({ key: 'packaging', heading: '', kind: 'packaging', items: options.packagingOptions.filter(matches) });
@@ -132,7 +188,7 @@ export function PickDialog({ mode, initialQuery = '', onChoose, onClose }: Props
   // The switched-off ones come after everything else, under their own heading, and are chosen like any other. Each row says it
   // too: a keyboard or screen-reader user tabs past the heading.
   const markedOff = (option: Option): Option => ({ ...option, meta: [option.meta, t('ui.notInUse')].filter(Boolean).join(' · ') });
-  if (mode === 'ingredient' || both) {
+  if (showIngredients) {
     sections.push({ key: 'ingredient-off', heading: t('ui.notInUse'), kind: 'ingredient', items: options.inactiveIngredientOptions.filter(matches).map(markedOff) });
   }
   if (mode === 'packaging') {
@@ -140,7 +196,8 @@ export function PickDialog({ mode, initialQuery = '', onChoose, onClose }: Props
   }
   const shown = sections.reduce((count, section) => count + section.items.length, 0);
   const emptyText = query.trim() !== '' ? t('fc.nothingMatches')
-    : mode === 'packaging' ? t('fc.noPackagingYet')
+  : mode === 'packaging' ? t('fc.noPackagingYet')
+    : mode === 'semi' || (both && kindFilter === 'semi') ? t('fc.pick.semiEmpty')
       // Recipes exist but all are archived: say that, rather than «no recipes yet».
       : (mode === 'recipe' || both) && options.everyRecipeArchived ? t('cat.shelf.allArchived')
         : t('fc.noRecipesYet');
@@ -152,6 +209,21 @@ export function PickDialog({ mode, initialQuery = '', onChoose, onClose }: Props
       title={t(TITLE[mode])}
       actions={<Button onPress={onClose}>{t('ui.back')}</Button>}
     >
+      {both ? (
+        <div className={styles.chips} role="group" aria-label={t('fc.pick.kinds')}>
+          {([['recipe', 'ui.recipes'], ['ingredient', 'fc.ingredients'], ['semi', 'fc.pick.semiTab']] as const).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              className={styles.chip}
+              aria-pressed={kindFilter === value}
+              onClick={() => { setKindFilter(kindFilter === value ? null : value); setCategoryFilter(undefined); }}
+            >
+              {t(label)}
+            </button>
+          ))}
+        </div>
+      ) : null}
       <input
         type="search"
         autoFocus
@@ -162,6 +234,23 @@ export function PickDialog({ mode, initialQuery = '', onChoose, onClose }: Props
         value={query}
         onChange={event => { setQuery(event.target.value); }}
       />
+      {showSemi && (mode === 'semi' || kindFilter === 'semi') && categories.length > 0 ? (
+        <div className={styles.chips} role="group" aria-label={t('fc.category.label')}>
+          <button type="button" className={styles.chip} aria-pressed={categoryFilter === undefined} onClick={() => { setCategoryFilter(undefined); }}>
+            {t('fc.pick.allCategories')}
+          </button>
+          {categories.filter(category => semi.some(row => row.categoryId === category.id)).map(category => (
+            <button key={category.id} type="button" className={styles.chip} aria-pressed={categoryFilter === category.id} onClick={() => { setCategoryFilter(category.id); }}>
+              {category.name}
+            </button>
+          ))}
+          {semi.some(row => row.categoryId === null) ? (
+            <button type="button" className={styles.chip} aria-pressed={categoryFilter === NO_CATEGORY} onClick={() => { setCategoryFilter(NO_CATEGORY); }}>
+              {t('fc.cat.none')}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
       <div className={styles.list}>
         {sections.map(section => (section.items.length === 0 ? null : (
           <section key={section.key} className={styles.section}>
@@ -172,6 +261,7 @@ export function PickDialog({ mode, initialQuery = '', onChoose, onClose }: Props
                   <button
                     type="button"
                     className={styles.row}
+                    disabled={option.off === true}
                     onClick={() => { onChoose({ kind: section.kind, id: option.id }); }}
                   >
                     {/* The supplier is IN the button, so it is part of the option's accessible name: «Flour 00, Molino Rossi»

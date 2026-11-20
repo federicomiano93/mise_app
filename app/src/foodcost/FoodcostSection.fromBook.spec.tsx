@@ -41,10 +41,14 @@ async function listed(recipes: unknown[], products = [product('Green')], options
   return { ...view, fake };
 }
 
-async function opened(recipes: unknown[], products = [product('Green')], options: Parameters<typeof renderFoodcost>[1] = {}) {
+// `kind`: the answer given for every row (Federico decides each one; none is chosen to begin with). null leaves them all unchosen.
+async function opened(recipes: unknown[], products = [product('Green')], options: Parameters<typeof renderFoodcost>[1] = {}, kind: 'Finished product' | 'Semi-finished' | null = 'Finished product') {
   const view = await listed(recipes, products, options);
   await view.user.click(await screen.findByRole('button', { name: /^Create the missing product/ }, LOAD));
   await screen.findByRole('dialog', { name: 'Products from the recipe book' });
+  if (kind !== null) {
+    for (const radio of within(choice()).getAllByRole('radio', { name: kind })) await view.user.click(radio);
+  }
   return view;
 }
 
@@ -254,7 +258,7 @@ describe('creating', () => {
     expect(fake.saved[0]!.data).toEqual({
       name: 'Brioche', components: [{ recipeId: 'r1', qtyKg: 1.7 }], packaging: [],
       sellingMode: null, piecesPerBatch: null, packSize: null, packUnit: null, sellingPrice: null, vatRate: null, foodCostTarget: null,
-      labourMinutes: null, labourPeople: null, cookedGrams: 1530, model: 3,
+      labourMinutes: null, labourPeople: null, cookedGrams: 1530, model: 4, kind: 'finished', categoryId: null,
     });
     expect(fake.saved[1]!.data).toMatchObject({ name: 'Pizza', components: [{ recipeId: 'r2', qtyKg: 0 }] });
     // No margin point: nothing is priced yet.
@@ -354,6 +358,49 @@ describe('creating', () => {
   });
 });
 
+describe('the kind of each card (model 4: finished or semi-finished)', () => {
+  it('starts with NOTHING chosen for any row, and says in the intro that each needs a choice', async () => {
+    await opened([BRIOCHE, PIZZA], [product('Green')], {}, null);
+    for (const radio of within(choice()).getAllByRole('radio')) expect(radio).not.toBeChecked();
+    expect(within(choice()).getAllByRole('radio', { name: 'Semi-finished' })).toHaveLength(2);
+    expect(within(choice()).getByText('For each one choose whether it is a finished product or a semi-finished one.')).toBeInTheDocument();
+  });
+
+  it('⚠️ a ticked row with no choice blocks the create, nothing is asked or written, and its row is pointed at with the reason', async () => {
+    const { user, fake } = await opened([BRIOCHE, PIZZA], [product('Green')], {}, null);
+    const first = within(choice()).getAllByRole('radio', { name: 'Finished product' })[0] as HTMLElement;
+    await user.click(first);
+    await user.click(createButton());
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(fake.createProductIfAbsent).not.toHaveBeenCalled();
+    // The second recipe (Pizza) is the first that has no answer: its group is outlined and its reason said.
+    expect(within(choice()).getByText('Choose how to register it in Food cost')).toBeInTheDocument();
+    const group = within(choice()).getByRole('radiogroup', { name: 'How to register Pizza' });
+    expect(group).toHaveAttribute('data-missing', 'true');
+    expect(within(group).getAllByRole('radio')[0]).toHaveFocus();
+    expect(dialogCss).toMatch(/\.kind\[data-missing="true"\][^}]*var\(--danger-ink\)/);
+  });
+
+  it('an unticked row needs no choice, and the error goes as soon as one is made', async () => {
+    const { user } = await opened([BRIOCHE, PIZZA], [product('Green')], {}, null);
+    await user.click(tick(/^Pizza/));
+    await user.click(within(choice()).getAllByRole('radio', { name: 'Semi-finished' })[0] as HTMLElement);
+    await user.click(createButton());
+    await screen.findByRole('alertdialog', { name: 'Create 1 product?' });
+  });
+
+  it('creates each card with the kind that was chosen for it, in no category', async () => {
+    const { user, fake } = await opened([BRIOCHE, PIZZA], [product('Green')], {}, null);
+    await user.click(within(choice()).getAllByRole('radio', { name: 'Semi-finished' })[0] as HTMLElement);
+    await user.click(within(choice()).getAllByRole('radio', { name: 'Finished product' })[1] as HTMLElement);
+    await user.click(createButton());
+    await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Create' }));
+    expect(await screen.findByText('2 products created')).toBeInTheDocument();
+    expect(fake.saved[0]!.data).toMatchObject({ name: 'Brioche', kind: 'semi', categoryId: null, model: 4 });
+    expect(fake.saved[1]!.data).toMatchObject({ name: 'Pizza', kind: 'finished', categoryId: null, model: 4 });
+  });
+});
+
 describe('in Italian', () => {
   const IT = { lang: 'it' as const, session: { language: 'it' as const, location: { country: 'IT' } } };
 
@@ -364,6 +411,8 @@ describe('in Italian', () => {
     await user.click(screen.getByRole('button', { name: 'Crea le schede mancanti (2)' }));
 
     const dialog = await screen.findByRole('dialog', { name: 'Schede dal Ricettario' });
+    expect(within(dialog).getByText('Per ognuna scegli se è un prodotto finito o un semilavorato.')).toBeInTheDocument();
+    for (const radio of within(dialog).getAllByRole('radio', { name: 'Prodotto finito' })) await user.click(radio);
     expect(within(dialog).getByRole('heading', { name: 'Da creare · 2' })).toBeInTheDocument();
     expect(within(dialog).getByRole('checkbox', { name: 'Brioche Ricetta intera: 1,70 kg' })).toBeChecked();
     expect(within(dialog).getByRole('checkbox', { name: 'Pizza Ricetta intera: peso da scrivere' })).toBeChecked();
@@ -381,6 +430,7 @@ describe('in Italian', () => {
     const { user, fake } = await listed([BRIOCHE], [product('Verde')], IT);
     fake.refuse.create = true;
     await user.click(await screen.findByRole('button', { name: 'Crea la scheda mancante' }, LOAD));
+    await user.click(await screen.findByRole('radio', { name: 'Prodotto finito' }));
     await user.click(await screen.findByRole('button', { name: 'Crea 1 scheda' }));
     await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Crea' }));
     expect(await screen.findByRole('alertdialog', { name: /non è stata creata/ })).toHaveTextContent('1 scheda non è stata creata: serve la connessione a internet. Riprova quando sei online.');

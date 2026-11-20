@@ -54,7 +54,7 @@ describe('a resale and an other item, across the sections', () => {
     const fake = editorSource([product('Green')], { recipes: [foodcostRecipe('Dough')], ingredients: [FOOD, WATER, SOAP] });
     const view = renderFoodcost('/food-cost/product/Green', { source: fake });
     await intoForm(view.user);
-    await view.user.click(within(screen.getByRole('region', { name: 'Made of' })).getByRole('button', { name: '+ Add recipe or ingredient' }));
+    await view.user.click(within(screen.getByRole('region', { name: 'Made of' })).getByRole('button', { name: '+ Add recipe, ingredient or semi-finished' }));
     const dialog = await screen.findByRole('dialog', undefined, LOAD);
     const offered = within(dialog).getAllByRole('listitem').map(row => row.textContent ?? '');
     expect(offered.some(text => text.startsWith('Acqua di cottura'))).toBe(true);

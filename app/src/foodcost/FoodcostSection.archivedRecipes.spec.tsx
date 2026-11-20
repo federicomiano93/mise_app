@@ -30,14 +30,18 @@ async function open(path: string, fake: ReturnType<typeof editorSource>) {
 describe('the recipes Food cost offers', () => {
   it('⚠️ leave an archived recipe out of the chooser', async () => {
     const { user } = await open('/food-cost/new', editorSource([], { recipes: RECIPES }));
-    await user.click(within(madeOf()).getByRole('button', { name: '+ Add recipe' }));
-    expect(optionNames(await screen.findByRole('dialog', undefined, LOAD))).toEqual(['Dough']);
+    await user.click(within(madeOf()).getByRole('button', { name: '+ Add recipe, ingredient or semi-finished' }));
+    const dialog = await screen.findByRole('dialog', undefined, LOAD);
+    // The chooser offers recipes, ingredients and semi-finished cards together; the «Recipes» chip narrows it to the recipes.
+    await user.click(within(dialog).getByRole('button', { name: 'Recipes' }));
+    expect(optionNames(dialog)).toEqual(['DoughRecipe']);
   });
 
   it('⚠️ when every recipe is archived the chooser says so, not «no recipes yet»', async () => {
     const { user } = await open('/food-cost/new', editorSource([], { recipes: [recipe('Donut', { archived: true })] }));
-    await user.click(within(madeOf()).getByRole('button', { name: '+ Add recipe' }));
+    await user.click(within(madeOf()).getByRole('button', { name: '+ Add recipe, ingredient or semi-finished' }));
     const dialog = within(await screen.findByRole('dialog', undefined, LOAD));
+    await user.click(dialog.getByRole('button', { name: 'Recipes' }));
     expect(dialog.getByText('Every recipe is archived — restore one in the Recipe catalogue to choose it.')).toBeInTheDocument();
     expect(dialog.queryByText(/No recipes yet/)).not.toBeInTheDocument();
   });

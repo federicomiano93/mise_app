@@ -239,6 +239,17 @@ Aria does not support Preact. The numbers are below.
   Stocktake's (a feature never imports from another feature's folder). The money comes from the
   venue's country (`session/useMoney.ts`), the percentages and dates from the interface language.
   Its parity list is `docs/parity/foodcost.md`.
+  ⚠️ PRODUCT MODEL 4 — CATEGORIES AND SEMI-FINISHED CARDS (the cakes plan, step 1, 20 Nov 2026): a card has a `kind` ('finished', the default, or
+  'semi') and a `categoryId`; a line of «Made of» may be `{kind:'semi', productId, qtyKg}`, another card used inside this one. The maths stays ONE
+  engine in `shared/`: `componentLineCost` costs a semi line at qtyKg × the card's cost per kilo (the figure `costPerKg(card, tables, {packaging:false})`
+  gives, its own loss inside), its labour per kilo is the card's total labour (own + its semi cards', recursively) ÷ its kilos and stays beside the
+  materials, `semiCardCost` is the same figure for the list, the chooser and the editor, `semiReachable` / `wouldLoop` grey out what would make a loop
+  (a loop or a chain deeper than `MAX_SEMI_DEPTH` = 4 reads `'card-loop'`, never a cost of 0), `costPerKg` opens a semi line into the card's own rows
+  (the reusable opening the cakes' shopping list will read), `CostTables.products` carries every card by id (the store builds it). In `app/src/foodcost/`:
+  `categoriesModel.ts` (reading, naming, grouping, which groups are open), `CategoriesDialog` (the `foodcost-categories` collection: add, rename, remove —
+  local-first through `foodcostStore.saveCategory` / `deleteCategory`, the source's `watchCategories`), the list in groups (all closed to begin with),
+  `SemiSections` («Cost per kg» and «Used in»), `semiWords.ts` (the pill and «materials · labour» words), the chooser's semi-finished choice (`PickDialog`) and
+  a kind choice per recipe in «Cards from the recipe book». `docs/parity/foodcost.md`, «Categories and semi-finished cards — as built».
   ⚠️ LAB MODE (step 5 of the Food cost plan, `app/src/foodcost/lab/`, 12 Nov 2026): a full-screen, one-step-at-a-time flow for producing a batch,
   opened ONLY from the READ view of a saved product (`LabEntry` under the summary: a big «Produce in the lab» and, when a production is open, a
   banner with the live clock and «Resume»; the edit form has no door, so unsaved edits can never be lost or mixed in) and drawn by `LabMode` +

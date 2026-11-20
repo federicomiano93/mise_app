@@ -1,13 +1,17 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigationType } from 'react-router';
-import { Plus, Search, Settings } from 'lucide-react';
-import { nameMatches, productsUsingRecipe, sortByMargin } from '@mise/shared/foodcost-model';
+import { ChevronRight, Plus, Search, Settings, Tags } from 'lucide-react';
+import { nameMatches, productsUsingRecipe, semiCardCost, sortByMargin } from '@mise/shared/foodcost-model';
 import { recipesWithoutProducts } from '@mise/shared/from-recipes';
 import { useT } from '../i18n/useT';
 import { useSession } from '../session/SessionContext';
 import { useMoney } from '../session/useMoney';
 import { Button } from '../ui/Button';
 import { FormBar } from '../ui/FormBar';
+import { CategoriesDialog } from './CategoriesDialog';
+import { NO_CATEGORY_KEY, groupRows, grouped, isGroupOpen } from './categoriesModel';
+import type { Group } from './categoriesModel';
+import { semiFigures } from './semiWords';
 import { wantsTitleFocus } from './foodcostNav';
 import { FROM_BOOK_OPENER, NEW_OPENER, SETTINGS_OPENER, useHandBack } from './handBack';
 import { useFoodcost } from './FoodcostContext';
@@ -39,7 +43,7 @@ export function FoodcostList({ openProductId, onOpenProduct, onOpenNew, onOpenSe
   const { canManage } = useSession();
   const money = useMoney();
   const handBack = useHandBack();
-  const { products, productsLoaded, productsFromServer, recipes, recipesLoaded, recipesFromServer, ingredientsLoaded, tables } = useFoodcost();
+  const { products, productsLoaded, productsFromServer, recipes, recipesLoaded, recipesFromServer, ingredientsLoaded, tables, categories } = useFoodcost();
   const { state } = useLocation();
   const navigationType = useNavigationType();
   const title = useRef<HTMLHeadingElement>(null);
@@ -55,6 +59,45 @@ export function FoodcostList({ openProductId, onOpenProduct, onOpenNew, onOpenSe
   // here, in a part that stays mounted from one address to the next, so Back from a product finds the same search.
   const [query, setQuery] = useState('');
   const found = useMemo(() => ranked.filter(({ product }) => nameMatches(product, query)), [ranked, query]);
+
+  // ── Categories (model 4, 20 Nov 2026) ──
+  // The list is drawn in groups once the venue has at least one category: the categories in their order, then «No category» last,
+  // a group with no cards not drawn. ⚠️ EVERY GROUP STARTS CLOSED (his explicit ask) and a tap opens or closes one; the group of the
+  // card that is open opens by itself; while a search is typed the matching cards show with their groups open, and clearing it
+  // returns to the person's own taps. The taps live in this component's state only — nothing is stored.
+  const [openGroups, setOpenGroups] = useState<ReadonlySet<string>>(() => new Set());
+  const searching = query.trim() !== '';
+  const groups = useMemo(() => (grouped(categories) ? groupRows(found, categories) : null), [found, categories]);
+  const toggleGroup = (id: string | null) => {
+    const key = id ?? NO_CATEGORY_KEY;
+    setOpenGroups(before => {
+      const next = new Set(before);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
+  const [categoriesOpen, setCategoriesOpen] = useState(false);
+  const categoriesRef = useRef<HTMLButtonElement>(null);
+  const closeCategories = () => {
+    setCategoriesOpen(false);
+    // The dialog gives the focus back to its button on its own; this keeps it there when the list changed meanwhile.
+    requestAnimationFrame(() => { categoriesRef.current?.focus(); });
+  };
+
+  // One row of the list: a semi-finished card shows its cost per kilo, a finished product its food cost (as before).
+  const rowOf = ({ product, result }: (typeof found)[number]) => (
+    <ProductRow
+      key={product.id}
+      id={product.id}
+      name={product.name}
+      result={result}
+      money={money}
+      isOpen={product.id === openProductId}
+      onOpen={() => onOpenProduct(product.id)}
+      semi={product.kind === 'semi' ? semiFigures(t, money, semiCardCost(product, tables)) : null}
+    />
+  );
+  const groupHeadId = useId();
 
   // The entry's decision lands here by a replace: the narrowed list's title takes the focus (the page
   // itself keeps it, KEEP_FOCUS). Not on Back to it (a POP): the row that opened a product is owed it.
@@ -115,6 +158,10 @@ export function FoodcostList({ openProductId, onOpenProduct, onOpenNew, onOpenSe
           <Plus aria-hidden="true" />
           {t('fc.newProduct')}
         </Button>
+        <Button ref={categoriesRef} variant="secondary" className={styles.settings} onPress={() => { setCategoriesOpen(true); }}>
+          <Tags aria-hidden="true" />
+          {t('fc.cat.button')}
+        </Button>
         {canManage ? (
           <Button ref={settingsRef} variant="secondary" className={styles.settings} onPress={onOpenSettings}>
             <Settings aria-hidden="true" />
@@ -125,6 +172,7 @@ export function FoodcostList({ openProductId, onOpenProduct, onOpenNew, onOpenSe
 
       {missing > 0 ? <FromBookBox count={missing} onOpen={openFromBook} buttonRef={fromBookRef} /> : null}
       {choosing ? <FromBookDialog onClose={closeFromBook} /> : null}
+      {categoriesOpen ? <CategoriesDialog onClose={closeCategories} /> : null}
 
       {/* ⚠️ THE SEARCH BOX IS NEVER REMOUNTED BY A DATA SNAPSHOT: it is a controlled input in a part that stays mounted,
           and only the rows below it are redrawn, so a snapshot landing mid-keystroke finds the text and the keyboard
@@ -152,20 +200,35 @@ export function FoodcostList({ openProductId, onOpenProduct, onOpenNew, onOpenSe
           <p className={styles.emptySub}>{t('fc.empty.sub')}</p>
           <Button onPress={onOpenNew}>{t('fc.empty.action')}</Button>
         </div>
-      )) : found.length === 0 ? null : (
-        <ul className={styles.rows}>
-          {found.map(({ product, result }) => (
-            <ProductRow
-              key={product.id}
-              id={product.id}
-              name={product.name}
-              result={result}
-              money={money}
-              isOpen={product.id === openProductId}
-              onOpen={() => onOpenProduct(product.id)}
-            />
-          ))}
-        </ul>
+      )) : found.length === 0 ? null : groups === null ? (
+        <ul className={styles.rows}>{found.map(rowOf)}</ul>
+      ) : (
+        <div className={styles.groups}>
+          {groups.map((group: Group<(typeof found)[number]>) => {
+            const open = isGroupOpen(group.id, group, { userOpen: openGroups, searching, openProductId });
+            const key = group.id ?? NO_CATEGORY_KEY;
+            const bodyId = `${groupHeadId}-${key}`;
+            return (
+              <section key={key} className={styles.group}>
+                {/* The header is a button (48px and more): the group opens and closes on a tap. */}
+                <h2 className={styles.groupHeading}>
+                  <button
+                    type="button"
+                    className={styles.groupButton}
+                    aria-expanded={open}
+                    aria-controls={bodyId}
+                    onClick={() => { toggleGroup(group.id); }}
+                  >
+                    <ChevronRight aria-hidden="true" className={styles.chevron} data-open={open} />
+                    <span className={styles.groupName}>{group.name ?? t('fc.cat.none')}</span>
+                    <span className={styles.groupCount}>{t('fc.cat.cards', { n: group.items.length })}</span>
+                  </button>
+                </h2>
+                <ul id={bodyId} className={styles.rows} hidden={!open}>{group.items.map(rowOf)}</ul>
+              </section>
+            );
+          })}
+        </div>
       )}
 
       {/* A search that matches nothing stays a small line under the box. The region is drawn before it speaks, so the line is

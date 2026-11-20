@@ -198,13 +198,13 @@ describe('an ingredient line offers only the units its price converts to', () =>
 
   it('a new line of something bought by the piece with no weight opens on pieces; one bought by the kilo on grams', async () => {
     const { user } = await form(source([product('P')], EGG_EACH), 'P');
-    await user.click(within(madeOf()).getByRole('button', { name: '+ Add recipe or ingredient' }));
+    await user.click(within(madeOf()).getByRole('button', { name: '+ Add recipe, ingredient or semi-finished' }));
     let dialog = await screen.findByRole('dialog', undefined, LOAD);
     await user.click(within(dialog).getByRole('button', { name: /^Egg/ }));
     const egg = lineOf(madeOf(), 'Egg');
     expect(within(egg).queryByRole('combobox', { name: 'Unit' })).not.toBeInTheDocument();
     expect(within(egg).getByText('pieces')).toBeInTheDocument();
-    await user.click(within(madeOf()).getByRole('button', { name: '+ Add recipe or ingredient' }));
+    await user.click(within(madeOf()).getByRole('button', { name: '+ Add recipe, ingredient or semi-finished' }));
     dialog = await screen.findByRole('dialog', undefined, LOAD);
     await user.click(within(dialog).getByRole('button', { name: /^Salt/ }));
     expect(within(lineOf(madeOf(), 'Salt')).getByRole('combobox', { name: 'Unit' })).toHaveValue('g');

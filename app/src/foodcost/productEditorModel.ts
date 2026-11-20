@@ -2,7 +2,7 @@ import {
   PRODUCT_MODEL, costProduct, isLegacyProduct, normalizeProduct, productSnapshot, snapshotWorthTaking, vatSelection, weighingAllowed,
 } from '@mise/shared/foodcost-model';
 import type {
-  CostTables, LineUnit, PackUnit, Product, ProductComponent, ProductDraft, SellingMode,
+  CostTables, LineUnit, PackUnit, Product, ProductComponent, ProductDraft, ProductKind, SellingMode,
 } from '@mise/shared/foodcost-model';
 import { normalizeLossPct } from '@mise/shared/catalogue-model';
 import { startWeighing, typeCooked, typeRaw } from '@mise/shared/foodcost-weighing';
@@ -28,7 +28,9 @@ import type { KiloLineUnit } from '@mise/shared/line-quantity';
 // read through grams (six decimals) would come back 0.041667 and a rename-only save would record a margin point.
 export type WorkingComponent =
   | { key: string; kind: 'recipe'; recipeId: string; qty: string; unit: KiloLineUnit; stored?: { qty: string; kg: number } }
-  | { key: string; kind: 'ingredient'; ingredientId: string; qty: string; unit: LineUnit };
+  | { key: string; kind: 'ingredient'; ingredientId: string; qty: string; unit: LineUnit }
+  // Model 4: another Food cost card (a semi-finished one) inside this one; `qty` is the text of its KILO box.
+  | { key: string; kind: 'semi'; productId: string; qty: string };
 
 // The unit every recipe line opens on.
 export const RECIPE_LINE_OPENS_IN: KiloLineUnit = 'g';
@@ -41,6 +43,9 @@ export interface WorkingPackaging {
 
 export interface Working {
   name: string;
+  // Model 4: finished or semi-finished, and the category the card sits in ('' = none). A new card starts finished, in none.
+  kind: ProductKind;
+  categoryId: string;
   components: WorkingComponent[];
   packaging: WorkingPackaging[];
   sellingMode: SellingMode | '';
@@ -105,7 +110,7 @@ const NOTHING_WEIGHED: OpenedWeighing = { rawText: null, rawGrams: null, cookedT
 
 export function emptyWorking(): Working {
   return {
-    name: '', components: [], packaging: [], sellingMode: '', piecesPerBatch: '', packSize: '', packUnit: '',
+    name: '', kind: 'finished', categoryId: '', components: [], packaging: [], sellingMode: '', piecesPerBatch: '', packSize: '', packUnit: '',
     labourMinutes: '', labourPeople: '', sellingPrice: '', vatSelect: '', vatOther: '', foodCostTarget: '',
     rawText: null, cookedText: '', opened: NOTHING_WEIGHED, cookingTyped: false,
   };
@@ -134,9 +139,13 @@ export function workingFrom(product: Product, country: unknown): Working {
   };
   return {
     name: product.name,
-    components: product.components.map<WorkingComponent>(line => (line.kind === 'ingredient'
-      ? { key: newLineKey(), kind: 'ingredient', ingredientId: line.ingredientId, qty: qtyText(line.qty), unit: line.unit }
-      : openRecipeLine(line.recipeId, line.qtyKg))),
+    kind: product.kind,
+    categoryId: product.categoryId ?? '',
+    components: product.components.map<WorkingComponent>(line => {
+      if (line.kind === 'ingredient') return { key: newLineKey(), kind: 'ingredient', ingredientId: line.ingredientId, qty: qtyText(line.qty), unit: line.unit };
+      if (line.kind === 'semi') return { key: newLineKey(), kind: 'semi', productId: line.productId, qty: qtyText(line.qtyKg) };
+      return openRecipeLine(line.recipeId, line.qtyKg);
+    }),
     packaging: product.packaging.map(line => ({ key: newLineKey(), ingredientId: line.ingredientId, qty: qtyText(line.qtyPcs) })),
     sellingMode: product.sellingMode ?? '',
     piecesPerBatch: text(product.piecesPerBatch),
@@ -195,6 +204,9 @@ export function packSizeShown(working: Working): boolean {
 }
 
 export function isShown(working: Working, field: NumberField): boolean {
+  // Model 4: a semi-finished card has no selling price, VAT, target, pieces or pack, so none of those boxes is drawn — and an invalid
+  // value left in one (kept in the working copy in case the card is switched back) never stops its Save.
+  if (working.kind === 'semi' && field !== 'labourMinutes' && field !== 'labourPeople') return false;
   if (field === 'piecesPerBatch') return piecesShown(working);
   if (field === 'packSize') return packSizeShown(working);
   return true;
@@ -280,9 +292,11 @@ export function recipeLossHint(working: Working, recipes: Readonly<Record<string
 // the ids that live only here. A number that is not a number stays NaN (it is refused at Save, and
 // every cost model reads it as «not said»).
 export function toProduct(working: Working, id: string, name: string = working.name): Product {
-  const components = working.components.map<ProductComponent>(line => (line.kind === 'ingredient'
-    ? { kind: 'ingredient', ingredientId: line.ingredientId, qty: readQty(line.qty), unit: line.unit }
-    : { recipeId: line.recipeId, qtyKg: recipeLineKg(line) }));
+  const components = working.components.map<ProductComponent>(line => {
+    if (line.kind === 'ingredient') return { kind: 'ingredient', ingredientId: line.ingredientId, qty: readQty(line.qty), unit: line.unit };
+    if (line.kind === 'semi') return { kind: 'semi', productId: line.productId, qtyKg: readQty(line.qty) };
+    return { recipeId: line.recipeId, qtyKg: recipeLineKg(line) };
+  });
   return {
     id,
     name,
@@ -301,6 +315,8 @@ export function toProduct(working: Working, id: string, name: string = working.n
     cookedGrams: weightOf(working.cookedText, working.opened.cookedText, working.opened.cookedGrams),
     noWeightLoss: false,
     model: PRODUCT_MODEL,
+    kind: working.kind,
+    categoryId: working.categoryId === '' ? null : working.categoryId,
   };
 }
 
@@ -316,6 +332,8 @@ export function costable(working: Working, id: string): Product {
 export function marginPointFor(
   initial: Product | null, clean: Product, tables: CostTables, nowIso: string,
 ): Record<string, unknown> | null {
+  // A semi-finished card has no selling price, so it takes no margin point (and a change of kind or category alone never does).
+  if (clean.kind === 'semi') return null;
   const result = costProduct(clean, tables);
   if (result.foodCostPct === null || !snapshotWorthTaking(initial, clean, tables)) return null;
   return productSnapshot(clean, result, nowIso, tables) as unknown as Record<string, unknown>;
@@ -326,13 +344,13 @@ export function marginPointFor(
 // line would keep its finished kilos and Save would write them as raw kilos — a cost too low, for ever. A legacy product with
 // ingredient lines only converts without the tables. ProductEditor says how long it waits.
 export function waitsForTables(product: Product): boolean {
-  return isLegacyProduct(product) && product.components.some(line => line.kind !== 'ingredient');
+  return isLegacyProduct(product) && product.components.some(line => line.kind !== 'ingredient' && line.kind !== 'semi');
 }
 
 // Whether every recipe on the product's lines is in `recipes`: this phone's copy, all there will be with no signal or with a
 // recipes stream that died — so ProductEditor opens the form on it only then.
 export function recipesOnLinesHere(product: Product, recipes: Readonly<Record<string, unknown>>): boolean {
-  return product.components.every(line => line.kind === 'ingredient' || recipes[line.recipeId] !== undefined);
+  return product.components.every(line => line.kind === 'ingredient' || line.kind === 'semi' || recipes[line.recipeId] !== undefined);
 }
 
 // A number for a sentence, in the interface language's own digits and decimal sign, with no

@@ -100,3 +100,86 @@
   color: var(--ink-2);
   overflow-wrap: anywhere;
 }
+
+/* Model 4: the list in groups, one per category. Each group's header is a button of 48px and more; the cards sit in the same card
+   frame as the plain list, under their header, and are not drawn while the group is closed (hidden). */
+.groups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+.group {
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.groupHeading {
+  margin: 0;
+  font-size: var(--fs-md);
+}
+
+.groupButton {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  width: 100%;
+  min-height: var(--hit);
+  padding: var(--s2) var(--s3);
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: 700 var(--fs-md) var(--font);
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.groupButton:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
+}
+
+@media (hover: hover) {
+  .groupButton:hover {
+    background: var(--sunken);
+  }
+}
+
+.chevron {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  color: var(--ink-3);
+  transition: transform 0.15s;
+}
+
+.chevron[data-open="true"] {
+  transform: rotate(90deg);
+}
+
+.groupName {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.groupCount {
+  flex: none;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+}
+
+/* Inside a group the rows have no frame of their own: the group's is the frame. */
+.group .rows {
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+}
+
+.group .rows[hidden] {
+  display: none;
+}

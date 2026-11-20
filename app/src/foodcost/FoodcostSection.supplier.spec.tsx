@@ -77,7 +77,7 @@ async function openForm(fake: ReturnType<typeof source>, options = {}) {
 
 async function openChooser(fake: ReturnType<typeof source>, options = {}) {
   const view = await openForm(fake, options);
-  await view.user.click(within(madeOf()).getByRole('button', { name: /^(\+ Add recipe or ingredient|\+ Aggiungi ricetta o ingrediente)$/ }));
+  await view.user.click(within(madeOf()).getByRole('button', { name: /^(\+ Add recipe, ingredient or semi-finished|\+ Aggiungi ricetta, ingrediente o semilavorato)$/ }));
   return { ...view, dialog: await chooser() };
 }
 

@@ -1,0 +1,144 @@
+/* The categories dialog (CategoriesDialog.tsx): one row per category inside the app's dialog; the list scrolls on its own so
+   «Done» is never pushed out of reach. Targets are 48px. */
+
+.rows {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(var(--vh100) * 0.5);
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+  min-height: var(--hit);
+  padding: var(--s1) 0;
+  border-top: 1px solid var(--line);
+}
+
+.row:first-child {
+  border-top: 0;
+}
+
+.name {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.count {
+  flex: none;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.icon {
+  flex: none;
+  min-width: var(--hit);
+  min-height: var(--hit);
+  padding: 0;
+}
+
+.icon svg,
+.remove svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* Delete: small and low-key — no frame, the muted ink, danger only when pointed at or focused. */
+.remove {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: var(--hit);
+  height: var(--hit);
+  border: 0;
+  border-radius: var(--r-md);
+  background: none;
+  color: var(--ink-3);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.remove svg {
+  width: 16px;
+  height: 16px;
+}
+
+.remove:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (hover: hover) {
+  .remove:hover {
+    background: var(--danger-tint);
+    color: var(--danger-ink);
+  }
+}
+
+.editor {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+}
+
+/* 18px on purpose: a field under 16px makes iOS zoom the page in when it is focused. */
+.input {
+  flex: 1 1 160px;
+  min-width: 0;
+  min-height: var(--hit);
+  padding: 0 var(--s3);
+  border: 1.5px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: 450 var(--fs-lg) var(--font);
+}
+
+.input:focus {
+  border-color: var(--accent);
+}
+
+.input[aria-invalid="true"] {
+  border-color: var(--danger);
+}
+
+.error {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--danger-ink);
+  font-size: var(--fs-sm);
+  font-weight: 650;
+}
+
+.error:empty {
+  display: none;
+}
+
+.add {
+  margin-top: var(--s2);
+}
+
+.empty {
+  padding: var(--s3);
+  color: var(--ink-2);
+}
+
+.hint {
+  margin: var(--s3) 0 0;
+  padding: var(--s3);
+  border-radius: var(--r-md);
+  background: var(--sunken);
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}

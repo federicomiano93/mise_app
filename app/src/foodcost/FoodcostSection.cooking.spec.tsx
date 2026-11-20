@@ -202,7 +202,7 @@ describe('what Save writes', () => {
     const data = savedProduct(fake).data as Record<string, unknown>;
     expect(data).not.toHaveProperty('rawGrams');
     expect(data).not.toHaveProperty('cookedGrams');
-    expect(data).toMatchObject({ model: 3 });
+    expect(data).toMatchObject({ model: 4 });
   });
 
   it('(l) typed weights are written as typed, a comma being a decimal point, and a raw weight apart only when it is apart', async () => {

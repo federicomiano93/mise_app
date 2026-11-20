@@ -73,7 +73,7 @@ describe('the block', () => {
   it('is hidden on a new product and comes back, still closed, once the first line is priced', async () => {
     const { user } = await open('/food-cost/new', editorSource([], { recipes: [recipe('Dough')] }));
     expect(block().hidden).toBe(true);
-    await user.click(within(screen.getByRole('region', { name: 'Made of' })).getByRole('button', { name: '+ Add recipe' }));
+    await user.click(within(screen.getByRole('region', { name: 'Made of' })).getByRole('button', { name: '+ Add recipe, ingredient or semi-finished' }));
     await user.click(within(await screen.findByRole('dialog', undefined, LOAD)).getByRole('button', { name: /Dough/ }));
     await user.type(within(screen.getByRole('region', { name: 'Made of' })).getByRole('textbox', { name: 'Quantity' }), '500');
     expect(block().hidden).toBe(false);

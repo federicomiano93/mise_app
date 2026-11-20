@@ -90,3 +90,44 @@
   width: var(--hit);
   padding: 0;
 }
+
+/* Model 4: the card type, a two-option segmented control (React Aria's RadioGroup). The group is a column: its word, then the segments. */
+.kind {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s2);
+}
+
+.segments {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--s1);
+  padding: var(--s1);
+  border-radius: var(--r-md);
+  background: var(--sunken);
+}
+
+.segment {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--hit);
+  padding: 0 var(--s4);
+  border: 2px solid transparent;
+  border-radius: var(--r-sm);
+  color: var(--ink-2);
+  font-weight: 600;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.segment[data-selected] {
+  background: var(--surface);
+  color: var(--accent-ink);
+  box-shadow: var(--shadow-1);
+}
+
+.segment[data-focus-visible] {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}

@@ -37,6 +37,8 @@ export const MAX_MINUTES = 100000;
 // A line of «Composto da» as the lab saw it when it started, and which line of the saved product it stands for.
 export type LabLineRef =
   | { kind: 'recipe'; recipeId: string }
+  // Model 4: a semi-finished card inside this one, weighed in grams like a recipe.
+  | { kind: 'semi'; productId: string }
   | { kind: 'ingredient'; ingredientId: string; unit: LineUnit };
 
 // `planned` is in the line's weighing unit — grams, or pieces for a piece line — and null for a line added in the lab.
@@ -93,13 +95,15 @@ function plannedOf(component: ProductComponent): number {
 }
 
 function refOf(component: ProductComponent): LabLineRef {
+  if (component.kind === 'semi') return { kind: 'semi', productId: component.productId };
   return component.kind === 'ingredient'
     ? { kind: 'ingredient', ingredientId: component.ingredientId, unit: component.unit }
     : { kind: 'recipe', recipeId: component.recipeId };
 }
 
 function matches(ref: LabLineRef, component: ProductComponent): boolean {
-  if (ref.kind === 'recipe') return component.kind !== 'ingredient' && component.recipeId === ref.recipeId;
+  if (ref.kind === 'semi') return component.kind === 'semi' && component.productId === ref.productId;
+  if (ref.kind === 'recipe') return component.kind !== 'ingredient' && component.kind !== 'semi' && component.recipeId === ref.recipeId;
   return component.kind === 'ingredient' && component.ingredientId === ref.ingredientId && component.unit === ref.unit;
 }
 

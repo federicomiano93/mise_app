@@ -1,0 +1,85 @@
+/* «Cost per kg» and «Used in» of a semi-finished card (SemiSections.tsx): inside a CardSection, so only the contents are styled. */
+
+.big {
+  margin: 0;
+  font-size: var(--fs-3xl);
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+
+.caption {
+  margin: var(--s1) 0 0;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.rows {
+  display: flex;
+  flex-direction: column;
+  margin: var(--s3) 0 0;
+}
+
+.row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--s3);
+  padding: var(--s2) 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.row dt {
+  color: var(--ink-2);
+}
+
+.row dd {
+  margin: 0;
+  font-weight: 600;
+}
+
+.total {
+  margin-top: var(--s1);
+  padding-top: var(--s3);
+  border-top: 1px solid var(--line);
+  font-size: var(--fs-lg);
+  font-weight: 700;
+}
+
+.total dt {
+  color: var(--ink);
+}
+
+.note {
+  margin: var(--s3) 0 0;
+  color: var(--warn-ink);
+  font-size: var(--fs-sm);
+}
+
+.used {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* A link in look, a button in kind (it opens another card without leaving the page's history): 48px, the accent ink. */
+.link {
+  display: flex;
+  align-items: center;
+  min-height: var(--hit);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent-ink);
+  font: 650 var(--fs-md) var(--font);
+  text-align: left;
+  text-decoration: underline;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.link:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
