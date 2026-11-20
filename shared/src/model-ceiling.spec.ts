@@ -13,6 +13,7 @@
 
 import { describe, expect, test } from 'vitest';
 import rules from '../../firestore.rules?raw';
+import { CAKE_MODEL } from './cake-model';
 import { CONFIG_MODEL } from './calculator-config';
 import { PRODUCT_MODEL, weighingAllowed } from './foodcost-model';
 import { CONFIG_MODEL as legacyConfigModel } from '../../js/calculator-config.js';
@@ -60,5 +61,17 @@ describe('products: the weights the form lets through are the ones the rules kee
     expect(weighingAllowed(-5)).toBe(false);
     expect(weighingAllowed(Number.NaN)).toBe(false);
     expect(weighingAllowed(Number.POSITIVE_INFINITY)).toBe(false);
+  });
+});
+
+// Cakes (20 Nov 2026): the cakes block's own ceiling on `model` is CAKE_MODEL, read from the block itself because the products'
+// one is a different number with the same line. (REFERENCE_KEYS against isCakeReference is pinned in cake-model.spec.ts.)
+describe('cakes: the rules ceiling is CAKE_MODEL', () => {
+  test('the cakes block keeps model at most CAKE_MODEL', () => {
+    const block = /match \/cakes\/\{cakeId\} \{[\s\S]*?allow delete/.exec(rules);
+    expect(block, 'the cakes block is in firestore.rules').not.toBeNull();
+    const found = /request\.resource\.data\.model <= (\d+)\s*(?:\n|&&)/.exec((block as RegExpExecArray)[0]);
+    expect(found, 'the cakes model ceiling is in the block').not.toBeNull();
+    expect(Number((found as RegExpExecArray)[1])).toBe(CAKE_MODEL);
   });
 });
