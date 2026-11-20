@@ -1,4 +1,4 @@
-import { createContext, useContext } from 'react';
+import { createContext, useContext, useMemo } from 'react';
 import type { ReactNode } from 'react';
 import type { PhonePush } from './phonePush';
 import type { TimerPush } from './timerPush';
@@ -16,7 +16,8 @@ interface PushServices {
 const PhonePushContext = createContext<PushServices | null>(null);
 
 export function PhonePushProvider({ phonePush, timerPush, children }: PushServices & { children: ReactNode }) {
-  return <PhonePushContext.Provider value={{ phonePush, timerPush }}>{children}</PhonePushContext.Provider>;
+  const value = useMemo(() => ({ phonePush, timerPush }), [phonePush, timerPush]);
+  return <PhonePushContext.Provider value={value}>{children}</PhonePushContext.Provider>;
 }
 
 function useServices(): PushServices {

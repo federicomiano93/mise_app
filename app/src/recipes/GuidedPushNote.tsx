@@ -43,6 +43,15 @@ export function GuidedPushNote({ onRegistered }: {
     return () => { document.removeEventListener('visibilitychange', onVisible); };
   }, []);
 
+  // ⚠️ A PHONE THAT SAYS «ON» CAN HAVE LOST ITS SUBSCRIPTION (phonePush.ts verify, local, no network): asked once as the screen
+  // opens; when the registration was forgotten the button comes back.
+  useEffect(() => {
+    if (phonePush.support() !== 'granted' || !phonePush.onForMe(uid)) return undefined;
+    let live = true;
+    void phonePush.verify().then(result => { if (live && result === 'cleared') redraw(n => n + 1); });
+    return () => { live = false; };
+  }, []);
+
   const reason = phonePush.support();
   const only = phonePush.permissionOnly();
   const registered = phonePush.onForMe(uid);
@@ -68,7 +77,8 @@ export function GuidedPushNote({ onRegistered }: {
     void phonePush.register().then(outcome => {
       setRegistering(false);
       if (outcome === 'blocked' || outcome === 'install-first' || outcome === 'unsupported' || outcome === 'failed') setTapped(outcome);
-      setFocusLine(true);
+      // The button goes away unless the prompt was dismissed (`ask`): then it keeps the focus.
+      setFocusLine(outcome !== 'ask');
       if (outcome === 'on') onRegistered();
       redraw(n => n + 1);
     });
@@ -85,7 +95,7 @@ export function GuidedPushNote({ onRegistered }: {
   if (state === 'B') {
     return (
       <div className={styles.noteBlock}>
-        <Button className={styles.alsoTell} isDisabled={registering} onPress={enable}>
+        <Button className={styles.alsoTell} isPending={registering} onPress={enable}>
           <Bell aria-hidden="true" />
           {t('cat.alsoTellMeIf')}
         </Button>

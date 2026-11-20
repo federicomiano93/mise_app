@@ -95,10 +95,22 @@ describe('schedule', () => {
     expect(JSON.stringify(warn.mock.calls)).not.toContain('secret-id');
   });
 
-  test('never throws when the write never answers: the time limit gives up', async () => {
+  test('⚠️ a write the time limit cut off still answers the id, so it can be cancelled (it may yet land)', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    const { timerPush } = build({ writeTimeoutMs: 20 }, { setDoc: () => new Promise(() => undefined) });
+    const { timerPush, updateDoc } = build({ writeTimeoutMs: 20 }, { setDoc: () => new Promise(() => undefined) });
+    expect(await timerPush.schedule(BOOKING)).toBe('r1-1-0-1');
+    timerPush.cancel('r1-1-0-1');
+    await vi.waitFor(() => { expect(updateDoc).toHaveBeenCalledWith({ path: 'locations/bakery/push-timers/r1-1-0-1' }, { active: false }); });
+  });
+
+  test('⚠️ if the person or the venue changed during the write, the booking is cancelled in ITS venue and not reported', async () => {
+    let current: unknown = READY;
+    const { timerPush, updateDoc } = build({ session: () => current as typeof READY }, {
+      setDoc: async () => { current = { status: 'ready', locationId: 'restaurant', user: { uid: 'u1' } }; },
+    });
     expect(await timerPush.schedule(BOOKING)).toBe('');
+    await vi.waitFor(() => { expect(updateDoc).toHaveBeenCalledTimes(1); });
+    expect(updateDoc).toHaveBeenCalledWith({ path: 'locations/bakery/push-timers/r1-1-0-1' }, { active: false });
   });
 
   test('never throws when the session itself throws', async () => {
@@ -127,6 +139,22 @@ describe('cancel', () => {
     const { timerPush } = build({}, { updateDoc: async () => { throw Object.assign(new Error('path'), { code: 'not-found' }); } });
     expect(() => { timerPush.cancel('r1-1-0-1'); }).not.toThrow();
     await vi.waitFor(() => { expect(warn).toHaveBeenCalledWith('Could not cancel a scheduled notification:', 'not-found'); });
+  });
+
+  test('⚠️ cancels in the venue the booking went to, even after the open venue changed', async () => {
+    let current: unknown = READY;
+    const { timerPush, updateDoc } = build({ session: () => current as typeof READY });
+    await timerPush.schedule(BOOKING);
+    current = { status: 'ready', locationId: 'restaurant', user: { uid: 'u1' } };
+    timerPush.cancel('r1-1-0-1');
+    await vi.waitFor(() => { expect(updateDoc).toHaveBeenCalledTimes(1); });
+    expect(updateDoc).toHaveBeenCalledWith({ path: 'locations/bakery/push-timers/r1-1-0-1' }, { active: false });
+  });
+
+  test('an id this phone did not book here (rebuilt after a reload) is cancelled in the open venue, and may queue offline', async () => {
+    const { timerPush, updateDoc } = build({ online: () => false });
+    timerPush.cancel('rebuilt-id');
+    await vi.waitFor(() => { expect(updateDoc).toHaveBeenCalledWith({ path: 'locations/bakery/push-timers/rebuilt-id' }, { active: false }); });
   });
 
   test('never throws when no venue is open', () => {

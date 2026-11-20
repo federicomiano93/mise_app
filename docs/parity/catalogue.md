@@ -2249,5 +2249,9 @@ machinery moved from `orders/` to `app/src/push/` so Recipes can use it. Differe
 re-registering on the timer tap**: a phone registered for somebody else books nothing, and the button on the screen registers it, from a
 real tap; (2) **offline books nothing** (a queued write would make sign-out warn «changes will be lost»); (3) **«+1 min» re-books**: the old
 booking is cancelled and the new end is booked under a new id; (4) **the id carries the end**: `{recipeId}-{startedAt}-{stepIndex}-{endsAt}`,
-because the rules never let an existing document be rewritten; (5) like the current app, nothing is re-booked when a mix is resumed or
-re-entered on a running timer, and leaving the screen cancels.
+because the rules never let an existing document be rewritten; (5) **a mix resumed on a running timer is booked again** (the owner's decision, unlike the current app): on mount with a running timer and
+a phone registered for this person, the old id (`{recipeId}-{startedAt}-{stepIndex}-{endsAt}`, possibly still active from before a reload) is
+cancelled and a fresh `…-r{time}` id is booked, with the same late-answer check as a tap; with under 30 s left nothing new is booked but the old
+id is remembered so Done or leaving still cancels it. A page discarded AFTER a resume booking leaves that booking uncancellable (accepted
+edge). Leaving the screen cancels. (6) a booking the time limit cut off still answers its id, so it can be cancelled; every booking remembers
+its venue, and one made while the person or venue changed is cancelled at once.

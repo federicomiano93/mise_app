@@ -339,9 +339,11 @@ the Auth accounts of people who left) is one more `KINDS` entry and one more swi
 | `usage` | `usage` | `updatedAt` Timestamp | older than 400 days |
 
 ⚠️ **Who writes `fcm-tokens/{token}`** (document id = the FCM token): the current app's `js/push.js` and, since 20 Nov 2026,
-Mise 2's `app/src/orders/phonePush.ts` — both on a TAP in Orders → Settings, both a MERGE of exactly `{ bakery, uid, updatedAt }`
+Mise 2's `app/src/push/phonePush.ts` — both on a TAP in Orders → Settings, both a MERGE of exactly `{ bakery, uid, updatedAt }`
 (never a whole write: the same document carries `muteOrderRequests`, written by the mute switch), and both remember it on the
 phone under `push-token` / `push-token-uid`. `pushTokenRefresh.ts` then only re-stamps `updatedAt` (an update, never a create).
+
+⚠️ **Who writes `push-timers/{id}`**: the current app's `js/push.js` and, since 20 Nov 2026, Mise 2's `app/src/push/timerPush.ts` (the guided mix's timer): a CREATE of exactly the 8 keys `bakery, uid, token, fireAt, title, body, active, createdAt` under a fresh id (an existing id cannot be re-created), and later an UPDATE of `active` alone (`false` = cancelled, never a delete), by the same uid. Mise 2 books only for a phone registered to the person signed in, and never offline.
 
 ⚠️ **Every kind ships OFF** (`ENABLED` in the model, all `false`): the function runs, queries and logs `{ kind, wouldDelete,
 skipped, … }` per kind and deletes nothing — **report-only** — until a later one-line PR switches a kind on (its pin in

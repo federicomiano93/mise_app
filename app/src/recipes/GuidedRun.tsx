@@ -3,10 +3,12 @@ import type { Ref } from 'react';
 import { BellRing, Check, Play } from 'lucide-react';
 import { useBlocker, useLocation, useNavigationType } from 'react-router';
 import type { BlockerFunction } from 'react-router';
+import { MIN_AHEAD_MS } from '@mise/shared/push-model';
 import { formatDuration, formatRemaining, normalizeEndNote, normalizeSteps, overdueText, progressText } from '@mise/shared/guided-model';
 import { useT } from '../i18n/useT';
-import { useTimerPush } from '../push/PhonePushContext';
+import { usePhonePush, useTimerPush } from '../push/PhonePushContext';
 import { markBusy } from '../session/busy';
+import { useSession } from '../session/SessionContext';
 import { announceAction } from '../telemetry/usage';
 import { Button } from '../ui/Button';
 import { FormBar } from '../ui/FormBar';
@@ -65,9 +67,13 @@ export function GuidedRun({ id, session }: Props) {
   const runNow = useRef(run);
   const [now, setNow] = useState(() => Date.now());
   const timerPush = useTimerPush();
+  const phonePush = usePhonePush();
+  const { user } = useSession();
   // The push this screen booked for the timer that is running ('' = none): read at cleanup time, never captured, so the dev
   // double-mount (which runs the cleanup between two mounts, with nothing booked) cannot cancel a booking made afterwards.
   const booked = useRef('');
+  // How many times a resume booking was made by this screen (StrictMode's second mount must not reuse the first one's id).
+  const resumes = useRef(0);
 
   const update = (next: RunState, at: number) => {
     runNow.current = next;
@@ -132,7 +138,7 @@ export function GuidedRun({ id, session }: Props) {
   // ⚠️ ASKED FOR, NEVER WAITED ON: the countdown has already started; a notification is a bonus for somebody who walks away.
   // schedule() never throws and answers '' when it books nothing, which is an ordinary outcome. Booked on taps only, never on
   // mount or resume (a mix picked up again does not book its running timer anew: the same as the current app).
-  const bookTimer = () => {
+  const bookTimer = (resume?: { suffix: string; alive: () => boolean }) => {
     const current = runNow.current;
     const wanted = current.endsAt;
     const stepIndex = current.index;
@@ -140,7 +146,7 @@ export function GuidedRun({ id, session }: Props) {
     if (current.finished || wanted <= 0 || bookedStep === undefined) return;
     void timerPush.schedule({
       // A fresh id for every booking (the rules never let an existing one be rewritten), so «+1 min» can book anew.
-      id: `${id}-${session.startedAt}-${stepIndex}-${wanted}`,
+      id: `${id}-${session.startedAt}-${stepIndex}-${wanted}${resume?.suffix ?? ''}`,
       fireAt: wanted,
       // The recipe names itself; the product name is only the last resort.
       title: snapshot.name || 'Mise',
@@ -149,7 +155,7 @@ export function GuidedRun({ id, session }: Props) {
       if (!got) return;
       // The step may have been finished, skipped, extended or left while this was in flight: cancel what was just booked.
       const now = runNow.current;
-      if (!mounted.current || now.finished || now.endsAt !== wanted || now.index !== stepIndex) timerPush.cancel(got);
+      if (!(resume?.alive() ?? mounted.current) || now.finished || now.endsAt !== wanted || now.index !== stepIndex) timerPush.cancel(got);
       else booked.current = got;
     });
   };
@@ -161,7 +167,31 @@ export function GuidedRun({ id, session }: Props) {
   };
   const dropBookedLatest = useRef(dropBooked);
   dropBookedLatest.current = dropBooked;
-  useEffect(() => () => { dropBookedLatest.current(); }, []);
+  // ⚠️ THE CANCEL WAITS ONE TICK AND LOOKS AGAIN: StrictMode's dev double-mount runs this cleanup between two mounts, and it must
+  // not cancel a booking the screen goes on holding.
+  useEffect(() => () => {
+    window.setTimeout(() => { if (!mounted.current) dropBookedLatest.current(); }, 0);
+  }, []);
+  // ⚠️ A MIX PICKED UP ON A RUNNING TIMER IS BOOKED AGAIN (the owner's decision, unlike the current app): the page may have been
+  // discarded or reloaded, and a booking from before may still be active. That old id is cancelled (a harmless refused update if
+  // it never existed), then a fresh id (`…-r<time>`) is booked, with the same late-answer check as a tap. With under 30 s left
+  // nothing new is booked, but the old id is remembered so Done or leaving still cancels a stale active one.
+  // ⚠️ THE CHECK IS PER MOUNT (`alive`): StrictMode's dev double-mount runs this twice, and the first run's late answer must be
+  // cancelled by its own cleanup, so exactly one booking stays active.
+  useEffect(() => {
+    const current = runNow.current;
+    if (booked.current || current.finished || current.endsAt <= Date.now() || !phonePush.onForMe(user?.uid ?? '')) return undefined;
+    const base = `${id}-${session.startedAt}-${current.index}-${current.endsAt}`;
+    if (current.endsAt - Date.now() < MIN_AHEAD_MS) {
+      booked.current = base;
+      return undefined;
+    }
+    let alive = true;
+    timerPush.cancel(base);
+    const again = resumes.current++;
+    bookTimer({ suffix: `-r${Date.now()}${again > 0 ? `-${again}` : ''}`, alive: () => alive });
+    return () => { alive = false; };
+  }, []);
 
   // ── Leaving ──────────────────────────────────────────────────────────────────────────────────────────────────
   // One level up: the recipe. The browser's Back when the recipe is the entry behind this one, otherwise this entry is

@@ -9,14 +9,19 @@
 // ordinary outcome (notifications off, a timer too short to beat the delivery), not a failure worth reporting.
 // ⚠️ BOOKS ONLY FOR A PHONE REGISTERED TO THE PERSON HOLDING IT (`onForMe`): the server rings only a token registered to whoever
 // set the timer. Unlike js/push.js nothing is re-registered here: the screen's own button registers, from a tap.
-// ⚠️ NOTHING OFFLINE: a write made offline would sit in Firestore's queue and a sign-out would then warn «your changes will be
-// lost» about something nobody typed.
-// ⚠️ A WRITE CUT OFF BY THE TIME LIMIT STAYS IN FIRESTORE'S QUEUE and may arrive later: harmless (the server checks `active`
-// and the caller cancels what it no longer wants), but the id is not remembered, so that late booking cannot be cancelled.
+// ⚠️ schedule() WRITES NOTHING OFFLINE: a write made offline would sit in Firestore's queue and a sign-out would then warn «your
+// changes will be lost» about something nobody typed.
+// ⚠️ cancel() MAY QUEUE OFFLINE, ON PURPOSE: a cancel that lands when the signal returns still beats the buzz for a step already
+// finished, and it is a one-field update of a document this phone made, so a sign-out warning about it is the lesser evil.
+// ⚠️ A WRITE CUT OFF BY THE TIME LIMIT STAYS IN FIRESTORE'S QUEUE and may still land: schedule() therefore ANSWERS THE ID in that
+// case (not ''), so the caller can cancel it. The cancel is issued on the same client after the create, and Firestore applies one
+// client's writes in order; if the create was refused the cancel fails harmlessly.
+// ⚠️ EACH BOOKING REMEMBERS ITS VENUE: a cancel after a venue switch must reach the venue that was booked, not the one open now.
 // ⚠️ EVERY BOOKING NEEDS A FRESH ID: the rules refuse an update of anything but `active`, so setDoc on an existing id fails.
 // ⚠️ CANCELLING MARKS `active: false`, it never deletes: the server can tell «cancelled» from «could not read».
 // ⚠️ A FAILURE LOGS THE ERROR CODE ALONE: a message can name the document path.
 
+import { sameSession } from '@mise/shared/device-model';
 import { buildPath } from '@mise/shared/location-id';
 import { buildTimerDoc, isSchedulable, isValidTimerDoc } from '@mise/shared/push-model';
 import type { KeyValueStorage } from '../session/backend';
@@ -52,12 +57,15 @@ export interface TimerPushDeps {
 
 export function createTimerPush(deps: TimerPushDeps): TimerPush {
   const limit = () => deps.writeTimeoutMs ?? WRITE_TIMEOUT_MS;
+  // The venue each booking went to (an id this phone did not book here, such as one rebuilt after a reload, falls back to the open venue).
+  const venues = new Map<string, string>();
 
   async function schedule({ id, fireAt, title, body }: TimerBooking): Promise<string> {
     try {
       if (!id || id.includes('/')) return '';
       if (deps.phonePush.support() !== 'granted') return '';
       const session = deps.session();
+      const before = session;
       const lid = session?.locationId;
       const uid = session?.user?.uid;
       if (session?.status !== 'ready' || !lid || !uid) return '';
@@ -70,11 +78,23 @@ export function createTimerPush(deps: TimerPushDeps): TimerPush {
       const payload = buildTimerDoc({ uid, token, fireAt, title, body, nowMs });
       if (!isValidTimerDoc(payload, nowMs)) return '';
 
-      await withTimeout((async () => {
-        const { fs, db } = await deps.firestore();
-        // A create, not a merge: the rules allow a create of exactly these keys.
-        await fs.setDoc(fs.doc(db, buildPath(lid, 'push-timers'), id), { bakery: lid, ...payload });
-      })(), limit());
+      try {
+        await withTimeout((async () => {
+          const { fs, db } = await deps.firestore();
+          // A create, not a merge: the rules allow a create of exactly these keys.
+          await fs.setDoc(fs.doc(db, buildPath(lid, 'push-timers'), id), { bakery: lid, ...payload });
+        })(), limit());
+      } catch (err) {
+        if (errorCode(err) !== 'timeout') throw err;
+        // Handed to Firestore and not confirmed: it may still land, so the id is answered and can be cancelled.
+        console.warn('A notification booking was not confirmed in time:', 'timeout');
+      }
+      venues.set(id, lid);
+      // ⚠️ THE PERSON OR THE VENUE MAY HAVE CHANGED DURING THE WAIT: the booking is cancelled at once and not reported as made.
+      if (!sameSession(before, deps.session())) {
+        cancel(id);
+        return '';
+      }
       return id;
     } catch (err) {
       console.warn('Could not schedule a notification:', errorCode(err));
@@ -85,7 +105,8 @@ export function createTimerPush(deps: TimerPushDeps): TimerPush {
   function cancel(id: string): void {
     if (!id) return;
     try {
-      const lid = deps.session()?.locationId;
+      const lid = venues.get(id) ?? deps.session()?.locationId;
+      venues.delete(id);
       if (!lid) return;
       void withTimeout((async () => {
         const { fs, db } = await deps.firestore();

@@ -1,5 +1,5 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, screen, waitFor, within } from '@testing-library/react';
 import { fakePhonePush } from '../testing/fakePhonePush';
 import type { FakePhonePush } from '../testing/fakePhonePush';
 import { fakeTimerPush } from '../testing/fakeTimerPush';
@@ -118,8 +118,24 @@ describe('the line under the controls', () => {
     const { user, run, phonePush } = await openRun(fakePhonePush({ reason: 'ask', outcome: 'on' }));
     await user.click(run.getByRole('button', { name: 'Also tell me if I leave the app' }));
     expect(phonePush.register).toHaveBeenCalledTimes(1);
-    expect(await run.findByText('It will also send a notification if you leave the app.')).toBeInTheDocument();
+    const line = await run.findByText('It will also send a notification if you leave the app.');
     expect(run.queryByRole('button', { name: 'Also tell me if I leave the app' })).toBeNull();
+    await waitFor(() => { expect(document.activeElement).toBe(line.closest('p')); });
+  });
+
+  it('B stays B and keeps the focus on the button when the prompt is dismissed (answer ask)', async () => {
+    const { user, run } = await openRun(fakePhonePush({ reason: 'ask', outcome: 'ask' }));
+    const button = run.getByRole('button', { name: 'Also tell me if I leave the app' });
+    await user.click(button);
+    await act(async () => { await Promise.resolve(); });
+    expect(run.getByRole('button', { name: 'Also tell me if I leave the app' })).toHaveFocus();
+  });
+
+  it('a phone that says on but lost its subscription gets the button back (verify, once, as the screen opens)', async () => {
+    const phonePush = fakePhonePush({ reason: 'granted', owner: 'u1', verifyAnswer: 'cleared' });
+    const { run } = await openRun(phonePush);
+    expect(await run.findByRole('button', { name: 'Also tell me if I leave the app' })).toBeInTheDocument();
+    expect(phonePush.verify).toHaveBeenCalledTimes(1);
   });
 
   it.each([
@@ -130,7 +146,8 @@ describe('the line under the controls', () => {
   ] as const)('B → C: a tap answered %s shows that reason and the honest line', async (outcome, sentence) => {
     const { user, run } = await openRun(fakePhonePush({ reason: 'ask', outcome }));
     await user.click(run.getByRole('button', { name: 'Also tell me if I leave the app' }));
-    expect(await run.findByText(sentence)).toBeInTheDocument();
+    const why = await run.findByText(sentence);
+    await waitFor(() => { expect(document.activeElement).toBe(why); });
     expect(run.getByText(/^Keep this screen open/)).toBeInTheDocument();
     expect(run.queryByRole('button', { name: 'Also tell me if I leave the app' })).toBeNull();
   });
@@ -142,7 +159,9 @@ describe('the line under the controls', () => {
     const { user, run } = await openRun(phonePush);
     const button = run.getByRole('button', { name: 'Also tell me if I leave the app' });
     await user.click(button);
-    expect(button).toBeDisabled();
+    // Pending, not disabled: it keeps the focus and blocks a second press.
+    expect(button).toHaveAttribute('aria-disabled', 'true');
+    expect(button).toHaveFocus();
     await user.click(button);
     expect(phonePush.register).toHaveBeenCalledTimes(1);
     await act(async () => { finish('on'); await Promise.resolve(); });
@@ -161,12 +180,56 @@ describe('the line under the controls', () => {
 });
 
 describe('booking the timer’s push', () => {
-  it('⚠️ books nothing when the mix opens, fresh or resumed on a running timer', async () => {
+  it('books nothing when a fresh mix opens, or when the phone is not registered for this person', async () => {
+    const fresh = await openRun();
+    await act(async () => { await Promise.resolve(); });
+    expect(fresh.timerPush.schedule).not.toHaveBeenCalled();
+    expect(fresh.timerPush.cancel).not.toHaveBeenCalled();
+    cleanup();
+    leaveSession({ endsAt: T0 + 300_000 });
+    const resumed = await openRun(fakePhonePush({ reason: 'ask' }));
+    await act(async () => { await Promise.resolve(); });
+    expect(resumed.timerPush.schedule).not.toHaveBeenCalled();
+    expect(resumed.timerPush.cancel).not.toHaveBeenCalled();
+  });
+
+  it('⚠️ a mix resumed on a running timer cancels the old booking and books a fresh id, once', async () => {
     leaveSession({ endsAt: T0 + 300_000 });
     const { timerPush } = await openRun();
     await act(async () => { await Promise.resolve(); });
+    const base = `r1-${STARTED}-0-${T0 + 300_000}`;
+    expect(timerPush.cancel).toHaveBeenCalledWith(base);
+    expect(timerPush.schedule).toHaveBeenCalledTimes(1);
+    expect(timerPush.schedule).toHaveBeenCalledWith({ id: `${base}-r${T0}`, fireAt: T0 + 300_000, title: 'Focaccia', body: 'Mix the flour and the water' });
+  });
+
+  it('⚠️ leaving after a resume cancels the fresh booking', async () => {
+    leaveSession({ endsAt: T0 + 300_000 });
+    const { user, run, timerPush } = await openRun();
+    await act(async () => { await Promise.resolve(); });
+    await user.click(run.getByRole('button', { name: 'Back' }));
+    await user.click(within(await screen.findByRole('alertdialog', { name: 'Leave the guided mix?' })).getByRole('button', { name: 'Leave' }));
+    await screen.findByRole('heading', { level: 3, name: 'Ingredients' });
+    await waitFor(() => { expect(timerPush.cancel).toHaveBeenCalledWith(`r1-${STARTED}-0-${T0 + 300_000}-r${T0}`); });
+  });
+
+  it('⚠️ a mix resumed with under 30 seconds left books nothing, but Done still cancels a stale booking', async () => {
+    leaveSession({ endsAt: T0 + 20_000 });
+    const { user, run, timerPush } = await openRun();
+    await act(async () => { await Promise.resolve(); });
     expect(timerPush.schedule).not.toHaveBeenCalled();
     expect(timerPush.cancel).not.toHaveBeenCalled();
+    await user.click(run.getByRole('button', { name: 'Done early' }));
+    expect(timerPush.cancel).toHaveBeenCalledWith(`r1-${STARTED}-0-${T0 + 20_000}`);
+  });
+
+  it('a resume booking that comes back after the step was finished is cancelled at once', async () => {
+    leaveSession({ endsAt: T0 + 300_000 });
+    const timerPush = fakeTimerPush({ hold: true });
+    const { user, run } = await openRun(fakePhonePush(REGISTERED), timerPush);
+    await user.click(run.getByRole('button', { name: 'Done early' }));
+    await act(async () => { timerPush.release(); await Promise.resolve(); });
+    expect(timerPush.cancel).toHaveBeenCalledWith(`r1-${STARTED}-0-${T0 + 300_000}-r${T0}`);
   });
 
   it('⚠️ «Start the timer» books once: the id carries the run, the step and the end, the title is the recipe and the body the step', async () => {
@@ -265,7 +328,7 @@ describe('booking the timer’s push', () => {
     await user.click(run.getByRole('button', { name: 'Back' }));
     await user.click(within(await screen.findByRole('alertdialog', { name: 'Leave the guided mix?' })).getByRole('button', { name: 'Leave' }));
     await screen.findByRole('heading', { level: 3, name: 'Ingredients' });
-    expect(timerPush.cancel).toHaveBeenCalledWith(ID_STEP_1);
+    await waitFor(() => { expect(timerPush.cancel).toHaveBeenCalledWith(ID_STEP_1); });
   });
 
   it('a booking that answers nothing is not remembered, so nothing is cancelled later', async () => {

@@ -239,7 +239,7 @@ self.addEventListener('message', event => {
 
 // ── Notifications that arrive with the app closed ────────────────────────────────────────────────────────
 //
-// ⚠️ THE SUBSCRIPTION IS MADE BY THE PAGE, NOT BY THIS FILE: Orders → Settings → «Enable notifications» (orders/phonePush.ts) hands
+// ⚠️ THE SUBSCRIPTION IS MADE BY THE PAGE, NOT BY THIS FILE: Orders → Settings → «Enable notifications» (push/phonePush.ts) hands
 // getToken() this worker's registration — never a second worker. The push subscription belongs to the REGISTRATION, not to the
 // script, so a phone subscribed by either app goes on receiving the server's pushes after this worker replaces it. A push that
 // shows nothing would make the browser show its own «this site has been updated in the background» and can
@@ -277,10 +277,14 @@ self.addEventListener('notificationclick', event => {
   const target = legacyTarget(wanted) || SCOPE;
   event.waitUntil((async () => {
     const open = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-    const existing = open.find(c => c.url === target) || open[0];
+    // ⚠️ A WINDOW ALREADY INSIDE THE TARGET'S SCREEN IS ONLY FOCUSED, NEVER NAVIGATED: a timer's notification names the recipes
+    // list (`#/recipes`) while the baker may be inside a guided mix (`#/recipes/<id>/mix`), and a navigate arrives as a POP the mix's
+    // leave-blocker cannot stop, so the mix would be left silently with dough in the bowl.
+    const inside = c => c.url === target || c.url.startsWith(target + '/');
+    const existing = open.find(inside) || open[0];
     if (existing) {
       try { await existing.focus(); } catch (err) { /* focus can be refused */ }
-      if (existing.url !== target && 'navigate' in existing) {
+      if (!inside(existing) && 'navigate' in existing) {
         try { await existing.navigate(target); } catch (err) { /* an uncontrolled window cannot be navigated */ }
       }
       return;
