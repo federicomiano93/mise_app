@@ -344,7 +344,8 @@ describe('Sections for employees', () => {
     it('sends an employee back to Settings', async () => {
       const { router } = renderApp('/settings/sections', { session: { role: 'staff', canManage: false, isOwner: false } });
       await waitFor(() => { expect(router.state.location.pathname).toBe('/settings'); });
-      expect(screen.queryAllByRole('switch')).toHaveLength(0);
+      // The page's only switch is the device's kiosk mode («This device», for everybody), never a section's.
+      expect(screen.queryAllByRole('switch')).toEqual([screen.getByRole('switch', { name: 'Lab tablet' })]);
     });
 
     it('lets a manager in', async () => {

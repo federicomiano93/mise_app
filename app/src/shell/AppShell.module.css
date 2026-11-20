@@ -1,5 +1,5 @@
 /* The frame of the app (values from the approved design, `mise2.css`). Phone first: the tab
-   bar at the bottom, no rail, no top bar. From 700px — tablets, portrait included — the rail
+   bar at the bottom, no rail, no top bar (except on the Home of a kiosk device, below). From 700px — tablets, portrait included — the rail
    takes the left edge and the top bar appears; a media query chooses, no script measures. */
 
 .shell {
@@ -241,6 +241,9 @@
   gap: var(--s4);
   /* A token: a split screen's right-hand side works out its height from it (StocktakeSection). */
   height: var(--topbar-h);
+  /* ⚠️ Without it the bar's longest content (a long venue name) sets the width of .main's column: on a phone in kiosk mode the
+     whole page grew to 477px at 360 and the browser zoomed it out (20 Nov 2026, found by the kiosk driver). */
+  min-width: 0;
   /* The right inset keeps the connection status clear of a notch on that side. */
   padding: 0 calc(var(--s6) + env(safe-area-inset-right)) 0 var(--s6);
   border-bottom: 1px solid var(--line);
@@ -259,6 +262,7 @@
 .venue,
 .venueStatic {
   display: inline-flex;
+  min-width: 0;
   align-items: center;
   gap: var(--s2);
   min-height: var(--hit);
@@ -281,6 +285,13 @@
 
 .venue[data-pressed] {
   background: var(--sunken);
+}
+
+.venueName {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .venueDot {
@@ -322,6 +333,62 @@
 
 .dot[data-online="false"] {
   background: var(--ink-3);
+}
+
+.syncText {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A phone on kiosk mode: the bar is hidden on a phone, but «Standby» and «Exit» live in it, so it shows there too — the venue, the two
+   round buttons and the connection (its dot alone, below); the date has no room. The pills never shrink; the venue gives way (its name
+   shortens with dots, then the box itself clips). From 700px the rules below take over. */
+.shell[data-topbar="on"][data-kiosk="on"] .main {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.shell[data-kiosk="on"] .topbar {
+  display: flex;
+  gap: var(--s3);
+  padding: 0 calc(var(--s3) + env(safe-area-inset-right)) 0 var(--s3);
+}
+
+.shell[data-kiosk="on"] .date {
+  display: none;
+}
+
+.shell[data-kiosk="on"] .venue,
+.shell[data-kiosk="on"] .venueStatic {
+  flex: 0 100 auto;
+  overflow: hidden;
+}
+
+.shell[data-kiosk="on"] .sync {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+/* On a kiosk PHONE the connection is the dot alone: its words, even «Online», cost the venue its name (measured at 360 and 296,
+   20 Nov 2026), and on a phone a lost connection is already said in words by the Home's offline strip (OfflineBanner). The words stay
+   for a screen reader (the status is still announced). */
+@media (max-width: 699.98px) {
+  .shell[data-kiosk="on"] .sync {
+    flex: none;
+  }
+
+  .shell[data-kiosk="on"] .syncText {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
 }
 
 /* The tab bar (phone) */
@@ -406,6 +473,16 @@
 
   .topbar {
     display: flex;
+  }
+
+  .shell[data-kiosk="on"] .topbar {
+    gap: var(--s4);
+    padding: 0 calc(var(--s6) + env(safe-area-inset-right)) 0 var(--s6);
+  }
+
+  .shell[data-kiosk="on"] .date {
+    display: block;
+    flex: none;
   }
 
   .tabbar {

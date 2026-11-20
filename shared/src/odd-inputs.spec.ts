@@ -15,6 +15,7 @@ import * as pushModel from './push-model';
 import * as homeCards from './home-cards';
 import * as awayModel from './away-model';
 import * as awayReminder from './away-reminder';
+import * as kioskModel from './kiosk-model';
 import * as allergenModel from './allergen-model';
 import * as sections from './sections';
 import * as firebaseTarget from './firebase-target';
@@ -94,6 +95,7 @@ import * as legacyPushModelJs from '../../js/push-model.js';
 import * as legacyHomeCardsJs from '../../js/home-cards.js';
 import * as legacyAwayModelJs from '../../js/away-model.js';
 import * as legacyAwayReminderJs from '../../js/away-reminder.js';
+import * as legacyKioskModelJs from '../../js/kiosk-model.js';
 import * as legacyAllergenModelJs from '../../js/allergen-model.js';
 import * as legacySectionsJs from '../../js/sections.js';
 import * as legacyFirebaseTargetJs from '../../js/firebase-target.js';
@@ -176,6 +178,7 @@ const legacyPushModel = legacyPushModelJs as unknown as typeof pushModel;
 const legacyHomeCards = legacyHomeCardsJs as unknown as typeof homeCards;
 const legacyAwayModel = legacyAwayModelJs as unknown as typeof awayModel;
 const legacyAwayReminder = legacyAwayReminderJs as unknown as typeof awayReminder;
+const legacyKioskModel = legacyKioskModelJs as unknown as typeof kioskModel;
 const legacyAllergenModel = legacyAllergenModelJs as unknown as typeof allergenModel;
 const legacySections = legacySectionsJs as unknown as typeof sections;
 const legacyFirebaseTarget = legacyFirebaseTargetJs as unknown as typeof firebaseTarget;
@@ -543,6 +546,73 @@ describe('away-reminder: odd inputs', () => {
   agree('reminderDue', awayReminder.reminderDue, legacyAwayReminder.reminderDue,
     product([true, false, 'true', 1, ...ODD], DAYS, DAYS));
   agree('dayFromISO', awayReminder.dayFromISO, legacyAwayReminder.dayFromISO, product(DAYS));
+});
+
+// ── kiosk-model ──────────────────────────────────────────────────────────────
+
+describe('kiosk-model: odd inputs', () => {
+  const m = kioskModel;
+  const l = legacyKioskModel;
+  const HOUR = 3_600_000;
+
+  const RAW = [...ODD, 'not json', '42', 'null', '[]', '{}', '{"enabled":true}', '{"enabled":"true","restMinutes":"5"}',
+    '{"enabled":true,"restMinutes":20,"nightHours":0}', '{"restMinutes":3,"nightHours":9}', '{"restMinutes":null,"nightHours":""}',
+    '{"restMinutes":5.0,"nightHours":1e0}', '{"restMinutes":-0}', { enabled: true, restMinutes: 2, nightHours: 4 },
+    { enabled: 1, restMinutes: '2', nightHours: [1] }, { restMinutes: NaN }, { nightHours: Infinity }];
+  const CHANGES = [...ODD, { enabled: true }, { enabled: 'yes' }, { restMinutes: 10 }, { restMinutes: 7 }, { nightHours: 0 },
+    { nightHours: '0' }, 'ab', { enabled: false, restMinutes: 20, nightHours: 4, extra: 1 }];
+  agree('readKioskSettings', m.readKioskSettings, l.readKioskSettings, product(RAW));
+  agree('kioskBandVisible', m.kioskBandVisible, l.kioskBandVisible, product(RAW));
+  agree('serializeKioskSettings', m.serializeKioskSettings, l.serializeKioskSettings, product(RAW, CHANGES));
+
+  const STATES = [...ODD, 'active', 'rest', 'night', 'Rest', 'asleep'];
+  const SETTINGS = [undefined, null, {}, { restMinutes: 5, nightHours: 1 }, { restMinutes: 2, nightHours: 0 }, { restMinutes: '5', nightHours: '1' },
+    { restMinutes: NaN, nightHours: -1 }, 'settings', 42];
+  const TIMES = [undefined, null, NaN, 0, NOW, NOW - 5 * 60_000, NOW - 2 * HOUR, '1700000000000', 'soon', Infinity];
+  const STATE_INPUTS: unknown[] = [...ODD, 'input'];
+  for (const state of STATES) {
+    for (const settings of SETTINGS) {
+      for (const lastInputAt of TIMES) {
+        STATE_INPUTS.push({ state, now: NOW, lastInputAt, restSince: lastInputAt, busy: false, signedIn: true, settings });
+      }
+      for (const busy of [true, false, 1, 0, '', 'yes', null]) {
+        for (const signedIn of [true, false, 1, 0, '', 'yes', null]) {
+          STATE_INPUTS.push({ state, now: NOW, lastInputAt: NOW - 3 * HOUR, restSince: NOW - 3 * HOUR, busy, signedIn, settings });
+        }
+      }
+    }
+  }
+  agree('nextKioskState', m.nextKioskState, l.nextKioskState, STATE_INPUTS.map(input => [input]));
+
+  const FLAGS = [true, false, 1, 0, '', 'yes', null, undefined];
+  const PAIRS: unknown[] = [...ODD, 'input'];
+  for (const prevState of STATES) {
+    for (const state of STATES) {
+      for (const flag of FLAGS) {
+        PAIRS.push({ prevState, state, busy: flag, updateWaiting: !flag, signedIn: flag, visible: !flag, enabled: flag,
+          now: NOW, restSince: NOW - 2 * HOUR, nightHours: flag ? 0 : 1, lastReloadDay: flag ? '2026-08-14' : null,
+          visibilityState: flag ? 'visible' : 'hidden', closed: flag });
+      }
+    }
+  }
+  for (const now of TIMES) {
+    for (const restSince of TIMES) {
+      for (const nightHours of [0, '0', 1, null, undefined, NaN, false, '']) {
+        PAIRS.push({ prevState: 'rest', state: 'rest', now, restSince, busy: false, signedIn: true, visible: true, nightHours,
+          lastReloadDay: '2026-08-13' });
+        PAIRS.push({ prevState: 'rest', state: 'night', now, restSince, busy: false, signedIn: true, visible: true, nightHours,
+          lastReloadDay: now });
+      }
+    }
+  }
+  const ONE = PAIRS.map(input => [input]);
+  agree('shouldAutoUpdate', m.shouldAutoUpdate, l.shouldAutoUpdate, ONE);
+  agree('shouldDailyReload', m.shouldDailyReload, l.shouldDailyReload, ONE);
+  agree('shouldReloadOnWake', m.shouldReloadOnWake, l.shouldReloadOnWake, ONE);
+  agree('shouldRestNow', m.shouldRestNow, l.shouldRestNow, ONE);
+  agree('exitRefused', m.exitRefused, l.exitRefused, ONE);
+  agree('workDayDate', m.workDayDate, l.workDayDate, product([...NOWS, ...TIMES, ...ODD, new Date(NOW), 8.64e15, 8.64e15 + 1]));
+  agree('wakeArmDelay', m.wakeArmDelay, l.wakeArmDelay, product([...TIMES, ...ODD], [...TIMES, ...ODD]));
 });
 
 // ── away-model ───────────────────────────────────────────────────────────────
@@ -1729,7 +1799,7 @@ describe('price-model: odd inputs', () => {
 
   // ── The writing half (the ingredient card's, step 3e-3) ──
   // The same odd values for both. priceUnitLabel, costReasonText and formatPricePerUnit take the translator
-  // and are run in price-write.spec.ts; keepPriceDate has no original yet (see price-model.spec.ts).
+  // and are run in price-write.spec.ts; keepPriceDate and samePriceMaps are paired below.
   const AT = '2026-10-01T10:00:00.000Z';
   const FORMATS: readonly unknown[] = [undefined, null, 5, 'str', [], {}, { kind: 'carton', count: 4, inner: 'busta' },
     { kind: 'carton', count: null, inner: 'busta' }, { kind: 'carton', count: 50, inner: 'pezzo' }, { kind: 'single', count: null, inner: '' },
@@ -1807,6 +1877,24 @@ describe('price-model: odd inputs', () => {
     ...product([{ name: 'Flour', priceUnit: 'kg', pricePerUnit: 7.2, vatRate: 4 }, { name: 'Flour' }, { priceBasis: 'rate', priceUpdatedAt: AT }, { __proto__: { priceUnit: 'kg' }, name: 'x' }],
       [undefined]),
     ...product(PRICE_DOCS.slice(0, 60))]);
+
+  // keepPriceDate: a stored price (dated, undated, odd) against real pricePatch results, a patch with no date
+  // and odd patches.
+  const DATED_DAY = '2026-09-01T12:00:00.000Z';
+  const BEFORE_PRICES: readonly unknown[] = [...ODD, { name: 'Flour' }, { priceUpdatedAt: DATED_DAY }, { priceUpdatedAt: null, pricePerUnit: 7.2 },
+    { priceUnit: 'kg', pricePerUnit: 7.2, unitWeightKg: null, priceUpdatedAt: DATED_DAY }, { priceUnit: 'kg', pricePerUnit: 7.2, priceUpdatedAt: 5 },
+    { priceUnit: 'kg', pricePerUnit: 0, priceUpdatedAt: DATED_DAY }, { priceUnit: 'kg', pricePerUnit: -1, priceUpdatedAt: DATED_DAY },
+    { priceUnit: 'pcs', pricePerUnit: 0.25, unitWeightKg: 0.06, priceUpdatedAt: DATED_DAY }, { priceUnit: 'pcs', pricePerUnit: 0.25, priceUpdatedAt: DATED_DAY },
+    { ...FLOUR_CASE, priceUpdatedAt: DATED_DAY }, { ...PCS_CASE, priceUpdatedAt: DATED_DAY }, { ...FLOUR_CASE, priceUpdatedAt: '' },
+    ...PRICE_DOCS.slice(0, 40).map(doc => (doc && typeof doc === 'object' ? { ...(doc as object), priceUpdatedAt: DATED_DAY } : doc))];
+  const REAL_PATCHES: readonly unknown[] = [{ priceUnit: 'kg', pricePerUnit: 7.2 }, { priceUnit: 'kg', pricePerUnit: 7.6 }, { priceUnit: 'l', pricePerUnit: 1.2 },
+    { priceUnit: 'pcs', pricePerUnit: 0.25, unitWeightKg: 0.06 }, { priceUnit: 'pcs', pricePerUnit: 0.25, unitWeightKg: 0.07 }, { priceUnit: null, pricePerUnit: null },
+    { priceUnit: 'case', casePrice: 180, caseCount: 1, caseItemSize: 25, caseItemUnit: 'kg' }, FLOUR_CASE, PCS_CASE, {}]
+    .map(input => m.pricePatch(input as never, AT));
+  const ODD_PATCHES: readonly unknown[] = [undefined, null, 5, 'x', {}, { priceUpdatedAt: null }, { priceUpdatedAt: undefined }, { priceUpdatedAt: 5 },
+    { priceUpdatedAt: AT }, { priceUpdatedAt: AT, priceUnit: 'kg', pricePerUnit: 7.2 }, { priceUpdatedAt: AT, priceUnit: 'kg', pricePerUnit: 'x' }];
+  agree('keepPriceDate', m.keepPriceDate as AnyFn, l.keepPriceDate as AnyFn, [...product(BEFORE_PRICES, REAL_PATCHES), ...product(BEFORE_PRICES.slice(0, 30), ODD_PATCHES)]);
+  agree('samePriceMaps', m.samePriceMaps, l.samePriceMaps, product(PRICE_MAPS, PRICE_MAPS));
 
   // The rate and the amount, in a few venues.
   const FEW_VENUES: readonly (readonly [unknown, unknown])[] = [[undefined, undefined], ['£', GB_LAYOUT], ['€', IT_LAYOUT],

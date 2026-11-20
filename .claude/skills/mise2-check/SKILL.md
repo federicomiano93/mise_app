@@ -1,13 +1,13 @@
 ---
 name: mise2-check
-description: The gates a Mise 2 change (anything in app/ or shared/, a React screen, a *Store.ts or *Source.ts, a ported function) must pass before its stacked PR is opened or a slice is called done — types, specs and build in both packages, the rules checks, ports against both files, living beside the current app, driving the slice on the emulator with axe-core at 1024, 360 and 296 in Italian and English, what a script cannot see, the code review and the PR. Use INSTEAD OF smoke-test and ui-check for Mise 2, before opening a Mise 2 PR, whenever Federico asks "is it ready" about a Mise 2 slice, and before calling a slice finished. It reports what ran and what did not; whether a screen reads well is only Federico, on the tablet and the phone.
+description: The gates a Mise 2 change (anything in app/ or shared/, a React screen, a *Store.ts or *Source.ts, a ported function) must pass before its PR is opened or a slice is called done — types, specs and build in both packages, the rules checks, ports against both files, living beside the rollback copy, driving the slice on the emulator with axe-core at 1024, 360 and 296 in Italian and English, what a script cannot see, the code review and the PR. Use INSTEAD OF smoke-test and ui-check for Mise 2, before opening a Mise 2 PR, whenever Federico asks "is it ready" about a Mise 2 slice, and before calling a slice finished. It reports what ran and what did not; whether a screen reads well is only Federico, on the tablet and the phone.
 ---
 
-# Mise 2 check — the gates before a stacked PR
+# Mise 2 check — the gates before its PR
 
 Federico reviews the APP, not the code: he opens each section on the preview link, so these gates
-are the net in front of him. Mise 2 reaches `main` only ALL AT ONCE, at the switch, so a slice ends
-in a stacked PR, never in a merge to `main`.
+are the net in front of him. Mise 2 is what phones run since v2.0.0, so a change ends in a PR from
+its feature branch into `main` (the `go-live` skill merges it at his word).
 
 Run the gates in order. A change skips a gate only when it cannot affect it, and the Report says
 which were skipped and why. If `js/` changed as well, that half also goes through `smoke-test`.
@@ -26,18 +26,18 @@ Delegate to the `test-runner` agent; its table has the commands and the flaky li
 ## Gate 2 — Firestore rules checks (when the rules or a saved shape changed)
 
 - `npm run test:rules:emulated`, and the `firestore-rules` skill for the checklist.
-- ⚠️ New keys must be in the LIVE rules before Mise 2 goes live, and nothing on a screen says so:
-  add the line to «Owed before the switch» in memory `piano-mise-2`.
+- ⚠️ New keys must be in the LIVE rules before the PR is merged, and nothing on a screen says so:
+  list it in the PR description and in the slice's «… as built» section.
 
 ## Gate 3 — ports (when `shared/src` or a `js/` original changed)
 
 - A port equals its `js/` original, odd inputs included: `shared/src/parity.spec.ts` and
   `shared/src/odd-inputs.spec.ts`, its specs running against BOTH files. A partial port says why it
   is not in `parity.spec.ts`.
-- ⚠️ `main` is not merged into the stack, so its newer exports are not in the ports. A fix on `main`
-  reaches the stack by taking only that fix's files.
+- ⚠️ A port can drift from a `js/` original that changed on `main` meanwhile: merge or rebase `main`
+  into the branch before the gates, and re-run the port specs.
 
-## Gate 4 — living beside the current app (always: read the diff for these)
+## Gate 4 — living beside the rollback copy (always: read the diff for these)
 
 `docs/architecture.md`, «Living beside the current app», «Rules for every new screen» and «Browser
 floor». Most of them have a spec; the ones a spec cannot judge are in bold.
@@ -76,17 +76,18 @@ Walk these in the driver or by hand, and say which you did not:
 - Keyboard alone, with focus coming back where it was promised; reduced motion.
 - Leaving with unsaved edits by every way out: Back, the browser's Back, the rail, the gesture.
 - The real tablet (SM-T550, Chrome 101, memory `tablet-via-usb`) for touch, drag, the camera, a new
-  CSS or JS feature. Not done now = a line in «Owed before the switch» in memory `piano-mise-2`.
+  CSS or JS feature. Not done now = say so in the PR description and the «… as built» section.
 
 ## Gate 7 — review and PR
 
 - The `code-reviewer` agent on the diff. Fix what it finds and re-run the gates the fix touches.
-- Append the «… as built» section to `docs/parity/<section>.md`: differences from the current app,
+- Append the «… as built» section to `docs/parity/<section>.md`: differences from the old app,
   and the choices made for Federico, which he must hear about.
 - No double curly brace, and no curly brace followed by a percent sign, in committed Markdown: it
   fails the whole Pages build (`tests/mise2-isolation.test.mjs`).
-- A stacked PR on the stack's top (memory `piano-mise-2` names it), never on `main`; the checks
+- A PR from the feature branch into `main` (a few PRs stacked for one feature built in steps is fine); the checks
   `test`, `rules` and `mise2` green; the preview link for his phone (`go-live`, appendix).
+- A port of an old-app behaviour not done yet goes in `docs/mise2-port-owed.md`.
 - Then update memory `piano-mise-2` and propose the next slice as a card.
 
 ## Report (always end with this)

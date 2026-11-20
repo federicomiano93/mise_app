@@ -333,8 +333,14 @@ What was built and every difference: `docs/parity/calculator.md`, «Calculator p
 ## H. Smaller / verify
 
 41. **Staff invite role-first** (#475) — belongs to the deferred staff screens (below).
+    **DONE 18 Nov 2026** (`docs/parity/staff-plan.md`, staff slices 3 and 4): «Who can get in» for the full owner — the role-first
+    invite (link or six digits, no role chosen at the start) and the people list (change role, rename, remove).
 42. **Join-form fixes** (`9e0a2dac`, `1a3567b9`, `ff7046a8`) — deferred with join codes.
+    **DONE 13 Nov 2026** (staff slices 1 and 2): the form stays on screen until the server answers, names the account it joins, asks
+    the email twice; the role list cannot pick Owner by itself (slice 3, D2).
 43. **Kiosk keeps screen on** (#406) — deferred with kiosk.
+    **DONE 18 Nov 2026** (staff slices 5 and 6): «This device», the rest screen with its Orders lines, the screen kept on with no
+    reload under the cover, and Rest / Exit on the Home. Still owed: the run on the lab tablet (Federico).
 44. **Tablet fits visible height on Chrome 101** (`5a3b3afb`) — Mise 2 has its own `feature/mise2-tablet-chrome101` (merged into the stack); not re-checked.
 45. **`app-version` real release reported** (`bb9e5532`) — Mise 2 telemetry versions are `m2-…`: no port.
 46. **Tooling only (no port)**: #480 session-start hook, #441/#340/#423 firebase-tools/node 24/CI, #379, #403, #451.
@@ -354,26 +360,21 @@ to its markers, with his decision in the line.
 
 What each one means for the people using Mise 2 until it is ported:
 - 16. Suppliers: verified and fixed (13 Nov 2026). Still different: no Disattiva/Riattiva on a row (only on the card), no hand-made pencil
-  (Mise 2 shows «Da fattura» on the invoice ones instead), and a reactivated row leaves the «Non in uso» group at once.
-- 26. Food cost step B (the cost on every «Made of» line, «No price», the «Which?» list of what has no price), and the two
-  decimals on those screens when they are built: Mise 2's lines keep their own notes (a recipe or an item with no price is
-  said, no money under a recipe or ingredient line; packaging shows its price each and total).
-  (Items 21, 22, 24, 25 and 28 are done: weighing units, the «Cost per 1 kg» block, the list search and the phone preview, the
-  read-first card with four figures and «Details», and two decimals on the screens Mise 2 has.)
-- 23. Food cost recipe link with several products (a check).
-- 41-43. Staff / join codes / roles screens (people, invitations incl. #475 role-first invite, the join form) and the
-  kiosk (#406 keep-screen-on, the kiosk lines already in shared). Until built: new people cannot join; existing accounts work.
+  (Mise 2 shows «Da fattura» on the invoice ones instead), and a reactivated row leaves the «Non in uso» group at once. The price-model pairing (keepPriceDate, samePriceMaps) is done on 20 Nov 2026
+  (PR `test/mise2-price-date-parity`) and no spec marker names 16 any more.
+  (Items 21-26 and 28 are done: weighing units, the «Cost per 1 kg» block, the recipe link with several products (23, 10 Nov 2026),
+  the list search and the phone preview, the read-first card with four figures and «Details», the line costs and «Which?» (26,
+  10 Nov 2026), and two decimals on the screens Mise 2 has.)
 
 Deferred too, with no item number:
-- Reminder notifications: order reminders stop arriving with the switch, also for The Italian Club (warn them first: a
-  line of the checklist above).
+- Reminder notifications: order reminders have not arrived since the switch (15 Nov 2026), for every venue.
 - The sales owner's «tell me when a client orders» notification switch (the current app's Clients page has it): Mise 2 has no
   push switch yet, deferred with the reminders above. A phone that already registered in the current app keeps receiving the
   pushes, and the tap lands on Orders received (`/calculator` is replaced for that role by `/clients/orders`, `SectionRoute`); a
   phone that did not register cannot do it from Mise 2 until the switch exists.
 - `order.html` stays served as it is (client links already sent): the Pages build keeps it, see `docs/switch-runbook.md`.
 - The 3-month order-list clean-up function (F9, a separate task): until it exists nothing is deleted, as today.
-- The app-admin hub (create a customer business, its owner link, re-send, delete) stops with the switch until ported: no new business from the app meanwhile (existing ones unaffected; a one-off script if needed). Its own slice after 41-43 (his decision D10, 13 Nov 2026, `docs/parity/staff-plan.md`).
+- The app-admin hub (create a customer business, its owner link, re-send, delete) has not been in the app since the switch (15 Nov 2026): no new business from the app meanwhile (existing ones unaffected; a one-off script if needed). Its own slice after 41-43 (his decision D10, 13 Nov 2026, `docs/parity/staff-plan.md`).
 
 ## Settings 3g-2 (was the WIP branch left out of the release branch)
 

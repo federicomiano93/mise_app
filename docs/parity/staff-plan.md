@@ -123,6 +123,8 @@ Sizes: **S** = a short session, **M** = one session. **About five sessions in al
 
 **When slices 1-4 are in, new people can join again. When 5-6 are in, the kiosk is back.** Then items 41-43 are ticked and their line leaves the deferred list.
 
+*Status (20 Nov 2026): slices 1-4 are live (v2.2.0 to v2.3.0); slices 5-6 are in PR #583.*
+
 ---
 
 ## 4. Decisions for you (each changes what a person sees)
@@ -438,3 +440,95 @@ Branch `feature/mise2-staff-4-people`, one PR into `main` (Mise 2 is live since 
 **Checked here (cloud session, no emulator)**: types, specs and build of both packages, the root suite. The screen drawn in Chromium with in-memory data at 1024, 360 and 296 in Italian and English: no sideways scroll, every button at least 44 px, nothing clipped, and axe-core (WCAG 2.2 AA + best practice) with no violation on the list, the role list, the question and the rename form showing an error.
 
 **Not done here**: driving it on the emulator with the real Functions emulator (a real role change, rename and removal; the last-owner refusal from the real function; a removed person's phone losing access), on the lab tablet (Chrome 101) and on the phone, in Italian and English — Federico's PC, before calling the slice done. Then items 41-42 (joining) are complete; 43 (kiosk) is slices 5-6.
+
+## Staff slice 5 as built (18 Nov 2026)
+
+Branch `feature/mise2-staff-5-kiosk`, one PR into `main`. No server, rules, Firestore or current-app change: kiosk mode is a setting of ONE DEVICE, in its localStorage.
+
+**What a person sees**
+
+- **Settings gains a fourth card, «This device»** («Questo dispositivo»), last, under «Account». **Everybody** sees it, an employee and a partial owner too (D7): the tablet is used by whoever is on shift.
+- **Its row**: «Lab tablet» («Tablet del laboratorio»), «Always open on this device; it dims when nobody uses it.», and a switch. Switched on, the row is followed by **«Dim after»** (2, 5, 10, 20 min), **«Screen off after»** («In the morning, wake it with the power button.»; Never, 1, 2, 4 h) and the current app's note about Android's screen timeout and screen pinning. Switched off, the two choices and the note go; the rows above never move.
+- **Saved on the tap**, with **«Saved ✓»** for two seconds on the card's title line (one, as in the current app). Switching it off keeps the minutes and hours for next time.
+- **A write the device refuses** (a private window, a full storage): «This setting could not be saved on this device.» in a Mise 2 dialog with OK, and the control shows the stored value again.
+- **The rest screen**: after the chosen minutes with nobody touching, a black full-screen cover. Top left, small and grey: the time, the venue, the long date, «Work day: …» while it is not yet 04:00 (the work day rolls at 04:00), and «No connection» when there is none. Nothing else (D9); the order lines come with slice 6. The block moves six pixels each minute (burn-in), it fades in over 200 ms (not with reduced motion).
+- **Only while a person is signed in with a venue open** (not the sign-in, the picker, «No venue yet», the join form, a venue being left), **never while somebody is busy** (an editor holding the busy marker) **and never over an open dialog or menu**. The idle time already served counts: it rests as soon as it is free.
+- **The waking tap presses nothing underneath**: every event of the gesture on the cover is stopped at the window in the capture phase, and the cover goes only after the finger has lifted (a click ends it at once, otherwise 0.7 s after the lift). **Any key** wakes it and does not reach the page. The cover is a button named «Tap to continue» («Tocca per continuare»), focused as it appears; after waking, the focus goes back where it was.
+- **The screen is kept on** (the Wake Lock, owner `kiosk`) in active and rest while signed in, asked for again on every tick (#406's `refreshWakeLock`, now in `ui/wakeLock.ts`), held while a fresh page is still loading its session, **released in night** (after the chosen hours of rest, so Android's own timeout switches the backlight off) and when nobody is signed in.
+- **A sign-out, a sign-in or a venue switch keeps the setting** (`kiosk-` is in KEEP_PREFIXES); a sign-out under the cover takes the cover away.
+
+**#406, as built: the app never reloads under the rest screen**
+
+- The cover **holds `markBusy()`** for as long as it is up, in rest and in night. Mise 2's two reloads by itself, the service worker letting a release in (`shell/serviceWorker.ts`) and the session's 30-second copy check (`session/session.ts`), both wait while anybody holds it; so does the language change's reload.
+- **An update and the daily safety reload happen only at the rest→night tick** (`shouldAutoUpdate`, `shouldDailyReload`, the current app's rules, ported). The page comes back dark: `kiosk-resume` = `night` in sessionStorage, read once at start, so the cover is up again, the marker held and no screen lock.
+- **How the shell is told «apply the update now»**: it is not told, and nothing new applies an update. At the night step, if a release is waiting (the current app's question: a waiting worker and the page already controlled) and nobody else is busy, the kiosk writes the night resume and the day of the reload, then **lets go of its own hold**. The shell's existing watcher, which asks `isBusy()` every 2 seconds while a worker waits, then lets the worker in and reloads, exactly as on every other device. If somebody else is busy, nothing happens. If no reload has come 15 seconds later (the shell's brake on repeated update reloads), the kiosk takes its hold again and forgets the resume. So there is still ONE update path, and it still asks `isBusy()`.
+- **A release that waited under the cover is let in by the waking tap**, the way the «Never» reload is: the cover stays up saying «One moment, reloading Mise…», the kiosk lets go of its hold, the shell reloads, the page comes back lit (the touch keeps Android's screen on). Without it the update would land a second after the cover lifted, under the baker's next tap. If no reload comes in 15 seconds, the app is given back.
+- **With «Never»** there is no night: the daily reload is done by the **waking tap** after 60 minutes of rest, once a day (`shouldReloadOnWake`). The cover stays up saying «One moment, reloading Mise…» and the page comes back lit; if the reload stalls, the app is given back after 15 seconds.
+- **Never in rest, never later in night**; a field focused when the tablet went to rest, or anybody else busy, holds the night reload back.
+
+**Choices made (not fixed by the plan)**
+
+- **The marker is also held while the kiosk tablet is in use but untouched for 30 seconds** (only while its screen lock is held, so only on a kiosk device with somebody signed in). The plan speaks of the rest screen only, but the current app never reloaded a kiosk tablet by itself while it was in use either: its update waited for a tap on «Update now», and a tap restarts Android's timeout. Mise 2 lets updates in by itself, so without this an update arriving four minutes after the last touch (before the rest at five) would drop the lock and Android, timed out at 1–2 minutes, would switch the screen off: #406 again, in active. With it, an update or the copy check lands only within half a minute of a touch. One constant (`ACTIVE_HOLD_AFTER_MS`) if he wants it otherwise.
+- **The cover sits above everything, dialogs included** (the current app's sat under its dialogs and its update banner). Mise 2 has no update banner, and a dialog that opens while the tablet rests (a refused write answered late) would otherwise shine over the black screen; it waits under it for the waking tap. For the same reason **any key wakes it**, wherever the focus is (the current app let a key aimed at a dialog above its cover pass).
+- **The focus goes back after a touch too**, unless it was in a text field (that would pop the keyboard up). The current app put it back after a key only.
+- **No fade-out**: the cover fades in over 200 ms as today, and goes at once when woken (the current app faded it out over 200 ms).
+- **No usage event** for kiosk on or off, and no console line.
+- **The app's version** (the current app's other row of «This device») is not on the card; it is not part of 41-43.
+- **The slice-6 helpers are ported but unused**: `shouldRestNow`, `wakeArmDelay`, `REST_NOW_GUARD_MS`, `kioskBandVisible`, `exitRefused`, `EXIT_CHECK_MS` are in `shared/src/kiosk-model.ts` (a full port) for the Home's Rest and Exit; `kioskSections()` and `shared/src/kiosk-lines.ts` are still not drawn.
+
+**New texts (EN / IT)**: none new. `settings.device` is the current app's `settings.home.device`; `kiosk.settings.*` and `kiosk.rest.*` are its words, key for key.
+
+**Ported to shared**: `shared/src/kiosk-model.ts`, a full port of `js/kiosk-model.js`, paired (`kiosk-model.spec.ts` runs every test against both files; `parity.spec.ts` and `odd-inputs.spec.ts` compare them).
+
+**Changed after the code review**: the waking tap lets a waiting release in under the cover (above); the daily reload at the night step has the same 15-second failsafe as the update (a reload that never came left the cover without its hold); `<Kiosk />` sits in its own `PartBoundary`; the night resume survives React replaying the effects in development; the «a field focused when it went to rest» spec now has the cover holding the focus, as on the page.
+
+**Left as built (from the review)**: a screen reader can still swipe to a control under the cover, and a mouse wheel wakes it and scrolls the page, as in the current app; a second reload in the very first seconds after the night step's reload (before the kiosk starts) would come back lit; a tablet that is in use, touched once after half a minute of nothing, can take an update within 2 seconds of that touch (the touch keeps the screen on; nothing typed is lost); whether Chrome freezes the 2-second retry when Android switches the screen off at the night step, so that the update waits for the morning tap, needs the tablet.
+
+**Not done here**: the real lab tablet (SM-T550, Chrome 101) — the Wake Lock holding the screen on through a whole rest, Android's screen timeout and screen pinning, the screen switching off in night and the page coming back dark after the night step's reload, a real update arriving while it rests. Those are Federico's, on the tablet.
+
+## Staff slice 6 as built (18 Nov 2026)
+
+Branch `feature/mise2-staff-6-kiosk-home`, stacked on slice 5 (`feature/mise2-staff-5-kiosk`), one PR. No server, rules or current-app change; nothing written to Firestore. With slices 5 and 6 the kiosk is back, and items 41-43 of `docs/mise2-port-owed.md` are ticked.
+
+**What a person sees**
+
+- **The rest screen gains its Orders lines** (D9, exactly as today): in the centre, large, **«To order today»** («Da ordinare oggi») and **«Arriving today»** («In arrivo oggi»), each with up to four supplier names (the short name when there is one) and «+N» for the rest; a section with nothing in it is not drawn. Names are up to 48 px on the tablet and about 25 px on a 296 px phone.
+- **Only for somebody the venue shows Orders to** (the current app's `restOrdersAllowed`: the venue has Orders and the card is shown to this person — the rail's own question, `visibleSectionIds`). Anybody else gets the rest screen without the lines, and nothing is read for them.
+- **The same rules as Orders**: a supplier already ordered today, or closed today as not ordered, is not «to order»; «arriving» honours the venue's goods-arrived switch (decision F4: off, no «arriving» line at all), through `orders/kioskFeed.ts`.
+- **The Home gains a band above «Da fare»** (D8), only while kiosk mode is on, for every role: **«Rest»** («Riposo», moon icon) and **«Exit»** («Esci», power icon, in the quiet red of a leaving action). Neither changes the setting.
+  - **Rest** covers the screen at once. The tap (or the key's repeat) that pressed it cannot wake it: the waking tap is armed only after 0.4 s. After waking, the focus goes back to «Rest».
+  - **Exit** asks the browser to close the page. A tablet that refuses (an installed app on many tablets) is told, after half a second: «This tablet doesn’t let the app close itself. To close it, open the recent-apps view and swipe Mise away.»
+  - Each counts a usage action by name only (`kiosk-rest`, `kiosk-exit`), as the current app does.
+
+**Reads, as built** (P14, the current app's `js/kiosk-orders.js`)
+
+- **While Orders is open**, its store answers from its own live data (`kiosk/liveOrdersLines.ts`, registered by `OrdersContext`): nothing is read.
+- **Anywhere else**, one-time reads while the tablet RESTS (`kiosk/kioskOrdersSource.ts`, in the data services): config/orders, the suppliers, orders-history from the start of the current work week, drafts/current — paths and queries the app already reads, no new index. Again every 15 minutes while it stays at rest; never in the night, never while active, never while the page is hidden; an answer younger than 15 minutes is reused. What was read last is still drawn in the night.
+- **A failed read keeps the previous answer**; the console gets the error's code only, never a name. A failed read of config/orders means the default week (Sunday) and the switch on; a failed read of the draft means the closes are not known (the line errs towards the reminder, as today).
+
+**Choices made (not fixed by the plan)**
+
+- **The band is two side-by-side buttons above the holiday band**, not the current app's round moon in the header and red bar at the foot: D8 put both above «Da fare», and Mise 2's Home has no header of its own.
+- **A failed read of config/orders falls back to the default week**, not to the current app's local mirror `orders-config` (Mise 2 does not keep that mirror).
+- **«safe center» is not used**: the current app centres the lines with `justify-content: safe center`, which is Chrome 115 — the lab tablet's Chrome 101 drops it, and they sat at the top. Mise 2 centres them with auto margins, which never clip the first title either. `safe` / `unsafe` alignment is now on the Chrome 101 guard's list (`shared/src/chrome101-tokens.ts`).
+
+**New texts (EN / IT)**: none new: `kiosk.rest.toOrderTitle`, `kiosk.rest.arrivingTitle`, `kiosk.home.rest`, `kiosk.home.exit`, `kiosk.home.cannotClose`, `kiosk.home.aria` are the current app's, key for key.
+
+**Not done here**: the real lab tablet (Federico): Rest from the band and the waking tap on the real touch screen, Exit on the installed app (whether Android lets it close), the lines read on a real venue's data while resting.
+
+### Staff slices 5 and 6 — merged with main as PR #583 (19 Nov 2026)
+
+- Both slices travel together on `feature/mise2-staff-kiosk`; #575 (slice 5 alone) is closed as superseded.
+- The code review's fixes: the cover draws the Orders lines from `feed.current()` at every paint, so yesterday's lines disappear after midnight even when no read succeeds; when the open Orders section closes during a rest, the cover starts reading by itself (`liveOrdersLines.ts` tells the kiosk when the section opens or closes); the Chrome 101 guard also catches `place-*` with `safe` / `unsafe` and ignores `var(--safe-x)`; `docs/architecture.md` lists the kiosk's four cross-feature imports as exceptions.
+- Rest and Exit send the usage counts `kiosk-rest` / `kiosk-exit` (the existing telemetry, the same names as the current app): the only Firestore write the kiosk causes.
+- **Open point (a)**: with «Screen off after: Never» there is no night, so the rest screen reads Orders every 15 minutes around the clock (about 50 documents × 96 a day with 30 suppliers, roughly 10% of the free daily reads per tablet; the same as the current app).
+- **Open point (b)**: a screen reader hears only «Tap to continue» on the cover, because its content sits inside a `role=button`. Kept as built, for a lab tablet.
+- **His tablet decision, 19 Nov 2026**: «Standby» (was «Riposo» / «Rest») and «Exit» are two small pills in the app's top bar, just before «Online», on the Home only and only with kiosk mode on, no longer a band in the Home (`shell/KioskPills.tsx`); round icon-only buttons on narrow widths.
+
+## Rest screen halves — as built, 20 Nov 2026
+
+Branch `feature/mise2-staff-kiosk` (PR #583). No server, rules or index change: one extra single-field read of `todos`, which any member may read.
+
+- The cover shows two halves under the corner block, the layout the owner approved on the tablet: left «Da fare oggi» (to-dos not done with `day <= work day`, overdue first by oldest day then creation time, at most 4, «+N», an overdue one has a small «in ritardo» line); right the orders sections («Da ordinare oggi», then «In consegna oggi»). A 1px divider between; under 700px the halves stack, to-dos on top. One half alone is centred as before.
+- To-dos show to EVERY role (not gated by Orders). Italian arrivals title changed from «In arrivo oggi» to «In consegna oggi» in Mise 2 only; the old app's `js/i18n.js` and `tests/kiosk-rest-orders.test.mjs` (which pins the old words) are untouched.
+- Files: `kiosk/kioskTodosSource.ts`, `restTodos.ts`, `restTodosFeed.ts`, `testing/fakeKioskTodosSource.ts`; tokens `--kiosk-late` (#b9776b, 5.9:1 on black) and `--kiosk-line`.

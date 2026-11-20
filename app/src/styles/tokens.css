@@ -45,6 +45,16 @@
   --ok-tint: oklch(0.955 0.035 152);
   --scrim: oklch(0.2 0.01 60 / 0.38);
 
+  /* The kiosk's rest screen (kiosk/RestScreen.tsx, staff slice 5), the current app's two values: grey text on pure black, the
+     one black screen of the app. #8c8c8c on #000 is 6.3:1, above the 4.5:1 small text needs, and dim enough not to light up a
+     dark room. */
+  --kiosk-bg: #000000;
+  --kiosk-text: #8c8c8c;
+  /* The rest screen's «overdue» line: a soft red, 5.9:1 on the black (small text needs 4.5:1). */
+  --kiosk-late: #b9776b;
+  /* The thin line between the rest screen's two halves: visible on the black, dimmer than the text. */
+  --kiosk-line: #444444;
+
   /* Type. Geist and Geist Mono (SIL OFL) are bundled with the app from @fontsource-variable,
      never fetched from Google Fonts: the app must start offline, and no third party learns
      who opens it. */

@@ -126,34 +126,36 @@ const MANAGER = { role: 'manager', canManage: true, isOwner: false } as const;
 const cardTitles = () => main().getAllByRole('heading', { level: 2 }).map(heading => heading.textContent);
 
 describe('SettingsPage: cards by who a row is about', () => {
-  it('shows an employee the You and Account cards only, in that order', () => {
+  it('shows an employee the You, Account and This device cards only, in that order', () => {
     renderApp('/settings', { session: EMPLOYEE });
-    expect(cardTitles()).toEqual(['You', 'Account']);
+    expect(cardTitles()).toEqual(['You', 'Account', 'This device']);
     expect(main().queryByRole('link', { name: 'App language' })).not.toBeInTheDocument();
     expect(main().queryByRole('link', { name: 'Sections for employees' })).not.toBeInTheDocument();
   });
 
-  it('shows an owner You, The venue and Account, in that order', () => {
+  it('shows an owner You, The venue, Account and This device, in that order', () => {
     renderApp('/settings');
-    expect(cardTitles()).toEqual(['You', 'The venue', 'Account']);
+    expect(cardTitles()).toEqual(['You', 'The venue', 'Account', 'This device']);
   });
 
   it('shows a manager (a head chef holds this level) The venue too', () => {
     renderApp('/settings', { session: MANAGER });
-    expect(cardTitles()).toEqual(['You', 'The venue', 'Account']);
+    expect(cardTitles()).toEqual(['You', 'The venue', 'Account', 'This device']);
   });
 
   // ⚠️ A PARTIAL OWNER canManage BUT DOES NOT MANAGE THE VENUE: its language and what its employees are shown are refused to them.
-  it.each([['sales', 'owner-sales'], ['kitchen', 'owner-kitchen']] as const)('shows the %s owner You and Account only, like an employee', (_who, role) => {
+  it.each([['sales', 'owner-sales'], ['kitchen', 'owner-kitchen']] as const)('shows the %s owner You, Account and This device only, like an employee', (_who, role) => {
     renderApp('/settings', { session: { role, canManage: true, canManageVenue: false, isOwner: false } });
-    expect(cardTitles()).toEqual(['You', 'Account']);
+    expect(cardTitles()).toEqual(['You', 'Account', 'This device']);
     expect(main().queryByRole('link', { name: 'App language' })).not.toBeInTheDocument();
     expect(main().queryByRole('link', { name: 'Sections for employees' })).not.toBeInTheDocument();
   });
 
-  it('has no «This device» card yet — the app version and the kiosk have their own steps', () => {
+  // Staff slice 5: the card with kiosk mode, last (DeviceCard.spec.tsx has the card itself). The app version is not on it yet.
+  it('ends with «This device», kiosk mode its only row', () => {
     renderApp('/settings');
-    expect(main().queryByRole('heading', { name: /device/i })).not.toBeInTheDocument();
+    const card = main().getByRole('heading', { level: 2, name: 'This device' }).closest('section') as HTMLElement;
+    expect(within(card).getByRole('switch', { name: 'Lab tablet' })).not.toBeChecked();
   });
 
   it('puts the holiday in You, and the two doors in The venue, each a whole row with its sentence', () => {

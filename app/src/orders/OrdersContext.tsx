@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { useDataServices } from '../data/DataContext';
 import { useSession } from '../session/SessionContext';
 import { readsPurchasePrices } from '../session/visibility';
+import { provideKioskLines } from '../kiosk/liveOrdersLines';
 import { createOrdersStore } from './ordersStore';
 import type { OrdersDeps, OrdersSnapshot, OrdersStore } from './ordersStore';
 
@@ -26,6 +27,10 @@ export function OrdersProvider({ children, deps }: { children: ReactNode; deps?:
     store.start();
     return () => store.stop();
   }, [store]);
+
+  // While Orders is open, the kiosk's rest screen draws its lines from this store's live data and reads nothing itself (staff slice 6,
+  // kiosk/liveOrdersLines.ts; the current app's Orders page answers `kiosk-rest-info` the same way).
+  useEffect(() => provideKioskLines(() => store.kioskSections()), [store]);
 
   // ⚠️ WHO MAY READ PRICES, asked as firestore.rules ask it (ingredient-prices: cardAccess(lid, 'foodcost', 'prices') != 'none'):
   // the venue has Food cost, and the person runs a side (an owner, a manager, the kitchen owner who orders the goods and has no

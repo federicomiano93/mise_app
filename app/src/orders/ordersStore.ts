@@ -426,7 +426,7 @@ export interface OrdersStore {
   saveSetting(change: SettingChange): Promise<SettingOutcome>;
   // The kiosk rest screen's Orders lines from what is held now (parity M14, decision T13), the goods-arrived switch honoured
   // (kioskFeed.ts). No read. null while the suppliers, the records or config/orders have not arrived: «nothing to show» and «not
-  // known yet» are told apart. The kiosk that draws them is step 3g.
+  // known yet» are told apart. The kiosk's rest screen draws them while Orders is open (staff slice 6, kiosk/liveOrdersLines.ts).
   kioskSections(): KioskSection[] | null;
   // Would anybody hear a list sent now (parity R17)? ⚠️ NEVER REJECTS AND NEVER STOPS A SEND: an unreadable roster, a refused read or
   // a phone that is offline is no evidence that nobody is listening, and answers «go ahead».

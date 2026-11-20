@@ -17,13 +17,15 @@ import { useOnline } from './useOnline';
 import { useToday } from './useToday';
 import { ScrollAreaContext, useScrollAreaState } from './scrollArea';
 import { useVisibleSections } from './useVisibleSections';
+import { useKioskSettings } from '../kiosk/kioskSettings';
+import { KioskPills } from './KioskPills';
 import styles from './AppShell.module.css';
 
 // The section an address belongs to: its first segment («stocktake» for /stocktake/2026-10).
 const sectionOf = (pathname: string): string => pathname.split('/')[1] ?? '';
 
 // The frame around every screen: a rail on a tablet, a tab bar on a phone, a top bar on a
-// tablet's Home, and the section itself in the middle.
+// tablet's Home (and on a kiosk phone's Home, for «Standby» and «Exit»), and the section itself in the middle.
 //
 // ⚠️ BOTH NAVIGATIONS ARE ALWAYS IN THE DOM; CSS MEDIA QUERIES DECIDE WHICH ONE SHOWS. No
 // script measures the width: a tablet turned from landscape to portrait, or a window resized,
@@ -49,6 +51,9 @@ function ShellFrame() {
   // every other screen gives its 60px to its own content, and says the connection only when it is lost, with the strip under
   // its title (Page). The venue switch lives in the bar, so it stays reachable from the Home.
   const topBar = sectionOf(pathname) === 'home';
+  // On a kiosk device the Home's bar also carries «Standby» and «Exit», so on a phone (where the bar is otherwise hidden) it shows too.
+  const kioskOn = useKioskSettings().enabled;
+  const kioskBar = topBar && kioskOn;
 
   // One scroll area serves every section, so without this a long Orders list scrolled to the
   // bottom would open Recipes halfway down.
@@ -76,11 +81,11 @@ function ShellFrame() {
     // Lets React Aria components that take an `href` navigate through the router instead of
     // reloading the page.
     <AriaRouterProvider navigate={to => navigate(to)} useHref={useHref}>
-      <div className={styles.shell} data-topbar={topBar ? 'on' : 'off'}>
+      <div className={styles.shell} data-topbar={topBar ? 'on' : 'off'} data-kiosk={kioskBar ? 'on' : undefined}>
         <SkipLink target={contentRef} />
         <Rail />
         <div className={styles.main}>
-          {topBar ? <TopBar /> : null}
+          {topBar ? <TopBar kiosk={kioskBar} /> : null}
           <main id="main" ref={contentRef} tabIndex={-1} className={styles.content}>
             {/* ⚠️ The holiday reminder and refusal live HERE, not straight under the shell: each boundary is a <div>, and
                 a <div> under the shell's grid takes a cell — the rail and the screen sat low and jumped when the holiday
@@ -179,7 +184,7 @@ function RailLink({ section }: { section: Section }) {
   );
 }
 
-function TopBar() {
+function TopBar({ kiosk }: { kiosk: boolean }) {
   const { t, locale } = useT();
   const today = useToday(locale);
   const online = useOnline();
@@ -189,10 +194,12 @@ function TopBar() {
       <Venue />
       <p className={styles.date}>{today}</p>
       <div className={styles.grow} />
+      {/* Home only and kiosk only; in its own part, so a failure there cannot break the bar. */}
+      {kiosk ? <PartBoundary><KioskPills /></PartBoundary> : null}
       <p className={styles.sync} role="status">
         {/* The dot is decoration: the words carry the meaning, so colour is never the only signal. */}
         <span className={styles.dot} data-online={online} aria-hidden="true" />
-        {online ? t('status.online') : t('status.offline')}
+        <span className={styles.syncText}>{online ? t('status.online') : t('status.offline')}</span>
       </p>
     </header>
   );
@@ -209,7 +216,7 @@ function Venue() {
   const label = (
     <>
       <span className={styles.venueDot} aria-hidden="true">{initial}</span>
-      <span>{name}</span>
+      <span className={styles.venueName}>{name}</span>
     </>
   );
 

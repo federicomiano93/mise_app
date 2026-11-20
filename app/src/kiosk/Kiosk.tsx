@@ -1,0 +1,151 @@
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore } from 'react';
+import type { KioskSection } from '@mise/shared/kiosk-lines';
+import { workDayDate } from '@mise/shared/kiosk-model';
+import { useOptionalDataServices } from '../data/DataContext';
+import { useJoinFlow } from '../session/JoinFlowContext';
+import { joinShown } from '../session/SessionGate';
+import { useSession } from '../session/SessionContext';
+import { visibleSectionIds } from '../session/visibility';
+import { createKioskController } from './kioskController';
+import type { KioskEnv } from './kioskController';
+import { browserKioskEnv } from './kioskEnv';
+import type { KioskOrdersSource } from './kioskOrdersSource';
+import type { KioskTodo, KioskTodosSource } from './kioskTodosSource';
+import { useKioskSettings } from './kioskSettings';
+import { liveKioskLines, liveKioskLinesShown, subscribeLiveKioskLines } from './liveOrdersLines';
+import { onRestNow } from './restNow';
+import { createRestOrdersFeed, fetchRestSections } from './restOrders';
+import { restTodosFor } from './restTodos';
+import { createRestTodosFeed } from './restTodosFeed';
+import { RestScreen } from './RestScreen';
+
+const NO_SECTIONS: readonly KioskSection[] = Object.freeze([]);
+const NO_TODO_DOCS: readonly KioskTodo[] = Object.freeze([]);
+
+// Kiosk mode (staff slices 5 and 6): mounted ONCE, beside the session gate (main.tsx), so it sees every state of the session — the
+// rest screen only while a person is signed in with a venue open, the screen lock held while a fresh page is still loading its
+// session, and the cover of a page resumed in the night kept until the session answers. With the setting off it does nothing.
+//
+// `env`, `orders` and `todos` are for the specs (fake timers, a fake wake lock, a fake reload; the rest screen's reads); the app uses the
+// browser's and the data services'.
+export function Kiosk({ env, orders, todos }: {
+  env?: KioskEnv;
+  orders?: (locationId: string) => KioskOrdersSource;
+  todos?: (locationId: string) => KioskTodosSource;
+}) {
+  const settings = useKioskSettings();
+  const session = useSession();
+  const join = useJoinFlow();
+  const services = useOptionalDataServices();
+  const [controller] = useState(() => createKioskController(env ?? browserKioskEnv()));
+  // Signed in and working: a venue is open and on screen — not the join form drawn over it, not a venue being left.
+  const signedIn = session.status === 'ready' && !session.leaving && !joinShown(session.status, join);
+
+  // ⚠️ The session first, then the setting: starting needs to know whether a person is signed in (the screen lock).
+  useEffect(() => { controller.setSession({ status: session.status, signedIn }); }, [controller, session.status, signedIn]);
+  useEffect(() => { controller.applySettings(settings); }, [controller, settings]);
+  useEffect(() => () => { controller.stop(); }, [controller]);
+  // The Home's «Standby» (staff slice 6).
+  useEffect(() => onRestNow(() => { controller.restNow(); }), [controller]);
+
+  const snapshot = useSyncExternalStore(controller.subscribe, controller.getSnapshot, controller.getSnapshot);
+
+  // ⚠️ THE ORDERS LINES ONLY FOR SOMEBODY THE VENUE SHOWS ORDERS TO (the current app's restOrdersAllowed: the venue has Orders and
+  // the card is shown to this person — the same question as the rail's, session/visibility.ts). UX only: the rules refuse the
+  // records and the draft to anybody else as well.
+  const allowed = session.status === 'ready' && session.locationId !== null
+    && visibleSectionIds(session.location, session.canManage, session.role).has('orders');
+  const makeSource = orders ?? (services === null ? null : services.kioskOrders);
+  const restLines = useRestOrders(snapshot.state, allowed, session.locationId, makeSource);
+  // ⚠️ THE TO-DOS ARE FOR EVERY ROLE (the rules let any member read them, and the Home shows them to everybody): not gated by `allowed`.
+  const makeTodos = todos ?? (services === null ? null : services.kioskTodos);
+  const restTodoDocs = useRestTodos(snapshot.state, session.status === 'ready' ? session.locationId : null, makeTodos);
+
+  if (snapshot.state === 'active') return null;
+  return (
+    <RestScreen
+      venue={session.status === 'ready' ? session.name : ''}
+      reloading={snapshot.reloading}
+      now={snapshot.paintedAt}
+      sections={allowed ? liveKioskLines() ?? restLines() : NO_SECTIONS}
+      todos={restTodosFor(restTodoDocs(), workDayDate(snapshot.paintedAt))}
+      armAt={snapshot.armAt}
+      onWake={controller.wakeTap}
+    />
+  );
+}
+
+// The reads behind the lines (restOrders.ts): started when the tablet goes to REST, stopped when it wakes or goes to night, refreshed
+// when the page comes back into view while resting. What was read last is still drawn in the night.
+// ⚠️ Returns a function asked at every paint (the cover repaints on every 15 s tick): the feed's own day check must be heard after
+// midnight even when no read succeeds — a copy kept in React state would keep yesterday's suppliers on the screen.
+function useRestOrders(
+  state: 'active' | 'rest' | 'night', allowed: boolean, locationId: string | null,
+  makeSource: ((locationId: string) => KioskOrdersSource) | null,
+): () => readonly KioskSection[] {
+  const [, repaint] = useReducer((n: number) => n + 1, 0);
+  const allowedRef = useRef(allowed);
+  allowedRef.current = allowed;
+  // Whether the open Orders section answers; when it closes during a rest the feed takes over (the feed refuses to start while it does).
+  const pageAnswers = useSyncExternalStore(subscribeLiveKioskLines, liveKioskLinesShown, liveKioskLinesShown);
+
+  const feed = useMemo(() => {
+    if (locationId === null || makeSource === null) return null;
+    const source = makeSource(locationId);
+    return createRestOrdersFeed({
+      allowed: () => allowedRef.current,
+      pageAnswers: liveKioskLinesShown,
+      fetchSections: () => fetchRestSections(source),
+      onChange: repaint,
+    });
+  }, [locationId, makeSource]);
+
+  useEffect(() => {
+    if (feed === null) return undefined;
+    if (state === 'rest' && allowed) { feed.start(); feed.refreshIfStale(); }
+    else feed.stop();
+    return undefined;
+  }, [feed, state, allowed, pageAnswers]);
+
+  useEffect(() => () => { feed?.stop(); }, [feed]);
+
+  useEffect(() => {
+    if (feed === null || state !== 'rest') return undefined;
+    const onVisible = () => { if (document.visibilityState === 'visible') feed.refreshIfStale(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => { document.removeEventListener('visibilitychange', onVisible); };
+  }, [feed, state]);
+
+  return useCallback(() => (feed === null ? NO_SECTIONS : feed.current()), [feed]);
+}
+
+// The to-do reads behind the left half (restTodosFeed.ts): the same timing as the Orders lines. Returns a function asked at every paint,
+// for the same reason (the work day is checked then, so yesterday's answer is never drawn after midnight).
+function useRestTodos(
+  state: 'active' | 'rest' | 'night', locationId: string | null,
+  makeSource: ((locationId: string) => KioskTodosSource) | null,
+): () => readonly KioskTodo[] {
+  const [, repaint] = useReducer((n: number) => n + 1, 0);
+  const feed = useMemo(() => {
+    if (locationId === null || makeSource === null) return null;
+    return createRestTodosFeed({ source: makeSource(locationId), onChange: repaint });
+  }, [locationId, makeSource]);
+
+  useEffect(() => {
+    if (feed === null) return undefined;
+    if (state === 'rest') { feed.start(); feed.refreshIfStale(); }
+    else feed.stop();
+    return undefined;
+  }, [feed, state]);
+
+  useEffect(() => () => { feed?.stop(); }, [feed]);
+
+  useEffect(() => {
+    if (feed === null || state !== 'rest') return undefined;
+    const onVisible = () => { if (document.visibilityState === 'visible') feed.refreshIfStale(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => { document.removeEventListener('visibilitychange', onVisible); };
+  }, [feed, state]);
+
+  return useCallback(() => (feed === null ? NO_TODO_DOCS : feed.current()), [feed]);
+}

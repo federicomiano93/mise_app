@@ -39,4 +39,15 @@ describe('the top bar', () => {
     expect(css).toMatch(/\.shell\[data-topbar="off"\]\s*\{[^}]*--topbar-h:\s*0px/);
     expect(css).toMatch(/\.shell\[data-topbar="on"\] \.main\s*\{[^}]*grid-template-rows:\s*auto minmax\(0, 1fr\)/);
   });
+
+  it('on a kiosk phone the bar shows, takes its own row, and gives way at the venue, never the page', () => {
+    // CSS only (jsdom draws no layout): the rules that keep a long venue name from widening the page on a 360px phone (20 Nov 2026).
+    expect(css).toMatch(/\.shell\[data-topbar="on"\]\[data-kiosk="on"\] \.main\s*\{[^}]*grid-template-rows:\s*auto minmax\(0, 1fr\)/);
+    expect(css).toMatch(/\.shell\[data-kiosk="on"\] \.topbar\s*\{[^}]*display:\s*flex/);
+    expect(css).toMatch(/\.topbar\s*\{[^}]*min-width:\s*0/);
+    expect(css).toMatch(/\.shell\[data-kiosk="on"\] \.venueStatic\s*\{[^}]*flex:\s*0 100 auto;[^}]*overflow:\s*hidden/);
+    expect(css).toMatch(/\.shell\[data-kiosk="on"\] \.sync\s*\{[^}]*min-width:\s*0/);
+    // On a kiosk phone the connection's words are kept for a screen reader but not drawn.
+    expect(css).toMatch(/@media \(max-width: 699\.98px\)\s*\{[^@]*\.shell\[data-kiosk="on"\] \.syncText\s*\{[^}]*clip-path:\s*inset\(50%\)/);
+  });
 });

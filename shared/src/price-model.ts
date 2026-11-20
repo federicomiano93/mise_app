@@ -1066,3 +1066,16 @@ export function withPrices<T extends object>(
     return price ? { ...clean, ...price } : clean;
   }) as Array<Omit<T, PriceField> & PriceFieldValues>;
 }
+
+// Whether two id → price document maps say the same thing, so a screen can skip a redraw.
+// ⚠️ IT MAY ONLY ERR TOWARDS «DIFFERENT»: the same fields in another order count as different, which
+// costs one redraw and can never leave an old price on screen.
+export function samePriceMaps(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  const ma = a as Record<string, unknown>;
+  const mb = b as Record<string, unknown>;
+  const ids = Object.keys(ma);
+  if (ids.length !== Object.keys(mb).length) return false;
+  return ids.every(id => id in mb && JSON.stringify(ma[id]) === JSON.stringify(mb[id]));
+}
