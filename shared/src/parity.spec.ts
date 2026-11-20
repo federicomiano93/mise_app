@@ -407,6 +407,8 @@ const PORT_OWED = new Set<string>([
 // app is frozen and never writes them; Mise 2 lists four kinds and adds isResale, isOther and isFood.
 const MISE2_ADDITIONS: Readonly<Record<string, readonly string[]>> = {
   'ingredient-kind': ['isFood', 'isOther', 'isResale'],
+  // The web-push key per host (phone push registration): the current app reads js/firebase.js VAPID_PUBLIC_KEY.
+  'firebase-target': ['PRODUCTION_VAPID_KEY', 'vapidKeyForHost'],
 };
 const MISE2_DIFFERENT_VALUES: Readonly<Record<string, readonly string[]>> = {
   'ingredient-kind': ['INGREDIENT_KINDS'],

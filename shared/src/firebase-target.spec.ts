@@ -16,6 +16,7 @@
 import { describe, expect, test } from 'vitest';
 import * as ported from './firebase-target';
 import * as legacyJs from '../../js/firebase-target.js';
+import legacyFirebaseSource from '../../js/firebase.js?raw';
 
 const legacy = legacyJs as unknown as typeof ported;
 
@@ -114,5 +115,22 @@ describe.each([
     expect(m.PRODUCTION_CONFIG.projectId).toBe('bakery-app-ebf90');
     expect(Object.isFrozen(m.LOCAL_HOSTS)).toBe(true);
     expect(Object.isFrozen(m.PRODUCTION_HOSTS)).toBe(true);
+  });
+});
+
+// Mise 2 only: the web-push key. It must equal the one the current app registers phones with (the two apps share a
+// phone's registration on one origin), and the preview project must never get it (no functions there).
+describe('the web-push key per host', () => {
+  test('the live site and localhost get the key the current app uses; every other host gets none', () => {
+    const legacyKey = /VAPID_PUBLIC_KEY\s*=\s*'([^']+)'/.exec(legacyFirebaseSource)?.[1];
+    expect(legacyKey).toBeTruthy();
+    expect(ported.PRODUCTION_VAPID_KEY).toBe(legacyKey);
+    for (const host of ['federicomiano93.github.io', 'federicomiano93.github.io.', 'localhost', '127.0.0.1']) {
+      expect(ported.vapidKeyForHost(host), host).toBe(ported.PRODUCTION_VAPID_KEY);
+    }
+    for (const host of ['mise-app-preview--pr-1-abc.web.app', '192.168.1.5', 'localhost.', '', undefined]) {
+      expect(ported.vapidKeyForHost(host), String(host)).toBe('');
+    }
+    expect(ported.PRODUCTION_VAPID_KEY.length).toBeGreaterThan(60);
   });
 });

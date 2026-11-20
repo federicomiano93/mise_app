@@ -49,6 +49,20 @@ describe('Firestore is reached only through the backend', () => {
     expect(backend).toMatch(/if \(isEmulator\) fs\.connectFirestoreEmulator/);
   });
 
+  // Cloud Messaging has the same single door: its download (about 100 KB) must stay out of the first load, and its real
+  // getToken() must stay behind pushToken.ts, which never calls it on a local address (that would register a real
+  // installation with the production project from a test page).
+  test('nothing imports Firebase Messaging eagerly, and the backend\'s one dynamic import is the only one', () => {
+    const eager = production
+      .filter(([, text]) => /^\s*import\s+(?!type\b)[^;]*from\s+'firebase\/messaging'/m.test(code(text)))
+      .map(([file]) => file);
+    expect(eager).toEqual([]);
+    const dynamic = production
+      .filter(([, text]) => /import\(\s*'firebase\/messaging'\s*\)/.test(code(text)))
+      .map(([file]) => file);
+    expect(dynamic).toEqual([BACKEND]);
+  });
+
   test('the sign-in form fetches Firestore while the password is typed', () => {
     expect(code(sources['./main.tsx'] ?? '')).toMatch(/status === 'signed-out'\) backend\.preloadFirestore\(\)/);
   });
