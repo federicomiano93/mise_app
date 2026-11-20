@@ -3,7 +3,7 @@ import { PRODUCT_MODEL, normalizeProduct } from '@mise/shared/foodcost-model';
 import type { Product } from '@mise/shared/foodcost-model';
 import { draftFromRecipe } from '@mise/shared/foodcost-model';
 import {
-  clearNumber, emptyWorking, firstBadWeight, followsTotal, isShown, rawBoxText, readNumber, readQty, recipeLineKg, recipeLossHint,
+  clearNumber, emptyWorking, firstBadWeight, followsTotal, isShown, marginPointFor, rawBoxText, readNumber, readQty, recipeLineKg, recipeLossHint,
   recipeWeighing, settleRaw, toProduct, vatRateOf, waitsForTables, weightText, workingFrom, workingFromDraft,
 } from './productEditorModel';
 
@@ -299,5 +299,29 @@ describe('a recipe line in the working copy', () => {
     expect(recipeLineKg({ ...line, qty: '42' })).toBe(0.042);
     expect(recipeLineKg({ ...line, unit: 'kg' }), 'the switch keeps the number: now 41.6667 kg').toBe(41.6667);
     expect(recipeLineKg(line), 'as it opened: the stored kilos').toBe(0.0416667);
+  });
+});
+
+describe('the margin point of a card that changes kind', () => {
+  const tables = { ingredients: { flour: { id: 'flour', name: 'Flour', priceUnit: 'kg', pricePerUnit: 2 } } };
+  const semi = normalizeProduct({
+    id: 's1', name: 'Ganache', kind: 'semi', model: 4, components: [{ kind: 'ingredient', ingredientId: 'flour', qty: 1000, unit: 'g' }],
+  }) as Product;
+  const finished = {
+    ...semi, kind: 'finished', sellingMode: 'piece', piecesPerBatch: 10, sellingPrice: 6, vatRate: 0, foodCostTarget: 30,
+  } as Product;
+  const NOW = '2026-11-20T10:00:00.000Z';
+
+  it('⚠️ semi → finished starts the margin history on that save', () => {
+    expect(marginPointFor(semi, finished, tables, NOW)).not.toBeNull();
+  });
+
+  it('finished → semi takes none (a semi-finished card has no selling price), and neither does a finished card saved unchanged', () => {
+    expect(marginPointFor(finished, { ...finished, kind: 'semi', sellingMode: null, sellingPrice: null } as Product, tables, NOW)).toBeNull();
+    expect(marginPointFor(finished, finished, tables, NOW)).toBeNull();
+  });
+
+  it('a semi-finished card saved as it is takes none', () => {
+    expect(marginPointFor(semi, semi, tables, NOW)).toBeNull();
   });
 });

@@ -5,7 +5,7 @@ import { Radio, RadioGroup } from 'react-aria-components';
 import { useBlocker, useLocation, useNavigate } from 'react-router';
 import type { BlockerFunction } from 'react-router';
 import {
-  PACK_UNITS, currentProduct, labourBatchCost, productCooking, productsUsingRecipe, totalLabourBatchCost, vatRatesFor, vatSelection,
+  PACK_UNITS, cardsUsing, currentProduct, labourBatchCost, productCooking, productsUsingRecipe, totalLabourBatchCost, vatRatesFor, vatSelection,
 } from '@mise/shared/foodcost-model';
 import { fcMoney } from '@mise/shared/fc-number';
 import { otherProductsUsing, readWeighing, weighingPatches } from '@mise/shared/foodcost-weighing';
@@ -46,6 +46,7 @@ import { CardSection, CardStack } from './CardSection';
 import { CookingSection } from './CookingSection';
 import { ProductActions } from './ProductActions';
 import { SemiCostBlock, UsedInBlock } from './SemiSections';
+import { deleteQuestion } from './semiWords';
 import { SuggestedPrice } from './SuggestedPrice';
 import { PerKgBlock } from './PerKgBlock';
 import { ProductSummary } from './ProductSummary';
@@ -567,7 +568,7 @@ export function ProductForm({ id, product, draft, origin, titleRef, onSaved, onB
     try {
       const ok = await confirm({
         title: t('fc.deleteProduct'),
-        message: t('fc.deleteProductQ', { name: initial?.name || t('fc.thisProduct') }),
+        message: deleteQuestion(t, initial?.name || t('fc.thisProduct'), cardsUsing(snap.products, id).length),
         okLabel: t('ui.delete'),
         cancelLabel: t('common.cancel'),
         danger: true,
@@ -589,6 +590,7 @@ export function ProductForm({ id, product, draft, origin, titleRef, onSaved, onB
   const nameInvalid = showNameError && working.name.trim() === '';
   const labourNeedsRate = (costed.labourMinutes ?? 0) > 0 && canManage && snap.settingsLoaded && !(Number(snap.tables.labourCostPerHour) > 0);
   const semiCard = working.kind === 'semi';
+  const usedIn = id === null ? 0 : cardsUsing(snap.products, id).length;
   // A category whose document is gone reads as none: the select then shows «No category».
   const categoryValue = snap.categories.some(category => category.id === working.categoryId) ? working.categoryId : '';
   // Model 4: the labour of the semi-finished cards inside, apart from the card's own work (said only when both exist).
@@ -714,6 +716,10 @@ export function ProductForm({ id, product, draft, origin, titleRef, onSaved, onB
               </div>
             </RadioGroup>
             <p className={styles.note}>{t(working.kind === 'semi' ? 'fc.kind.semiHint' : 'fc.kind.finishedHint')}</p>
+            {/* A semi-finished card that other cards use, about to become a finished product: said here, no dialog. */}
+            {initial?.kind === 'semi' && working.kind === 'finished' && usedIn > 0
+              ? <p className={styles.note} data-testid="kind-used-note">{t('fc.kind.semiUsedToFinished', { n: usedIn })}</p>
+              : null}
           </div>
 
           <div className={styles.field}>

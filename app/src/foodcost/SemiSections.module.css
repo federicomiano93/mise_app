@@ -7,6 +7,12 @@
   font-variant-numeric: tabular-nums;
 }
 
+.bigLabel {
+  color: var(--ink-2);
+  font-size: var(--fs-md);
+  font-weight: 600;
+}
+
 .caption {
   margin: var(--s1) 0 0;
   color: var(--ink-2);

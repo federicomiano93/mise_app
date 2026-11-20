@@ -1,9 +1,10 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { screen, within } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { UserEvent } from '@testing-library/user-event';
 import { editorSource, intoForm } from '../testing/foodcostEditorFixtures';
-import { LOAD, bareProduct, product, renderFoodcost, split } from '../testing/renderFoodcost';
+import { EMPLOYEE, LOAD, bareProduct, product, renderFoodcost, split } from '../testing/renderFoodcost';
+import categoriesCss from './CategoriesDialog.module.css?raw';
 
 // Categories and semi-finished cards (Mise 2, product model 4, 20 Nov 2026 — the cakes plan, step 1): the list in groups, the
 // categories dialog, the card type in the editor, the cost per kilo and «Used in», the chooser's semi-finished cards and what Save
@@ -63,8 +64,10 @@ describe('the list in groups', () => {
     await user.click(await screen.findByRole('button', { name: /^Semis/ }, LOAD));
     expect(group(/^Semis/)).toHaveAttribute('aria-expanded', 'true');
     const row = screen.getByRole('button', { name: /^Ganache/ });
-    expect(row).toHaveTextContent('materials £2.00 · labour £6.00');
-    expect(row).toHaveTextContent('£8.00/kg');
+    // ⚠️ A NUMBER STANDING ALONE IS THE MATERIALS COST PER KG; the labour sits beside it, labelled.
+    expect(row).toHaveTextContent('£2.00/kg');
+    expect(row).toHaveTextContent('labour £6.00/kg');
+    expect(row).not.toHaveTextContent('£8.00');
     await user.click(group(/^Semis/));
     expect(screen.queryByRole('button', { name: /^Ganache/ })).not.toBeInTheDocument();
   });
@@ -270,10 +273,14 @@ describe('the cost per kg and «Used in» of a semi-finished card', () => {
   it('shows the cost per kg, split into materials and labour, and the cards that use it', async () => {
     renderFoodcost('/food-cost/product/Ganache', { source: sourceOf([GANACHE, CAKE]) });
     const cost = await screen.findByRole('region', { name: 'Cost per kg' }, LOAD);
-    expect(within(cost).getByTestId('semi-cost-total')).toHaveTextContent('£8.00/kg');
+    // The total with labour is said only with its words; the two lines under it are the parts.
+    expect(within(cost).getByTestId('semi-cost-total')).toHaveTextContent('£8.00/kg — materials + labour');
     expect(within(cost).getByText('Materials').nextSibling).toHaveTextContent('£2.00/kg');
     expect(within(cost).getByText('Labour').nextSibling).toHaveTextContent('£6.00/kg');
     expect(within(cost).getByText(/1 kg of Ganache\./)).toBeInTheDocument();
+    expect(within(cost).getByText('In the cards that use it, the materials (£2.00/kg) go into the cost and the food cost; the labour (£6.00/kg) goes into the labour line.')).toBeInTheDocument();
+    // No lone figure equals materials + labour: every «£8.00» on the card sits inside the labelled total.
+    for (const node of screen.getAllByText(/£8\.00/)) expect(node.parentElement?.textContent ?? node.textContent).toContain('materials + labour');
     const used = screen.getByRole('region', { name: 'Used in' });
     expect(within(used).getByRole('button', { name: 'Open Cake' })).toHaveTextContent('Cake — 500.00 g');
     expect(within(used).getByText(/the cost of these cards changes too/)).toBeInTheDocument();
@@ -283,8 +290,10 @@ describe('the cost per kg and «Used in» of a semi-finished card', () => {
     const fake = editorSource([GANACHE], { categories: CATEGORIES, settings: null });
     renderFoodcost('/food-cost/product/Ganache', { source: fake, session: { canManage: false, isOwner: false, role: 'staff', location: { staffShownCards: { foodcost: true } } } });
     const cost = await screen.findByRole('region', { name: 'Cost per kg' }, LOAD);
-    expect(within(cost).getByTestId('semi-cost-total')).toHaveTextContent('£2.00/kg');
+    // Without the labour (an employee, or no rate): the headline is the materials alone and no labour word is said anywhere.
+    expect(within(cost).getByTestId('semi-cost-total')).toHaveTextContent(/^£2\.00\/kg$/);
     expect(within(cost).queryByText('Labour')).not.toBeInTheDocument();
+    expect(cost).not.toHaveTextContent(/labour/i);
     expect(screen.queryByRole('region', { name: 'Used in' })).not.toBeInTheDocument();
   });
 
@@ -298,7 +307,8 @@ describe('the cost per kg and «Used in» of a semi-finished card', () => {
   it('is in Italian', async () => {
     renderFoodcost('/food-cost/product/Ganache', { source: sourceOf([GANACHE, CAKE]), lang: 'it', session: { language: 'it' } });
     const cost = await screen.findByRole('region', { name: 'Costo al kg' }, LOAD);
-    expect(within(cost).getByText(/È il prezzo che usano le altre schede quando la mettono in «Composto da»/)).toBeInTheDocument();
+    expect(within(cost).getByTestId('semi-cost-total')).toHaveTextContent('£8.00/kg — materie + lavoro');
+    expect(within(cost).getByText('Nelle schede che la usano, le materie (£2.00/kg) entrano nel costo e nel food cost; il lavoro (£6.00/kg) va nella riga del lavoro.')).toBeInTheDocument();
     expect(screen.getByRole('region', { name: 'Usato in' })).toBeInTheDocument();
   });
 });
@@ -315,7 +325,7 @@ describe('a semi-finished card in «Made of»', () => {
     const { user } = await openForm('/food-cost/new', [GANACHE, ICING, CAKE]);
     const dialog = await openChooser(user);
     const names = within(dialog).getAllByRole('button').map(b => b.textContent);
-    expect(names.some(text => text?.startsWith('Ganache') && text.includes('£8.00/kg') && text.includes('materials £2.00 · labour £6.00'))).toBe(true);
+    expect(names.some(text => text?.startsWith('Ganache') && text.includes('£2.00/kg') && text.includes('labour £6.00/kg') && !text.includes('£8.00'))).toBe(true);
     expect(names.some(text => text?.startsWith('Icing') && text.includes('£2.00/kg'))).toBe(true);
     expect(names.some(text => text?.startsWith('Cake'))).toBe(false);
     expect(within(dialog).getByRole('heading', { level: 3, name: 'Semis' })).toBeInTheDocument();
@@ -334,18 +344,19 @@ describe('a semi-finished card in «Made of»', () => {
     expect(within(madeOf()).getByText('£2.00/kg')).toBeInTheDocument();
     await user.type(row, '0.25');
     expect(within(madeOf()).getByText('£0.50')).toBeInTheDocument();
-    expect(within(madeOf()).getByText('materials £0.50')).toBeInTheDocument();
   });
 
-  it('a card with labour says «labour included» and splits the amount into materials and labour', async () => {
+  it('a card with labour shows the MATERIALS as the figures of the row and the labour on a line of its own', async () => {
     const { user } = await openForm('/food-cost/new', [GANACHE]);
     const dialog = await openChooser(user);
     await user.click(within(dialog).getByRole('button', { name: /^Ganache/ }));
     await user.type(within(madeOf()).getByRole('textbox', { name: 'Quantity' }), '0.5');
-    expect(within(madeOf()).getByText('£8.00/kg · labour included')).toBeInTheDocument();
-    expect(within(madeOf()).getByText('£4.00')).toBeInTheDocument();
-    expect(within(madeOf()).getByText('materials £1.00')).toBeInTheDocument();
-    expect(within(madeOf()).getByText('labour £3.00')).toBeInTheDocument();
+    expect(within(madeOf()).getByText('£2.00/kg')).toBeInTheDocument();
+    expect(within(madeOf()).getByText(/^£1\.00$/)).toBeInTheDocument();
+    expect(within(madeOf()).getByText('+ labour £3.00')).toBeInTheDocument();
+    // Neither the per-kilo total (8.00) nor the amount's total (4.00) is ever a figure on its own.
+    expect(madeOf()).not.toHaveTextContent('£8.00');
+    expect(madeOf()).not.toHaveTextContent('£4.00');
   });
 
   it('⚠️ the card itself, one already on this card and one that would hold it again are said and cannot be chosen', async () => {
@@ -385,6 +396,184 @@ describe('a semi-finished card in «Made of»', () => {
     expect(data.components).toContainEqual({ kind: 'semi', productId: 'Icing', qtyKg: 0.3 });
     expect(data.components).toContainEqual({ kind: 'semi', productId: 'Ganache', qtyKg: 0.5 });
     expect([data.model, data.kind, data.categoryId]).toEqual([4, 'finished', 'c2']);
+  });
+});
+
+describe('«Made of»: the rows add up to the total under them, and the delete says what it leaves behind', () => {
+  it('⚠️ the materials of the rows (flour £2.00 + ganache £1.00) are the total under them, and the labour is apart', async () => {
+    await openForm('/food-cost/product/Cake', [GANACHE, CAKE]);
+    // The ganache row: its materials, then «+ labour» on its own line.
+    expect(within(madeOf()).getByText('£1.00')).toBeInTheDocument();
+    expect(within(madeOf()).getByText('+ labour £3.00')).toBeInTheDocument();
+    // The foot of the section adds the MATERIALS up: 2.00 + 1.00.
+    expect(within(madeOf()).getByText(/1\.50 kg · £3\.00$/)).toBeInTheDocument();
+    expect(madeOf()).not.toHaveTextContent('£4.00');
+    expect(madeOf()).not.toHaveTextContent('£8.00');
+  });
+
+  it('the read view says the same: materials per kilo and for the amount, labour on its own', async () => {
+    renderFoodcost('/food-cost/product/Cake', { source: sourceOf([GANACHE, CAKE]) });
+    const made = await screen.findByRole('region', { name: 'Made of' }, LOAD);
+    expect(made).toHaveTextContent('£2.00/kg · £1.00');
+    expect(made).toHaveTextContent('+ labour £3.00');
+    expect(made).not.toHaveTextContent('£8.00');
+  });
+
+  it('⚠️ deleting a semi-finished card that other cards use says what stays behind in them', async () => {
+    const { user } = await openForm('/food-cost/product/Ganache', [GANACHE, CAKE]);
+    await user.click(screen.getByRole('button', { name: 'Delete product' }));
+    const asked = await screen.findByRole('alertdialog', undefined, LOAD);
+    expect(asked).toHaveTextContent('Delete “Ganache”? It is used in 1 card: there a line with no price will stay, to remove by hand. This cannot be undone.');
+  });
+
+  it('a card nobody uses is asked about as before', async () => {
+    const { user } = await openForm('/food-cost/product/Icing', [ICING, CAKE]);
+    await user.click(screen.getByRole('button', { name: 'Delete product' }));
+    expect(await screen.findByRole('alertdialog', undefined, LOAD)).toHaveTextContent('Delete “Icing”? This cannot be undone, and its margin history goes with it.');
+  });
+
+  it('the read view warns in the same way, in Italian too', async () => {
+    renderFoodcost('/food-cost/product/Ganache', { source: sourceOf([GANACHE, CAKE]), lang: 'it', session: { language: 'it' } });
+    const user = userOf();
+    await user.click(await screen.findByRole('button', { name: 'Elimina prodotto' }, LOAD));
+    expect(await screen.findByRole('alertdialog', undefined, LOAD))
+      .toHaveTextContent('Eliminare “Ganache”? È usata in 1 scheda: in quella resterà una riga senza prezzo, da togliere a mano. Non si può annullare.');
+  });
+});
+
+describe('semi-finished cards inside each other: too deep is not a loop', () => {
+  const inside = (name: string, holds?: string) => product(name, {
+    kind: 'semi', model: 4, components: holds ? [semiLine(holds, 1)] : [gram(1000)], sellingMode: null, sellingPrice: null, vatRate: null, piecesPerBatch: null,
+  });
+  // D0 holds D1 holds D2 holds D3 holds D4: D0 already carries the four levels there may be.
+  const CHAIN = [inside('D0', 'D1'), inside('D1', 'D2'), inside('D2', 'D3'), inside('D3', 'D4'), inside('D4'), inside('Free')];
+
+  it('⚠️ a card whose choice would pile up a fifth level is said and cannot be chosen, with its own reason', async () => {
+    const { user } = await openForm('/food-cost/product/D4', CHAIN);
+    const dialog = await (async () => {
+      await user.click(within(madeOf()).getByRole('button', { name: '+ Add recipe, ingredient or semi-finished' }));
+      const found = await chooser();
+      await user.click(within(found).getByRole('button', { name: 'Semi-finished' }));
+      return found;
+    })();
+    const free = within(dialog).getByRole('button', { name: /^Free/ });
+    expect(free).toBeDisabled();
+    expect(free).toHaveTextContent('too many semi-finished cards inside each other (4 levels at most)');
+    // A real loop keeps its own words.
+    expect(within(dialog).getByRole('button', { name: /^D0/ })).toHaveTextContent('it would contain this card again');
+  });
+
+  it('the same card is offered where the chain stays within four levels', async () => {
+    const { user } = await openForm('/food-cost/product/D0', CHAIN);
+    await user.click(within(madeOf()).getByRole('button', { name: '+ Add recipe, ingredient or semi-finished' }));
+    const dialog = await chooser();
+    await user.click(within(dialog).getByRole('button', { name: 'Semi-finished' }));
+    expect(within(dialog).getByRole('button', { name: /^Free/ })).toBeEnabled();
+  });
+
+  it('a line that is too deep says so on its row, in plain words', async () => {
+    const fiveDeep = [inside('E0', 'E1'), inside('E1', 'E2'), inside('E2', 'E3'), inside('E3', 'E4'), inside('E4', 'E5'), inside('E5')];
+    await openForm('/food-cost/product/E0', fiveDeep);
+    expect(within(madeOf()).getByText(/Too many semi-finished cards inside each other \(4 levels at most\)/)).toBeInTheDocument();
+  });
+});
+
+describe('a semi-finished card changed to a finished product', () => {
+  it('⚠️ says, under the type, that the cards that use it keep it in their cost and that it will be bookable', async () => {
+    const { user } = await openForm('/food-cost/product/Ganache', [GANACHE, CAKE]);
+    expect(screen.queryByTestId('kind-used-note')).not.toBeInTheDocument();
+    await user.click(within(productRegion()).getByRole('radio', { name: 'Finished product' }));
+    expect(screen.getByTestId('kind-used-note')).toHaveTextContent('It is used in 1 card: it will stay in its cost and will also appear among the products to book.');
+  });
+
+  it('says nothing for a card nobody uses', async () => {
+    const { user } = await openForm('/food-cost/product/Icing', [ICING, CAKE]);
+    await user.click(within(productRegion()).getByRole('radio', { name: 'Finished product' }));
+    expect(screen.queryByTestId('kind-used-note')).not.toBeInTheDocument();
+  });
+});
+
+describe('the list: a card left by Back keeps its group open for the focus', () => {
+  it('⚠️ Back from a card leaves its group open and the focus on its row, never on the page', async () => {
+    split();
+    const { user } = await listed([GANACHE, CAKE], CATEGORIES, '/food-cost/product/Cake');
+    expect(await screen.findByRole('button', { name: /^Cakes/ }, LOAD)).toHaveAttribute('aria-expanded', 'true');
+    await user.click(await screen.findByRole('button', { name: /^Back/ }, LOAD));
+    await waitFor(() => { expect(screen.getByRole('button', { name: /^Cake(?!s)/ })).toHaveFocus(); });
+    expect(group(/^Cakes/)).toHaveAttribute('aria-expanded', 'true');
+  });
+});
+
+describe('the categories dialog: leaving, focus and who may remove', () => {
+  const opened = async (products = [GANACHE, CAKE], options: Parameters<typeof renderFoodcost>[1] = {}) => {
+    const fake = sourceOf(products);
+    const view = renderFoodcost('/food-cost', { ...options, source: fake });
+    await screen.findByRole('button', { name: 'New product' }, LOAD);
+    await view.user.click(await screen.findByRole('button', { name: 'Categories' }, LOAD));
+    return { ...view, fake, dialog: await chooser() };
+  };
+
+  it('⚠️ «Done» while a name is being typed asks before dropping it; «Keep typing» stays on the box with the text', async () => {
+    const { user, dialog, fake } = await opened();
+    await user.click(within(dialog).getByRole('button', { name: '+ New category' }));
+    await user.type(within(dialog).getByRole('textbox', { name: 'Category name' }), 'Bread');
+    await user.click(within(dialog).getByRole('button', { name: 'Done' }));
+    const ask = await screen.findByRole('alertdialog');
+    expect(ask).toHaveTextContent('Discard the name you typed?');
+    expect(ask).toHaveTextContent('“Bread” has not been saved yet.');
+    await user.click(within(ask).getByRole('button', { name: 'Keep typing' }));
+    expect(within(dialog).getByRole('textbox', { name: 'Category name' })).toHaveValue('Bread');
+    expect(within(dialog).getByRole('textbox', { name: 'Category name' })).toHaveFocus();
+    await user.click(within(dialog).getByRole('button', { name: 'Done' }));
+    await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Discard' }));
+    await waitFor(() => { expect(screen.queryByRole('dialog', { name: 'Food cost categories' })).not.toBeInTheDocument(); });
+    expect(fake.saved.filter(s => s.kind === 'category')).toEqual([]);
+  });
+
+  it('«Done» with an empty box, or a rename left as it was, asks nothing', async () => {
+    const { user, dialog } = await opened();
+    await user.click(within(dialog).getByRole('button', { name: 'Rename Semis' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Done' }));
+    await waitFor(() => { expect(screen.queryByRole('dialog', { name: 'Food cost categories' })).not.toBeInTheDocument(); });
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+  });
+
+  it('⚠️ whoever is not a manager has no remove control (the rules refuse them), and can still rename and add', async () => {
+    const { dialog } = await opened([GANACHE, CAKE], { session: EMPLOYEE });
+    expect(within(dialog).queryByRole('button', { name: /^Remove / })).not.toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Rename Semis' })).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: '+ New category' })).toBeInTheDocument();
+  });
+
+  it('the focus goes back to the row\'s rename button after Save, and after Cancel', async () => {
+    const { user, dialog } = await opened();
+    await user.click(within(dialog).getByRole('button', { name: 'Rename Semis' }));
+    await user.type(within(dialog).getByRole('textbox', { name: 'Category name' }), 'x{Enter}');
+    await waitFor(() => { expect(within(dialog).getByRole('button', { name: 'Rename Semisx' })).toHaveFocus(); });
+    await user.click(within(dialog).getByRole('button', { name: 'Rename Cakes' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => { expect(within(dialog).getByRole('button', { name: 'Rename Cakes' })).toHaveFocus(); });
+  });
+
+  it('after removing a category the focus goes to the next row, or to «+ New category» after the last', async () => {
+    const { user, dialog } = await opened();
+    await user.click(within(dialog).getByRole('button', { name: 'Remove Semis' }));
+    await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Remove' }));
+    await waitFor(() => { expect(within(dialog).getByRole('button', { name: 'Rename Cakes' })).toHaveFocus(); });
+    await user.click(within(dialog).getByRole('button', { name: 'Remove Cakes' }));
+    await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Remove' }));
+    await waitFor(() => { expect(within(dialog).getByRole('button', { name: '+ New category' })).toHaveFocus(); });
+  });
+
+  it('the error line is in the page BEFORE it has anything to say, so a screen reader announces it when it arrives', async () => {
+    const { user, dialog } = await opened();
+    await user.click(within(dialog).getByRole('button', { name: '+ New category' }));
+    const alert = within(dialog).getByRole('alert');
+    expect(alert).toBeEmptyDOMElement();
+    await user.type(within(dialog).getByRole('textbox', { name: 'Category name' }), '{Enter}');
+    expect(within(dialog).getByRole('alert')).toBe(alert);
+    expect(alert).toHaveTextContent('Write a name for the category.');
+    expect(categoriesCss).not.toMatch(/\.error:empty\s*\{[^}]*display:\s*none/);
   });
 });
 

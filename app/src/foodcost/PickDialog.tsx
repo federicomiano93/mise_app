@@ -3,7 +3,7 @@ import { normalizeSearchText } from '@mise/shared/catalogue-model';
 import { isFood, isPackaging } from '@mise/shared/ingredient-kind';
 import { ingredientDisplayName } from '@mise/shared/ingredient-name';
 import { fcMoney } from '@mise/shared/fc-number';
-import { semiCardCost, wouldLoop } from '@mise/shared/foodcost-model';
+import { semiCardCost, wouldBeTooDeep, wouldLoop } from '@mise/shared/foodcost-model';
 import { pricePerKg } from '@mise/shared/price-model';
 import { withoutArchived } from '@mise/shared/recipe-shelf';
 import type { MessageKey } from '../i18n/en';
@@ -29,7 +29,7 @@ type Props = {
   initialQuery?: string;
   onChoose: (choice: Choice) => void;
   // The card being edited ('' for a new one) and the semi-finished cards it already holds: a card cannot hold itself, one that
-  // would hold it again (a loop), or the same card twice. Only the semi-finished choices read them.
+  // would hold it again (a loop), one that would pile up too many levels, or the same card twice. Only the semi-finished choices read them.
   cardId?: string;
   usedSemiIds?: readonly string[];
   // Escape, Back: nothing was chosen.
@@ -85,7 +85,9 @@ export function PickDialog({ mode, initialQuery = '', cardId = '', usedSemiIds =
       const reason = card.id === cardId ? 'fc.pick.itself' as const
         : usedSemiIds.includes(card.id) ? 'fc.pick.alreadyHere' as const
           : wouldLoop(tables.products, cardId, card.id) ? 'fc.pick.loops' as const
-            : null;
+            // ⚠️ Not a loop but too many cards inside each other (MAX_SEMI_DEPTH), for this card or for the cards that already hold it.
+            : wouldBeTooDeep(tables.products, cardId, card.id) ? 'fc.pick.tooDeep' as const
+              : null;
       const figures = semiFigures(t, money, semiCardCost(card, tables));
       return { card, categoryId: categoryIdOf(card, categories), reason, figures };
     })

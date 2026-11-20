@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { fcMoney } from '@mise/shared/fc-number';
+import { fcMoney, fcNumber } from '@mise/shared/fc-number';
 import { cardsUsing, productCooking, semiCardCost } from '@mise/shared/foodcost-model';
 import type { CostTables, Product } from '@mise/shared/foodcost-model';
 import { fcWeight } from '@mise/shared/fc-number';
@@ -31,34 +31,37 @@ export function SemiCostBlock({ product, tables, labourNote }: CostProps) {
   const name = product.name.trim() || t('fc.untitledProduct');
   const known = cost.materialsPerKg !== null && cost.totalPerKg !== null;
 
+  const lossText = loss !== null && loss > 0 ? t('fc.semi.costCaptionLoss', { name, loss: fcNumber(loss, money) }) : t('fc.semi.costCaption', { name });
+  // ⚠️ A NUMBER STANDING ALONE IS ALWAYS THE MATERIALS COST PER KG — the figure other cards put in their cost and food cost %. The total
+  // with labour is said only with those words; without the labour (an employee, no rate, no minutes) there is no labour word at all.
+  const withLabour = cost.labourPerKg !== null;
+
   return (
     <CardSection title={t('fc.semi.costTitle')} help={t('fc.semi.costHelp')}>
       {!known ? <p className={styles.caption}>{t('fc.semi.costNone')}</p> : (
         <>
-          <p className={styles.big} data-testid="semi-cost-total">{t('fc.semi.perKg', { amount: fcMoney(cost.totalPerKg, money) })}</p>
-          <p className={styles.caption}>
-            {loss !== null && loss > 0
-              ? t('fc.semi.costCaptionLoss', { name, loss: `${Math.round(loss * 100) / 100}` })
-              : t('fc.semi.costCaption', { name })}
+          <p className={styles.big} data-testid="semi-cost-total">
+            {t('fc.semi.perKg', { amount: fcMoney(withLabour ? cost.totalPerKg : cost.materialsPerKg, money) })}
+            {withLabour ? <>{' '}<span className={styles.bigLabel}>{t('fc.semi.bothLabel')}</span></> : null}
           </p>
-          <dl className={styles.rows}>
-            <div className={styles.row}>
-              <dt>{t('fc.semi.materials')}</dt>
-              <dd>{t('fc.semi.perKg', { amount: fcMoney(cost.materialsPerKg, money) })}</dd>
-            </div>
-            {cost.labourPerKg === null ? null : (
-              <>
-                <div className={styles.row}>
-                  <dt>{t('fc.semi.labour')}</dt>
-                  <dd>{t('fc.semi.perKg', { amount: fcMoney(cost.labourPerKg, money) })}</dd>
-                </div>
-                <div className={`${styles.row} ${styles.total}`}>
-                  <dt>{t('fc.semi.total')}</dt>
-                  <dd>{t('fc.semi.perKg', { amount: fcMoney(cost.totalPerKg, money) })}</dd>
-                </div>
-              </>
-            )}
-          </dl>
+          <p className={styles.caption}>{lossText}</p>
+          {cost.labourPerKg === null ? null : (
+            <dl className={styles.rows}>
+              <div className={styles.row}>
+                <dt>{t('fc.semi.materials')}</dt>
+                <dd>{t('fc.semi.perKg', { amount: fcMoney(cost.materialsPerKg, money) })}</dd>
+              </div>
+              <div className={styles.row}>
+                <dt>{t('fc.semi.labour')}</dt>
+                <dd>{t('fc.semi.perKg', { amount: fcMoney(cost.labourPerKg, money) })}</dd>
+              </div>
+            </dl>
+          )}
+          <p className={styles.caption}>
+            {cost.labourPerKg === null
+              ? t('fc.semi.costUseNoLabour')
+              : t('fc.semi.costUse', { materials: fcMoney(cost.materialsPerKg, money), labour: fcMoney(cost.labourPerKg, money) })}
+          </p>
           {cost.partial ? <p className={styles.note}>{t('fc.perKg.partial')}</p> : null}
         </>
       )}

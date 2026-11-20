@@ -2,7 +2,7 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { Ref } from 'react';
 import { Pencil } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router';
-import { currentProduct, labourBatchCost, productionCost, totalLabourBatchCost } from '@mise/shared/foodcost-model';
+import { cardsUsing, currentProduct, labourBatchCost, productionCost, totalLabourBatchCost } from '@mise/shared/foodcost-model';
 import type { CostTables, Product } from '@mise/shared/foodcost-model';
 import { countryOf } from '@mise/shared/market';
 import { useT } from '../i18n/useT';
@@ -22,6 +22,7 @@ import { LabEntry } from './lab/LabEntry';
 import { LabMode } from './lab/LabMode';
 import { PerKgBlock } from './PerKgBlock';
 import { SemiCostBlock, UsedInBlock } from './SemiSections';
+import { deleteQuestion } from './semiWords';
 import { ProductActions } from './ProductActions';
 import { SuggestedPrice } from './SuggestedPrice';
 import { workingFrom } from './productEditorModel';
@@ -126,7 +127,7 @@ export function ProductRead({ id, product: stored, gone, origin, titleRef, onEdi
     try {
       const ok = await confirm({
         title: t('fc.deleteProduct'),
-        message: t('fc.deleteProductQ', { name: product.name || t('fc.thisProduct') }),
+        message: deleteQuestion(t, product.name || t('fc.thisProduct'), cardsUsing(snap.products, id).length),
         okLabel: t('ui.delete'),
         cancelLabel: t('common.cancel'),
         danger: true,

@@ -126,7 +126,7 @@ export function ReadMadeOf({ product, working, tables, loaded }: Lines) {
     const shown = working.components[index];
     if (!shown) return { name: '', missing: false, amount: null, cost: '', note: '' };
     const name = lineName(t, shown, tables, loaded);
-    // A semi-finished card inside: its tag and name, what a kilo costs and what this amount costs, split into materials and labour.
+    // A semi-finished card inside: its tag and name, what a kilo of its materials costs and what this amount's materials cost, the labour apart.
     if (line.kind === 'semi' && shown.kind === 'semi') {
       const view = semiLineView(t, money, shown, tables, loaded);
       return {
@@ -134,7 +134,7 @@ export function ReadMadeOf({ product, working, tables, loaded }: Lines) {
         missing: name.missing,
         amount: positive(line.qtyKg) ? fcWeight(line.qtyKg, money) : null,
         cost: view.cost === '' ? view.perKg : `${view.perKg} · ${view.cost}`,
-        note: [[view.materials, view.labour].filter(Boolean).join(' · '), view.note].filter(Boolean).join(' '),
+        note: [view.labour, view.note].filter(Boolean).join(' '),
       };
     }
     const amount = line.kind === 'ingredient'

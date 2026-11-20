@@ -136,7 +136,6 @@ export function LineRow({ rowKey, kind, name, supplier = '', cost, note, semi, q
           semi === undefined || semi.cost === '' ? null : (
             <span className={styles.cost}>
               {semi.cost}
-              <span className={styles.split}>{semi.materials}</span>
               {semi.labour === '' ? null : <span className={styles.split}>{semi.labour}</span>}
             </span>
           )
