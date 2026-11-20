@@ -13,7 +13,7 @@ type Ref = { kind: string; path: string; parts?: unknown[] };
 
 function fakeKit() {
   const listeners: { target: Ref; options: unknown; next: (snap: unknown) => void; error: (err: unknown) => void; stopped: boolean }[] = [];
-  const batches: { sets: [Ref, Record<string, unknown>][]; committed: boolean }[] = [];
+  const batches: { sets: [Ref, Record<string, unknown>][]; deletes: Ref[]; committed: boolean }[] = [];
   let autoIds = 0;
   const fs = {
     collection: (_db: unknown, ...segments: string[]): Ref => ({ kind: 'collection', path: segments.join('/') }),
@@ -35,10 +35,11 @@ function fakeKit() {
       return () => { entry.stopped = true; };
     }),
     writeBatch: vi.fn(() => {
-      const batch = { sets: [] as [Ref, Record<string, unknown>][], committed: false };
+      const batch = { sets: [] as [Ref, Record<string, unknown>][], deletes: [] as Ref[], committed: false };
       batches.push(batch);
       return {
         set: (ref: Ref, data: Record<string, unknown>) => { batch.sets.push([ref, data]); },
+        delete: (ref: Ref) => { batch.deletes.push(ref); },
         commit: async () => { batch.committed = true; },
       };
     }),
@@ -82,6 +83,51 @@ describe('the Food cost source, as firestore.rules expect it', () => {
     const source = createFirestoreFoodcostSource(() => Promise.resolve(kit), 'bakery');
     await source.saveProduct('p1', { name: 'Loaf' }, null);
     expect(batches[0]!.sets).toHaveLength(1);
+  });
+
+  // Cakes (20 Nov 2026): the cake travels in the batch of its product.
+  test('⚠️ a cake companion is written in the SAME batch as its product and its margin point, stamped for the venue', async () => {
+    const { kit, fs, batches } = fakeKit();
+    const source = createFirestoreFoodcostSource(() => Promise.resolve(kit), 'panificio-miano');
+    await source.saveProduct('cake-c1', { name: 'Sacher', model: 4 }, { recordedAt: '2026-11-20' }, { kind: 'cake', id: 'c1', data: { name: 'Sacher', model: 1 } });
+    expect(fs.writeBatch).toHaveBeenCalledTimes(1);
+    expect(fs.setDoc).not.toHaveBeenCalled();
+    const [batch] = batches;
+    expect(batch!.committed).toBe(true);
+    expect(batch!.sets.map(([ref]) => ref.path.replace(/auto-\d+/, 'auto'))).toEqual([
+      'locations/panificio-miano/products/cake-c1',
+      'locations/panificio-miano/cakes/c1',
+      'locations/panificio-miano/products/cake-c1/snapshots/auto',
+    ]);
+    expect(batch!.sets[1]![1]).toEqual({ name: 'Sacher', model: 1, bakery: 'panificio-miano' });
+  });
+
+  test('without a companion the batch holds exactly what it held before', async () => {
+    const { kit, batches } = fakeKit();
+    const source = createFirestoreFoodcostSource(() => Promise.resolve(kit), 'bakery');
+    await source.saveProduct('p1', { name: 'Loaf' }, null);
+    expect(batches[0]!.sets.map(([ref]) => ref.path)).toEqual(['locations/bakery/products/p1']);
+  });
+
+  test('⚠️ a product and its cake are deleted in ONE batch; a product alone by deleteDoc, as before', async () => {
+    const { kit, fs, batches } = fakeKit();
+    const source = createFirestoreFoodcostSource(() => Promise.resolve(kit), 'bakery');
+    await source.removeProduct('cake-c1', { kind: 'cake', id: 'c1' });
+    expect(fs.deleteDoc).not.toHaveBeenCalled();
+    expect(batches[0]!.committed).toBe(true);
+    expect(batches[0]!.deletes.map(ref => ref.path)).toEqual(['locations/bakery/products/cake-c1', 'locations/bakery/cakes/c1']);
+    await source.removeProduct('p1');
+    expect(fs.deleteDoc.mock.calls[0]![0].path).toBe('locations/bakery/products/p1');
+    expect(batches).toHaveLength(1);
+  });
+
+  test('⚠️ the cake’s id is checked like the product’s: nothing is written when it could name another path', async () => {
+    const { kit, fs } = fakeKit();
+    const source = createFirestoreFoodcostSource(() => Promise.resolve(kit), 'bakery');
+    await expect(source.saveProduct('cake-x', { name: 'x' }, null, { kind: 'cake', id: 'a/b', data: {} })).rejects.toThrow();
+    await expect(source.removeProduct('cake-x', { kind: 'cake', id: '..' })).rejects.toThrow();
+    expect(fs.writeBatch).not.toHaveBeenCalled();
+    expect(fs.deleteDoc).not.toHaveBeenCalled();
   });
 
   test('⚠️ a weighing writes THREE fields of a recipe with updateDoc, stamped — never the whole recipe', async () => {

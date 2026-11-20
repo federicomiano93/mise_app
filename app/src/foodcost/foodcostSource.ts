@@ -48,6 +48,17 @@ export interface RecipeLossPatch {
   readonly cookedGrams: number;
 }
 
+// The cake that travels with its product (`cakes/{id}`, see cakes/ and shared/src/cake-model.ts). `data` is toCakeDocument's result.
+export interface CakeCompanionSave {
+  readonly kind: 'cake';
+  readonly id: string;
+  readonly data: Readonly<Record<string, unknown>>;
+}
+export interface CakeCompanionDelete {
+  readonly kind: 'cake';
+  readonly id: string;
+}
+
 export interface FoodcostSource {
   // A new product id, made on the phone with no write, so a new product can be on screen (and in
   // the local copy) before the network has heard of it — instantly, and offline.
@@ -74,14 +85,23 @@ export interface FoodcostSource {
   watchSettings(onChange: (data: Record<string, unknown> | null, meta: { readonly fromServer: boolean }) => void): () => void;
   // A product, WHOLE, and when given its margin point, in ONE batch. Resolves when the server has
   // both (offline: never); rejects when either is refused.
-  saveProduct(id: string, data: Readonly<Record<string, unknown>>, snapshot: Readonly<Record<string, unknown>> | null): Promise<void>;
+  // `companion` (Cakes, 20 Nov 2026): the cake behind a `cake-<id>` product, written WHOLE in the SAME batch, stamped for the venue and
+  // its id checked like the product's — so a cake and its card are never saved apart. Nothing else ever rides along.
+  saveProduct(
+    id: string,
+    data: Readonly<Record<string, unknown>>,
+    snapshot: Readonly<Record<string, unknown>> | null,
+    companion?: CakeCompanionSave,
+  ): Promise<void>;
   // A product made from the recipe book (item 29, current app f8d54f35): written WHOLE at its id, but only if the SERVER says no
   // product is there. Resolves true when created and false when it already existed (nothing written); rejects when the server
   // cannot be reached (offline: it FAILS, it does not queue) or when the write is refused. No margin point: nothing is priced yet.
   createProductIfAbsent(id: string, data: Readonly<Record<string, unknown>>): Promise<boolean>;
   // The oven loss onto a recipe: three fields, never the whole recipe.
   saveRecipeLoss(id: string, patch: RecipeLossPatch): Promise<void>;
-  removeProduct(id: string): Promise<void>;
+  // A product's document. With a cake companion the cake goes in the SAME batch: product and cake leave together or not at all
+  // (its margin history is left, as for any product).
+  removeProduct(id: string, companion?: CakeCompanionDelete): Promise<void>;
   // The categories the list groups cards by (Mise 2, model 4, 20 Nov 2026): `foodcost-categories/{id}` = { bakery, name, rank }. Live.
   // `meta.fromServer` is the products' word. Fails quietly in the store: a refusal reads as «no categories».
   watchCategories(onChange: (list: StoredDoc[], meta: ProductsMeta) => void, onError: (err: unknown) => void): () => void;
@@ -118,6 +138,8 @@ const INGREDIENTS = 'ingredients';
 const INGREDIENT_PRICES = 'ingredient-prices';
 const SUPPLIERS = 'suppliers';
 const CATEGORIES = 'foodcost-categories';
+// A cake rides in the batch of its product (Cakes, 20 Nov 2026); the cakes section only READS this collection (cakes/cakesSource.ts).
+const CAKES = 'cakes';
 const SETTINGS = 'foodcost-settings';
 const SETTINGS_DOC = 'main';
 const PRICE_LIST = 'price-list';
@@ -162,6 +184,7 @@ export function createFirestoreFoodcostSource(
   const pricesPath = buildPath(locationId, INGREDIENT_PRICES);
   const suppliersPath = buildPath(locationId, SUPPLIERS);
   const categoriesPath = buildPath(locationId, CATEGORIES);
+  const cakesPath = buildPath(locationId, CAKES);
   const settingsPath = buildPath(locationId, SETTINGS);
   const priceListPath = buildPath(locationId, PRICE_LIST);
 
@@ -292,11 +315,15 @@ export function createFirestoreFoodcostSource(
     // product whose history has no record of the change just made. Either both land or neither.
     // ⚠️ WHOLE, NOT MERGED: the store has computed the exact document, and a merge would keep a line
     // removed from the list alive in Firestore.
-    async saveProduct(id, data, snapshot) {
+    // ⚠️ BOTH IDS ARE CHECKED BEFORE ANYTHING IS BUILT, and a companion cake is one more set of the SAME batch: the product's own
+    // writes are exactly what they were without it.
+    async saveProduct(id, data, snapshot, companion) {
       const { fs, db } = await firestore();
       const ref: DocumentReference = fs.doc(db, productsPath, checkId(id));
+      const cakeRef: DocumentReference | null = companion ? fs.doc(db, cakesPath, checkId(companion.id)) : null;
       const batch = fs.writeBatch(db);
       batch.set(ref, withBakery(data));
+      if (companion && cakeRef) batch.set(cakeRef, withBakery(companion.data));
       if (snapshot) batch.set(fs.doc(fs.collection(db, productsPath, id, SNAPSHOTS)), withBakery(snapshot));
       await batch.commit();
     },
@@ -355,9 +382,18 @@ export function createFirestoreFoodcostSource(
       await fs.deleteDoc(fs.doc(db, categoriesPath, checkId(id)));
     },
 
-    async removeProduct(id) {
+    async removeProduct(id, companion) {
       const { fs, db } = await firestore();
-      await fs.deleteDoc(fs.doc(db, productsPath, checkId(id)));
+      const ref: DocumentReference = fs.doc(db, productsPath, checkId(id));
+      if (!companion) {
+        await fs.deleteDoc(ref);
+        return;
+      }
+      const cakeRef: DocumentReference = fs.doc(db, cakesPath, checkId(companion.id));
+      const batch = fs.writeBatch(db);
+      batch.delete(ref);
+      batch.delete(cakeRef);
+      await batch.commit();
     },
 
     // ⚠️ ORDERED BY THE recordedAt FIELD, never by document id: Firestore refuses a descending scan

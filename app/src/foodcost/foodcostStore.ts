@@ -28,7 +28,7 @@ import { positiveNumber } from '@mise/shared/price-model';
 import type { KeyValueStorage } from '../session/backend';
 import { nextRank, readCategories } from './categoriesModel';
 import type { Category } from './categoriesModel';
-import type { FoodcostSource, RecipeLossPatch, StoredDoc } from './foodcostSource';
+import type { CakeCompanionDelete, CakeCompanionSave, FoodcostSource, RecipeLossPatch, StoredDoc } from './foodcostSource';
 
 // ⚠️ THE CURRENT APP'S KEYS, WITH THEIR MEANING (both apps share one origin): either app may paint
 // from the other's copy. Not under KEEP_PREFIXES, so a venue switch wipes them. The venue is NOT in
@@ -98,6 +98,8 @@ export interface ProductSave {
   readonly product: Product;
   readonly snapshot: Readonly<Record<string, unknown>> | null;
   readonly lossPatches: Readonly<Record<string, RecipeLossPatch>>;
+  // Cakes: the cake behind a `cake-<id>` product, written in the SAME batch. The product's name is the cake's, so a refusal says it.
+  readonly companion?: CakeCompanionSave;
 }
 
 // What creating products from the recipe book came to: each product was created, or was already there (this phone's copy or the
@@ -133,7 +135,8 @@ export interface FoodcostStore {
   newProductId(): string;
   // Saves a product LOCAL-FIRST and returns its id at once.
   saveProduct(save: ProductSave): string;
-  deleteProduct(id: string): void;
+  // `companion`: a cake's product is deleted together with its cake, in one batch.
+  deleteProduct(id: string, companion?: CakeCompanionDelete): void;
   // The products for the recipes he ticked (item 29, current app f8d54f35). ⚠️ NOT LOCAL-FIRST, AND DELIBERATELY: each one is
   // created only after the SERVER says no product is at its id, so offline it FAILS (counted, nothing queued) and a product made
   // on another phone is never overwritten. The live list brings the new products in; no local copy is touched.
@@ -468,7 +471,7 @@ export function createFoodcostStore(
     // ⚠️ THE ID IS MADE HERE (or kept), NEVER BY THE DATA LAYER: the product is on screen under it
     // at once, and a second id minted later would write a different document — two products, one of
     // them invisible, and the rollback would remove the wrong one.
-    saveProduct({ product, snapshot: point, lossPatches }) {
+    saveProduct({ product, snapshot: point, lossPatches, companion }) {
       const id = product.id || source.newProductId();
       saveRecipeLosses(lossPatches);
       const data = toProductDocument(product);
@@ -477,7 +480,7 @@ export function createFoodcostStore(
       saveSeq.set(id, mine);
       if (prev === null) firstSaves.set(id, 'sending');
       upsertLocal(normalizeProduct({ id, ...data }) as Product);
-      const write = source.saveProduct(id, data, point);
+      const write = source.saveProduct(id, data, point, companion);
       void write.then(() => { if (saveSeq.get(id) === mine) firstSaves.delete(id); }, () => undefined);
       track(write, err => {
         deps.warn('Product did not sync to Firestore:', err);
@@ -528,13 +531,13 @@ export function createFoodcostStore(
 
     firstSave: id => firstSaves.get(id) ?? null,
 
-    deleteProduct(id) {
+    deleteProduct(id, companion) {
       const prev = products.find(p => p.id === id) ?? null;
       const mine = ++seq;
       saveSeq.set(id, mine);
       firstSaves.delete(id);
       removeLocal(id);
-      track(source.removeProduct(id), err => {
+      track(source.removeProduct(id, companion), err => {
         deps.warn('Product delete did not sync to Firestore:', err);
         if (prev && saveSeq.get(id) === mine && !listenerWillRevert()) upsertLocal(prev);
         say({ kind: 'product-not-deleted' });

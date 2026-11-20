@@ -43,10 +43,10 @@ function fakeSource() {
     saveCategory: (id, data) => write('category', id, data),
     removeCategory: id => write('category-remove', id),
     watchSettings: vi.fn(onChange => { settings = onChange; return () => stopped.push('settings'); }),
-    saveProduct: (id, data, snapshot) => write('product', id, data, snapshot),
+    saveProduct: (id, data, snapshot, companion) => write('product', id, data, snapshot, companion),
     createProductIfAbsent: (id, data) => new Promise<boolean>((resolve, reject) => { creates.push({ id, data, resolve, reject }); }),
     saveRecipeLoss: (id: string, patch: RecipeLossPatch) => write('loss', id, patch),
-    removeProduct: id => write('remove', id),
+    removeProduct: (id, companion) => write('remove', id, companion),
     getProductHistory: vi.fn(async () => [{ id: 'h1', foodCostPct: 30 }]),
     saveLabourCostPerHour: (rate, updatedAt) => write('rate', rate, updatedAt),
     // The bookings price list is Bookings' settings screen's own (it moved there from Food cost): the store never touches it.
@@ -635,6 +635,53 @@ describe('the Food cost store', () => {
       await done;
       expect(store.getSnapshot().unsent).toBe(false);
       expect(store.getSnapshot().products).toEqual([]);
+    });
+  });
+
+  // Cakes (20 Nov 2026): a cake travels in the batch of its `cake-<id>` product, so every promise of a product save covers it.
+  describe('a cake as the product’s companion', () => {
+    const companion = { kind: 'cake' as const, id: 'c1', data: { name: 'Sacher', model: 1 } };
+
+    test('the companion goes from the store to the source with the product, local-first like it', () => {
+      const { fake, store } = setup({ storage: fakeStorage({ [PRODUCTS_KEY]: [] }) });
+      store.start();
+      const id = store.saveProduct({ product: product({ id: 'cake-c1', name: 'Sacher' } as Product & { name: string }), snapshot: { recordedAt: 'x' }, lossPatches: {}, companion });
+      expect(id).toBe('cake-c1');
+      expect(store.getSnapshot().products.map(p => p.id)).toEqual(['cake-c1']);
+      expect(store.getSnapshot().unsent).toBe(true);
+      expect(fake.writes[0]!.args[3]).toBe(companion);
+    });
+
+    test('a save with no companion passes none', () => {
+      const { fake, store } = setup();
+      store.start();
+      store.saveProduct({ product: product({ id: 'p1', name: 'Loaf' } as Product & { name: string }), snapshot: null, lossPatches: {} });
+      expect(fake.writes[0]!.args[3]).toBeUndefined();
+    });
+
+    test('⚠️ a refusal rolls the new cake card back, marks its first save refused and names the cake', async () => {
+      const { fake, store, messages } = setup({ storage: fakeStorage({ [PRODUCTS_KEY]: [] }) });
+      store.start();
+      store.saveProduct({ product: product({ id: 'cake-c1', name: 'Sacher' } as Product & { name: string }), snapshot: null, lossPatches: {}, companion });
+      expect(store.firstSave('cake-c1')).toBe('sending');
+      fake.writes[0]!.pending.reject(new Error('permission-denied'));
+      await settle();
+      expect(store.getSnapshot().products).toEqual([]);
+      expect(store.firstSave('cake-c1')).toBe('refused');
+      expect(store.getSnapshot().unsent).toBe(false);
+      expect(messages).toEqual([{ kind: 'product-not-saved', name: 'Sacher' }]);
+    });
+
+    test('the delete carries the companion; a refusal brings the card back', async () => {
+      const { fake, store, messages } = setup({ storage: fakeStorage({ [PRODUCTS_KEY]: [{ id: 'cake-c1', name: 'Sacher' }] }) });
+      store.start();
+      store.deleteProduct('cake-c1', { kind: 'cake', id: 'c1' });
+      expect(store.getSnapshot().products).toEqual([]);
+      expect(fake.writes[0]!.args).toEqual(['cake-c1', { kind: 'cake', id: 'c1' }]);
+      fake.writes[0]!.pending.reject(new Error('refused'));
+      await settle();
+      expect(store.getSnapshot().products.map(p => p.id)).toEqual(['cake-c1']);
+      expect(messages).toEqual([{ kind: 'product-not-deleted' }]);
     });
   });
 });
