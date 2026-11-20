@@ -113,7 +113,7 @@ describe('moving about', () => {
     await user.click(await screen.findByRole('button', { name: /^Sacher/ }, LOAD));
     expect(router.state.location.pathname).toBe('/cakes/c1');
     expect(await screen.findByRole('heading', { level: 2, name: 'Sacher' })).toBeInTheDocument();
-    expect(screen.getByText('The cake editor arrives in the next step.')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 3, name: /^Parts of the cake/ }, LOAD)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^Sacher/ })).toHaveAttribute('aria-current', 'true');
     // The list is still there beside it.
     expect(screen.getByRole('button', { name: /^Cassata/ })).toBeInTheDocument();

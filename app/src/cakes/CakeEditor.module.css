@@ -1,5 +1,5 @@
-/* The placeholder of the cake's editor (replaced by the real one in the next slice). Nothing on the card may clip: the form bar sticks
-   to the top of the scroll area. */
+/* What stands in for the cake's form while it is not there: loading, or «this cake no longer exists». Nothing on the card may clip: the
+   form bar sticks to the top of the scroll area. */
 
 .editor {
   min-width: 0;
@@ -8,7 +8,7 @@
   background: var(--surface);
 }
 
-.soon {
+.loading {
   padding: var(--s6);
   color: var(--ink-2);
 }

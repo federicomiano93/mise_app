@@ -1,0 +1,165 @@
+/* One cake's editor: a card holding the form bar and the form. On the split it is the right-hand pane; below 1280px it replaces the list.
+
+   ⚠️ NOTHING ON THE CARD MAY CLIP (no `overflow`): the form bar sticks to the top of the scrolling area, and a clipping ancestor would
+   turn it into an ordinary row. */
+
+.editor {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+  padding: var(--s4);
+}
+
+@media (min-width: 1000px) {
+  .body {
+    padding: var(--s6);
+  }
+}
+
+/* The bar's «a listino» tag, beside the name. */
+.pill {
+  padding: var(--s1) var(--s3);
+  border-radius: var(--r-pill);
+  background: var(--accent-tint);
+  color: var(--accent-ink);
+  font-size: var(--fs-sm);
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+/* Delete and Save, at the bar's right edge: Delete small and low-key beside the one primary action. */
+.actions {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.trash {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--hit);
+  height: var(--hit);
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--ink-3);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.trash:hover {
+  background: var(--sunken);
+  color: var(--danger-ink);
+}
+
+.trash:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.trash svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* A line above the form that needs a word: the reference grams changed, or there are none. */
+.band {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s3);
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--accent-tint-2);
+  border-radius: var(--r-md);
+  background: var(--accent-tint);
+}
+
+.band p {
+  flex: 1 1 240px;
+  margin: 0;
+  color: var(--ink);
+}
+
+/* One column below 1280px, in an order that puts the name and measures before the parts (the two groups below stop being boxes);
+   from 1280px two columns: the drawing and the parts, and a 380px side with the measures and the cost. */
+.grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+}
+
+.main,
+.side {
+  display: contents;
+}
+
+.stage {
+  order: 1;
+}
+
+.measures {
+  order: 2;
+}
+
+.parts {
+  order: 3;
+}
+
+.cost {
+  order: 4;
+}
+
+@media (min-width: 1280px) {
+  .grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 380px;
+    align-items: start;
+  }
+
+  .main,
+  .side {
+    display: flex;
+    flex-direction: column;
+    gap: var(--s4);
+    min-width: 0;
+  }
+
+  .stage,
+  .measures,
+  .parts,
+  .cost {
+    order: 0;
+  }
+}
+
+.card {
+  min-width: 0;
+  padding: var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+}
+
+.cardTitle {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s1) var(--s3);
+  margin: 0 0 var(--s3);
+  font-size: var(--fs-lg);
+}
+
+.caption {
+  color: var(--ink-3);
+  font-size: var(--fs-sm);
+  font-weight: 400;
+}
