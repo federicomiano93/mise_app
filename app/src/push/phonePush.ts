@@ -32,7 +32,7 @@ import { buildPath } from '@mise/shared/location-id';
 import type { KeyValueStorage } from '../session/backend';
 import type { FirestoreKit } from '../session/firebaseBackend';
 import { errorCode, type TelemetrySession } from '../telemetry/common';
-import { MUTE_KEY, PUSH_TOKEN_KEY, PUSH_TOKEN_OWNER_KEY } from './phoneMute';
+import { MUTE_KEY, PUSH_TOKEN_KEY, PUSH_TOKEN_OWNER_KEY } from './phoneKeys';
 
 // Why this phone can or cannot receive: the screen says WHICH reason, rather than offering a button that can never work.
 export type PushSupport = 'granted' | 'ask' | 'blocked' | 'install-first' | 'unsupported' | 'not-configured';
@@ -97,7 +97,7 @@ function usableToken(token: unknown): token is string {
   return typeof token === 'string' && token.length > 0 && token.length <= 4096 && !token.includes('/');
 }
 
-function withTimeout<T>(work: Promise<T>, ms: number): Promise<T> {
+export function withTimeout<T>(work: Promise<T>, ms: number): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const late = new Promise<never>((_, reject) => {
     timer = setTimeout(() => reject(Object.assign(new Error('timeout'), { code: 'timeout' })), ms);

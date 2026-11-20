@@ -2057,7 +2057,7 @@ questo telefono…» switch stayed locked with `ord.mute.noPhone`.
 A phone that only granted the permission through the old button sees the button once more and one tap registers it (no prompt).
 
 **Built.**
-- `orders/phonePush.ts` (+ spec): `pushSupport` reasons as `js/push.js` plus `not-configured` (no VAPID key); `register()` (merge of exactly
+- `push/phonePush.ts` (+ spec): `pushSupport` reasons as `js/push.js` plus `not-configured` (no VAPID key); `register()` (merge of exactly
   `{ bakery, uid, updatedAt }`, `push-token` / `push-token-uid` kept, old row deleted on rotation, nothing offline, code-only logging, never throws,
   15 s limit on the write); `onForMe(uid)`. Context: `PhonePushContext.tsx`, built in `main.tsx`.
 - `session/pushToken.ts` + `firebaseBackend.pushToken()`: Messaging loaded lazily; ⚠️ a local address gets an `emulator-push-<16 hex>` token and the
