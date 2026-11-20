@@ -522,3 +522,11 @@ Branch `feature/mise2-staff-6-kiosk-home`, stacked on slice 5 (`feature/mise2-st
 - **Open point (a)**: with «Screen off after: Never» there is no night, so the rest screen reads Orders every 15 minutes around the clock (about 50 documents × 96 a day with 30 suppliers, roughly 10% of the free daily reads per tablet; the same as the current app).
 - **Open point (b)**: a screen reader hears only «Tap to continue» on the cover, because its content sits inside a `role=button`. Kept as built, for a lab tablet.
 - **His tablet decision, 19 Nov 2026**: «Standby» (was «Riposo» / «Rest») and «Exit» are two small pills in the app's top bar, just before «Online», on the Home only and only with kiosk mode on, no longer a band in the Home (`shell/KioskPills.tsx`); round icon-only buttons on narrow widths.
+
+## Rest screen halves — as built, 20 Nov 2026
+
+Branch `feature/mise2-staff-kiosk` (PR #583). No server, rules or index change: one extra single-field read of `todos`, which any member may read.
+
+- The cover shows two halves under the corner block, the layout the owner approved on the tablet: left «Da fare oggi» (to-dos not done with `day <= work day`, overdue first by oldest day then creation time, at most 4, «+N», an overdue one has a small «in ritardo» line); right the orders sections («Da ordinare oggi», then «In consegna oggi»). A 1px divider between; under 700px the halves stack, to-dos on top. One half alone is centred as before.
+- To-dos show to EVERY role (not gated by Orders). Italian arrivals title changed from «In arrivo oggi» to «In consegna oggi» in Mise 2 only; the old app's `js/i18n.js` and `tests/kiosk-rest-orders.test.mjs` (which pins the old words) are untouched.
+- Files: `kiosk/kioskTodosSource.ts`, `restTodos.ts`, `restTodosFeed.ts`, `testing/fakeKioskTodosSource.ts`; tokens `--kiosk-late` (#b9776b, 5.9:1 on black) and `--kiosk-line`.

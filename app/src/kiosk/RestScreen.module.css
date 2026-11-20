@@ -122,3 +122,79 @@
   line-height: 1.3;
   overflow-wrap: anywhere;
 }
+
+/* The two halves (the owner's layout of 20 Nov 2026): «To do today» on the left, the Orders lines on the right, a thin line between,
+   text left-aligned, both titles on the same top line. Only drawn when BOTH halves have something; one alone is centred above. */
+.halves {
+  display: flex;
+  flex: 1;
+  flex-direction: row;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.half {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s8);
+  min-width: 0;
+  padding: var(--s8) var(--s10) 0;
+  text-align: left;
+}
+
+.divider {
+  flex: none;
+  width: 1px;
+  background: var(--kiosk-line);
+}
+
+.halves .sectionTitle {
+  margin-bottom: var(--s4);
+}
+
+.halves .names {
+  font-size: var(--fs-2xl);
+  line-height: 1.25;
+}
+
+.halves .names li + li {
+  margin-top: var(--s3);
+}
+
+/* An overdue to-do: a small second line under its words, in a soft red that reads on the black. */
+.late {
+  display: block;
+  font-size: var(--fs-lg);
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--kiosk-late);
+}
+
+/* A phone: the halves stack, to-dos on top, the line between them lying down; smaller words so four lines of each still fit. */
+@media (max-width: 700px) {
+  .halves {
+    flex-direction: column;
+  }
+
+  .half {
+    flex: 0 1 auto;
+    gap: var(--s4);
+    padding: var(--s4) 0 0;
+  }
+
+  .divider {
+    width: auto;
+    height: 1px;
+    margin-top: var(--s4);
+  }
+
+  .halves .names {
+    font-size: var(--fs-xl);
+  }
+
+  .halves .names li + li {
+    margin-top: var(--s2);
+  }
+}

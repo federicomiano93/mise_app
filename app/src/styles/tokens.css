@@ -50,6 +50,10 @@
      dark room. */
   --kiosk-bg: #000000;
   --kiosk-text: #8c8c8c;
+  /* The rest screen's «overdue» line: a soft red, 5.9:1 on the black (small text needs 4.5:1). */
+  --kiosk-late: #b9776b;
+  /* The thin line between the rest screen's two halves: visible on the black, dimmer than the text. */
+  --kiosk-line: #444444;
 
   /* Type. Geist and Geist Mono (SIL OFL) are bundled with the app from @fontsource-variable,
      never fetched from Google Fonts: the app must start offline, and no third party learns

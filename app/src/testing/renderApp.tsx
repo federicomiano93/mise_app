@@ -28,6 +28,7 @@ import { fakeSettingsSource } from './fakeSettingsSource';
 import { fakeTodosSource } from './fakeTodosSource';
 import { fakeOrdersDueSource } from './fakeOrdersDueSource';
 import { fakeKioskOrdersSource } from './fakeKioskOrdersSource';
+import { fakeKioskTodosSource } from './fakeKioskTodosSource';
 import { fakeSuppliersSource } from './fakeSuppliersSource';
 import { fakeStore } from './fakeSession';
 
@@ -63,7 +64,7 @@ export function renderApp(path: string, { lang = 'en', routes = appRoutes, sessi
     photo: () => ({ readRecipe: () => Promise.reject(new Error('no photo reader in this spec')), setRecipePhoto: () => Promise.reject(new Error('no photo switch in this spec')) }),
     suppliers: () => fakeSuppliersSource(), invoiceImport: () => fakeImportSource(),
     priceChanges: () => fakePriceChangesSource(), merge: () => fakeMergeSource(),
-    orders: () => fakeOrdersSource(), todos: () => fakeTodosSource(), ordersDue: () => fakeOrdersDueSource(), kioskOrders: () => fakeKioskOrdersSource(),
+    orders: () => fakeOrdersSource(), todos: () => fakeTodosSource(), ordersDue: () => fakeOrdersDueSource(), kioskOrders: () => fakeKioskOrdersSource(), kioskTodos: () => fakeKioskTodosSource(),
     settings: () => fakeSettingsSource(), bookings: () => fakeBookingsSource(), ...data };
 
   render(
