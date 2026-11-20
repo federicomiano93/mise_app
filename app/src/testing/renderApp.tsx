@@ -6,8 +6,8 @@ import userEvent from '@testing-library/user-event';
 import { DataProvider } from '../data/DataContext';
 import type { DataServices } from '../data/DataContext';
 import { onRouteError } from '../errors/routeErrors';
-import { PhonePushProvider } from '../orders/PhonePushContext';
-import type { PhonePush } from '../orders/phonePush';
+import { PhonePushProvider } from '../push/PhonePushContext';
+import type { PhonePush } from '../push/phonePush';
 import { en } from '../i18n/en';
 import { it as italian } from '../i18n/it';
 import { I18nProvider } from '../i18n/I18nProvider';
@@ -34,6 +34,8 @@ import { fakeKioskTodosSource } from './fakeKioskTodosSource';
 import { fakeSuppliersSource } from './fakeSuppliersSource';
 import { fakeStore } from './fakeSession';
 import { fakePhonePush } from './fakePhonePush';
+import { fakeTimerPush } from './fakeTimerPush';
+import type { TimerPush } from '../push/timerPush';
 
 type Options = {
   lang?: Language;
@@ -48,6 +50,8 @@ type Options = {
   entries?: InitialEntry[];
   // This phone's push registration (Orders → Settings). By default one that supports nothing yet: asks, registered for nobody.
   phonePush?: PhonePush;
+  // The booking of a guided-mix timer's push (Recipes). By default one that books the id it is asked for.
+  timerPush?: TimerPush;
 };
 
 // Draws the real app at a path, in a language, inside a memory router (no address bar, no
@@ -56,7 +60,7 @@ type Options = {
 //
 // ⚠️ jsdom applies no media query, so BOTH navigations are in the page: always scope a query
 // with within(screen.getByRole('navigation', { name: … })).
-export function renderApp(path: string, { lang = 'en', routes = appRoutes, session, data, entries, phonePush = fakePhonePush() }: Options = {}) {
+export function renderApp(path: string, { lang = 'en', routes = appRoutes, session, data, entries, phonePush = fakePhonePush(), timerPush = fakeTimerPush() }: Options = {}) {
   const router = createMemoryRouter(routes, entries
     ? { initialEntries: entries, initialIndex: entries.length - 1 }
     : { initialEntries: [path] });
@@ -76,7 +80,7 @@ export function renderApp(path: string, { lang = 'en', routes = appRoutes, sessi
     <I18nProvider initialLanguage={lang} initialMessages={messages}>
       <SessionProvider store={store}>
         <DataProvider services={services}>
-          <PhonePushProvider phonePush={phonePush}>
+          <PhonePushProvider phonePush={phonePush} timerPush={timerPush}>
             <RouterProvider router={router} onError={onRouteError} />
           </PhonePushProvider>
         </DataProvider>

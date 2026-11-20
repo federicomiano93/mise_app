@@ -16,8 +16,9 @@ import { onRouteError } from './errors/routeErrors';
 import { I18nProvider } from './i18n/I18nProvider';
 import { loadLanguage, pickLanguage } from './i18n/i18n';
 import { vapidKeyForHost } from '@mise/shared/firebase-target';
-import { browserHasSubscription, browserPushEnv, createPhonePush, rowWriter } from './orders/phonePush';
-import { PhonePushProvider } from './orders/PhonePushContext';
+import { browserHasSubscription, browserPushEnv, createPhonePush, rowWriter } from './push/phonePush';
+import { PhonePushProvider } from './push/PhonePushContext';
+import { createTimerPush } from './push/timerPush';
 import { browserRefreshDeps, startPushTokenRefresh, tokenWriter } from './orders/pushTokenRefresh';
 import { router } from './router';
 import { createBrowserEnv } from './session/browserEnv';
@@ -56,7 +57,7 @@ startTelemetry({ store, sinks });
 // one small write a week, a few seconds after a venue opens, never offline, never visible.
 startPushTokenRefresh(store, browserRefreshDeps(tokenWriter(backend.firestore)));
 
-// This phone's registration for server push, made on a tap in Orders → Settings (orders/phonePush.ts): the token comes from the
+// This phone's registration for server push, made on a tap in Orders → Settings (push/phonePush.ts): the token comes from the
 // backend's Cloud Messaging (a made-up one on a local address), the row goes through the backend's Firestore.
 const phonePush = createPhonePush({
   env: browserPushEnv(),
@@ -69,6 +70,16 @@ const phonePush = createPhonePush({
   // ⚠️ NOT ON A LOCAL ADDRESS: its token is made up and has no browser subscription, so the check would take it back at once.
   hasSubscription: backend.isEmulator ? undefined : browserHasSubscription,
   ...rowWriter(backend.firestore),
+});
+
+// The push a guided-mix timer books so the phone rings with the app closed (push/timerPush.ts): only for a phone registered above.
+const timerPush = createTimerPush({
+  phonePush,
+  storage: browserStorage(),
+  session: () => store.getSnapshot(),
+  online: () => navigator.onLine !== false,
+  now: () => Date.now(),
+  firestore: backend.firestore,
 });
 
 // Every section's data, on the same backend: Firestore is loaded by the first section that reads.
@@ -121,7 +132,7 @@ void loadLanguage(wanted).then(({ lang, messages }) => {
           <SessionProvider store={store}>
             <JoinFlowProvider flow={joinFlow}>
               <DataProvider services={services}>
-                <PhonePushProvider phonePush={phonePush}>
+                <PhonePushProvider phonePush={phonePush} timerPush={timerPush}>
                   <SessionGate>
                     <RouterProvider router={router} onError={onRouteError} />
                   </SessionGate>

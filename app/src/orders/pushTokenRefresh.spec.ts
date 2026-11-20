@@ -5,7 +5,7 @@ import type { KeyValueStorage } from '../session/backend';
 import type { FirestoreKit } from '../session/firebaseBackend';
 import type { TelemetrySession } from '../telemetry/common';
 import { fakeSessionSource } from '../testing/fakeSessionSource';
-import { PUSH_TOKEN_KEY, PUSH_TOKEN_OWNER_KEY } from './phoneMute';
+import { PUSH_TOKEN_KEY, PUSH_TOKEN_OWNER_KEY } from '../push/phoneKeys';
 import {
   ASK_AGAIN_MS, REFRESH_EVERY_MS, REFRESH_STAMP_KEY, START_DELAY_MS,
   browserRefreshDeps, refreshDue, refreshIfDue, startPushTokenRefresh, tokenWriter,

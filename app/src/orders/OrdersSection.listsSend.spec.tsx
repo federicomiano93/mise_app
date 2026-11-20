@@ -6,7 +6,7 @@ import { MAX_LINES } from '@mise/shared/order-request-model';
 import { fakeOrdersSource } from '../testing/fakeOrdersSource';
 import type { FakeOrdersSource } from '../testing/fakeOrdersSource';
 import { LOAD, ingredient, renderOrders, supplier } from '../testing/renderOrders';
-import { MUTE_KEY, PUSH_TOKEN_KEY } from './phoneMute';
+import { MUTE_KEY, PUSH_TOKEN_KEY } from '../push/phoneKeys';
 
 // «Orders», step 3f-7 slice B: sending the order as a list to whoever runs the place, the «nobody will be told» warning, the
 // «send the list again» button, «asked» on the confirm screen, and the phone's mute switch.

@@ -1184,8 +1184,8 @@ SAME PR.
   the run, the alarm (built, below).
 - **Slice B built** (the guided mix: the run, resume, the alarm, the wake lock): `/recipes/<id>/mix` (usage screen `recipes-run`), full
   width at every width, one level below the recipe (Back returns to it with no second entry, the focus on the card's first mix
-  button, the scroll where it was). Items 94, 96, 97 and 98 are done; item 99 (the phone notification) is NOT: the line under the
-  controls says «Keep this screen open» (with or without a wake lock), and no push code exists. Differences from the current app, all on
+  button, the scroll where it was). Items 94, 96, 97 and 98 are done; item 99 (the phone notification) was NOT built here and is now (see «The timer's phone notification as built»,
+  20 Nov 2026): the line under the controls then said only «Keep this screen open» (with or without a wake lock). Differences from the current app, all on
   purpose: (1) **a mix starts reload-safe**: the card's button writes the saved session (snapshot of the recipe as shown, with the batch the
   recipe page is scaled to) and THEN opens the run, and the run always goes on from the stored session, so a reload mid-mix resumes at the
   stored step and never restarts (the current app keeps the live run in memory and loses a fresh one on reload); a typed address with
@@ -2237,3 +2237,21 @@ the vertical and horizontal fit, 1-4 digit weights on one right edge within 0.1 
 (a real PDF with its Total row, no rounding of its own), `ExportSheet.spec.tsx` (no rounding question), `RecipesSection.export.spec.tsx`
 (the title as the file name, the Total word handed to the PDF). Not driven on the emulator or a device; the owner checks the PDFs
 against his references on his PC.
+
+## The timer's phone notification as built (20 Nov 2026, item 99, notifications step 2)
+
+The guided mix's timer books a server push, so the phone rings when a step's timer ends with the app closed (the server half,
+`scheduleTimerPush` / `sendTimerPush`, and the rules are unchanged). `push/timerPush.ts` (`createTimerPush`, everything injected) books
+`locations/{lid}/push-timers/{id}` with a create and cancels by MARKING `active: false`; `GuidedRun` calls it on taps only and remembers the
+id in a ref; `GuidedPushNote` draws the line under the controls (A «It will also send a notification…», B the button «Also tell me if I leave
+the app» plus the honest line, C the reason plus the honest line; `not-configured` and permission-only mode say only the honest line). The push
+machinery moved from `orders/` to `app/src/push/` so Recipes can use it. Differences from the current app, all on purpose: (1) **no
+re-registering on the timer tap**: a phone registered for somebody else books nothing, and the button on the screen registers it, from a
+real tap; (2) **offline books nothing** (a queued write would make sign-out warn «changes will be lost»); (3) **«+1 min» re-books**: the old
+booking is cancelled and the new end is booked under a new id; (4) **the id carries the end**: `{recipeId}-{startedAt}-{stepIndex}-{endsAt}`,
+because the rules never let an existing document be rewritten; (5) **a mix resumed on a running timer is booked again** (the owner's decision, unlike the current app): on mount with a running timer and
+a phone registered for this person, the old id (`{recipeId}-{startedAt}-{stepIndex}-{endsAt}`, possibly still active from before a reload) is
+cancelled and a fresh `…-r{time}` id is booked, with the same late-answer check as a tap; with under 30 s left nothing new is booked but the old
+id is remembered so Done or leaving still cancels it. A page discarded AFTER a resume booking leaves that booking uncancellable (accepted
+edge). Leaving the screen cancels. (6) a booking the time limit cut off still answers its id, so it can be cancelled; every booking remembers
+its venue, and one made while the person or venue changed is cancelled at once.

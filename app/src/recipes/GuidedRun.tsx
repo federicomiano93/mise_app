@@ -3,14 +3,18 @@ import type { Ref } from 'react';
 import { BellRing, Check, Play } from 'lucide-react';
 import { useBlocker, useLocation, useNavigationType } from 'react-router';
 import type { BlockerFunction } from 'react-router';
+import { MIN_AHEAD_MS } from '@mise/shared/push-model';
 import { formatDuration, formatRemaining, normalizeEndNote, normalizeSteps, overdueText, progressText } from '@mise/shared/guided-model';
 import { useT } from '../i18n/useT';
+import { usePhonePush, useTimerPush } from '../push/PhonePushContext';
 import { markBusy } from '../session/busy';
+import { useSession } from '../session/SessionContext';
 import { announceAction } from '../telemetry/usage';
 import { Button } from '../ui/Button';
 import { FormBar } from '../ui/FormBar';
 import { useConfirm } from '../ui/useConfirm';
-import { acquireWakeLock, canKeepScreenAwake, releaseWakeLock } from '../ui/wakeLock';
+import { acquireWakeLock, releaseWakeLock } from '../ui/wakeLock';
+import { GuidedPushNote } from './GuidedPushNote';
 import { startAlarm, stopAlarm, unlockAlarm } from './guidedAlarm';
 import {
   TICK_MS, addMinute, advance, alarmDue, controlsFor, missedLines, runFrom, rung, sessionOf, snapshotAmounts, startTimer, stepLines, timerOf,
@@ -62,6 +66,14 @@ export function GuidedRun({ id, session }: Props) {
   // The state, readable at once by the interval and the page-visible handler, which outlive the render that made them.
   const runNow = useRef(run);
   const [now, setNow] = useState(() => Date.now());
+  const timerPush = useTimerPush();
+  const phonePush = usePhonePush();
+  const { user } = useSession();
+  // The push this screen booked for the timer that is running ('' = none): read at cleanup time, never captured, so the dev
+  // double-mount (which runs the cleanup between two mounts, with nothing booked) cannot cancel a booking made afterwards.
+  const booked = useRef('');
+  // How many times a resume booking was made by this screen (StrictMode's second mount must not reuse the first one's id).
+  const resumes = useRef(0);
 
   const update = (next: RunState, at: number) => {
     runNow.current = next;
@@ -121,6 +133,66 @@ export function GuidedRun({ id, session }: Props) {
       release();
     };
   }, [finished]);
+
+  // ── The server push for the timer ───────────────────────────────────────────────────────────────────────────
+  // ⚠️ ASKED FOR, NEVER WAITED ON: the countdown has already started; a notification is a bonus for somebody who walks away.
+  // schedule() never throws and answers '' when it books nothing, which is an ordinary outcome. Booked on the Start and «+1 min»
+  // taps, and once more when a mix is resumed on a running timer (with a fresh «-r» id: leaving cancelled the first booking, and
+  // line A must stay true — the owner's decision, 20 Nov 2026; the current app does not re-book).
+  const bookTimer = (resume?: { suffix: string; alive: () => boolean }) => {
+    const current = runNow.current;
+    const wanted = current.endsAt;
+    const stepIndex = current.index;
+    const bookedStep = steps[stepIndex];
+    if (current.finished || wanted <= 0 || bookedStep === undefined) return;
+    void timerPush.schedule({
+      // A fresh id for every booking (the rules never let an existing one be rewritten), so «+1 min» can book anew.
+      id: `${id}-${session.startedAt}-${stepIndex}-${wanted}${resume?.suffix ?? ''}`,
+      fireAt: wanted,
+      // The recipe names itself; the product name is only the last resort.
+      title: snapshot.name || 'Mise',
+      body: bookedStep.text || t('cat.timeIsUp'),
+    }).then(got => {
+      if (!got) return;
+      // The step may have been finished, skipped, extended or left while this was in flight: cancel what was just booked.
+      const now = runNow.current;
+      if (!(resume?.alive() ?? mounted.current) || now.finished || now.endsAt !== wanted || now.index !== stepIndex) timerPush.cancel(got);
+      else booked.current = got;
+    });
+  };
+  // Disarm whatever this screen booked (cancelling MARKS the alarm, see timerPush.ts).
+  const dropBooked = () => {
+    const old = booked.current;
+    booked.current = '';
+    if (old) timerPush.cancel(old);
+  };
+  const dropBookedLatest = useRef(dropBooked);
+  dropBookedLatest.current = dropBooked;
+  // ⚠️ THE CANCEL WAITS ONE TICK AND LOOKS AGAIN: StrictMode's dev double-mount runs this cleanup between two mounts, and it must
+  // not cancel a booking the screen goes on holding.
+  useEffect(() => () => {
+    window.setTimeout(() => { if (!mounted.current) dropBookedLatest.current(); }, 0);
+  }, []);
+  // ⚠️ A MIX PICKED UP ON A RUNNING TIMER IS BOOKED AGAIN (the owner's decision, unlike the current app): the page may have been
+  // discarded or reloaded, and a booking from before may still be active. That old id is cancelled (a harmless refused update if
+  // it never existed), then a fresh id (`…-r<time>`) is booked, with the same late-answer check as a tap. With under 30 s left
+  // nothing new is booked, but the old id is remembered so Done or leaving still cancels a stale active one.
+  // ⚠️ THE CHECK IS PER MOUNT (`alive`): StrictMode's dev double-mount runs this twice, and the first run's late answer must be
+  // cancelled by its own cleanup, so exactly one booking stays active.
+  useEffect(() => {
+    const current = runNow.current;
+    if (booked.current || current.finished || current.endsAt <= Date.now() || !phonePush.onForMe(user?.uid ?? '')) return undefined;
+    const base = `${id}-${session.startedAt}-${current.index}-${current.endsAt}`;
+    if (current.endsAt - Date.now() < MIN_AHEAD_MS) {
+      booked.current = base;
+      return undefined;
+    }
+    let alive = true;
+    timerPush.cancel(base);
+    const again = resumes.current++;
+    bookTimer({ suffix: `-r${Date.now()}${again > 0 ? `-${again}` : ''}`, alive: () => alive });
+    return () => { alive = false; };
+  }, []);
 
   // ── Leaving ──────────────────────────────────────────────────────────────────────────────────────────────────
   // One level up: the recipe. The browser's Back when the recipe is the entry behind this one, otherwise this entry is
@@ -201,10 +273,12 @@ export function GuidedRun({ id, session }: Props) {
     unlockAlarm();
     const at = Date.now();
     commit(startTimer(runNow.current, step, at), at);
+    bookTimer();
   }
 
   function next() {
     stopAlarm();
+    dropBooked();
     const at = Date.now();
     commit(advance(runNow.current, steps), at);
   }
@@ -213,8 +287,10 @@ export function GuidedRun({ id, session }: Props) {
   // the alarm that has just started must stop with it.
   function extend() {
     stopAlarm();
+    dropBooked();
     const at = Date.now();
     commit(addMinute(runNow.current), at);
+    bookTimer();
   }
 
   // The focus: the step's instruction every time a new step opens (a screen reader reads it), the end card when the mix
@@ -284,8 +360,9 @@ export function GuidedRun({ id, session }: Props) {
               ) : null}
             </div>
             <Controls kind={controlsFor(step, run, steps, now)} onStart={begin} onSkip={next} onExtend={extend} onDone={next} />
-            {/* What this phone can actually do about the screen going dark, said in one line. No notification yet in Mise 2. */}
-            <p className={styles.note}>{canKeepScreenAwake() ? t('cat.keepThisScreenOpen') : t('cat.keepThisScreenOpen2')}</p>
+            {/* What this phone can do when the timer ends and the app is not in front: a notification, the button that turns it
+                on, or the honest «keep this screen open». A phone registered by this very tap books a timer already running. */}
+            <GuidedPushNote onRegistered={() => { if (!booked.current && timerOf(runNow.current, Date.now()) === 'running') bookTimer(); }} />
           </>
         )}
         {/* ⚠️ THESE TWO LIVE REGIONS ARE ALWAYS ON THE PAGE, and only their text comes and goes: text added to a region that was

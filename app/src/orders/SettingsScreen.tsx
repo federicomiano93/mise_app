@@ -20,7 +20,7 @@ import { SETTINGS_OPENER, SUPPLIER_ORDER_DOOR, useHandBack } from './handBack';
 import { cameFromList, useLeave } from './ordersNav';
 import { ORDERS_PATH } from './ordersPath';
 import { phoneMuted, phoneToken, rememberPhoneMute } from './phoneMute';
-import { usePhonePush } from './PhonePushContext';
+import { usePhonePush } from '../push/PhonePushContext';
 import { historyDaysOf, MAX_HISTORY_DAYS, MIN_HISTORY_DAYS } from './settingsPatch';
 import type { SettingChange } from './settingsPatch';
 import type { SettingOutcome } from './ordersStore';

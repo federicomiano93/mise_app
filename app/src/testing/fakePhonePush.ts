@@ -1,6 +1,6 @@
 import { vi } from 'vitest';
 import type { Mock } from 'vitest';
-import type { PhonePush, PushOutcome, PushSupport } from '../orders/phonePush';
+import type { PhonePush, PushOutcome, PushSupport } from '../push/phonePush';
 
 // A PhonePush a spec can steer: what the phone supports, whether it is registered for somebody, and what a tap answers.
 export type FakePhonePush = PhonePush & {

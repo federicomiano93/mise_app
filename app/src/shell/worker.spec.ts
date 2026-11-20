@@ -226,6 +226,20 @@ describe('messages and notifications', () => {
     expect(navigated).toEqual([`${SCOPE}#/orders`]);
   });
 
+  test('⚠️ a tap on a timer’s notification only focuses a window already inside Recipes (a guided mix), never navigates it away', async () => {
+    const { sw } = await installed();
+    const mix = `${SCOPE}#/recipes/r1/mix`;
+    const inMix = await sw.click('./catalogue.html', [{ url: `${SCOPE}#/home` }, { url: mix }]);
+    expect(inMix.focused).toEqual([mix]);
+    expect(inMix.navigated).toEqual([]);
+    const onList = await sw.click('./catalogue.html', [{ url: `${SCOPE}#/recipes` }]);
+    expect(onList.focused).toEqual([`${SCOPE}#/recipes`]);
+    expect(onList.navigated).toEqual([]);
+    // A screen that only shares the prefix is NOT inside it.
+    const other = await sw.click('./catalogue.html', [{ url: `${SCOPE}#/recipes-archive` }]);
+    expect(other.navigated).toEqual([`${SCOPE}#/recipes`]);
+  });
+
   test('a push while the app is on screen shows nothing more', async () => {
     const { world, sw } = await installed();
     await sw.push({ data: { title: 'x' } }, true);

@@ -1,7 +1,8 @@
 // This phone's order-list mute, on the current app's keys (phoneMute.ts).
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { MUTE_KEY, PUSH_TOKEN_KEY, phoneMuted, phoneToken, rememberPhoneMute } from './phoneMute';
+import { MUTE_KEY, PUSH_TOKEN_KEY } from '../push/phoneKeys';
+import { phoneMuted, phoneToken, rememberPhoneMute } from './phoneMute';
 
 afterEach(() => {
   vi.restoreAllMocks();
