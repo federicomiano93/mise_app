@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readsPurchasePrices, visibleSectionIds } from './visibility';
 
-const ALL = ['home', 'bookings', 'orders', 'suppliers', 'recipes', 'labels', 'calculator', 'pastries', 'stocktake', 'foodcost', 'settings'];
+const ALL = ['home', 'bookings', 'orders', 'suppliers', 'recipes', 'labels', 'calculator', 'pastries', 'stocktake', 'foodcost', 'cakes', 'settings'];
 const ids = (location: Record<string, unknown> | null, canManage: boolean, role: string = canManage ? 'owner' : 'staff') =>
   [...visibleSectionIds(location, canManage, role)].sort();
 const sorted = (list: string[]) => [...list].sort();
@@ -107,8 +107,8 @@ describe('visibleSectionIds', () => {
 describe('visibleSectionIds for the partial owners', () => {
   it('shows the sales owner Home, Clients, Food cost and Settings, and nothing of the kitchen', () => {
     // Bookings (customers at the counter) are the sales side's (18 Nov 2026).
-    expect(ids({}, true, 'owner-sales')).toEqual(sorted(['home', 'bookings', 'clients', 'foodcost', 'settings']));
-    expect(ids(null, true, 'owner-sales')).toEqual(sorted(['home', 'bookings', 'clients', 'foodcost', 'settings']));
+    expect(ids({}, true, 'owner-sales')).toEqual(sorted(['home', 'bookings', 'clients', 'foodcost', 'cakes', 'settings']));
+    expect(ids(null, true, 'owner-sales')).toEqual(sorted(['home', 'bookings', 'clients', 'foodcost', 'cakes', 'settings']));
   });
 
   it('shows the kitchen owner everything but Food cost, Stocktake kept', () => {
@@ -159,5 +159,31 @@ describe('readsPurchasePrices (the rules: cardAccess(lid, foodcost, prices))', (
   it('does not depend on the role card: the kitchen owner has no Food cost screen and still reads the prices', () => {
     expect(visibleSectionIds({}, true, 'owner-kitchen').has('foodcost')).toBe(false);
     expect(readsPurchasePrices({}, true)).toBe(true);
+  });
+});
+
+// «Cakes» (20 Nov 2026) is Food cost's companion: behind its very gate, no card id of its own.
+describe('Cakes follows Food cost exactly', () => {
+  const cakesAndFoodcost = (location: Record<string, unknown> | null, canManage: boolean, role: string) => {
+    const seen = visibleSectionIds(location, canManage, role);
+    return [seen.has('cakes'), seen.has('foodcost')];
+  };
+
+  it('is shown to an owner and a manager, and to the sales owner, but not to the kitchen owner', () => {
+    expect(cakesAndFoodcost({}, true, 'owner')).toEqual([true, true]);
+    expect(cakesAndFoodcost({}, true, 'manager')).toEqual([true, true]);
+    expect(cakesAndFoodcost({}, true, 'owner-sales')).toEqual([true, true]);
+    expect(cakesAndFoodcost({}, true, 'owner-kitchen')).toEqual([false, false]);
+  });
+
+  it('is shown to an employee only when the venue shows Food cost to staff', () => {
+    expect(cakesAndFoodcost({}, false, 'staff')).toEqual([false, false]);
+    expect(cakesAndFoodcost({ staffShownCards: { foodcost: true } }, false, 'staff')).toEqual([true, true]);
+    // Showing Stocktake alone is not showing Food cost, so it is not showing Cakes.
+    expect(cakesAndFoodcost({ staffShownCards: { inventory: true } }, false, 'staff')).toEqual([false, false]);
+  });
+
+  it('goes with the venue switching Food cost off', () => {
+    expect(cakesAndFoodcost({ sections: { foodcost: false } }, true, 'owner')).toEqual([false, false]);
   });
 });

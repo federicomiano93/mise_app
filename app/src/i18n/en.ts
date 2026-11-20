@@ -38,6 +38,9 @@ export const en = {
   'section.home': 'Home',
   'section.clients': 'Clients',
   'section.labels': 'Labels',
+  'section.cakes': 'Cakes',
+  'nav.moreRailNote': 'The sections that don’t fit in this screen’s rail.',
+  'nav.moreAllInRail': 'All sections are in the rail',
   'clients.received.sub': 'What your clients asked for, to read',
   // new: the Clients door's line when the configuration stream broke before the server answered.
   'clients.couldNotLoad': 'The clients could not be loaded. Check your connection and reopen this page.',
