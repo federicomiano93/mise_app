@@ -45,6 +45,16 @@
   --ok-tint: oklch(0.955 0.035 152);
   --scrim: oklch(0.2 0.01 60 / 0.38);
 
+  /* The cake's section drawing (cakes/CakeSection2D.tsx, and the 3D view that follows): the colour of each part of a cake, taken from the
+     approved mockup. They fill shapes only, no text is ever set in them, so no contrast figure applies. Every outline and every word
+     on the drawing uses the neutrals above. */
+  --cake-base: #e7c27d;
+  --cake-soak: #c98f3a;
+  --cake-filling: #f7ebc7;
+  --cake-coating: #fffbf2;
+  --cake-decoration: #e0574b;
+  --cake-board: #ffffff;
+
   /* The kiosk's rest screen (kiosk/RestScreen.tsx, staff slice 5), the current app's two values: grey text on pure black, the
      one black screen of the app. #8c8c8c on #000 is 6.3:1, above the 4.5:1 small text needs, and dim enough not to light up a
      dark room. */
