@@ -259,19 +259,41 @@ export function SettingsScreen({ onOpenSupplierOrder }: { onOpenSupplierOrder: (
   const uid = user?.uid ?? '';
   const reason = phonePush.support();
   const registered = phonePush.onForMe(uid);
+  // Permission-only: a browser with notifications but no push (or no key in this project) still gets the button that asks the
+  // permission, which the notices raised while the app is open need.
+  const only = phonePush.permissionOnly();
+  // What the notices block shows: a status line (on), the button, or one sentence that replaces the button.
+  const shown: 'on' | 'button' | 'blocked' | 'unsupported' | 'install' = only !== null
+    ? (only === 'granted' ? 'on' : only === 'denied' ? 'blocked' : 'button')
+    : reason === 'granted' ? (registered ? 'on' : 'button')
+    : reason === 'ask' ? 'button'
+    : reason === 'blocked' ? 'blocked'
+    : reason === 'install-first' ? 'install' : 'unsupported';
   const [registering, setRegistering] = useState(false);
   const [registerFailed, setRegisterFailed] = useState(false);
   // Redraws after a tap whose outcome changed nothing the state holds (blocked, unsupported).
   const [, redraw] = useState(0);
   // The button disappears when the phone is registered: focus goes to the status line that replaces it.
   const statusLine = useRef<HTMLParagraphElement>(null);
+  const noteLine = useRef<HTMLParagraphElement>(null);
   const [focusStatus, setFocusStatus] = useState(false);
   useEffect(() => {
-    if (registered && focusStatus) {
+    if (!focusStatus) return;
+    // The button is still there (the prompt was dismissed): it keeps the focus.
+    if (shown === 'button') { setFocusStatus(false); return; }
+    const target = shown === 'on' ? statusLine.current : noteLine.current;
+    if (target) {
       setFocusStatus(false);
-      statusLine.current?.focus();
+      target.focus();
     }
-  }, [registered, focusStatus]);
+  }, [shown, focusStatus]);
+  // A phone that says «on» but has lost its push subscription gets the button back (phonePush.ts verify).
+  useEffect(() => {
+    if (reason !== 'granted' || !registered) return;
+    let live = true;
+    void phonePush.verify().then(result => { if (live && result === 'cleared') redraw(n => n + 1); });
+    return () => { live = false; };
+  }, [reason, registered, phonePush]);
   const enable = () => {
     if (registering) return;
     setRegistering(true);
@@ -279,10 +301,10 @@ export function SettingsScreen({ onOpenSupplierOrder }: { onOpenSupplierOrder: (
     void phonePush.register().then(outcome => {
       setRegistering(false);
       if (outcome === 'failed') setRegisterFailed(true);
-      else if (outcome === 'on') {
+      else {
+        // The button is gone (registered, blocked, unsupported…): focus follows to the line that replaces it.
         setFocusStatus(true);
-        // A fresh registration is not muted until the person says so: draw the switch from what this phone remembers now.
-        setMuted(phoneMuted());
+        if (outcome === 'on') setMuted(phoneMuted());
       }
       redraw(n => n + 1);
     });
@@ -424,16 +446,16 @@ export function SettingsScreen({ onOpenSupplierOrder }: { onOpenSupplierOrder: (
           <div className={styles.block} role="group" aria-labelledby={noticesTitle}>
             <h4 id={noticesTitle} className={styles.doorTitle}>{t('ord.settings.noticesTitle')}</h4>
             <p className={styles.sub}>{t('ord.settings.noticesAbout')}</p>
-            {reason === 'unsupported' || reason === 'not-configured' ? <p>{t('ord.settings.noticesUnsupported')}</p> : null}
-            {reason === 'install-first' ? <p>{t('ord.settings.noticesInstallFirst')}</p> : null}
-            {reason === 'granted' && registered ? (
+            {shown === 'unsupported' ? <p ref={noteLine} tabIndex={-1}>{t('ord.settings.noticesUnsupported')}</p> : null}
+            {shown === 'install' ? <p ref={noteLine} tabIndex={-1}>{t('ord.settings.noticesInstallFirst')}</p> : null}
+            {shown === 'on' ? (
               <p ref={statusLine} tabIndex={-1} className={styles.status}>
                 <Bell aria-hidden="true" />
                 <span>{t('ord.settings.noticesOn')}</span>
               </p>
             ) : null}
-            {reason === 'blocked' ? <p>{t('ord.settings.noticesBlocked')}</p> : null}
-            {reason === 'ask' || (reason === 'granted' && !registered) ? (
+            {shown === 'blocked' ? <p ref={noteLine} tabIndex={-1}>{t('ord.settings.noticesBlocked')}</p> : null}
+            {shown === 'button' ? (
               <Button className={styles.enable} isPending={registering} onPress={enable}>
                 <Bell aria-hidden="true" />
                 {t('ord.settings.noticesEnable')}

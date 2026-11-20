@@ -16,7 +16,7 @@ import { onRouteError } from './errors/routeErrors';
 import { I18nProvider } from './i18n/I18nProvider';
 import { loadLanguage, pickLanguage } from './i18n/i18n';
 import { vapidKeyForHost } from '@mise/shared/firebase-target';
-import { browserPushEnv, createPhonePush, rowWriter } from './orders/phonePush';
+import { browserHasSubscription, browserPushEnv, createPhonePush, rowWriter } from './orders/phonePush';
 import { PhonePushProvider } from './orders/PhonePushContext';
 import { browserRefreshDeps, startPushTokenRefresh, tokenWriter } from './orders/pushTokenRefresh';
 import { router } from './router';
@@ -66,6 +66,8 @@ const phonePush = createPhonePush({
   online: () => navigator.onLine !== false,
   now: () => Date.now(),
   getToken: backend.pushToken,
+  // ⚠️ NOT ON A LOCAL ADDRESS: its token is made up and has no browser subscription, so the check would take it back at once.
+  hasSubscription: backend.isEmulator ? undefined : browserHasSubscription,
   ...rowWriter(backend.firestore),
 });
 

@@ -96,6 +96,16 @@ describe('the button that registers this phone', () => {
     expect(screen.queryByText(/could not be turned on/)).not.toBeInTheDocument();
   });
 
+  it('⚠️ focus follows to the sentence that replaces the button when the prompt is refused', async () => {
+    const phonePush = fakePhonePush({ reason: 'ask', outcome: 'blocked' });
+    phonePush.register.mockImplementation(async () => { phonePush.reason = 'blocked'; return 'blocked'; });
+    const view = await opened(phonePush);
+    await view.user.click(screen.getByRole('button', { name: ENABLE }));
+    const line = await screen.findByText(/^Notifications are blocked/);
+    await waitFor(() => { expect(line).toHaveFocus(); });
+    expect(line).toHaveAttribute('tabindex', '-1');
+  });
+
   it('a prompt answered «blocked» takes the button away and says where to turn them on', async () => {
     const phonePush = fakePhonePush({ reason: 'ask', outcome: 'blocked' });
     phonePush.register.mockImplementation(async () => { phonePush.reason = 'blocked'; return 'blocked'; });
@@ -103,6 +113,53 @@ describe('the button that registers this phone', () => {
     await view.user.click(screen.getByRole('button', { name: ENABLE }));
     expect(await screen.findByText(/^Notifications are blocked/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: ENABLE })).not.toBeInTheDocument();
+  });
+});
+
+describe('a phone that says «on» but lost its subscription', () => {
+  it('⚠️ gets the button back, and the mute switch locks again', async () => {
+    const phonePush = fakePhonePush({ reason: 'granted', owner: 'u1', verifyAnswer: 'cleared' });
+    window.localStorage.setItem('push-token', 'fake-token');
+    window.localStorage.setItem('push-token-uid', 'u1');
+    await opened(phonePush);
+    expect(await screen.findByRole('button', { name: ENABLE })).toBeInTheDocument();
+    expect(screen.queryByText(ON)).not.toBeInTheDocument();
+    expect(screen.getByRole('switch', { name: MUTE })).toBeDisabled();
+    expect(phonePush.verify).toHaveBeenCalled();
+  });
+
+  it('keeps the status line while the subscription is there', async () => {
+    const phonePush = fakePhonePush({ reason: 'granted', owner: 'u1', verifyAnswer: 'ok' });
+    await opened(phonePush);
+    await waitFor(() => { expect(phonePush.verify).toHaveBeenCalled(); });
+    expect(screen.getByText(ON)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: ENABLE })).not.toBeInTheDocument();
+  });
+
+  it('is not asked while the phone is not registered', async () => {
+    const phonePush = fakePhonePush({ reason: 'granted', owner: '' });
+    await opened(phonePush);
+    expect(phonePush.verify).not.toHaveBeenCalled();
+  });
+});
+
+describe('where push cannot be set up but notifications exist (permission only)', () => {
+  it('the preview project or a browser without push still gets the button, and «on» once the permission is granted', async () => {
+    const phonePush = fakePhonePush({ reason: 'not-configured', only: 'default' });
+    const view = await opened(phonePush);
+    await view.user.click(screen.getByRole('button', { name: ENABLE }));
+    expect(await screen.findByText(ON)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: ENABLE })).not.toBeInTheDocument();
+    // Nothing is registered for the mute switch.
+    expect(screen.getByRole('switch', { name: MUTE })).toBeDisabled();
+  });
+
+  it('a browser that has notifications but no PushManager, already granted, says on; denied says blocked', async () => {
+    await opened(fakePhonePush({ reason: 'unsupported', only: 'granted' }));
+    expect(screen.getByText(ON)).toBeInTheDocument();
+    cleanup();
+    await opened(fakePhonePush({ reason: 'unsupported', only: 'denied' }));
+    expect(screen.getByText(/^Notifications are blocked/)).toBeInTheDocument();
   });
 });
 

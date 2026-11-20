@@ -63,6 +63,12 @@ describe('Firestore is reached only through the backend', () => {
     expect(dynamic).toEqual([BACKEND]);
   });
 
+  test('⚠️ the backend hands its REAL emulator flag to the push token, so a local page can never call the real getToken', () => {
+    const backend = code(sources[BACKEND] ?? '');
+    expect(backend).toMatch(/const isEmulator = LOCAL_HOSTS\.includes\(hostname\);/);
+    expect(backend).toMatch(/createPushToken\(\{\s*isEmulator,/);
+  });
+
   test('the sign-in form fetches Firestore while the password is typed', () => {
     expect(code(sources['./main.tsx'] ?? '')).toMatch(/status === 'signed-out'\) backend\.preloadFirestore\(\)/);
   });

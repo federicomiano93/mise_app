@@ -17,14 +17,22 @@
 // same row rather than piling up rows nothing will clean.
 // ⚠️ NOTHING OFFLINE (as pushTokenRefresh.ts): a write made offline would sit in Firestore's queue and a sign-out would then warn
 // «your changes will be lost» about something nobody typed. Offline answers 'failed' and writes nothing.
+// ⚠️ A WRITE CUT OFF BY THE TIME LIMIT STAYS IN FIRESTORE'S QUEUE and goes out when the signal returns (the same exposure as
+// pushTokenRefresh.ts): harmless — the same row, the same person — but a sign-out may then warn about it.
+// ⚠️ THE ROW CARRIES `muteOrderRequests` = what this phone's switch draws (phoneMute.ts), so the server always matches the screen.
+// On a shared tablet A mutes and signs out; the next person registers with the mirror gone while the server still says true: a
+// fresh device therefore RINGS (the safe direction). A deliberate difference from js/push.js, which leaves the field alone.
+// ⚠️ A PHONE THAT SAYS «ON» CAN HAVE LOST ITS SUBSCRIPTION (notifications blocked then allowed again, or the server deleted the row
+// for a dead token): verify() asks the browser, locally, and takes the registration back when it is gone.
 // ⚠️ A FAILURE LOGS THE ERROR CODE ALONE: a message can name the document path, and that path IS the token.
 // ⚠️ NEVER THROWS: the button must always come back.
 
+import { sameSession } from '@mise/shared/device-model';
 import { buildPath } from '@mise/shared/location-id';
 import type { KeyValueStorage } from '../session/backend';
 import type { FirestoreKit } from '../session/firebaseBackend';
 import { errorCode, type TelemetrySession } from '../telemetry/common';
-import { PUSH_TOKEN_KEY, PUSH_TOKEN_OWNER_KEY } from './phoneMute';
+import { MUTE_KEY, PUSH_TOKEN_KEY, PUSH_TOKEN_OWNER_KEY } from './phoneMute';
 
 // Why this phone can or cannot receive: the screen says WHICH reason, rather than offering a button that can never work.
 export type PushSupport = 'granted' | 'ask' | 'blocked' | 'install-first' | 'unsupported' | 'not-configured';
@@ -44,6 +52,7 @@ export interface TokenRow {
   readonly bakery: string;
   readonly uid: string;
   readonly updatedAt: number;
+  readonly muteOrderRequests: boolean;
 }
 
 export interface PhonePushDeps {
@@ -59,7 +68,10 @@ export interface PhonePushDeps {
   // setDoc(locations/{lid}/fcm-tokens/{token}, row, { merge: true }).
   readonly writeRow: (lid: string, token: string, row: TokenRow) => Promise<unknown>;
   readonly deleteRow: (lid: string, token: string) => Promise<unknown>;
-  // How long the write may take before the tap answers 'failed'.
+  // Does the browser still hold a push subscription for this phone? null = cannot tell (no worker in time, a local address,
+  // an error). Absent on a local address: its token is made up and has no subscription.
+  readonly hasSubscription?: () => Promise<boolean | null>;
+  // How long the token and the write may each take before the tap answers 'failed' (and the subscription check gives up).
   readonly writeTimeoutMs?: number;
 }
 
@@ -70,6 +82,12 @@ export interface PhonePush {
   // Is this phone registered to the person holding it? Permission alone does not say: a shared phone can still carry the
   // registration of the person before.
   onForMe(uid: string): boolean;
+  // Permission-only mode: a browser that has notifications but cannot be registered for push (no push machinery, or no key in
+  // this project). The calendar notices raised while the app is open still need the permission, so the button asks it, as before
+  // push existed. null = not in this mode.
+  permissionOnly(): 'default' | 'granted' | 'denied' | null;
+  // «On» but the subscription is gone? 'cleared' = the registration was forgotten (the button comes back); 'ok'; 'unknown'.
+  verify(): Promise<'ok' | 'cleared' | 'unknown'>;
 }
 
 export const WRITE_TIMEOUT_MS = 15_000;
@@ -109,12 +127,50 @@ export function createPhonePush(deps: PhonePushDeps): PhonePush {
     }
   }
 
+  function permissionOnly(): 'default' | 'granted' | 'denied' | null {
+    try {
+      const reason = support();
+      if ((reason !== 'not-configured' && reason !== 'unsupported') || !deps.env.hasNotification()) return null;
+      return deps.env.permission();
+    } catch {
+      return null;
+    }
+  }
+
+  async function verify(): Promise<'ok' | 'cleared' | 'unknown'> {
+    try {
+      if (!deps.hasSubscription || support() !== 'granted' || read(PUSH_TOKEN_KEY) === '') return 'unknown';
+      const has = await withTimeout(deps.hasSubscription(), deps.writeTimeoutMs ?? WRITE_TIMEOUT_MS);
+      if (has === null) return 'unknown';
+      if (has) return 'ok';
+      try {
+        deps.storage?.removeItem(PUSH_TOKEN_KEY);
+        deps.storage?.removeItem(PUSH_TOKEN_OWNER_KEY);
+      } catch {
+        return 'unknown';
+      }
+      return 'cleared';
+    } catch {
+      return 'unknown';
+    }
+  }
+
   function onForMe(uid: string): boolean {
     return support() === 'granted' && uid !== '' && read(PUSH_TOKEN_KEY) !== '' && read(PUSH_TOKEN_OWNER_KEY) === uid;
   }
 
   async function register(): Promise<PushOutcome> {
     try {
+      const only = permissionOnly();
+      if (only !== null) {
+        if (only !== 'default') return only === 'granted' ? 'on' : 'blocked';
+        try {
+          const answer = await deps.env.requestPermission();
+          return answer === 'granted' ? 'on' : answer === 'denied' ? 'blocked' : 'ask';
+        } catch {
+          return 'unsupported';
+        }
+      }
       const reason = support();
       if (reason !== 'granted' && reason !== 'ask') return reason;
 
@@ -134,12 +190,19 @@ export function createPhonePush(deps: PhonePushDeps): PhonePush {
       if (session?.status !== 'ready' || !lid || !uid) return 'failed';
       if (!deps.online()) return 'failed';
 
-      const token = await deps.getToken();
+      const limit = deps.writeTimeoutMs ?? WRITE_TIMEOUT_MS;
+      const token = await withTimeout(deps.getToken(), limit);
       if (!usableToken(token)) return 'failed';
 
       // ⚠️ MERGED, see the header. The tap answers 'failed' if the server does not confirm in time; a write already handed
       // over may still arrive later, which is harmless (the same row, the same person).
-      await withTimeout(deps.writeRow(lid, token, { bakery: lid, uid, updatedAt: deps.now() }), deps.writeTimeoutMs ?? WRITE_TIMEOUT_MS);
+      await withTimeout(deps.writeRow(lid, token, {
+        bakery: lid, uid, updatedAt: deps.now(), muteOrderRequests: read(MUTE_KEY) === '1',
+      }), limit);
+
+      // ⚠️ THE PERSON OR THE VENUE MAY HAVE CHANGED DURING THE WAIT (a sign-out, a venue switch, somebody else on a shared tablet):
+      // the registration is remembered only for the session it was written for.
+      if (!sameSession(session, deps.session())) return 'failed';
 
       const previous = read(PUSH_TOKEN_KEY);
       try {
@@ -163,7 +226,13 @@ export function createPhonePush(deps: PhonePushDeps): PhonePush {
     }
   }
 
-  return { support, register, onForMe };
+  return { support, register, onForMe, permissionOnly, verify };
+}
+
+// The browser's own subscription, locally and with no network. null when the worker is not there.
+export async function browserHasSubscription(): Promise<boolean | null> {
+  const registration = await navigator.serviceWorker.ready;
+  return (await registration.pushManager.getSubscription()) !== null;
 }
 
 // The browser's own answers, read when called (the specs import this file without a browser).

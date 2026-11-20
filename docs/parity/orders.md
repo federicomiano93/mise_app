@@ -2069,4 +2069,15 @@ A phone that only granted the permission through the old button sees the button 
 - `askNoticePermission` (calendarNotices.ts) removed: nothing else used it.
 
 **Not covered.** A real `getToken` on a real phone and a real push arriving; the iPhone Home-screen path; the preview project (no functions, so
-`not-configured`). Left as in `js/push.js`: after a registration with a new token the mute mirror (`push-mute-order-requests`) is re-read, not reset.
+`not-configured`).
+
+**Review fixes (20 Nov 2026).**
+- ⚠️ DELIBERATE DIFFERENCE from `js/push.js`: the merged row also carries `muteOrderRequests` = what the switch draws (`phoneMuted()`), so the server
+  always matches the screen and a fresh device rings (a shared tablet: A mutes and signs out, the next person registers).
+- A phone registered for me whose browser holds no push subscription any more (permission blocked then allowed again, or the server deleted the row)
+  gets the button back: `verify()` asks `pushManager.getSubscription()` (local, 15 s limit, skipped on local addresses where the token is made up) and
+  clears `push-token` / `push-token-uid`.
+- The token step has the same 15 s limit as the write; the registration is remembered only if the session (venue + person) is still the one it was written for.
+- `not-configured` and a browser with `Notification` but no `PushManager` still get the permission-only button (the in-app calendar notices need it); once
+  granted the line says «on». Focus follows to the sentence that replaces the button (`tabIndex -1`) for blocked / unsupported / install-first too.
+- A write cut off by the time limit stays in Firestore's queue (the same exposure as `pushTokenRefresh.ts`).

@@ -34,8 +34,8 @@ const READY = { status: 'ready', locationId: 'bakery', user: { uid: 'u1' } } as 
 
 function setup(over: Partial<PhonePushDeps> = {}, stored: Record<string, string> = {}) {
   const storage = memoryStorage(stored);
-  const writeRow = vi.fn(async () => undefined);
-  const deleteRow = vi.fn(async () => undefined);
+  const writeRow = vi.fn<PhonePushDeps['writeRow']>(async () => undefined);
+  const deleteRow = vi.fn<PhonePushDeps['deleteRow']>(async () => undefined);
   const getToken = vi.fn(async () => 'tok-1');
   const deps: PhonePushDeps = {
     env: env({ permission: 'granted' }),
@@ -113,9 +113,8 @@ describe('register', () => {
   test('a blocked, unsupported, install-first or unconfigured phone answers that reason and does nothing', async () => {
     const cases: Array<[Partial<PhonePushDeps>, string]> = [
       [{ env: env({ permission: 'denied' }) }, 'blocked'],
-      [{ env: env({ hasPushManager: () => false }) }, 'unsupported'],
+      [{ env: env({ hasNotification: () => false }) }, 'unsupported'],
       [{ env: env({ hasPushManager: () => false, isIOS: () => true }) }, 'install-first'],
-      [{ vapidKey: '' }, 'not-configured'],
     ];
     for (const [over, reason] of cases) {
       const run = setup(over);
@@ -125,12 +124,12 @@ describe('register', () => {
     }
   });
 
-  test('⚠️ writes ONE merged row of exactly {bakery, uid, updatedAt} and remembers the token under the current app\'s keys', async () => {
+  test('⚠️ writes ONE merged row of exactly {bakery, uid, updatedAt, muteOrderRequests} and remembers the token under the current app\'s keys', async () => {
     const run = setup();
     expect(await run.push.register()).toBe('on');
     expect(run.writeRow).toHaveBeenCalledTimes(1);
-    expect(run.writeRow).toHaveBeenCalledWith('bakery', 'tok-1', { bakery: 'bakery', uid: 'u1', updatedAt: 1234 });
-    expect(Object.keys((run.writeRow.mock.calls[0] as unknown[])[2] as object).sort()).toEqual(['bakery', 'uid', 'updatedAt']);
+    expect(run.writeRow).toHaveBeenCalledWith('bakery', 'tok-1', { bakery: 'bakery', uid: 'u1', updatedAt: 1234, muteOrderRequests: false });
+    expect(Object.keys((run.writeRow.mock.calls[0] as unknown[])[2] as object).sort()).toEqual(['bakery', 'muteOrderRequests', 'uid', 'updatedAt']);
     expect(run.storage.data.get('push-token')).toBe('tok-1');
     expect(run.storage.data.get('push-token-uid')).toBe('u1');
     expect(run.deleteRow).not.toHaveBeenCalled();
@@ -226,6 +225,111 @@ describe('register', () => {
   });
 });
 
+describe('register: the later rules', () => {
+  test('⚠️ the row says what this phone’s switch draws, so a fresh device rings and a muted one stays muted', async () => {
+    const fresh = setup();
+    await fresh.push.register();
+    expect(fresh.writeRow.mock.calls[0]?.[2]).toMatchObject({ muteOrderRequests: false });
+    const muted = setup({}, { 'push-mute-order-requests': '1' });
+    await muted.push.register();
+    expect(muted.writeRow.mock.calls[0]?.[2]).toMatchObject({ muteOrderRequests: true });
+  });
+
+  test('a token that never arrives answers failed after the time limit, writing nothing', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const run = setup({ getToken: () => new Promise<string>(() => undefined), writeTimeoutMs: 500 });
+      const answer = run.push.register();
+      await vi.advanceTimersByTimeAsync(600);
+      await expect(answer).resolves.toBe('failed');
+      expect(run.writeRow).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('⚠️ the venue switched during the write: nothing is remembered', async () => {
+    let current: { status: string; locationId: string; user: { uid: string } } = { ...READY, user: { uid: 'u1' } };
+    const writeRow = vi.fn(async () => { current = { ...current, locationId: 'cafe' }; });
+    const run = setup({ writeRow, session: () => current });
+    expect(await run.push.register()).toBe('failed');
+    expect(run.storage.data.size).toBe(0);
+  });
+
+  test('the person changed during the write: nothing is remembered', async () => {
+    let current: { status: string; locationId: string; user: { uid: string } } = { ...READY, user: { uid: 'u1' } };
+    const writeRow = vi.fn(async () => { current = { ...current, user: { uid: 'u2' } }; });
+    const run = setup({ writeRow, session: () => current });
+    expect(await run.push.register()).toBe('failed');
+    expect(run.storage.data.size).toBe(0);
+  });
+});
+
+describe('permission-only mode', () => {
+  test('a browser with notifications but no push machinery, or no key, only asks the permission', async () => {
+    for (const over of [{ vapidKey: '' }, { env: env({ permission: 'default', hasPushManager: () => false }) }]) {
+      const asking = over.env ?? env({ permission: 'default' });
+      const run = setup({ ...over, env: asking });
+      expect(run.push.permissionOnly()).toBe('default');
+      expect(await run.push.register()).toBe('on');
+      expect(asking.requestPermission).toHaveBeenCalledTimes(1);
+      expect(run.getToken).not.toHaveBeenCalled();
+      expect(run.writeRow).not.toHaveBeenCalled();
+      expect(run.push.permissionOnly()).toBe('granted');
+    }
+  });
+
+  test('a refused prompt says blocked; a normal phone and an iPhone-to-install are not in this mode', async () => {
+    const refusing = env({ permission: 'default', requestPermission: vi.fn(async () => 'denied' as const) });
+    expect(await setup({ vapidKey: '', env: refusing }).push.register()).toBe('blocked');
+    expect(setup().push.permissionOnly()).toBeNull();
+    expect(setup({ env: env({ hasNotification: () => false, hasPushManager: () => false }) }).push.permissionOnly()).toBeNull();
+    expect(setup({ env: env({ hasPushManager: () => false, isIOS: () => true }) }).push.permissionOnly()).toBeNull();
+  });
+});
+
+describe('verify: a phone that says «on» but lost its subscription', () => {
+  const owned = { 'push-token': 'tok-1', 'push-token-uid': 'u1' };
+
+  test('⚠️ no subscription: both keys are cleared, so the button comes back', async () => {
+    const run = setup({ hasSubscription: async () => false }, owned);
+    expect(run.push.onForMe('u1')).toBe(true);
+    expect(await run.push.verify()).toBe('cleared');
+    expect(run.storage.data.has('push-token')).toBe(false);
+    expect(run.storage.data.has('push-token-uid')).toBe(false);
+    expect(run.push.onForMe('u1')).toBe(false);
+  });
+
+  test('a subscription present leaves everything as it is', async () => {
+    const run = setup({ hasSubscription: async () => true }, owned);
+    expect(await run.push.verify()).toBe('ok');
+    expect(run.push.onForMe('u1')).toBe(true);
+  });
+
+  test('cannot tell (null, a throw, a worker that never gets ready, or no check on a local address): nothing is cleared', async () => {
+    for (const hasSubscription of [async () => null, async () => { throw new Error('x'); }, () => new Promise<boolean>(() => undefined), undefined]) {
+      vi.useFakeTimers();
+      try {
+        const run = setup({ hasSubscription, writeTimeoutMs: 100 }, owned);
+        const answer = run.push.verify();
+        await vi.advanceTimersByTimeAsync(200);
+        expect(await answer).toBe('unknown');
+        expect(run.push.onForMe('u1')).toBe(true);
+      } finally {
+        vi.useRealTimers();
+      }
+    }
+  });
+
+  test('not asked when there is no token or the permission is not granted', async () => {
+    const check = vi.fn(async () => false);
+    expect(await setup({ hasSubscription: check }).push.verify()).toBe('unknown');
+    expect(await setup({ hasSubscription: check, env: env({ permission: 'denied' }) }, owned).push.verify()).toBe('unknown');
+    expect(check).not.toHaveBeenCalled();
+  });
+});
+
 describe('onForMe', () => {
   test('⚠️ a token registered for somebody else is not mine', () => {
     const run = setup({}, { 'push-token': 'tok-1', 'push-token-uid': 'u2' });
@@ -249,8 +353,8 @@ describe('rowWriter: the real write', () => {
     const doc = vi.fn((_db: unknown, path: string, id: string) => ({ path: `${path}/${id}` }));
     const kit = { fs: { setDoc, deleteDoc, doc }, db: 'db' } as unknown as Awaited<ReturnType<Parameters<typeof rowWriter>[0]>>;
     const writer = rowWriter(async () => kit);
-    await writer.writeRow('bakery', 'tok-1', { bakery: 'bakery', uid: 'u1', updatedAt: 5 });
-    expect(setDoc).toHaveBeenCalledWith({ path: 'locations/bakery/fcm-tokens/tok-1' }, { bakery: 'bakery', uid: 'u1', updatedAt: 5 }, { merge: true });
+    await writer.writeRow('bakery', 'tok-1', { bakery: 'bakery', uid: 'u1', updatedAt: 5, muteOrderRequests: false });
+    expect(setDoc).toHaveBeenCalledWith({ path: 'locations/bakery/fcm-tokens/tok-1' }, { bakery: 'bakery', uid: 'u1', updatedAt: 5, muteOrderRequests: false }, { merge: true });
     await writer.deleteRow('bakery', 'old');
     expect(deleteDoc).toHaveBeenCalledWith({ path: 'locations/bakery/fcm-tokens/old' });
   });
