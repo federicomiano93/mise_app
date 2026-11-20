@@ -17,6 +17,11 @@ describe('the rest screen halves', () => {
     expect(phone).toMatch(/\.divider\s*\{[^}]*height:\s*1px/);
   });
 
+  it('clamps a to-do’s words to two lines, outside the overdue line', () => {
+    expect(css).toMatch(/\.todoText\s*\{[^}]*display:\s*-webkit-box[^}]*-webkit-box-orient:\s*vertical[^}]*-webkit-line-clamp:\s*2[^}]*overflow:\s*hidden/);
+    expect(css).not.toMatch(/\.names\s*\{[^}]*line-clamp/);
+  });
+
   it('paints the overdue line in the kiosk\'s own token', () => {
     expect(css).toMatch(/\.late\s*\{[^}]*color:\s*var\(--kiosk-late\)/);
   });

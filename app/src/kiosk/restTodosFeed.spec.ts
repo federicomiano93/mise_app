@@ -1,5 +1,7 @@
 // The scheduler behind the «To do today» half (restTodosFeed.ts): the timing of the Orders lines' feed, mirrored from restOrders.spec.ts.
 
+import { workDayDate } from '@mise/shared/kiosk-model';
+import { restTodosFor } from './restTodos';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import type { KioskTodo, KioskTodosSource } from './kioskTodosSource';
 import { REFRESH_MS } from './restOrders';
@@ -83,11 +85,23 @@ describe('the to-do scheduler', () => {
     expect(JSON.stringify(warn.mock.calls)).not.toContain('secret');
   });
 
-  test('yesterday’s answer is never drawn on a new work day', async () => {
-    const { f, at } = feed();
+  test('on a new work day the old list is still returned (the cover re-sorts it), and a new read is due', async () => {
+    const { f, calls, at } = feed();
     f.start(); await settle();
     at.now += 24 * 3_600_000;
-    expect(f.current()).toStrictEqual([]);
+    expect(f.current()).toStrictEqual([ONE]);
+    f.refreshIfStale(); await settle();
+    expect(calls.read).toBe(2);
+  });
+
+  test('a failed read on the new work day keeps the old list, which then reads as overdue', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { f, timers, at } = feed({ read: async n => { if (n === 2) throw new Error('offline'); return [ONE]; } });
+    f.start(); await settle();
+    at.now += 24 * 3_600_000;
+    timers.fire(); await settle();
+    expect(f.current()).toStrictEqual([ONE]);
+    expect(restTodosFor(f.current(), workDayDate(at.now)).items).toStrictEqual([{ text: 'Mop', late: true }]);
   });
 
   test('a read that returns after stop is ignored', async () => {

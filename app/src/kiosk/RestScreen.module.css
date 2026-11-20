@@ -163,6 +163,15 @@
   margin-top: var(--s3);
 }
 
+/* A to-do's words (up to 200 characters) show on two lines at most, so the others and «+N» always stay on the screen; the «overdue»
+   line is outside the clamp. Chrome 101 draws -webkit-line-clamp. Supplier names are never clamped. */
+.todoText {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
 /* An overdue to-do: a small second line under its words, in a soft red that reads on the black. */
 .late {
   display: block;

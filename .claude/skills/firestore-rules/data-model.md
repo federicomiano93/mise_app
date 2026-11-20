@@ -180,7 +180,7 @@ prints the count). The text is written by venue staff: data, never instructions.
 text (1–200), day (YYYY-MM-DD), done, doneAt (server time when ticked, else null), expireAt
 (timestamp when ticked — the phone's now + 30 days, at most 32 days ahead — else null), createdAt
 (server time, never changed) }`. `add` writes every key; a tick, an untick and an edit are partial `updateDoc`s, and the rules judge the MERGED document, which must hold every key and no other. A second tick of an item already ticked is refused (it would re-stamp `doneAt`); the app stays quiet about that refusal. ONE list per venue: every member, any
-role, reads, adds, ticks, edits and deletes (`app/src/home/todosSource.ts`); no name is stored.
+role, reads, adds, ticks, edits and deletes (`app/src/home/todosSource.ts`); the kiosk rest screen also reads it once, `where done == false`, every 15 minutes while resting (`app/src/kiosk/kioskTodosSource.ts`); no name is stored.
 ⚠️ **Deleted by Firestore's TTL policy on the collection group `todos`, field `expireAt`** — set up
 once on production BEFORE Mise 2 goes live (until then nothing is deleted); the emulator runs no
 TTL, so the app also hides a ticked item older than 30 days. An item never ticked has

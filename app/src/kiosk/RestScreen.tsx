@@ -76,8 +76,10 @@ export function RestScreen({ venue, reloading, now, sections, todos, armAt, onWa
         <ul className={styles.names}>
           {todos.items.map((item, index) => (
             <li key={index}>
-              {item.text}
-              {item.late ? <span className={styles.late}>{t('kiosk.rest.late')}</span> : null}
+              <span className={styles.todoText}>{item.text}</span>
+              {item.late ? (
+                <span className={styles.late}><span className="visually-hidden">, </span>{t('kiosk.rest.late')}</span>
+              ) : null}
             </li>
           ))}
           {todos.more > 0 ? <li>{`+${todos.more}`}</li> : null}

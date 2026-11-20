@@ -21,7 +21,7 @@ export interface RestTodosFeed {
   start(): void;
   stop(): void;
   refreshIfStale(): void;
-  // What the cover draws from: the last answer of this work day, or nothing.
+  // What the cover draws from: the last good answer, or nothing.
   current(): readonly KioskTodo[];
   isRunning(): boolean;
 }
@@ -77,8 +77,10 @@ export function createRestTodosFeed({
     refreshIfStale() {
       if (running && !fresh()) void refresh();
     },
+    // The last good list whatever the day: a to-do does not depend on the day, the cover sorts it against the painted work day
+    // (Kiosk.tsx), so yesterday's items are shown late after midnight and a failed read of the new day keeps them.
     current() {
-      return cache !== null && cache.day === today() ? cache.todos : [];
+      return cache !== null ? cache.todos : [];
     },
     isRunning: () => running,
   };
