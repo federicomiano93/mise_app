@@ -1,0 +1,292 @@
+/* The parts of one tier, and the packaging. Nothing here clips (no `overflow`): the form bar above sticks to the top of the scroll area.
+   A card is a grid row (name, grams, materials, labour, buttons) where there is room, and wraps where there is not (the last rule). */
+
+.parts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  min-width: 0;
+}
+
+/* The tiers, as a segmented choice (the same look as Food cost's card type). */
+.tabs {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-self: flex-start;
+  gap: var(--s1);
+  padding: var(--s1);
+  border-radius: var(--r-md);
+  background: var(--sunken);
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  min-height: var(--hit);
+  padding: 0 var(--s4);
+  border: 2px solid transparent;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--ink-2);
+  font: 600 var(--fs-md) var(--font);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.tab small {
+  color: var(--ink-3);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+}
+
+.tab[aria-pressed="true"] {
+  background: var(--surface);
+  color: var(--accent-ink);
+  box-shadow: var(--shadow-1);
+}
+
+.tab:focus-visible,
+.choose:focus-visible,
+.add:focus-visible,
+.icon:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* The column names, over the first part. */
+.head {
+  display: none;
+  gap: var(--s3);
+  padding-bottom: var(--s2);
+  border-bottom: 1px solid var(--line);
+  color: var(--ink-3);
+  font-size: var(--fs-xs);
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.right {
+  text-align: right;
+}
+
+.part {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+  padding: var(--s3) 0;
+  border-top: 1px solid var(--line);
+}
+
+.part:first-of-type {
+  border-top: 0;
+}
+
+/* The part chosen (in the drawing or here). */
+.part[data-selected="true"] {
+  margin: 0 calc(-1 * var(--s3));
+  padding: var(--s3);
+  border-top-color: transparent;
+  border-radius: var(--r-md);
+  background: var(--accent-tint);
+}
+
+.partHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s1) var(--s3);
+}
+
+.partName {
+  margin: 0;
+  font-size: var(--fs-md);
+}
+
+/* The part's name is a button that chooses it in the drawing: it looks like the heading it is. */
+.choose {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--hit);
+  margin: calc(-1 * var(--s2)) 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: 700 var(--fs-md) var(--font);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.rule {
+  color: var(--ink-3);
+  font-size: var(--fs-sm);
+}
+
+.none {
+  margin: 0;
+  padding: var(--s1) 0;
+  color: var(--ink-3);
+  font-style: italic;
+}
+
+.full {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2) var(--s3);
+  padding: var(--s2) 0;
+}
+
+.what {
+  display: flex;
+  flex: 1 1 100%;
+  flex-direction: column;
+  min-width: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.what > span[data-missing="true"] {
+  color: var(--danger-ink);
+}
+
+.what small {
+  color: var(--ink-3);
+  font-size: var(--fs-sm);
+  font-weight: 400;
+}
+
+.what small[data-manual="true"] {
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+
+.what small[data-todo="true"] {
+  color: var(--warn-ink);
+  font-weight: 600;
+}
+
+.qty {
+  display: flex;
+  flex: 1 1 120px;
+  align-items: center;
+  gap: var(--s2);
+  max-width: 160px;
+}
+
+.unit {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.money {
+  flex: 0 0 auto;
+  min-width: 72px;
+  font-size: var(--fs-md);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.money small {
+  display: block;
+  color: var(--ink-3);
+  font-size: var(--fs-xs);
+}
+
+.money[data-missing="true"] {
+  color: var(--warn-ink);
+  font-weight: 650;
+}
+
+.actions {
+  display: flex;
+  margin-left: auto;
+}
+
+.icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--hit);
+  height: var(--hit);
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--ink-3);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.icon:hover {
+  background: var(--sunken);
+}
+
+.icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.add {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: var(--s2);
+  min-height: var(--hit);
+  padding: 0 var(--s2);
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--accent-ink);
+  font: 600 var(--fs-md) var(--font);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.add svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* ⚠️ THE ROW IS A GRID ONLY WHERE THE CARD IS WIDE ENOUGH (about 560px of it), and a media query can only see the window — a container query is newer than the lab
+   tablet's Chrome 101. The editor is one column from 700px up to 1279px (the card is the screen minus the rail: wide from 860px) and two
+   columns from 1280px, where the parts get what is left beside the 380px side and the list (wide only from 1600px). Anywhere else the
+   row wraps: the name on its own line, the figures under it. */
+@media (min-width: 860px) and (max-width: 1279.98px), (min-width: 1600px) {
+  .head,
+  .line {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 136px 88px auto;
+    align-items: center;
+  }
+
+  .parts[data-labour="true"] .head,
+  .parts[data-labour="true"] .line {
+    grid-template-columns: minmax(0, 1fr) 136px 88px 88px auto;
+  }
+
+  .what {
+    flex: none;
+  }
+
+  .qty {
+    max-width: none;
+  }
+
+  /* The two buttons (↺ and ✕) take the width they need; a row with only ✕ keeps the column as wide, so the figures line up. */
+  .actions {
+    justify-content: flex-end;
+    min-width: calc(2 * var(--hit));
+  }
+
+  .head > span:last-child {
+    min-width: calc(2 * var(--hit));
+  }
+}
