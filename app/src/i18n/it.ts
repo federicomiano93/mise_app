@@ -529,7 +529,7 @@ export const it: Messages = {
   'fc.semi.costTitle': 'Costo al kg',
   'fc.semi.costCaptionLoss': '1 kg di {name} pronto, dopo il calo del {loss}%.',
   'fc.semi.costCaption': '1 kg di {name}.',
-  'fc.semi.bothLabel': '— materie + lavoro',
+  'fc.semi.bothLabel': 'materie + lavoro',
   'fc.semi.costUse': 'Nelle schede che la usano, le materie ({materials}/kg) entrano nel costo e nel food cost; il lavoro ({labour}/kg) va nella riga del lavoro.',
   'fc.semi.costUseNoLabour': 'Nelle schede che la usano, questa cifra entra nel costo e nel food cost.',
   'fc.semi.costNone': 'Ancora nessun costo al kg: compila «Composto da» con righe che hanno un prezzo e i pesi della cottura.',

@@ -274,7 +274,7 @@ describe('the cost per kg and «Used in» of a semi-finished card', () => {
     renderFoodcost('/food-cost/product/Ganache', { source: sourceOf([GANACHE, CAKE]) });
     const cost = await screen.findByRole('region', { name: 'Cost per kg' }, LOAD);
     // The total with labour is said only with its words; the two lines under it are the parts.
-    expect(within(cost).getByTestId('semi-cost-total')).toHaveTextContent('£8.00/kg — materials + labour');
+    expect(within(cost).getByTestId('semi-cost-total')).toHaveTextContent('£8.00/kg materials + labour');
     expect(within(cost).getByText('Materials').nextSibling).toHaveTextContent('£2.00/kg');
     expect(within(cost).getByText('Labour').nextSibling).toHaveTextContent('£6.00/kg');
     expect(within(cost).getByText(/1 kg of Ganache\./)).toBeInTheDocument();
@@ -307,7 +307,7 @@ describe('the cost per kg and «Used in» of a semi-finished card', () => {
   it('is in Italian', async () => {
     renderFoodcost('/food-cost/product/Ganache', { source: sourceOf([GANACHE, CAKE]), lang: 'it', session: { language: 'it' } });
     const cost = await screen.findByRole('region', { name: 'Costo al kg' }, LOAD);
-    expect(within(cost).getByTestId('semi-cost-total')).toHaveTextContent('£8.00/kg — materie + lavoro');
+    expect(within(cost).getByTestId('semi-cost-total')).toHaveTextContent('£8.00/kg materie + lavoro');
     expect(within(cost).getByText('Nelle schede che la usano, le materie (£2.00/kg) entrano nel costo e nel food cost; il lavoro (£6.00/kg) va nella riga del lavoro.')).toBeInTheDocument();
     expect(screen.getByRole('region', { name: 'Usato in' })).toBeInTheDocument();
   });

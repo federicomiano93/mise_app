@@ -572,7 +572,7 @@ export const en = {
   'fc.semi.costTitle': 'Cost per kg',
   'fc.semi.costCaptionLoss': '1 kg of finished {name}, after the {loss}% loss.',
   'fc.semi.costCaption': '1 kg of {name}.',
-  'fc.semi.bothLabel': '— materials + labour',
+  'fc.semi.bothLabel': 'materials + labour',
   'fc.semi.costUse': 'In the cards that use it, the materials ({materials}/kg) go into the cost and the food cost; the labour ({labour}/kg) goes into the labour line.',
   'fc.semi.costUseNoLabour': 'In the cards that use it, this figure goes into the cost and the food cost.',
   'fc.semi.costNone': 'No cost per kg yet: fill in “Made of” with priced lines and the baking weights.',
