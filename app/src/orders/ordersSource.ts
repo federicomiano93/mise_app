@@ -535,7 +535,7 @@ export function createFirestoreOrdersSource(firestore: () => Promise<FirestoreKi
       return docsOf(await fs.getDocs(fs.collection(db, awayPath) as Query));
     },
 
-    // A merge: the same document carries who this phone is registered to, which only js/push.js writes until step 3g.
+    // A merge: the same document carries who this phone is registered to, which js/push.js and Mise 2's phonePush.ts write.
     async setPhoneMute(token, mute) {
       const { fs, db } = await firestore();
       await fs.setDoc(fs.doc(db, tokensPath, token), { muteOrderRequests: mute }, { merge: true });

@@ -239,9 +239,9 @@ self.addEventListener('message', event => {
 
 // ── Notifications that arrive with the app closed ────────────────────────────────────────────────────────
 //
-// ⚠️ KEPT FROM THE CURRENT APP, THOUGH MISE 2 SUBSCRIBES NOBODY YET (reminder notifications are deferred until
-// after the switch). The push subscription belongs to the REGISTRATION, not to the script, so a phone the
-// current app subscribed goes on receiving the server's pushes after this worker replaces it. A push that
+// ⚠️ THE SUBSCRIPTION IS MADE BY THE PAGE, NOT BY THIS FILE: Orders → Settings → «Enable notifications» (orders/phonePush.ts) hands
+// getToken() this worker's registration — never a second worker. The push subscription belongs to the REGISTRATION, not to the
+// script, so a phone subscribed by either app goes on receiving the server's pushes after this worker replaces it. A push that
 // shows nothing would make the browser show its own «this site has been updated in the background» and can
 // cost the site its permission, so every push still shows the server's text; a tap opens the Mise 2 screen
 // of the page it names.

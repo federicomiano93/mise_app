@@ -15,6 +15,9 @@ import { PartBoundary } from './errors/PartBoundary';
 import { onRouteError } from './errors/routeErrors';
 import { I18nProvider } from './i18n/I18nProvider';
 import { loadLanguage, pickLanguage } from './i18n/i18n';
+import { vapidKeyForHost } from '@mise/shared/firebase-target';
+import { browserPushEnv, createPhonePush, rowWriter } from './orders/phonePush';
+import { PhonePushProvider } from './orders/PhonePushContext';
 import { browserRefreshDeps, startPushTokenRefresh, tokenWriter } from './orders/pushTokenRefresh';
 import { router } from './router';
 import { createBrowserEnv } from './session/browserEnv';
@@ -28,6 +31,7 @@ import { browserServiceWorkerEnv, watchServiceWorker } from './shell/serviceWork
 import { installViewportHeight } from './shell/viewportHeight';
 import { createTelemetrySinks } from './telemetry/sinks';
 import { startTelemetry } from './telemetry/startTelemetry';
+import { browserStorage } from './telemetry/common';
 
 const container = document.getElementById('root');
 if (!container) {
@@ -51,6 +55,19 @@ startTelemetry({ store, sinks });
 // This phone's alert registration, kept younger than the nightly clean-up's 60 days (orders/pushTokenRefresh.ts): at most
 // one small write a week, a few seconds after a venue opens, never offline, never visible.
 startPushTokenRefresh(store, browserRefreshDeps(tokenWriter(backend.firestore)));
+
+// This phone's registration for server push, made on a tap in Orders → Settings (orders/phonePush.ts): the token comes from the
+// backend's Cloud Messaging (a made-up one on a local address), the row goes through the backend's Firestore.
+const phonePush = createPhonePush({
+  env: browserPushEnv(),
+  vapidKey: vapidKeyForHost(location.hostname),
+  storage: browserStorage(),
+  session: () => store.getSnapshot(),
+  online: () => navigator.onLine !== false,
+  now: () => Date.now(),
+  getToken: backend.pushToken,
+  ...rowWriter(backend.firestore),
+});
 
 // Every section's data, on the same backend: Firestore is loaded by the first section that reads.
 const services = createDataServices(backend.firestore, backend, () => store.getSnapshot().role);
@@ -102,9 +119,11 @@ void loadLanguage(wanted).then(({ lang, messages }) => {
           <SessionProvider store={store}>
             <JoinFlowProvider flow={joinFlow}>
               <DataProvider services={services}>
-                <SessionGate>
-                  <RouterProvider router={router} onError={onRouteError} />
-                </SessionGate>
+                <PhonePushProvider phonePush={phonePush}>
+                  <SessionGate>
+                    <RouterProvider router={router} onError={onRouteError} />
+                  </SessionGate>
+                </PhonePushProvider>
                 {/* Kiosk mode (staff slice 5): beside the gate, so it sees every state of the session; nothing with the setting off.
                     Its own boundary: a failure there must not take the whole app down. */}
                 <PartBoundary>

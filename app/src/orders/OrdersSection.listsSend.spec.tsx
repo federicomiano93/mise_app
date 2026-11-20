@@ -1,3 +1,4 @@
+import { fakePhonePush } from '../testing/fakePhonePush';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, screen, waitFor, within } from '@testing-library/react';
 import { addDays, parseISODate, todayISO, toISODate } from '@mise/shared/day';
@@ -517,7 +518,9 @@ describe('«asked» on the confirm screen', () => {
 
 describe('the mute switch for this phone', () => {
   const atSettings = (source = seeded(), options: Options = STAFF) => {
-    const view = renderOrders('/orders/settings', { source, ...options });
+    // A phone registered for the signed-in person (u1), as the token in storage says; the specs below set that token.
+    const phonePush = fakePhonePush({ reason: 'granted', owner: window.localStorage.getItem(PUSH_TOKEN_KEY) ? 'u1' : '' });
+    const view = renderOrders('/orders/settings', { source, phonePush, ...options });
     return view;
   };
   const muteSwitch = () => screen.findByRole('switch', { name: 'Do not buzz this phone about order lists' }, LOAD);

@@ -55,6 +55,15 @@ describe('main.tsx', () => {
     expect(main).toContain('startPushTokenRefresh(store, browserRefreshDeps(tokenWriter(backend.firestore)));');
   });
 
+  // The Settings button registers this phone for server push on the same backend: its token and its Firestore, and the screens
+  // get it through the provider (a missing provider throws, orders/PhonePushContext.tsx).
+  test('registers phones for push through the one backend, and gives the screens that registration', () => {
+    expect(main).toMatch(/getToken: backend\.pushToken,/);
+    expect(main).toContain('...rowWriter(backend.firestore),');
+    expect(main).toMatch(/vapidKey: vapidKeyForHost\(location\.hostname\)/);
+    expect(main).toMatch(/<PhonePushProvider phonePush=\{phonePush\}>/);
+  });
+
   // A second backend would be a second Firebase connection and a second offline cache.
   test('creates one backend and gives it to both the session and the telemetry writes', () => {
     expect(main.match(/createFirebaseBackend\(/g)).toHaveLength(1);
