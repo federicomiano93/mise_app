@@ -354,7 +354,8 @@ to its markers, with his decision in the line.
 
 What each one means for the people using Mise 2 until it is ported:
 - 16. Suppliers: verified and fixed (13 Nov 2026). Still different: no Disattiva/Riattiva on a row (only on the card), no hand-made pencil
-  (Mise 2 shows «Da fattura» on the invoice ones instead), and a reactivated row leaves the «Non in uso» group at once.
+  (Mise 2 shows «Da fattura» on the invoice ones instead), and a reactivated row leaves the «Non in uso» group at once. The price-model pairing (keepPriceDate, samePriceMaps) is done on 20 Nov 2026
+  (PR `test/mise2-price-date-parity`) and no spec marker names 16 any more.
   (Items 21-26 and 28 are done: weighing units, the «Cost per 1 kg» block, the recipe link with several products (23, 10 Nov 2026),
   the list search and the phone preview, the read-first card with four figures and «Details», the line costs and «Which?» (26,
   10 Nov 2026), and two decimals on the screens Mise 2 has.)
