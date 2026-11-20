@@ -136,8 +136,9 @@ export function GuidedRun({ id, session }: Props) {
 
   // ── The server push for the timer ───────────────────────────────────────────────────────────────────────────
   // ⚠️ ASKED FOR, NEVER WAITED ON: the countdown has already started; a notification is a bonus for somebody who walks away.
-  // schedule() never throws and answers '' when it books nothing, which is an ordinary outcome. Booked on taps only, never on
-  // mount or resume (a mix picked up again does not book its running timer anew: the same as the current app).
+  // schedule() never throws and answers '' when it books nothing, which is an ordinary outcome. Booked on the Start and «+1 min»
+  // taps, and once more when a mix is resumed on a running timer (with a fresh «-r» id: leaving cancelled the first booking, and
+  // line A must stay true — the owner's decision, 20 Nov 2026; the current app does not re-book).
   const bookTimer = (resume?: { suffix: string; alive: () => boolean }) => {
     const current = runNow.current;
     const wanted = current.endsAt;
