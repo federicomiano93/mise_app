@@ -215,16 +215,19 @@ describe('costs come from the Food cost engine', () => {
     expect((totals.labourAssembly as number) + (totals.labourSemis as number)).toBeCloseTo(totals.labour as number, 4);
     expect(totals.labourSemis).toBeGreaterThan(0);
   });
-  test('without a labour rate there is no labour and no total, and the slice is priced on the materials', () => {
+  test('without a labour rate there is no labour and no total, and the slice keeps its materials figure', () => {
     const totals = cakeTotals(cake, tablesOf(null));
     expect(totals).toMatchObject({ labour: null, labourAssembly: null, labourSemis: null, total: null });
     expect(totals.perSlice.cost).toBeCloseTo((totals.materials as number) / 20, 4);
+    expect(totals.perSlice.total).toBeNull();
   });
-  test('per slice', () => {
+  test('per slice: the figure alone is ALWAYS the materials (whoever looks); materials + labour apart', () => {
     const totals = cakeTotals(cake, TABLES);
     expect(totals.perSlice.price).toBe(3);
-    // The slice's cost is rounded to 4 decimals, so only the third is certain.
-    expect(totals.perSlice.cost).toBeCloseTo((totals.total as number) / 20, 3);
+    // Rounded to 4 decimals, so only the third is certain.
+    expect(totals.perSlice.cost).toBeCloseTo((totals.materials as number) / 20, 3);
+    expect(totals.perSlice.total).toBeCloseTo((totals.total as number) / 20, 3);
+    expect(totals.perSlice.cost).toBe(cakeTotals(cake, tablesOf(null)).perSlice.cost);
   });
   test('a card with no price makes the cost partial and is named', () => {
     const totals = cakeTotals(cakeOf({ lines: [line(0, 'base', 'SPONGE'), line(0, 'decoration', 'CREAM')] }), TABLES);

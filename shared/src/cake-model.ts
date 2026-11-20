@@ -391,7 +391,8 @@ export interface CakeTotals {
   status: CostResult['status'];
   partial: boolean;
   suggestedGross: number | null;
-  perSlice: { cost: number | null; price: number | null };
+  // cost = materials per slice; total = materials + labour per slice (null without a labour rate).
+  perSlice: { cost: number | null; total: number | null; price: number | null };
   unpricedIds: string[];
 }
 
@@ -408,8 +409,9 @@ export function cakeTotals(cake: Cake, tables: CostTables): CakeTotals {
     if (component.kind !== 'semi') continue;
     if (componentLineCost(component, tables).reason !== null) unpricedIds.push(component.productId);
   }
-  // Without a labour rate there is no total; the slice's cost is then the materials alone, so it still says something.
-  const perSliceBasis = pc.totalUnitCost ?? pc.unitCost;
+  // ⚠️ A figure shown alone is ALWAYS the materials (the step-1 rule, PR #589): the slice's `cost` must not mean
+  // «materials + labour» for a manager and «materials» for an employee who cannot read the rate. The total is apart.
+  const perSliceOf = (value: number | null) => (value === null ? null : roundTo(value / cake.slices, 4));
   return {
     product,
     materials: pc.unitCost,
@@ -422,7 +424,8 @@ export function cakeTotals(cake: Cake, tables: CostTables): CakeTotals {
     partial: pc.partial,
     suggestedGross: suggestedGrossPrice({ unitCost: pc.unitCost, vatRate: product.vatRate, targetPct: product.foodCostTarget }),
     perSlice: {
-      cost: perSliceBasis === null ? null : roundTo(perSliceBasis / cake.slices, 4),
+      cost: perSliceOf(pc.unitCost),
+      total: perSliceOf(pc.totalUnitCost),
       price: cake.sellingPrice === null ? null : roundTo(cake.sellingPrice / cake.slices, 4),
     },
     unpricedIds,
