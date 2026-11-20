@@ -2744,7 +2744,7 @@ service cloud.firestore {
           && (!('packUnit' in request.resource.data)
               || request.resource.data.packUnit == null
               || request.resource.data.packUnit in ['g', 'kg', 'pcs'])
-          // ⚠️ The ceiling is the app's PRODUCT_MODEL exactly — Mise 2's, 3 since 10 Nov 2026
+          // ⚠️ The ceiling is the app's PRODUCT_MODEL exactly — Mise 2's, 4 since 20 Nov 2026
           // (shared/src/foodcost-model.ts; the current app's js/foodcost/foodcost-model.js
           // still writes 2), pinned by tests/model-ceiling.test.mjs and
           // shared/src/model-ceiling.spec.ts: a higher number saved by hand would make the
@@ -2881,7 +2881,10 @@ service cloud.firestore {
           && request.resource.data.rank >= 0
           && request.resource.data.rank <= 1000000000000000;
 
-        allow delete: if cardAccess(lid, 'foodcost', 'foodcost') != 'none';
+        // Deleting is the managers' only, like deleting a card: whoever may name a group may
+        // not take it away from everybody's list (decided at review, 20 Nov 2026).
+        // No card is rewritten — its categoryId just stops matching a document.
+        allow delete: if canManage(lid, 'foodcost');
       }
 
       // ── The monthly stocktake ───────────────────────────────────────────

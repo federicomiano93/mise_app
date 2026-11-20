@@ -4599,6 +4599,14 @@ async function staffCards() {
     }, asAccount(SAM)));
   await expectDenied('⚠️ but deleting a product stays with whoever runs the place',
     () => deleteWrite(`${L}/products/P1`, asAccount(SAM)));
+  // A Food cost category: an employee shown the card may name one, but taking it off
+  // everybody's list is the managers' only, like deleting a card (decided at review).
+  await expectAllowed('…makes a Food cost category',
+    () => wholeWrite(`${L}/foodcost-categories/K1`, { ...stamp, name: 'Torte', rank: 1 }, asAccount(SAM)));
+  await expectDenied('⚠️ but deleting a category stays with whoever runs the place',
+    () => deleteWrite(`${L}/foodcost-categories/K1`, asAccount(SAM)));
+  await expectAllowed('…and the owner removes it',
+    () => deleteWrite(`${L}/foodcost-categories/K1`));
   await expectDenied('⚠️ and a price is still written only by whoever runs the place',
     () => mergeWrite(`${L}/ingredient-prices/flour`, { ...stamp, priceUnit: 'kg', pricePerUnit: 9 }, asAccount(SAM)));
   await expectDenied('…nor added to the price history',
