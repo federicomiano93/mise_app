@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import shellCss from './AppShell.module.css?raw';
 import tokensCss from '../styles/tokens.css?raw';
-import { SECTIONS } from './sections';
+import { RAIL_PLACES_SHORT, SECTIONS } from './sections';
 
 // ⚠️ THE RAIL FITS THE LAB TABLET'S WINDOW. In landscape the tablet shows 648px under Chrome's bars (driven 13 Oct
 // 2026); at 64px an item the rail needed 700 and its foot — the account — was cut. This adds the rail up the way the
 // stylesheet draws it and checks it against each window it is drawn for. jsdom draws nothing, so the numbers come from
-// the CSS text. Since «Labels» (13 Nov 2026) an owner with every section sees TEN items in the rail.
+// the CSS text. Since «Cakes» (20 Nov 2026) an owner with every section sees TWELVE places in the rail: the steps for a rail
+// of up to 11 are the old ones, and a rail marked `data-items="12"` has its own, one item earlier, ending in «More».
 const withoutComments = (css: string): string => css.replace(/\/\*[\s\S]*?\*\//g, '');
 const px = (value: string | undefined): number => Number(/(-?\d+(?:\.\d+)?)px/.exec(value ?? '')?.[1] ?? NaN);
 const token = (name: string): number => px(new RegExp(`${name}:\s*([^;]+);`).exec(tokensCss)?.[1]);
@@ -22,11 +23,11 @@ const mostItems = (): number => SECTIONS.filter(section => section.id !== 'clien
 // The rail's own padding (top + bottom), the brand (44) and its margin below (read from .mark) unless the window hides it,
 // the items with the 4px gaps of the main nav (one more gap than items, counted generously), the gap to the account nav, and
 // the account nav (56).
-function railNeeds(itemHeight: number, { withMark = true }: { withMark?: boolean } = {}): number {
+function railNeeds(itemHeight: number, { withMark = true, items = RAIL_PLACES_SHORT }: { withMark?: boolean; items?: number } = {}): number {
   const s4 = token('--s4');
   const mark = /\.mark\s*\{([^}]*)\}/.exec(css)?.[1] ?? '';
   const markMargin = token(/margin-bottom:\s*var\((--[\w-]+)\)/.exec(mark)?.[1] ?? '');
-  const items = mostItems(); // every section anybody is shown together, Settings included
+  // `items`: the places in the rail, Settings included (11 for a rail of up to 11, 12 for the fullest).
   return 2 * s4 + (withMark ? 44 + markMargin : 0) + items * itemHeight + (items + 1) * 4 + 4 + 56;
 }
 
@@ -44,11 +45,13 @@ function contentAt(block: string | undefined, base: string | undefined): number 
 describe('the rail on a short window', () => {
   const base = /\.railItem\s*\{([^}]*)\}/.exec(css)?.[1];
 
-  it('has eleven items at most (the sum below counts that many)', () => {
+  it('counts eleven places for a rail of up to 11 (the sums below count that many)', () => {
     // Since 13 Nov 2026 «Labels» follows Recipes in the rail; since 18 Nov 2026 «Bookings» follows the Home.
-    expect(mostItems()).toBe(11);
-    // …and the sales owner's rail, with Clients, is shorter than that: Home, Bookings, Clients, Food cost, Settings.
-    expect(SECTIONS.length).toBe(12);
+    expect(RAIL_PLACES_SHORT).toBe(11);
+    // The fullest rail is one more: «Cakes» (20 Nov 2026), which is what the `data-items="12"` steps below are for.
+    expect(mostItems()).toBe(12);
+    // …and the sales owner's rail, with Clients, is shorter than that: Home, Bookings, Clients, Food cost, Cakes, Settings.
+    expect(SECTIONS.length).toBe(13);
   });
 
   it('gives 64px above 903px, which fits any window from 904px', () => {
@@ -86,7 +89,7 @@ describe('the rail on a short window', () => {
     expect(height).toBe(49);
     expect(contentAt(item, item)).toBeLessThanOrEqual(height);
     // Padding (8 + 8), the items with a 2px gap more than there are items, the 2px gap to the account nav, the account nav (56).
-    const items = mostItems();
+    const items = RAIL_PLACES_SHORT;
     const needs = 2 * token('--s2') + items * height + (items + 1) * 2 + 2 + 56;
     expect(needs).toBe(637);
     expect(needs).toBeLessThanOrEqual(648);
@@ -94,6 +97,88 @@ describe('the rail on a short window', () => {
     for (const block of css.matchAll(/\.railItem\s*\{([^}]*)\}/g)) {
       if (/min-height/.test(block[1] ?? '')) expect(minHeight(block[1])).toBeGreaterThanOrEqual(48);
     }
+  });
+});
+
+// ⚠️ THE FULLEST RAIL (12 places: every section but Clients). Each step moves up by one item; at 687px or less the last two sections go
+// under «More» (`data-spill`), leaving 11 places. Every number comes from the stylesheet text.
+describe('a rail of 12 places', () => {
+  const base = /\.railItem\s*\{([^}]*)\}/.exec(css)?.[1];
+  const TWELVE = 12;
+  const ITEM = '.rail[data-items="12"] .railItem';
+  // The body of `@media (max-height: Npx) { … }`, up to the closing brace at the start of a line.
+  const stepAt = (maxHeight: number): string =>
+    new RegExp(`@media\\s*\\(max-height:\\s*${maxHeight}px\\)\\s*\\{([\\s\\S]*?)\\n\\}`).exec(css)?.[1] ?? '';
+  const escapeRe = (text: string): string => text.replace(/[.[\]"=]/g, match => `\\${match}`);
+  // The declarations of one selector inside a step.
+  const rule = (step: string, selector: string): string =>
+    new RegExp(`(?:^|\\n)\\s*${escapeRe(selector)}\\s*\\{([^}]*)\\}`).exec(step)?.[1] ?? '';
+  const tightNeeds = (items: number): number => 2 * token('--s2') + items * 49 + (items + 1) * 2 + 2 + 56;
+
+  it('is the number of places the fullest rail has, one more than the short rail holds', () => {
+    expect(mostItems()).toBe(TWELVE);
+    expect(TWELVE).toBe(RAIL_PLACES_SHORT + 1);
+  });
+
+  it('gives 64px above 971px (the base item), which fits any window from 972px', () => {
+    expect(minHeight(base)).toBe(64);
+    expect(railNeeds(64, { items: TWELVE })).toBe(972);
+  });
+
+  it('gives 56px up to 971px, which fits any window from 876px', () => {
+    const item = rule(stepAt(971), ITEM);
+    expect(minHeight(item)).toBe(56);
+    expect(contentAt(item, base)).toBeLessThanOrEqual(56);
+    expect(railNeeds(64, { items: TWELVE }) - 1).toBe(971);
+    expect(railNeeds(56, { items: TWELVE })).toBe(876);
+  });
+
+  it('gives 52px up to 875px without the brand letter, which fits any window from 768px', () => {
+    const step = stepAt(875);
+    const item = rule(step, ITEM);
+    expect(minHeight(item)).toBe(52);
+    expect(contentAt(item, base)).toBeLessThanOrEqual(52);
+    expect(rule(step, '.rail[data-items="12"] .mark')).toMatch(/display:\s*none/);
+    expect(railNeeds(56, { items: TWELVE }) - 1).toBe(875);
+    expect(railNeeds(52, { items: TWELVE, withMark: false })).toBe(768);
+  });
+
+  it('gives 49px up to 767px with the rail tightened, which fits any window from 688px', () => {
+    const step = stepAt(767);
+    const rail = rule(step, '.rail[data-items="12"]');
+    const nav = rule(step, '.rail[data-items="12"] .railNav');
+    const item = rule(step, ITEM);
+    expect(rail).toMatch(/padding-top:\s*var\(--s2\)/);
+    expect(rail).toMatch(/padding-bottom:\s*var\(--s2\)/);
+    expect(px(/gap:\s*([^;]+);/.exec(rail)?.[1])).toBe(2);
+    expect(px(/gap:\s*([^;]+);/.exec(nav)?.[1])).toBe(2);
+    expect(minHeight(item)).toBe(49);
+    expect(contentAt(item, item)).toBeLessThanOrEqual(49);
+    expect(railNeeds(52, { items: TWELVE, withMark: false }) - 1).toBe(767);
+    expect(tightNeeds(TWELVE)).toBe(688);
+  });
+
+  it('at 687px or less hides the spilled links and shows «More»: 11 places, which fit the lab tablet (648px)', () => {
+    const step = stepAt(687);
+    expect(rule(step, '.rail[data-items="12"] .railItem[data-spill]')).toMatch(/display:\s*none/);
+    expect(rule(step, '.rail[data-items="12"] .railItem.railMore')).toMatch(/display:\s*flex/);
+    // «More» is hidden at every other height, and the 49px step above is the one still in force.
+    expect(/\.railItem\.railMore\s*\{\s*display:\s*none;/.test(css)).toBe(true);
+    expect(tightNeeds(TWELVE) - 1).toBe(687);
+    // Two links hidden and «More» shown: the rail holds RAIL_PLACES_SHORT places.
+    expect(tightNeeds(RAIL_PLACES_SHORT)).toBe(637);
+    expect(tightNeeds(RAIL_PLACES_SHORT)).toBeLessThanOrEqual(648);
+  });
+
+  it('never draws an item under 48px, in any step of any rail', () => {
+    let seen = 0;
+    for (const block of css.matchAll(/\.railItem\s*\{([^}]*)\}/g)) {
+      if (!/min-height/.test(block[1] ?? '')) continue;
+      seen += 1;
+      expect(minHeight(block[1])).toBeGreaterThanOrEqual(48);
+    }
+    // The base, the three steps for up to 11 places and the three for 12.
+    expect(seen).toBe(7);
   });
 });
 

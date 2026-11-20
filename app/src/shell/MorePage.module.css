@@ -1,4 +1,6 @@
-/* The list of sections behind the phone's «More» tab: one card, one row per section. */
+/* The list of sections behind the phone's «More» tab: one card, one row per section. From 700px wide (the rail is shown) it lists only
+   what the rail's short window spills (data-spill, MorePage.tsx), under a note that says so. ⚠️ Both sides are written here, as the shell's
+   are: a rule for one side only leaves the other blank. */
 
 .list {
   margin: 0;
@@ -41,4 +43,36 @@
 
 .chevron {
   color: var(--ink-3);
+}
+
+/* The note above the list exists for the rail's screens only. */
+.railNote {
+  margin: 0 0 var(--s3);
+  color: var(--ink-2);
+}
+
+@media (max-width: 699.98px) {
+  .item:not([data-phone]),
+  .railNote {
+    display: none;
+  }
+}
+
+@media (min-width: 700px) {
+  .item:not([data-spill]) {
+    display: none;
+  }
+
+  /* Rows hidden between two shown ones must not leave a stray rule: only a shown row after a shown row draws one. */
+  .item + .item {
+    border-top: 0;
+  }
+
+  .item[data-spill] ~ .item[data-spill] {
+    border-top: 1px solid var(--line);
+  }
+
+  .list:not([data-spill]) {
+    display: none;
+  }
 }
