@@ -381,6 +381,20 @@ describe('the kind of each card (model 4: finished or semi-finished)', () => {
     expect(dialogCss).toMatch(/\.kind\[data-missing="true"\][^}]*var\(--danger-ink\)/);
   });
 
+  it('⚠️ a blocked create is SAID, the reason is read where the focus lands, and unticking the row clears its outline', async () => {
+    const { user } = await opened([BRIOCHE, PIZZA], [product('Green')], {}, null);
+    await user.click(within(choice()).getAllByRole('radio', { name: 'Finished product' })[0] as HTMLElement);
+    await user.click(createButton());
+    expect(await screen.findByText('Choose how to register Pizza in Food cost, then press Create.')).toBeInTheDocument();
+    const group = within(choice()).getByRole('radiogroup', { name: 'How to register Pizza' });
+    const first = within(group).getAllByRole('radio')[0] as HTMLElement;
+    expect(first).toHaveFocus();
+    expect(first).toHaveAccessibleDescription('Choose how to register it in Food cost');
+    await user.click(tick(/^Pizza/));
+    expect(group).toHaveAttribute('data-missing', 'false');
+    expect(within(choice()).queryByText('Choose how to register it in Food cost')).not.toBeInTheDocument();
+  });
+
   it('an unticked row needs no choice, and the error goes as soon as one is made', async () => {
     const { user } = await opened([BRIOCHE, PIZZA], [product('Green')], {}, null);
     await user.click(tick(/^Pizza/));

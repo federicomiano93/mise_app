@@ -3,6 +3,7 @@ import type { FormEvent } from 'react';
 import { Check, Pencil, Trash2, X } from 'lucide-react';
 import { useT } from '../i18n/useT';
 import { markBusy } from '../session/busy';
+import { useSession } from '../session/SessionContext';
 import { Button } from '../ui/Button';
 import { Dialog } from '../ui/Dialog';
 import { useConfirm } from '../ui/useConfirm';
@@ -19,6 +20,9 @@ type Props = {
 // What the row being typed in is: a new category, or an existing one renamed.
 type Editing = { id: string | null; text: string };
 
+// Where the focus goes when the editor closes or a row goes: a category's rename button, or «+ New category».
+const ADD = '__add__';
+
 // The categories the list groups cards by (model 4, 20 Nov 2026), in the order of the list: rename, remove, add. Everything is
 // written at once and local-first (foodcostStore.saveCategory): there is no Save to press, the way the products' own list has none
 // for its search. A name is trimmed, 1 to 60 characters, and never the same as another's (capitals and accents not counting).
@@ -29,12 +33,17 @@ export function CategoriesDialog({ onClose }: Props) {
   const { t } = useT();
   const store = useFoodcostStore();
   const { categories, products } = useFoodcost();
+  // ⚠️ REMOVING IS THE MANAGERS' ONLY, as deleting a card is (the rules refuse anybody else): the control is not drawn for the rest.
+  const { canManage } = useSession();
   const [confirm, confirmDialog] = useConfirm();
   const [editing, setEditing] = useState<Editing | null>(null);
   const [problem, setProblem] = useState<CategoryNameProblem | null>(null);
   const inputId = useId();
   const errorId = useId();
   const input = useRef<HTMLInputElement>(null);
+  const renameButtons = useRef(new Map<string, HTMLButtonElement>());
+  const addButton = useRef<HTMLButtonElement>(null);
+  const [focusTarget, setFocusTarget] = useState<string | null>(null);
   const counts = useMemo(() => cardCounts(products, categories), [products, categories]);
 
   // A name half typed is an unsaved edit: a reload the app starts by itself waits (session/busy.ts).
@@ -42,6 +51,17 @@ export function CategoriesDialog({ onClose }: Props) {
   useEffect(() => (typing ? markBusy() : undefined), [typing]);
   // The box takes the focus when it opens (to rename, or to name a new one).
   useEffect(() => { if (typing) input.current?.focus(); }, [typing, editing?.id]);
+
+  // The focus goes back to a button the person can see, once the editor is closed and the rows are drawn (after the confirm's own
+  // focus restore, which runs on the next frame: the last word is ours).
+  useEffect(() => {
+    if (focusTarget === null || editing !== null) return;
+    const frame = requestAnimationFrame(() => {
+      (focusTarget === ADD ? addButton.current : renameButtons.current.get(focusTarget))?.focus();
+      setFocusTarget(null);
+    });
+    return () => { cancelAnimationFrame(frame); };
+  }, [focusTarget, editing, categories]);
 
   const problemText = (kind: CategoryNameProblem): string => {
     if (kind === 'empty') return t('fc.cat.problem.empty');
@@ -59,15 +79,33 @@ export function CategoriesDialog({ onClose }: Props) {
       input.current?.focus();
       return;
     }
-    store.saveCategory(editing.text, editing.id ?? undefined);
+    const savedId = store.saveCategory(editing.text, editing.id ?? undefined);
+    setEditing(null);
+    setProblem(null);
+    setFocusTarget(savedId);
+  };
+
+  const cancel = () => {
+    setFocusTarget(editing?.id ?? ADD);
     setEditing(null);
     setProblem(null);
   };
 
-  const cancel = () => {
-    setEditing(null);
-    setProblem(null);
-  };
+  // ⚠️ «Done» WITH A NAME STILL BEING TYPED never throws it away in silence (P20): it asks. A box that is empty, or a rename left as it
+  // was, has nothing to lose.
+  async function done() {
+    const typed = editing === null ? '' : editing.text.trim();
+    const original = editing?.id == null ? '' : (categories.find(category => category.id === editing.id)?.name ?? '');
+    if (typed === '' || typed === original) { onClose(); return; }
+    const discard = await confirm({
+      title: t('fc.cat.discardTitle'),
+      message: t('fc.cat.discardQ', { name: typed }),
+      okLabel: t('fc.cat.discardOk'),
+      cancelLabel: t('fc.cat.keepEditing'),
+      danger: true,
+    });
+    if (discard) onClose(); else input.current?.focus();
+  }
 
   async function remove(id: string, name: string) {
     const n = counts.get(id) ?? 0;
@@ -78,7 +116,11 @@ export function CategoriesDialog({ onClose }: Props) {
       cancelLabel: t('common.cancel'),
       danger: true,
     });
-    if (yes) store.deleteCategory(id);
+    if (!yes) return;
+    // The focus moves to the next row's rename button, or to «+ New category» when it was the last.
+    const at = categories.findIndex(category => category.id === id);
+    setFocusTarget(categories[at + 1]?.id ?? ADD);
+    store.deleteCategory(id);
   }
 
   const editor = (
@@ -116,7 +158,7 @@ export function CategoriesDialog({ onClose }: Props) {
         isOpen
         onClose={() => { if (!typing) onClose(); else cancel(); }}
         title={t('fc.cat.title')}
-        actions={<Button variant="primary" onPress={onClose}>{t('fc.cat.done')}</Button>}
+        actions={<Button variant="primary" onPress={() => { void done(); }}>{t('fc.cat.done')}</Button>}
       >
         {categories.length === 0 && editing === null ? <p className={styles.empty}>{t('fc.cat.empty')}</p> : (
           <ul className={styles.rows}>
@@ -127,6 +169,7 @@ export function CategoriesDialog({ onClose }: Props) {
                     <span className={styles.name}>{category.name}</span>
                     <span className={styles.count}>{t('fc.cat.cards', { n: counts.get(category.id) ?? 0 })}</span>
                     <Button
+                      ref={node => { if (node) renameButtons.current.set(category.id, node); else renameButtons.current.delete(category.id); }}
                       className={styles.icon}
                       aria-label={t('fc.cat.rename', { name: category.name })}
                       onPress={() => { setEditing({ id: category.id, text: category.name }); setProblem(null); }}
@@ -134,14 +177,16 @@ export function CategoriesDialog({ onClose }: Props) {
                       <Pencil aria-hidden="true" />
                     </Button>
                     {/* Delete is small and low-key (P20): a bare icon, in danger only on hover and focus. */}
-                    <Button
-                      variant="bare"
-                      className={styles.remove}
-                      aria-label={t('fc.cat.remove', { name: category.name })}
-                      onPress={() => { void remove(category.id, category.name); }}
-                    >
-                      <Trash2 aria-hidden="true" />
-                    </Button>
+                    {canManage ? (
+                      <Button
+                        variant="bare"
+                        className={styles.remove}
+                        aria-label={t('fc.cat.remove', { name: category.name })}
+                        onPress={() => { void remove(category.id, category.name); }}
+                      >
+                        <Trash2 aria-hidden="true" />
+                      </Button>
+                    ) : null}
                   </>
                 )}
               </li>
@@ -150,7 +195,7 @@ export function CategoriesDialog({ onClose }: Props) {
           </ul>
         )}
         {editing === null ? (
-          <Button className={styles.add} onPress={() => { setEditing({ id: null, text: '' }); setProblem(null); }}>
+          <Button ref={addButton} className={styles.add} onPress={() => { setEditing({ id: null, text: '' }); setProblem(null); }}>
             {t('fc.cat.new')}
           </Button>
         ) : null}

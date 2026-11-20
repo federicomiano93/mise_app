@@ -65,6 +65,8 @@ export function FromBookDialog({ onClose }: Props) {
       if (on) next.add(keyOf(item)); else next.delete(keyOf(item));
       return next;
     });
+    // An unticked row is no longer asked anything: its red outline goes with it.
+    if (!on && missing === keyOf(item)) setMissing(null);
   };
   const toggleAll = () => {
     setTicked(before => {
@@ -110,6 +112,8 @@ export function FromBookDialog({ onClose }: Props) {
                 className={styles.radio}
                 checked={kinds[key] === kind}
                 disabled={busy}
+                // The reason is read where the focus lands (the group's own description is not always spoken on entering it).
+                aria-describedby={missing === key ? errorId : undefined}
                 onChange={() => { chooseKind(item, kind); }}
               />
               {t(kind === 'finished' ? 'fc.fromBook.kindFinished' : 'fc.fromBook.kindSemi')}
@@ -150,6 +154,8 @@ export function FromBookDialog({ onClose }: Props) {
     if (unchosen !== undefined) {
       const key = keyOf(unchosen);
       setMissing(key);
+      // Said too, as every blocked save is: a screen reader hears what stopped it and which recipe, not only a moved focus.
+      say(t('fc.fromBook.kindMissingSay', { name: String(unchosen.recipe['name'] ?? '').trim() }));
       const group = kindGroups.current.get(key);
       group?.scrollIntoView?.({ block: 'center' });
       group?.querySelector('input')?.focus();

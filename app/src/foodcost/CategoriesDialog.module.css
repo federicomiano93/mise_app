@@ -122,7 +122,9 @@
 }
 
 .error:empty {
-  display: none;
+  /* ⚠️ NOT taken out of the page: a live region that is taken out of the page cannot speak when its words arrive. Empty, it is a line of no
+     height whose flex gap is taken back. */
+  margin-top: calc(var(--s2) * -1);
 }
 
 .add {

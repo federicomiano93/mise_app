@@ -76,6 +76,16 @@ export function FoodcostList({ openProductId, onOpenProduct, onOpenNew, onOpenSe
       return next;
     });
   };
+  // ⚠️ THE GROUP OF THE CARD THAT WAS OPEN STAYS OPEN once the card is left: Back hands the focus to that card's row, and a row inside a
+  // closed group cannot take it (the focus would fall to the page). The group is remembered as the person's own tap, the moment it opens by
+  // itself for the open card.
+  useEffect(() => {
+    if (openProductId === null || groups === null) return;
+    const home = groups.find(group => group.items.some(row => row.product.id === openProductId));
+    if (!home) return;
+    const key = home.id ?? NO_CATEGORY_KEY;
+    setOpenGroups(before => (before.has(key) ? before : new Set(before).add(key)));
+  }, [openProductId, groups]);
   const [categoriesOpen, setCategoriesOpen] = useState(false);
   const categoriesRef = useRef<HTMLButtonElement>(null);
   const closeCategories = () => {
