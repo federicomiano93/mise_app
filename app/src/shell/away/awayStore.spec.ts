@@ -402,8 +402,11 @@ describe('a holiday change in the air holds the busy mark (no self-started reloa
   it('holds from the write until the server answers — accepted or refused', async () => {
     let held = 0;
     const hold = () => { held += 1; return () => { held -= 1; }; };
-    const source = fakeSettingsSource();
-    const store = createAwayStore(source, 'u1', () => Date.UTC(2026, 10, 8, 12), hold);
+    // ⚠️ ONE clock for the store AND the fake source: the source judges the day against its own clock, and the real one made this
+    // test fail from 21 Nov 2026, the day after the holiday it sets.
+    const clock = () => Date.UTC(2026, 10, 8, 12);
+    const source = fakeSettingsSource({ now: clock });
+    const store = createAwayStore(source, 'u1', clock, hold);
     store.start();
     const change = store.set('2026-11-20');
     expect(change.accepted).toBe(true);
