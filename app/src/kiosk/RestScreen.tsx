@@ -17,7 +17,7 @@ type Props = {
   now: number;
   // What to order and what arrives today (staff slice 6), only for somebody who may see Orders: a title key and supplier names each.
   sections: readonly KioskSection[];
-  // Not before this moment is the waking tap armed (the Home's «Rest» raised it: its own tap must not wake it). 0: at once.
+  // Not before this moment is the waking tap armed (the Home's «Standby» raised it: its own tap must not wake it). 0: at once.
   armAt: number;
   onWake: (viaKey: boolean) => void;
 };
@@ -44,7 +44,7 @@ export function RestScreen({ venue, reloading, now, sections, armAt, onWake }: P
     const node = cover.current;
     if (node === null) return undefined;
     try { node.focus({ preventScroll: true }); } catch { /* ignore */ }
-    // Raised by the Home's «Rest»: the tap (or the key's repeat) that did it must not wake the cover (REST_NOW_GUARD_MS).
+    // Raised by the Home's «Standby»: the tap (or the key's repeat) that did it must not wake the cover (REST_NOW_GUARD_MS).
     const delay = wakeArmDelay(armAt, Date.now());
     if (delay === 0) return armWakeTap(window, node, onWake);
     let disarm: (() => void) | null = null;

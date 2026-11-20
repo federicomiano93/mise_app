@@ -1,6 +1,6 @@
 /* «Standby» and «Exit» in the Home's top bar (Federico, on the lab tablet, 19 Nov 2026): two small pills, icon then word, just before
    «Online». From 960px each is a pill with its word (36px tall, its touch area stretched to the 48px of --hit by ::after); under it, and on a phone,
-   a 48px round button holding the icon alone, the word kept for the screen reader — the bar never wraps and never clips «Online». */
+   a 48px round button holding the icon alone, the word kept for the screen reader — the bar never wraps: the venue gives way first (AppShell.module.css). */
 
 .group {
   display: flex;
@@ -47,7 +47,8 @@
   background: var(--danger-tint);
 }
 
-.icon {
+/* Qualified: base.css's `svg.lucide` (20px) would win over a lone class. */
+.pill .icon {
   flex: none;
   width: 18px;
   height: 18px;
@@ -77,9 +78,10 @@
   .pill::after {
     content: "";
     position: absolute;
-    top: -6px;
+    /* -7px, not -6: the box is 36px with a 1px border, and ::after sits on the 34px inside it. */
+    top: -7px;
     right: 0;
-    bottom: -6px;
+    bottom: -7px;
     left: 0;
   }
 

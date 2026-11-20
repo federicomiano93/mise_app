@@ -36,7 +36,7 @@ export function Kiosk({ env, orders }: { env?: KioskEnv; orders?: (locationId: s
   useEffect(() => { controller.setSession({ status: session.status, signedIn }); }, [controller, session.status, signedIn]);
   useEffect(() => { controller.applySettings(settings); }, [controller, settings]);
   useEffect(() => () => { controller.stop(); }, [controller]);
-  // The Home's «Rest» (staff slice 6).
+  // The Home's «Standby» (staff slice 6).
   useEffect(() => onRestNow(() => { controller.restNow(); }), [controller]);
 
   const snapshot = useSyncExternalStore(controller.subscribe, controller.getSnapshot, controller.getSnapshot);

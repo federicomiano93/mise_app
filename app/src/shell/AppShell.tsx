@@ -25,7 +25,7 @@ import styles from './AppShell.module.css';
 const sectionOf = (pathname: string): string => pathname.split('/')[1] ?? '';
 
 // The frame around every screen: a rail on a tablet, a tab bar on a phone, a top bar on a
-// tablet's Home, and the section itself in the middle.
+// tablet's Home (and on a kiosk phone's Home, for «Standby» and «Exit»), and the section itself in the middle.
 //
 // ⚠️ BOTH NAVIGATIONS ARE ALWAYS IN THE DOM; CSS MEDIA QUERIES DECIDE WHICH ONE SHOWS. No
 // script measures the width: a tablet turned from landscape to portrait, or a window resized,
@@ -199,7 +199,7 @@ function TopBar({ kiosk }: { kiosk: boolean }) {
       <p className={styles.sync} role="status">
         {/* The dot is decoration: the words carry the meaning, so colour is never the only signal. */}
         <span className={styles.dot} data-online={online} aria-hidden="true" />
-        {online ? t('status.online') : t('status.offline')}
+        <span className={styles.syncText}>{online ? t('status.online') : t('status.offline')}</span>
       </p>
     </header>
   );

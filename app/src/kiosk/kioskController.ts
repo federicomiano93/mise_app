@@ -89,7 +89,7 @@ export interface KioskSnapshot {
   readonly reloading: boolean;
   // When the cover was last painted: the clock it shows. Moves on every tick while the cover is up.
   readonly paintedAt: number;
-  // Not before this moment may the waking tap be armed: the cover raised by the Home's «Rest» must not be woken by the very tap
+  // Not before this moment may the waking tap be armed: the cover raised by the Home's «Standby» must not be woken by the very tap
   // (or the repeat of the key) that raised it (REST_NOW_GUARD_MS, wakeArmDelay). 0 for a cover raised by idleness.
   readonly armAt: number;
 }
@@ -99,7 +99,7 @@ export interface KioskController {
   setSession(session: KioskSessionView): void;
   // The waking tap (or key) on the cover; wakeTap.ts has already swallowed it.
   wakeTap(viaKey: boolean): void;
-  // The Home's «Rest» (staff slice 6): cover the screen at once, on a kiosk device, signed in, not already resting.
+  // The Home's «Standby» (staff slice 6): cover the screen at once, on a kiosk device, signed in, not already resting.
   restNow(): void;
   stop(): void;
   subscribe(listener: () => void): () => void;
