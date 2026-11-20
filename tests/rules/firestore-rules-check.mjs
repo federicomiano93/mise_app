@@ -2460,6 +2460,96 @@ async function products() {
     fetch(`${FS}/locations/trattoria-x/foodcost-categories/c1`, { headers: asAccount(ALICE) }));
   await expectAllowed('a member removes a category', () => deleteWrite(`${CAT}/c1`));
 
+  // ── Cakes (20 Nov 2026, the cakes plan step 2): cakes/{id} + its product cake-<id>, one batch ──
+  const CK = 'locations/main/cakes';
+  const REF = { diameterCm: 22, discs: 3, discHeightCm: 3, baseG: 300, soakG: 90, fillingG: 280, coatingG: 450, decorationG: 200 };
+  const cake = (over = {}) => ({
+    bakery: 'main', name: 'Chantilly e frutta', diameterCm: 24, tiers: 1, discs: 3, slices: 12,
+    lines: [{ tier: 0, part: 'base', productId: 'PDS', grams: 360, manual: false }],
+    packaging: [{ ingredientId: 'BOX', qtyPcs: 1 }],
+    assemblyMinutes: 40, sellingPrice: 60, vatRate: 10, foodCostTarget: 30, categoryId: null,
+    ref: REF, model: 1, updatedAt: '2026-11-20T20:00:00.000Z', ...over,
+  });
+  await expectAllowed('a member with Food cost saves a cake', () => wholeWrite(`${CK}/K1`, cake()));
+  await expectAllowed('…and reads it', () => fetch(`${FS}/${CK}/K1`, { headers: asAccount(ALICE) }));
+  await expectAllowed('a cake with nothing priced yet (nulls)', () =>
+    wholeWrite(`${CK}/K2`, cake({ assemblyMinutes: null, sellingPrice: null, vatRate: null, foodCostTarget: null, ref: null })));
+  await expectAllowed('a zero VAT rate on a cake', () => wholeWrite(`${CK}/K2`, cake({ vatRate: 0 })));
+  await expectAllowed('three tiers from 22 cm (the top one is 10 cm)', () => wholeWrite(`${CK}/K2`, cake({ diameterCm: 22, tiers: 3 })));
+  await expectDenied('three tiers from 21 cm (the top one would be 9 cm)', () => wholeWrite(`${CK}/K3`, cake({ diameterCm: 21, tiers: 3 })));
+  await expectDenied('two tiers from 15 cm', () => wholeWrite(`${CK}/K3`, cake({ diameterCm: 15, tiers: 2 })));
+  await expectDenied('four tiers', () => wholeWrite(`${CK}/K3`, cake({ diameterCm: 60, tiers: 4 })));
+  await expectDenied('a tier count sent as a decimal', () => wholeWrite(`${CK}/K3`, cake({ tiers: 1.5 })));
+  await expectDenied('a 9 cm cake', () => wholeWrite(`${CK}/K3`, cake({ diameterCm: 9 })));
+  await expectDenied('a 61 cm cake', () => wholeWrite(`${CK}/K3`, cake({ diameterCm: 61 })));
+  await expectDenied('six discs', () => wholeWrite(`${CK}/K3`, cake({ discs: 6 })));
+  await expectDenied('no slices', () => wholeWrite(`${CK}/K3`, cake({ slices: 0 })));
+  await expectDenied('an empty cake name', () => wholeWrite(`${CK}/K3`, cake({ name: '' })));
+  await expectDenied('a cake name of 201 characters', () => wholeWrite(`${CK}/K3`, cake({ name: 'n'.repeat(201) })));
+  await expectAllowed('90 lines', () =>
+    wholeWrite(`${CK}/K3`, cake({ lines: Array.from({ length: 90 }, () => ({ tier: 0, part: 'base', productId: 'PDS', grams: 1 })) })));
+  await expectDenied('91 lines', () =>
+    wholeWrite(`${CK}/K3`, cake({ lines: Array.from({ length: 91 }, () => ({ tier: 0, part: 'base', productId: 'PDS', grams: 1 })) })));
+  await expectDenied('21 packaging lines', () =>
+    wholeWrite(`${CK}/K3`, cake({ packaging: Array.from({ length: 21 }, () => ({ ingredientId: 'BOX', qtyPcs: 1 })) })));
+  await expectDenied('lines sent as a map', () => wholeWrite(`${CK}/K3`, cake({ lines: { a: 1 } })));
+  await expectDenied('a selling price of zero', () => wholeWrite(`${CK}/K3`, cake({ sellingPrice: 0 })));
+  await expectDenied('a VAT rate over 100', () => wholeWrite(`${CK}/K3`, cake({ vatRate: 101 })));
+  await expectDenied('a category id of 65 characters on a cake', () => wholeWrite(`${CK}/K3`, cake({ categoryId: 'c'.repeat(65) })));
+  await expectDenied('a reference missing a key', () => {
+    const { decorationG, ...short } = REF;
+    return wholeWrite(`${CK}/K3`, cake({ ref: short }));
+  });
+  await expectDenied('a reference with an unknown key', () => wholeWrite(`${CK}/K3`, cake({ ref: { ...REF, sugarG: 5 } })));
+  await expectDenied('a reference with negative grams', () => wholeWrite(`${CK}/K3`, cake({ ref: { ...REF, fillingG: -1 } })));
+  await expectDenied('a reference disc 0 cm high', () => wholeWrite(`${CK}/K3`, cake({ ref: { ...REF, discHeightCm: 0 } })));
+  await expectDenied('an unknown key on a cake', () => wholeWrite(`${CK}/K3`, cake({ customer: 'Rossi' })));
+  await expectDenied('a cake stamped for another location', () => wholeWrite(`${CK}/K3`, cake({ bakery: 'trattoria-x' })));
+  await expectDenied('a cake with no model', () => {
+    const { model, ...noModel } = cake();
+    return wholeWrite(`${CK}/K3`, noModel);
+  });
+  await expectDenied('a cake model 2 (from a future build)', () => wholeWrite(`${CK}/K3`, cake({ model: 2 })));
+  await seedDoc(`${CK}/FUTURE`, cake({ model: 2 }));
+  await expectDenied('⚠️ a save that lowers the cake model', () => wholeWrite(`${CK}/FUTURE`, cake({ model: 1 })));
+  await expectDenied('a cake id of 65 characters', () => wholeWrite(`${CK}/${'k'.repeat(65)}`, cake()));
+  await expectDenied('a signed-out device saves no cake', () => wholeWrite(`${CK}/K3`, cake(), noAuth()));
+  await expectDenied('a signed-out device reads no cake', () => fetch(`${FS}/${CK}/K1`));
+  await expectDenied('a venue without Food Cost reads no cake', () =>
+    fetch(`${FS}/locations/trattoria-x/cakes/K1`, { headers: asAccount(BOB) }));
+  await expectDenied('…and saves none', () =>
+    wholeWrite('locations/trattoria-x/cakes/K1', cake({ bakery: 'trattoria-x' }), asAccount(BOB)));
+  await expectDenied('reading another location\'s cakes', () =>
+    fetch(`${FS}/locations/trattoria-x/cakes/K1`, { headers: asAccount(ALICE) }));
+  // ⚠️ «Salva a listino» = the cake, its product cake-<id> and the product's first margin snapshot in ONE commit.
+  const cakeBatch = (id, headers = asUser()) => fetch(`${FS.replace(/\/documents$/, '')}/documents:commit`, {
+    method: 'POST', headers,
+    body: JSON.stringify({ writes: [
+      { update: { name: `projects/${PROJECT}/databases/(default)/documents/${CK}/${id}`, fields: toFields(cake()) } },
+      { update: { name: `projects/${PROJECT}/databases/(default)/documents/${P}/cake-${id}`,
+        fields: toFields(product({ name: 'Chantilly e frutta', model: 4, kind: 'finished', categoryId: null,
+          components: [{ kind: 'semi', productId: 'PDS', qtyKg: 0.36 }], sellingMode: 'piece', piecesPerBatch: 1 })) } },
+      { update: { name: `projects/${PROJECT}/databases/(default)/documents/${P}/cake-${id}/snapshots/S1`,
+        fields: toFields({ bakery: 'main', recordedAt: '2026-11-20T20:00:00.000Z', unitCost: 18, foodCostPct: 33,
+          sellingPrice: 60, vatRate: 10, sellingMode: 'piece', frozenPrices: { FLOUR: 2 } }) } },
+    ] }),
+  });
+  await expectAllowed('«Salva a listino»: the cake, its product and the snapshot in one batch', () => cakeBatch('K9'));
+  await expectDenied('…and none of it from a venue without Food Cost', () => cakeBatch('K8', asAccount(BOB)));
+  // The reference grams: one document, read by whoever sees Food cost, written by whoever runs the place.
+  const CREF = 'locations/main/cake-settings';
+  const refDoc = (over = {}) => ({ bakery: 'main', grams: REF, updatedAt: '2026-11-20T20:00:00.000Z', ...over });
+  await expectAllowed('the owner sets the reference grams', () => wholeWrite(`${CREF}/reference`, refDoc()));
+  await expectAllowed('…and reads them', () => fetch(`${FS}/${CREF}/reference`, { headers: asAccount(ALICE) }));
+  await expectDenied('a second settings document', () => wholeWrite(`${CREF}/other`, refDoc()));
+  await expectDenied('reference grams with an unknown key', () => wholeWrite(`${CREF}/reference`, refDoc({ grams: { ...REF, x: 1 } })));
+  await expectDenied('an unknown key beside the grams', () => wholeWrite(`${CREF}/reference`, refDoc({ note: 'x' })));
+  await expectDenied('reference grams stamped for another location', () => wholeWrite(`${CREF}/reference`, refDoc({ bakery: 'trattoria-x' })));
+  await expectDenied('a venue without Food Cost reads no reference', () =>
+    fetch(`${FS}/locations/trattoria-x/cake-settings/reference`, { headers: asAccount(BOB) }));
+  await expectDenied('the reference is never deleted', () => deleteWrite(`${CREF}/reference`));
+  await expectAllowed('the owner deletes a cake', () => deleteWrite(`${CK}/K2`));
+
   await expectAllowed('a member may delete a product', () => deleteWrite(`${P}/P2`));
 
   // ── The margin history ──
@@ -4607,6 +4697,23 @@ async function staffCards() {
     () => deleteWrite(`${L}/foodcost-categories/K1`, asAccount(SAM)));
   await expectAllowed('…and the owner removes it',
     () => deleteWrite(`${L}/foodcost-categories/K1`));
+  // Cakes (20 Nov 2026): shown to exactly whoever is shown Food cost; deleting a cake and setting the
+  // reference grams stay with whoever runs the place.
+  const cakeDoc = {
+    ...stamp, name: 'Torta', diameterCm: 24, tiers: 1, discs: 3, slices: 12, lines: [], packaging: [],
+    model: 1, updatedAt: '2026-11-20',
+  };
+  const refGrams = { diameterCm: 22, discs: 3, discHeightCm: 3, baseG: 300, soakG: 90, fillingG: 280, coatingG: 450, decorationG: 200 };
+  await expectAllowed('…saves a cake', () => wholeWrite(`${L}/cakes/C1`, cakeDoc, asAccount(SAM)));
+  await expectAllowed('…and reads it', readAs(SAM, `${L}/cakes/C1`));
+  await expectDenied('⚠️ but deleting a cake stays with whoever runs the place',
+    () => deleteWrite(`${L}/cakes/C1`, asAccount(SAM)));
+  await expectAllowed('the manager sets the reference grams',
+    () => wholeWrite(`${L}/cake-settings/reference`, { ...stamp, grams: refGrams, updatedAt: '2026-11-20' }, asAccount(MAYA)));
+  await expectAllowed('…the shown employee reads them', readAs(SAM, `${L}/cake-settings/reference`));
+  await expectDenied('⚠️ …but does not change them',
+    () => wholeWrite(`${L}/cake-settings/reference`, { ...stamp, grams: { ...refGrams, baseG: 1 }, updatedAt: '2026-11-20' }, asAccount(SAM)));
+  await expectAllowed('the manager deletes a cake', () => deleteWrite(`${L}/cakes/C1`, asAccount(MAYA)));
   await expectDenied('⚠️ and a price is still written only by whoever runs the place',
     () => mergeWrite(`${L}/ingredient-prices/flour`, { ...stamp, priceUnit: 'kg', pricePerUnit: 9 }, asAccount(SAM)));
   await expectDenied('…nor added to the price history',
@@ -4892,6 +4999,14 @@ async function partialOwners() {
   await expectDenied('…deletes no menu', () => deleteWrite(`${L}/client-menus/c-one`, asAccount(KITCHEN)));
   await expectDenied('…and changes no client setting', () =>
     mergeWrite(`${L}/client-settings/orders`, { ...stamp, cutoff: '16:00', updatedAt: '2026-11-01T09:00:00.000Z' }, asAccount(KITCHEN)));
+  // Cakes follow Food cost (20 Nov 2026): the kitchen side sees none of them.
+  const PO_CAKE = { ...stamp, name: 'Torta', diameterCm: 24, tiers: 1, discs: 3, slices: 12, lines: [], packaging: [], model: 1, updatedAt: '2026-11-20' };
+  const PO_REF = { ...stamp, grams: { diameterCm: 22, discs: 3, discHeightCm: 3, baseG: 300, soakG: 90, fillingG: 280, coatingG: 450, decorationG: 200 }, updatedAt: '2026-11-20' };
+  await seedDoc(`${L}/cakes/C1`, PO_CAKE);
+  await seedDoc(`${L}/cake-settings/reference`, PO_REF);
+  await expectDenied('⚠️ …reads no cake', readAs(KITCHEN, `${L}/cakes/C1`));
+  await expectDenied('…saves none', () => wholeWrite(`${L}/cakes/C2`, PO_CAKE, asAccount(KITCHEN)));
+  await expectDenied('…and reads no reference grams', readAs(KITCHEN, `${L}/cake-settings/reference`));
 
   // ⚠️ A SWITCH ABOUT EMPLOYEES OPENS NOTHING FOR THEM.
   await showMain({ foodcost: true });
@@ -4917,6 +5032,9 @@ async function partialOwners() {
     mergeWrite(`${L}/ingredient-prices/flour`, { ...stamp, priceUnit: 'kg', pricePerUnit: 0.8 }, asAccount(SALES)));
   await expectAllowed('…adds to the history', () =>
     createWrite(`${L}/ingredients/flour/prices`, PRICE, asAccount(SALES)));
+  await expectAllowed('…saves a cake', () => wholeWrite(`${L}/cakes/C2`, PO_CAKE, asAccount(SALES)));
+  await expectAllowed('…sets the reference grams', () => wholeWrite(`${L}/cake-settings/reference`, PO_REF, asAccount(SALES)));
+  await expectAllowed('…deletes a cake', () => deleteWrite(`${L}/cakes/C2`, asAccount(SALES)));
   await expectAllowed('…records a price change', () =>
     wholeWrite(`${L}/price-changes/inv-2-1-flour`, change('2'), asAccount(SALES)));
   await expectAllowed('…remembers an invoice decision', () =>
