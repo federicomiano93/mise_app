@@ -16,12 +16,11 @@ import { useStatusMessage } from '../ui/StatusMessage';
 import { useAlert } from '../ui/useAlert';
 import { useConfirm } from '../ui/useConfirm';
 import { useOrders, useOrdersStore } from './OrdersContext';
-import { askNoticePermission, noticePermission } from './calendarNotices';
-import type { NoticePermission } from './calendarNotices';
 import { SETTINGS_OPENER, SUPPLIER_ORDER_DOOR, useHandBack } from './handBack';
 import { cameFromList, useLeave } from './ordersNav';
 import { ORDERS_PATH } from './ordersPath';
 import { phoneMuted, phoneToken, rememberPhoneMute } from './phoneMute';
+import { usePhonePush } from './PhonePushContext';
 import { historyDaysOf, MAX_HISTORY_DAYS, MIN_HISTORY_DAYS } from './settingsPatch';
 import type { SettingChange } from './settingsPatch';
 import type { SettingOutcome } from './ordersStore';
@@ -239,23 +238,77 @@ export function SettingsScreen({ onOpenSupplierOrder }: { onOpenSupplierOrder: (
   const [confirm, confirmDialog] = useConfirm();
   const [alert, alertDialog] = useAlert();
   const store = useOrdersStore();
-  const { canManage } = useSession();
+  const { canManage, user } = useSession();
   const say = useStatusMessage();
+  const phonePush = usePhonePush();
   const switchTitle = useId();
   const switchSub = useId();
   const switchNote = useId();
   const muteTitle = useId();
   const muteSub = useId();
   const muteNote = useId();
-  // This phone's alert token (js/push.js writes it) and whether the switch is on; read once, the screen is the only writer.
-  const hasToken = phoneToken() !== '';
+  // Whether the switch is on; read once, the screen is the only writer.
   const [muted, setMuted] = useState(phoneMuted);
   const handBack = useHandBack();
   const leave = useLeave(ORDERS_PATH, () => { handBack.expect(SETTINGS_OPENER); });
   const titleId = useId();
   const noticesTitle = useId();
-  // What this phone's browser says about notifications; the button asks, and the answer redraws.
-  const [permission, setPermission] = useState<NoticePermission>(noticePermission);
+  // What this phone can do about notifications, asked at every drawing (the answer changes under the tap: permission, token).
+  // ⚠️ «REGISTERED FOR ME», NOT «ALLOWED»: permission alone does not put the phone on the server's list, and the mute switch
+  // below needs that registration. A phone that only allowed notifications in the old button sees the button once more.
+  const uid = user?.uid ?? '';
+  const reason = phonePush.support();
+  const registered = phonePush.onForMe(uid);
+  // Permission-only: a browser with notifications but no push (or no key in this project) still gets the button that asks the
+  // permission, which the notices raised while the app is open need.
+  const only = phonePush.permissionOnly();
+  // What the notices block shows: a status line (on), the button, or one sentence that replaces the button.
+  const shown: 'on' | 'button' | 'blocked' | 'unsupported' | 'install' = only !== null
+    ? (only === 'granted' ? 'on' : only === 'denied' ? 'blocked' : 'button')
+    : reason === 'granted' ? (registered ? 'on' : 'button')
+    : reason === 'ask' ? 'button'
+    : reason === 'blocked' ? 'blocked'
+    : reason === 'install-first' ? 'install' : 'unsupported';
+  const [registering, setRegistering] = useState(false);
+  const [registerFailed, setRegisterFailed] = useState(false);
+  // Redraws after a tap whose outcome changed nothing the state holds (blocked, unsupported).
+  const [, redraw] = useState(0);
+  // The button disappears when the phone is registered: focus goes to the status line that replaces it.
+  const statusLine = useRef<HTMLParagraphElement>(null);
+  const noteLine = useRef<HTMLParagraphElement>(null);
+  const [focusStatus, setFocusStatus] = useState(false);
+  useEffect(() => {
+    if (!focusStatus) return;
+    // The button is still there (the prompt was dismissed): it keeps the focus.
+    if (shown === 'button') { setFocusStatus(false); return; }
+    const target = shown === 'on' ? statusLine.current : noteLine.current;
+    if (target) {
+      setFocusStatus(false);
+      target.focus();
+    }
+  }, [shown, focusStatus]);
+  // A phone that says «on» but has lost its push subscription gets the button back (phonePush.ts verify).
+  useEffect(() => {
+    if (reason !== 'granted' || !registered) return;
+    let live = true;
+    void phonePush.verify().then(result => { if (live && result === 'cleared') redraw(n => n + 1); });
+    return () => { live = false; };
+  }, [reason, registered, phonePush]);
+  const enable = () => {
+    if (registering) return;
+    setRegistering(true);
+    setRegisterFailed(false);
+    void phonePush.register().then(outcome => {
+      setRegistering(false);
+      if (outcome === 'failed') setRegisterFailed(true);
+      else {
+        // The button is gone (registered, blocked, unsupported…): focus follows to the line that replaces it.
+        setFocusStatus(true);
+        if (outcome === 'on') setMuted(phoneMuted());
+      }
+      redraw(n => n + 1);
+    });
+  };
   const title = useRef<HTMLHeadingElement>(null);
   const doorRef = useCallback((node: HTMLButtonElement | null) => { handBack.register(SUPPLIER_ORDER_DOOR, node); }, [handBack]);
   const [deliverySaved, showDeliverySaved] = useSavedChip();
@@ -388,27 +441,30 @@ export function SettingsScreen({ onOpenSupplierOrder }: { onOpenSupplierOrder: (
 
         {/* Alerts of THIS phone (steps 3f-6, 3f-7; parity R12, M7): per device. */}
         <Section title={t('ord.settings.alertsTitle')} note={t('ord.settings.alertsNote')}>
-          {/* Notices on THIS phone (step 3f-6, parity R12): per device, no push. The explanation, then what the browser says. */}
+          {/* Notices on THIS phone (step 3f-6, parity R12): per device. The explanation, then what the phone can do about them; the button
+              registers it for server push too (phonePush.ts). */}
           <div className={styles.block} role="group" aria-labelledby={noticesTitle}>
             <h4 id={noticesTitle} className={styles.doorTitle}>{t('ord.settings.noticesTitle')}</h4>
             <p className={styles.sub}>{t('ord.settings.noticesAbout')}</p>
-            {permission === 'unsupported' ? <p>{t('ord.settings.noticesUnsupported')}</p> : null}
-            {permission === 'granted' ? (
-              <p className={styles.status}>
+            {shown === 'unsupported' ? <p ref={noteLine} tabIndex={-1}>{t('ord.settings.noticesUnsupported')}</p> : null}
+            {shown === 'install' ? <p ref={noteLine} tabIndex={-1}>{t('ord.settings.noticesInstallFirst')}</p> : null}
+            {shown === 'on' ? (
+              <p ref={statusLine} tabIndex={-1} className={styles.status}>
                 <Bell aria-hidden="true" />
                 <span>{t('ord.settings.noticesOn')}</span>
               </p>
             ) : null}
-            {permission === 'denied' ? <p>{t('ord.settings.noticesBlocked')}</p> : null}
-            {permission === 'default' ? (
-              <Button
-                className={styles.enable}
-                onPress={() => { void askNoticePermission().then(setPermission); }}
-              >
+            {shown === 'blocked' ? <p ref={noteLine} tabIndex={-1}>{t('ord.settings.noticesBlocked')}</p> : null}
+            {shown === 'button' ? (
+              <Button className={styles.enable} isPending={registering} onPress={enable}>
                 <Bell aria-hidden="true" />
                 {t('ord.settings.noticesEnable')}
               </Button>
             ) : null}
+            {/* Its live region is on the page, empty, before it speaks. */}
+            <p role="status" className={registerFailed ? styles.failed : styles.quiet}>
+              {registerFailed ? t('ord.settings.noticesFailed') : ''}
+            </p>
           </div>
 
           {/* ⚠️ A PROPERTY OF THIS PHONE, not of the person (somebody may want the alert in a pocket and not on the kitchen tablet), and it
@@ -420,13 +476,13 @@ export function SettingsScreen({ onOpenSupplierOrder }: { onOpenSupplierOrder: (
               <span className={styles.text}>
                 <span id={muteTitle} className={styles.doorTitle}>{t('ord.mute.orderRequests')}</span>
                 <span id={muteSub} className={styles.sub}>{t('ord.mute.stillShown')}</span>
-                {hasToken ? null : <span id={muteNote} className={styles.sub}>{t('ord.mute.noPhone')}</span>}
+                {registered ? null : <span id={muteNote} className={styles.sub}>{t('ord.mute.noPhone')}</span>}
               </span>
               <SettingSwitch
-                selected={hasToken && muted}
-                isDisabled={!hasToken}
+                selected={registered && muted}
+                isDisabled={!registered}
                 labelledBy={muteTitle}
-                describedBy={hasToken ? muteSub : `${muteSub} ${muteNote}`}
+                describedBy={registered ? muteSub : `${muteSub} ${muteNote}`}
                 onChange={next => {
                   setMuted(next);
                   const failed = () => { setMuted(!next); say(t('ord.incoming.couldNotSave'), LONG_MS); };

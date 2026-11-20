@@ -3,9 +3,8 @@
 // WHY: the nightly clean-up (functions/retention.js, the owner's decision of 18 Nov 2026) deletes
 // locations/{lid}/fcm-tokens/{token} once its `updatedAt` is 60 days old. The current app writes `updatedAt` only when
 // somebody taps «turn notifications on», or sets a timer on a phone whose stored owner is somebody else (js/push.js
-// rememberToken, scheduleAlarm), and Mise 2 registers no phone yet
-// (phoneMute.ts), so a phone that works perfectly would be silenced after two quiet months. Mise 2 therefore re-writes
-// the stamp while the phone is in use.
+// rememberToken, scheduleAlarm) and by Mise 2's own tap in Orders → Settings (phonePush.ts), so a phone that works
+// perfectly would be silenced after two quiet months. Mise 2 therefore re-writes the stamp while the phone is in use.
 //
 // WHAT: once the session is ready, if this phone holds a token (`push-token`) whose stored owner (`push-token-uid`, the
 // current app's keys) is the person signed in, ONE update of exactly `{ bakery, uid, updatedAt }` onto that document — the
@@ -14,7 +13,7 @@
 // update leaves alone.
 // ⚠️ UPDATE ONLY, NEVER RE-CREATE. The server deletes a row on purpose: a dead token (functions/index.js,
 // registration-token-not-registered) and a removed member's phone (functions/onboarding.js). A merge would quietly bring
-// it back. The cost: a row deleted by mistake no longer heals itself; the current app's own tap re-registers it.
+// it back. The cost: a row deleted by mistake no longer heals itself; the tap in Settings (phonePush.ts, or the current app's) re-registers it.
 // A `not-found` answer is final: nothing is created and the stamp stays, so it is not asked again on every open.
 // ⚠️ ONLY WHEN NOTIFICATIONS ARE GRANTED (as the current app's pushSupport().ok, js/push.js). A phone that blocked them
 // writes nothing and stamps nothing, so its row ages out after 60 days, and refreshes on the next open if it is granted again.

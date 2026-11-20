@@ -63,16 +63,8 @@ export function noticePermission(): NoticePermission {
   return Notification.permission;
 }
 
-// The Settings button. A browser that throws on the question answers what it already knew.
-export async function askNoticePermission(): Promise<NoticePermission> {
-  if (noticePermission() === 'unsupported') return 'unsupported';
-  try {
-    return await Notification.requestPermission();
-  } catch (err) {
-    console.warn('Notification permission request failed:', err);
-    return noticePermission();
-  }
-}
+// ⚠️ THE SETTINGS BUTTON NO LONGER ASKS FROM HERE: it registers the phone for server push, which asks the permission as its first
+// step (phonePush.ts). This file only READS the permission, for the notices raised while the app is open.
 
 export interface PhoneNotice {
   // The notice's stable key (`bh-<date>`, `conf-<supplier>-<date>`): it is the notification's tag too, so the phone shows one.

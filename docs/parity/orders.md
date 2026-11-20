@@ -2045,3 +2045,39 @@ No Firestore data, rules or queries changed: every point reads the streams Order
   is off by `ORDER_PHOTO_ON = false` (`orderImage.ts`; `useSendOrder` answers `canSharePhotos` false), its code untouched.
 - **«Ordine inviato?».** `AskHereDialog` is the shared `Dialog` with `forced` (no Escape, no backdrop) and `small`: the name, «Ordine
   inviato?», «No» (focused) / «Sì». Every other device keeps the line (`AwaitingBanners`). Asked on any Orders screen.
+
+## Phone push registration — as built (20 Nov 2026)
+
+**The gap.** Mise 2's «Attiva le notifiche» (Orders → Settings) only asked the browser's permission (`askNoticePermission`); it never
+registered the phone for server push (`js/push.js` `enablePush` → `rememberToken`). A phone set up since v2.0.0 therefore had no row under
+`locations/{lid}/fcm-tokens`: no order-list request (`functions/index.js`), no client order (`notifyClientOrder`), and the «Non far suonare
+questo telefono…» switch stayed locked with `ord.mute.noPhone`.
+
+**Decided (the owner, 20 Nov 2026).** The button registers the phone: permission when it is `default`, then the token, then the merged row.
+A phone that only granted the permission through the old button sees the button once more and one tap registers it (no prompt).
+
+**Built.**
+- `orders/phonePush.ts` (+ spec): `pushSupport` reasons as `js/push.js` plus `not-configured` (no VAPID key); `register()` (merge of exactly
+  `{ bakery, uid, updatedAt }`, `push-token` / `push-token-uid` kept, old row deleted on rotation, nothing offline, code-only logging, never throws,
+  15 s limit on the write); `onForMe(uid)`. Context: `PhonePushContext.tsx`, built in `main.tsx`.
+- `session/pushToken.ts` + `firebaseBackend.pushToken()`: Messaging loaded lazily; ⚠️ a local address gets an `emulator-push-<16 hex>` token and the
+  real `getToken` is never called. Real hosts: `getToken` with the VAPID key (`vapidKeyForHost`) and `navigator.serviceWorker.ready`.
+- Settings block: button (React Aria `isPending` while it works) / status line (focus moves to it after the tap) / `noticesBlocked` /
+  `noticesUnsupported` (also for `not-configured`) / NEW `noticesInstallFirst`; failure → NEW `noticesFailed` in a polite live region;
+  `noticesAbout` rewritten (the «only with the app open» note is no longer true for order lists and client orders).
+- The mute switch's «has a token» is now «registered for me» and updates right after the tap.
+- `askNoticePermission` (calendarNotices.ts) removed: nothing else used it.
+
+**Not covered.** A real `getToken` on a real phone and a real push arriving; the iPhone Home-screen path; the preview project (no functions, so
+`not-configured`).
+
+**Review fixes (20 Nov 2026).**
+- ⚠️ DELIBERATE DIFFERENCE from `js/push.js`: the merged row also carries `muteOrderRequests` = what the switch draws (`phoneMuted()`), so the server
+  always matches the screen and a fresh device rings (a shared tablet: A mutes and signs out, the next person registers).
+- A phone registered for me whose browser holds no push subscription any more (permission blocked then allowed again, or the server deleted the row)
+  gets the button back: `verify()` asks `pushManager.getSubscription()` (local, 15 s limit, skipped on local addresses where the token is made up) and
+  clears `push-token` / `push-token-uid`.
+- The token step has the same 15 s limit as the write; the registration is remembered only if the session (venue + person) is still the one it was written for.
+- `not-configured` and a browser with `Notification` but no `PushManager` still get the permission-only button (the in-app calendar notices need it); once
+  granted the line says «on». Focus follows to the sentence that replaces the button (`tabIndex -1`) for blocked / unsupported / install-first too.
+- A write cut off by the time limit stays in Firestore's queue (the same exposure as `pushTokenRefresh.ts`).

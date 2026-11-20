@@ -1,10 +1,10 @@
 // This phone's «do not buzz me about order lists» (parity M7, js/push.js): what the Settings switch reads and remembers.
 //
-// ⚠️ THE CURRENT APP'S KEYS, ON THE SAME ORIGIN: until step 3g registers phones in Mise 2 only js/push.js writes the token, and either
+// ⚠️ THE CURRENT APP'S KEYS, ON THE SAME ORIGIN: both js/push.js and Mise 2 (phonePush.ts) write the token, and either
 // app may open next and must draw the same switch. The SERVER's copy (on the token document) is the one that decides who is buzzed;
 // the local one is only what the screen draws, so a failed read answers «not muted»: the safe direction is a phone that rings.
 //
-// Not under KEEP_PREFIXES, as in the current app: a sign-out wipes them, and js/push.js registers the phone again.
+// Not under KEEP_PREFIXES, as in the current app: a sign-out wipes them, and the phone is registered again by the tap in Settings (phonePush.ts or js/push.js).
 
 export const PUSH_TOKEN_KEY = 'push-token';
 // WHOSE registration the token above is: the uid js/push.js wrote it for (its TOKEN_UID_KEY). A shared phone can still

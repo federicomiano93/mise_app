@@ -61,3 +61,14 @@ export function isPreviewHost(hostname: unknown): boolean {
 export function configForHost(hostname: unknown): FirebaseWebConfig {
   return isPreviewHost(hostname) ? PREVIEW_CONFIG : PRODUCTION_CONFIG;
 }
+
+// The web-push key (VAPID, PUBLIC — the same value as js/firebase.js VAPID_PUBLIC_KEY, public config like the API key) that
+// getToken() needs to register a phone for server push. Production only: the preview project has no functions, so no push
+// is configured there ('' = «not configured»: Orders → Settings then offers only the browser's permission, which the in-app notices need).
+// ⚠️ A SEPARATE EXPORT, NOT A FIELD OF THE CONFIG: the config object is handed to initializeApp() and compared with
+// js/firebase-target.js value for value; a Mise 2 addition lives beside it (parity.spec.ts MISE2_ADDITIONS).
+export const PRODUCTION_VAPID_KEY = 'BD2mUu9H_bxvaxiYdEYGmhFHA_kybZN84Oxzl5Y43Cuni6e41O1asMt8kr7TyAPIGU6FsnJKDaJVoujDOCgB3zU';
+
+export function vapidKeyForHost(hostname: unknown): string {
+  return isPreviewHost(hostname) ? '' : PRODUCTION_VAPID_KEY;
+}

@@ -338,6 +338,11 @@ the Auth accounts of people who left) is one more `KINDS` entry and one more swi
 | `errors` | `errors` | `createdAt` Timestamp | older than 30 days |
 | `usage` | `usage` | `updatedAt` Timestamp | older than 400 days |
 
+⚠️ **Who writes `fcm-tokens/{token}`** (document id = the FCM token): the current app's `js/push.js` and, since 20 Nov 2026,
+Mise 2's `app/src/orders/phonePush.ts` — both on a TAP in Orders → Settings, both a MERGE of exactly `{ bakery, uid, updatedAt }`
+(never a whole write: the same document carries `muteOrderRequests`, written by the mute switch), and both remember it on the
+phone under `push-token` / `push-token-uid`. `pushTokenRefresh.ts` then only re-stamps `updatedAt` (an update, never a create).
+
 ⚠️ **Every kind ships OFF** (`ENABLED` in the model, all `false`): the function runs, queries and logs `{ kind, wouldDelete,
 skipped, … }` per kind and deletes nothing — **report-only** — until a later one-line PR switches a kind on (its pin in
 `tests/retention-model.test.mjs` changes with it). The last three take over the owner's manual prunes with the same periods;

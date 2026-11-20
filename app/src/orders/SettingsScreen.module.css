@@ -218,3 +218,9 @@
 .enable {
   align-self: flex-start;
 }
+
+/* The line under the enable button when registering this phone failed. */
+.failed {
+  color: var(--danger-ink);
+  font-weight: 600;
+}

@@ -34,8 +34,9 @@ import {
   createUserWithEmailAndPassword, type Auth,
 } from 'firebase/auth';
 import type { Firestore } from 'firebase/firestore';
-import { configForHost, LOCAL_HOSTS } from '@mise/shared/firebase-target';
+import { configForHost, LOCAL_HOSTS, vapidKeyForHost } from '@mise/shared/firebase-target';
 import type { DocData, SessionBackend, WipeResult } from './backend';
+import { createPushToken } from './pushToken';
 
 // The Firestore SDK's functions, from the lazily loaded module, and the one client.
 export type FirestoreSdk = typeof import('firebase/firestore');
@@ -57,6 +58,10 @@ export interface FirebaseBackend extends SessionBackend {
   // Auth, for the writes that must carry the signed-in account's uid (telemetry/sinks.ts).
   readonly auth: Auth;
   readonly isEmulator: boolean;
+  // This phone's push token (Cloud Messaging), the SDK loaded on the first call. ⚠️ On a local address it is an
+  // emulator-only made-up token and the real getToken() is never called (pushToken.ts). Rejects when the browser or the
+  // network refuses. Must be called from a tap that has already been granted the notification permission.
+  pushToken(): Promise<string>;
   // Creates the account behind a client's ordering link and resolves with its uid, WITHOUT touching the
   // signed-in person's own session (see the function). Rejects when Auth refuses or cannot be reached.
   createLinkAccount(email: string, password: string): Promise<string>;
@@ -170,8 +175,21 @@ export function createFirebaseBackend(hostname: string): FirebaseBackend {
     return result.data;
   }
 
+  // ⚠️ FIREBASE MESSAGING IS LOADED ONLY WHEN A PHONE IS BEING REGISTERED (the one dynamic import of it), and only on a real
+  // address: see pushToken.ts for why a local page never reaches it.
+  const pushToken = createPushToken({
+    isEmulator,
+    vapidKey: vapidKeyForHost(hostname),
+    load: () => import('firebase/messaging').then(sdk => {
+      const messaging = sdk.getMessaging(app);
+      return { getToken: options => sdk.getToken(messaging, options) };
+    }),
+    serviceWorkerReady: () => navigator.serviceWorker.ready,
+  });
+
   return {
     firestore,
+    pushToken,
     firestoreIfReady: () => ready,
     createLinkAccount,
     callFunction,

@@ -16,11 +16,10 @@ import { LOAD, ingredient, renderOrders, split, supplier } from '../testing/rend
 const browser = vi.hoisted(() => ({
   notifyOnce: vi.fn(),
   permission: vi.fn((): string => 'default'),
-  ask: vi.fn(async (): Promise<string> => 'granted'),
 }));
 vi.mock('./calendarNotices', async importOriginal => {
   const real = await importOriginal<typeof import('./calendarNotices')>();
-  return { ...real, notifyOnce: browser.notifyOnce, noticePermission: () => browser.permission(), askNoticePermission: () => browser.ask() };
+  return { ...real, notifyOnce: browser.notifyOnce, noticePermission: () => browser.permission() };
 });
 
 beforeAll(async () => { await import('./OrdersSection'); }, 60_000);
@@ -29,7 +28,6 @@ beforeEach(() => {
   window.localStorage.clear();
   browser.notifyOnce.mockReset();
   browser.permission.mockReset().mockReturnValue('default');
-  browser.ask.mockReset().mockResolvedValue('granted');
 });
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); window.localStorage.clear(); });
 
@@ -418,45 +416,5 @@ describe('the calendar notices', () => {
     await atList(seeded(), { session: { location: {} } } as Options);
     expect(bell()).toHaveAccessibleName('Notices');
     expect(browser.notifyOnce).not.toHaveBeenCalled();
-  });
-});
-
-describe('the notifications in the Orders settings', () => {
-  async function atSettings(permission: string) {
-    browser.permission.mockReturnValue(permission);
-    const view = renderOrders('/orders/settings', { source: seeded() });
-    await screen.findByRole('heading', { name: 'Notices (this phone)' }, LOAD);
-    return view;
-  }
-
-  it('says the device does not support them', async () => {
-    await atSettings('unsupported');
-    expect(screen.getByText('This device does not support notifications.')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Enable notifications' })).not.toBeInTheDocument();
-  });
-
-  it('says they are on', async () => {
-    await atSettings('granted');
-    expect(screen.getByText('Notifications are on for this device.')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Enable notifications' })).not.toBeInTheDocument();
-  });
-
-  it('says they are blocked, and where to turn them on', async () => {
-    await atSettings('denied');
-    expect(screen.getByText('Notifications are blocked. Turn them on for this app in your browser/site settings, then reload.')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Enable notifications' })).not.toBeInTheDocument();
-  });
-
-  it('explains them, and a button asks the browser and redraws with its answer', async () => {
-    const view = await atSettings('default');
-    expect(screen.getByText(/^Get an alert when an order is due/)).toBeInTheDocument();
-    browser.ask.mockImplementation(async () => {
-      browser.permission.mockReturnValue('granted');
-      return 'granted';
-    });
-    await view.user.click(screen.getByRole('button', { name: 'Enable notifications' }));
-    expect(await screen.findByText('Notifications are on for this device.')).toBeInTheDocument();
-    expect(browser.ask).toHaveBeenCalledTimes(1);
-    expect(screen.queryByRole('button', { name: 'Enable notifications' })).not.toBeInTheDocument();
   });
 });
