@@ -972,3 +972,39 @@ time and the people into the product's card. Mise 2 only, POST-SWITCH: NOT a por
   `LabMode.spec.tsx` (the whole flow on the real card with the fake source: door, steps, keypad and keyboard, tick, add a line, the save
   question, the write and its margin point, Esci / Riprendi, a clock after a reload, a corrupt draft, Italian). They do NOT measure layout
   (jsdom): 1024, 360 and 296 wide, the real tablet's Chrome 101 and the feel of the keypad are for a driver and Federico.
+
+## Categories and semi-finished cards — as built (20 Nov 2026)
+
+Step 1 of the «Torte» plan. Mise 2 only: the rollback copy (`js/`) is not changed and still writes model 2, which the rules now refuse over a
+model-4 card (rules commit `cbeaa819`: `kind`, `categoryId`, `foodcost-categories`, model ceiling 4).
+
+**Data.** `products/{id}` gains `kind` ('finished' | 'semi'; absent = finished) and `categoryId` (string 1–64 or null); `PRODUCT_MODEL` is 4;
+`toProductDocument` writes both on every save and `createProductIfAbsent` too. A model-3 card is read as it is (the raw-kilos conversion is keyed on
+the new constant `RAW_LINES_MODEL = 3`, not on `PRODUCT_MODEL`, so a model-3 card is never converted twice). `foodcost-categories/{id}` =
+`{ bakery, name, rank }`; rank = the clock at creation, always after the last one. Removing a category deletes its document only.
+
+**The maths** (`shared/src/foodcost-model.ts`, `per-kg-model.ts`; specs `semi-finished.spec.ts`). A semi line costs qtyKg × materials per kilo of the
+referenced card (its batch's lines' cost ÷ its batch's kilos = `costPerKg(...).total`), and weighs qtyKg. Labour per kilo = the card's total labour ÷
+the same kilos; `productionCost().labourBatchCost` = own labour + Σ semi lines' labour, `labourUnitCost` / `totalUnitCost` follow, `unitCost` and the food cost %
+never include it, and with no labour rate every labour figure stays null. No card → `'no-card'`; a loop or a chain deeper than 4 → `'card-loop'`; no price →
+`'card-no-price'` (a card priced only in part is costed and partial). `semiReachable` / `wouldLoop` / `cardsUsing` / `semiCardCost` /
+`totalLabourBatchCost` are new exports (Mise 2 additions in `foodcost-model.spec.ts`); `PRODUCT_MODEL` differs from the original again (4 / 2). `odd-inputs.spec.ts`'s
+lens also takes `kind` and `categoryId` off a normalised card. `frozenPricesFor` walks into the semi cards (same guard); `snapshotWorthTaking` counts a
+change of semi lines, not of kind or category; a semi card takes no margin point. `priceItemOf` returns null for a semi card, and Bookings' product list
+skips it.
+
+**Screens.** The list is grouped once the venue has a category (all groups closed, a search opens the matching ones, the open card's group opens by itself,
+state in the component only); a semi row shows «€/kg» and «materials · labour». «Categories» opens the dialog (rename, remove after a question that says how many
+cards move, duplicate and empty names refused). The editor has «Card type» (React Aria `RadioGroup`) and «Category»; a semi card hides How it is sold, packaging and the
+price fields (kept in the working copy; their invalid values never stop its Save — `isShown`), says there is no selling price, and gets «Cost per kg» and «Used in».
+The chooser is always the combined one (recipes, ingredients, semi-finished) with kind chips and category chips; the card itself, one already on the card and a loop
+are shown and disabled with their reason. A semi line's row has a tag on its own line, «€/kg · labour included» and the cost split into materials and labour.
+«Cards from the recipe book» asks for a kind per ticked recipe (none chosen at first; block, jump to, outline, say). The labour section says «A from semi-finished cards + B own
+work» when both exist. Lab mode accepts semi lines (weighed in grams like a recipe).
+
+**Decisions taken while building.** (1) The first line of a card can now be a semi-finished card or an ingredient: the chooser is the combined one from the start (it used
+to offer recipes only until a line existed). (2) A semi line's kilo box is not required to save, like every other line's quantity (an empty one is 0). (3) A semi card has no
+Packaging section. (4) In the read view the semi row's money is one text line (rate · amount) and its split goes in the note. (5) The labour split is drawn under the Work
+section, not in the summary panel (a semi card has no summary).
+
+**Not covered by the specs** (jsdom, no layout): the row at 1024 beside the list, 360 and 296 wide; the look of the group headers and chips; Chrome 101 on the tablet.

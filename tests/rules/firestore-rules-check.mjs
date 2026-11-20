@@ -2330,10 +2330,10 @@ async function products() {
   await expectDenied('a product model sent as text', () => wholeWrite(`${P}/P1`, product({ model: '2' })));
   await expectDenied('a product model of zero', () => wholeWrite(`${P}/P1`, product({ model: 0 })));
   // ⚠️⚠️ The ceiling: a product saved by hand with a higher model could never be saved by
-  // any phone again (7 Oct 2026 security audit). Mise 2 writes 3 (10 Nov 2026), so 4 is the
+  // any phone again (7 Oct 2026 security audit). Mise 2 writes 4 (20 Nov 2026; 3 from 10 Nov), so 5 is the
   // first number above the app's.
-  await expectDenied('⚠️⚠️ a product model above the app\'s (4)', () =>
-    wholeWrite(`${P}/P1`, product({ model: 4 })));
+  await expectDenied('⚠️⚠️ a product model above the app\'s (5)', () =>
+    wholeWrite(`${P}/P1`, product({ model: 5 })));
   await expectDenied('…nor 100, the old ceiling', () => createWrite(P, product({ model: 100 })));
 
   // ⚠️⚠️ THE OLD-PHONE GUARD. A product is written WHOLE; a phone on the version before
@@ -2409,6 +2409,56 @@ async function products() {
   await seedDoc(`${P}/NOMODEL`, product());
   await expectAllowed('…and a product saved before the model existed', () =>
     wholeWrite(`${P}/NOMODEL`, product({ model: 3 })));
+
+  // ── Mise 2, model 4 (20 Nov 2026, the cakes plan): a card is finished or SEMI-FINISHED, sits in a category, and may hold
+  // semi-finished lines ──
+  const SEMI = { kind: 'semi', productId: 'GANACHE', qtyKg: 0.4 };
+  await expectAllowed('a semi-finished card in a category, model 4', () =>
+    wholeWrite(`${P}/SEMI1`, product({ model: 4, kind: 'semi', categoryId: 'cat-1', sellingMode: null, sellingPrice: null, vatRate: null })));
+  await expectAllowed('a finished card with no category (null)', () =>
+    wholeWrite(`${P}/SEMI2`, product({ model: 4, kind: 'finished', categoryId: null })));
+  await expectAllowed('a card holding a semi-finished line', () =>
+    wholeWrite(`${P}/SEMI3`, product({ model: 4, components: [{ recipeId: 'DOUGH', qtyKg: 1 }, SEMI] })));
+  await expectAllowed('a category id of exactly 64 characters', () =>
+    wholeWrite(`${P}/SEMI4`, product({ model: 4, categoryId: 'c'.repeat(64) })));
+  await expectDenied('a kind nobody writes', () => wholeWrite(`${P}/SEMI1`, product({ model: 4, kind: 'other' })));
+  await expectDenied('a kind sent as a number', () => wholeWrite(`${P}/SEMI1`, product({ model: 4, kind: 1 })));
+  await expectDenied('a category id of 65 characters', () => wholeWrite(`${P}/SEMI1`, product({ model: 4, categoryId: 'c'.repeat(65) })));
+  await expectDenied('an empty category id', () => wholeWrite(`${P}/SEMI1`, product({ model: 4, categoryId: '' })));
+  await expectDenied('a category id sent as a number', () => wholeWrite(`${P}/SEMI1`, product({ model: 4, categoryId: 7 })));
+  // THE OLD-PHONE GUARD, ONE MODEL UP AGAIN: a phone still on model 3 would save a card back WITHOUT its kind, category and
+  // semi-finished lines (it writes whole), so it must never write over a model-4 card.
+  await seedDoc(`${P}/MODEL4`, product({ model: 4, kind: 'semi', categoryId: 'cat-1' }));
+  await expectDenied('a model-3 save over a model-4 card', () => wholeWrite(`${P}/MODEL4`, product({ model: 3 })));
+  await expectDenied('…nor the current app (model 2)', () => wholeWrite(`${P}/MODEL4`, product({ model: 2 })));
+  await expectAllowed('Mise 2 saves it again at 4', () =>
+    wholeWrite(`${P}/MODEL4`, product({ model: 4, kind: 'semi', categoryId: 'cat-1' })));
+  await seedDoc(`${P}/MODEL3B`, product({ model: 3, cookedGrams: 690 }));
+  await expectAllowed('a model-3 card is brought up to 4 by Mise 2', () =>
+    wholeWrite(`${P}/MODEL3B`, product({ model: 4, cookedGrams: 690, kind: 'finished', categoryId: null })));
+
+  // ── The categories of the list: foodcost-categories/{id} = { bakery, name, rank } ──
+  const CAT = 'locations/main/foodcost-categories';
+  const category = (over = {}) => ({ bakery: 'main', name: 'Cakes', rank: 1_760_000_000_000, ...over });
+  await expectAllowed('a member with Food cost makes a category', () => wholeWrite(`${CAT}/c1`, category()));
+  await expectAllowed('…and renames it', () => wholeWrite(`${CAT}/c1`, category({ name: 'Torte' })));
+  await expectAllowed('…and reads it', () => fetch(`${FS}/${CAT}/c1`, { headers: asAccount(ALICE) }));
+  await expectAllowed('a name of exactly 60 characters', () => wholeWrite(`${CAT}/c2`, category({ name: 'n'.repeat(60) })));
+  await expectDenied('a name of 61 characters', () => wholeWrite(`${CAT}/c3`, category({ name: 'n'.repeat(61) })));
+  await expectDenied('an empty name', () => wholeWrite(`${CAT}/c3`, category({ name: '' })));
+  await expectDenied('a name sent as a number', () => wholeWrite(`${CAT}/c3`, category({ name: 5 })));
+  await expectDenied('a rank sent as text', () => wholeWrite(`${CAT}/c3`, category({ rank: '1' })));
+  await expectDenied('a negative rank', () => wholeWrite(`${CAT}/c3`, category({ rank: -1 })));
+  await expectDenied('an unknown key on a category', () => wholeWrite(`${CAT}/c3`, category({ colour: 'red' })));
+  await expectDenied('a category stamped for another location', () => wholeWrite(`${CAT}/c3`, category({ bakery: 'trattoria-x' })));
+  await expectDenied('a signed-out device makes no category', () => wholeWrite(`${CAT}/c3`, category(), noAuth()));
+  await expectDenied('a venue without Food Cost reads no category', () =>
+    fetch(`${FS}/locations/trattoria-x/foodcost-categories/c1`, { headers: asAccount(BOB) }));
+  await expectDenied('…and writes none', () =>
+    wholeWrite('locations/trattoria-x/foodcost-categories/c1', { bakery: 'trattoria-x', name: 'Theirs', rank: 1 }, asAccount(BOB)));
+  await expectDenied('reading another location\'s categories', () =>
+    fetch(`${FS}/locations/trattoria-x/foodcost-categories/c1`, { headers: asAccount(ALICE) }));
+  await expectAllowed('a member removes a category', () => deleteWrite(`${CAT}/c1`));
 
   await expectAllowed('a member may delete a product', () => deleteWrite(`${P}/P2`));
 
@@ -4549,6 +4599,14 @@ async function staffCards() {
     }, asAccount(SAM)));
   await expectDenied('⚠️ but deleting a product stays with whoever runs the place',
     () => deleteWrite(`${L}/products/P1`, asAccount(SAM)));
+  // A Food cost category: an employee shown the card may name one, but taking it off
+  // everybody's list is the managers' only, like deleting a card (decided at review).
+  await expectAllowed('…makes a Food cost category',
+    () => wholeWrite(`${L}/foodcost-categories/K1`, { ...stamp, name: 'Torte', rank: 1 }, asAccount(SAM)));
+  await expectDenied('⚠️ but deleting a category stays with whoever runs the place',
+    () => deleteWrite(`${L}/foodcost-categories/K1`, asAccount(SAM)));
+  await expectAllowed('…and the owner removes it',
+    () => deleteWrite(`${L}/foodcost-categories/K1`));
   await expectDenied('⚠️ and a price is still written only by whoever runs the place',
     () => mergeWrite(`${L}/ingredient-prices/flour`, { ...stamp, priceUnit: 'kg', pricePerUnit: 9 }, asAccount(SAM)));
   await expectDenied('…nor added to the price history',

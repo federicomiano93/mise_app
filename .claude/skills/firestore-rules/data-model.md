@@ -300,6 +300,24 @@ the only other one is `client-accounts` (managers, or the account itself — aud
   at its next Save — never rewritten in bulk. The rules ceiling is 3, so the current app (2) can
   no longer save over a product Mise 2 has saved, and nothing lowers it back: reverting the app
   does not undo it.
+  ⚠️⚠️ **Mise 2 writes `model: 4` (20 Nov 2026, the cakes plan step 1)**: a card is either
+  `kind: 'finished'` (absent = finished, so every card saved before stays what it was) or
+  `kind: 'semi'` (a ganache, a sponge: priced per kilo, no selling price, never on the bookings
+  price list — `priceItemOf` returns null for it), and may carry `categoryId` (a string of 1–64
+  characters = the id of a `foodcost-categories` document, `null`/absent = «no category»; an id
+  whose document is gone reads as none, so removing a category rewrites no card). `components[]`
+  gains `{kind:'semi', productId, qtyKg}` — another card used inside this one, in kilos per batch
+  of what comes out of THAT card's oven (its cost per kilo, its own loss included); lines are not
+  validated by the rules. The app writes `kind` and `categoryId` on EVERY save. A model-3 card needs
+  no conversion (it is a model-4 card with no kind, category or semi lines). The ceiling is 4: a
+  phone still on 3 would save a card back without these fields, so the rules refuse it over a
+  model-4 card; nothing lowers it back. Labour stays out of the food cost % (a card's labour is
+  its own plus its semi cards', recursively); a loop or a chain deeper than 4 cards reads as «no
+  cost», never 0.
+- `foodcost-categories/{id}` — `{ bakery, name (1–60), rank (number ≥ 0, the order of the list; the
+  clock at creation) }`, nothing else. One document per category, so a rename is one write and a
+  removal deletes the document only. Read, create, update and delete: whoever may read and save
+  the cards (`cardAccess(lid, 'foodcost', 'foodcost')`). Never `config/{doc}`.
 - `foodcost-settings/main` — `{ bakery, labourCostPerHour, updatedAt }`; read and write
   `canManage(lid,'foodcost')` only, never deleted: an employee shown Food cost must not learn the
   rate.

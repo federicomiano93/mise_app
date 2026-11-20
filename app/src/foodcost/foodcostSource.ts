@@ -82,6 +82,15 @@ export interface FoodcostSource {
   // The oven loss onto a recipe: three fields, never the whole recipe.
   saveRecipeLoss(id: string, patch: RecipeLossPatch): Promise<void>;
   removeProduct(id: string): Promise<void>;
+  // The categories the list groups cards by (Mise 2, model 4, 20 Nov 2026): `foodcost-categories/{id}` = { bakery, name, rank }. Live.
+  // `meta.fromServer` is the products' word. Fails quietly in the store: a refusal reads as «no categories».
+  watchCategories(onChange: (list: StoredDoc[], meta: ProductsMeta) => void, onError: (err: unknown) => void): () => void;
+  // A new category id, made on the phone with no write.
+  newCategoryId(): string;
+  // One category, WHOLE (create and rename are the same write; the venue stamp is added here).
+  saveCategory(id: string, data: Readonly<{ name: string; rank: number }>): Promise<void>;
+  // Removes the category's document ONLY: no card is rewritten, a card's stale id reads as «no category».
+  removeCategory(id: string): Promise<void>;
   // A product's margin history, newest first, at most `max`. Read once, never watched.
   getProductHistory(productId: string, max?: number): Promise<StoredDoc[]>;
   // The hourly labour cost (null clears it), merged with its stamp.
@@ -108,6 +117,7 @@ const INGREDIENTS = 'ingredients';
 // work at all (js/price-model.js says why).
 const INGREDIENT_PRICES = 'ingredient-prices';
 const SUPPLIERS = 'suppliers';
+const CATEGORIES = 'foodcost-categories';
 const SETTINGS = 'foodcost-settings';
 const SETTINGS_DOC = 'main';
 const PRICE_LIST = 'price-list';
@@ -151,6 +161,7 @@ export function createFirestoreFoodcostSource(
   const ingredientsPath = buildPath(locationId, INGREDIENTS);
   const pricesPath = buildPath(locationId, INGREDIENT_PRICES);
   const suppliersPath = buildPath(locationId, SUPPLIERS);
+  const categoriesPath = buildPath(locationId, CATEGORIES);
   const settingsPath = buildPath(locationId, SETTINGS);
   const priceListPath = buildPath(locationId, PRICE_LIST);
 
@@ -318,6 +329,30 @@ export function createFirestoreFoodcostSource(
       const fields: Record<string, number> = { rawGrams: patch.rawGrams, cookedGrams: patch.cookedGrams };
       if (patch.lossPct !== undefined) fields['lossPct'] = patch.lossPct;
       await fs.updateDoc(fs.doc(db, recipesPath, checkId(id)), withBakery(fields));
+    },
+
+    // QUIET, like the recipes: someone who may not read categories simply sees every card in one list.
+    // includeMetadataChanges for the same reason as the products.
+    watchCategories: (onChange, onError) => listen(kit => kit.fs.onSnapshot(
+      kit.fs.collection(kit.db, categoriesPath) as Query,
+      { includeMetadataChanges: true },
+      snap => onChange(docsOf(snap), { fromServer: !snap.metadata.fromCache }),
+      err => {
+        console.warn('watch(categories) failed:', err);
+        onError(err);
+      },
+    ), onError),
+
+    newCategoryId: () => makeDocumentId(),
+
+    async saveCategory(id, data) {
+      const { fs, db } = await firestore();
+      await fs.setDoc(fs.doc(db, categoriesPath, checkId(id)), withBakery({ name: data.name, rank: data.rank }));
+    },
+
+    async removeCategory(id) {
+      const { fs, db } = await firestore();
+      await fs.deleteDoc(fs.doc(db, categoriesPath, checkId(id)));
     },
 
     async removeProduct(id) {

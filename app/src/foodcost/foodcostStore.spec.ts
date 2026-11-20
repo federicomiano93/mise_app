@@ -38,6 +38,10 @@ function fakeSource() {
     watchRecipes: vi.fn((onChange, onError) => { recipes = { onChange, onError }; return () => stopped.push('recipes'); }),
     watchIngredients: vi.fn((onChange, onError) => { ingredients = { onChange, onError }; return () => stopped.push('ingredients'); }),
     watchSuppliers: vi.fn((onChange, onError) => { suppliers = { onChange, onError }; return () => stopped.push('suppliers'); }),
+    watchCategories: vi.fn(() => () => stopped.push('categories')),
+    newCategoryId: () => `cat-${++ids}`,
+    saveCategory: (id, data) => write('category', id, data),
+    removeCategory: id => write('category-remove', id),
     watchSettings: vi.fn(onChange => { settings = onChange; return () => stopped.push('settings'); }),
     saveProduct: (id, data, snapshot) => write('product', id, data, snapshot),
     createProductIfAbsent: (id, data) => new Promise<boolean>((resolve, reject) => { creates.push({ id, data, resolve, reject }); }),
@@ -94,7 +98,7 @@ describe('the Food cost store', () => {
     store.start();
     expect(fake.source.watchProducts).toHaveBeenCalledTimes(1);
     store.stop();
-    expect(fake.stopped.sort()).toEqual(['ingredients', 'products', 'recipes', 'settings', 'suppliers']);
+    expect(fake.stopped.sort()).toEqual(['categories', 'ingredients', 'products', 'recipes', 'settings', 'suppliers']);
   });
 
   // POST-SWITCH (step 4 of the Food cost plan): the suppliers, for the names under an ingredient. Memory only, quiet, never waited for.
@@ -263,10 +267,13 @@ describe('the Food cost store', () => {
     const { fake, store } = setup();
     store.start();
     const before = store.getSnapshot().tables;
+    // Model 4: the cards by id are part of the tables (a semi-finished line looks its card up there), so a product moves them.
     fake.products([{ id: 'p1', name: 'Loaf' }]);
-    expect(store.getSnapshot().tables).toBe(before);
-    fake.recipes([{ id: 'r1', name: 'Dough' }]);
     expect(store.getSnapshot().tables).not.toBe(before);
+    expect(Object.keys(store.getSnapshot().tables.products as object)).toEqual(['p1']);
+    const withProducts = store.getSnapshot().tables;
+    fake.recipes([{ id: 'r1', name: 'Dough' }]);
+    expect(store.getSnapshot().tables).not.toBe(withProducts);
     expect(store.getSnapshot().tables.recipes).toBe(store.getSnapshot().recipes);
     expect(store.getSnapshot().recipes.r1!.name).toBe('Dough');
   });
@@ -286,10 +293,10 @@ describe('the Food cost store', () => {
   test('⚠️ the document carries exactly the whitelisted fields and the product model, never the id', () => {
     const doc = toProductDocument(product({ id: 'p1', name: 'Loaf', sellingPrice: 2.5, vatRate: 0 } as Product & { name: string }));
     expect(Object.keys(doc).sort()).toEqual([
-      'components', 'foodCostTarget', 'labourMinutes', 'labourPeople', 'model', 'name', 'packSize', 'packUnit',
+      'categoryId', 'components', 'foodCostTarget', 'kind', 'labourMinutes', 'labourPeople', 'model', 'name', 'packSize', 'packUnit',
       'packaging', 'piecesPerBatch', 'sellingMode', 'sellingPrice', 'vatRate',
     ]);
-    expect(doc.model).toBe(3);
+    expect(doc.model).toBe(4);
     expect(doc.vatRate).toBe(0);
     expect(doc).not.toHaveProperty('id');
   });
@@ -299,7 +306,7 @@ describe('the Food cost store', () => {
     expect(none).not.toHaveProperty('rawGrams');
     expect(none).not.toHaveProperty('cookedGrams');
     const both = toProductDocument(product({ id: 'p1', name: 'Loaf', rawGrams: 1000, cookedGrams: 880 } as Product & { name: string }));
-    expect(both).toMatchObject({ rawGrams: 1000, cookedGrams: 880, model: 3 });
+    expect(both).toMatchObject({ rawGrams: 1000, cookedGrams: 880, model: 4 });
     const cookedOnly = toProductDocument(product({ id: 'p1', name: 'Loaf', cookedGrams: 880 } as Product & { name: string }));
     expect(cookedOnly).not.toHaveProperty('rawGrams');
     expect(cookedOnly.cookedGrams).toBe(880);
@@ -567,7 +574,7 @@ describe('the Food cost store', () => {
       expect(fake.creates).toHaveLength(1);
       expect(fake.creates[0]!.id).toBe('recipe-r1');
       expect(fake.creates[0]!.data).toEqual(toProductDocument(product({ id: 'recipe-r1', name: 'Brioche', components: [{ recipeId: 'r1', qtyKg: 1 }], cookedGrams: 900 })));
-      expect(fake.creates[0]!.data).toMatchObject({ name: 'Brioche', model: 3, sellingMode: null, sellingPrice: null, vatRate: null, packaging: [] });
+      expect(fake.creates[0]!.data).toMatchObject({ name: 'Brioche', model: 4, sellingMode: null, sellingPrice: null, vatRate: null, packaging: [] });
       answer(fake, true);
       expect(await done).toEqual({ made: 1, skipped: 0, failed: 0 });
     });

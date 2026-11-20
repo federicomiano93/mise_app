@@ -78,7 +78,22 @@ export type LineUnit = (typeof LINE_UNITS)[number];
 // current app would read as finished kilos and cost too HIGH by the loss — so the rules refuse its save over a model-3
 // product, and it can never write the raw lines back as finished ones. Products below 3 are converted on read
 // (fromLegacyProduct).
-export const PRODUCT_MODEL = 3;
+// ⚠️ 4 (20 Nov 2026, the cakes plan step 1): a card may carry `kind` ('finished' | 'semi'), `categoryId` and semi-finished lines.
+// A phone still on 3 would save a card back without them, so the rules refuse a model-3 save over a model-4 card. A card read
+// at model 3 is the same as model 4 with no kind, no category and no semi lines: nothing is converted.
+export const PRODUCT_MODEL = 4;
+
+// The model below which a recipe line holds FINISHED kilos and is converted on read (fromLegacyProduct). It is the model that
+// introduced raw kilos, NOT the current one: a model-3 card must never be converted again when PRODUCT_MODEL moves on.
+const RAW_LINES_MODEL = 3;
+
+// What a card is: sold as it is, or a SEMI-FINISHED one (a ganache, a sponge) used inside other cards and priced per kilo.
+// Absent on a stored card = finished, so every card saved before stays what it was.
+export const PRODUCT_KINDS = Object.freeze(['finished', 'semi'] as const);
+export type ProductKind = (typeof PRODUCT_KINDS)[number];
+
+// How many semi-finished cards may sit inside each other (a card inside a card inside a card …). Deeper reads as a loop.
+export const MAX_SEMI_DEPTH = 4;
 
 // The traffic light. Green up to the target, amber up to a tenth above it, red beyond. RELATIVE rather
 // than a fixed number of points, so a 12% target and a 35% target both get a proportionate warning band
@@ -128,7 +143,15 @@ export interface IngredientLine {
   unit: LineUnit;
 }
 
-export type ProductComponent = RecipeLine | IngredientLine;
+// Mise 2, model 4: ANOTHER FOOD COST CARD used inside this one — a semi-finished one — in kilos per batch, of what comes out of
+// THAT card's oven (its cost per kilo, its own loss included).
+export interface SemiLine {
+  kind: 'semi';
+  productId: string;
+  qtyKg: number;
+}
+
+export type ProductComponent = RecipeLine | IngredientLine | SemiLine;
 
 // One packaging item, in pieces PER UNIT SOLD.
 export interface PackagingLine {
@@ -161,6 +184,10 @@ export interface Product {
   rawGrams: number | null;
   cookedGrams: number | null;
   model: number | null;
+  // Model 4: finished (the default) or semi-finished, and the group the card sits in (the id of a foodcost-categories document,
+  // null = none; an id whose category is gone reads as none).
+  kind: ProductKind;
+  categoryId: string | null;
 }
 
 // The two tables a cost is read from, by id (a Map or a plain object each — callers hand over whatever they
@@ -171,10 +198,16 @@ export type Table = ReadonlyMap<string, unknown> | Readonly<Record<string, unkno
 export interface CostTables {
   recipes?: Table | null;
   ingredients?: Table | null;
+  // Mise 2, model 4: every Food cost card by id, as read — what a semi-finished line looks its card up in.
+  products?: Table | null;
   labourCostPerHour?: number | null;
 }
 
 export type IngredientLineReason = 'no-ingredient-price' | 'no-piece-price' | 'no-piece-weight';
+
+// Why a semi-finished line has no (complete) cost: the card is gone, it has no complete price yet, it holds itself (a loop), or it
+// sits deeper than MAX_SEMI_DEPTH cards inside each other (too deep: not a loop, told apart so the words are true).
+export type SemiLineReason = 'no-card' | 'card-no-price' | 'card-loop' | 'card-too-deep';
 
 // What ONE line of «Made of» is priced at and costs (componentLineCost).
 export interface ComponentLineCost {
@@ -184,7 +217,12 @@ export interface ComponentLineCost {
   cost: number | null;
   kg: number;
   partial: boolean;
-  reason: 'missing-recipe' | 'missing-ingredient' | 'no-recipe-cost' | IngredientLineReason | null;
+  reason: 'missing-recipe' | 'missing-ingredient' | 'no-recipe-cost' | IngredientLineReason | SemiLineReason | null;
+  // A SEMI-FINISHED line only (model 4): `cost` is the materials; these are what the card costs per kilo and what the line's
+  // labour is. null = not known (never 0). `labour` is null whenever the labour rate is not handed in.
+  materialsPerKg?: number | null;
+  labourPerKg?: number | null;
+  labour?: number | null;
 }
 
 // What ONE packaging item is priced at and costs per unit sold (packagingLineCost).
@@ -211,6 +249,11 @@ export type BatchRow =
   | {
     kind: 'recipe'; id: string; name: string; qty: number; cost: number | null;
     reason: 'missing-recipe' | 'no-recipe-cost' | null;
+  }
+  | {
+    // Model 4: a semi-finished card inside this one; `qty` is kilos, `labour` what the work on those kilos costs.
+    kind: 'semi'; id: string; name: string; qty: number; cost: number | null;
+    reason: SemiLineReason | null; labour: number | null;
   };
 
 export interface BatchTotals {
@@ -342,6 +385,12 @@ function normalizeComponent(raw: unknown): ProductComponent | null {
       unit: (LINE_UNITS as readonly unknown[]).includes(line.unit) ? line.unit as LineUnit : 'g',
     };
   }
+  if (line.kind === 'semi') {
+    const productId = line.productId != null ? String(line.productId).trim() : '';
+    if (!productId) return null;
+    const qtyKg = Number(line.qtyKg);
+    return { kind: 'semi', productId, qtyKg: Number.isFinite(qtyKg) && qtyKg >= 0 ? qtyKg : 0 };
+  }
   const recipeId = line.recipeId != null ? String(line.recipeId).trim() : '';
   if (!recipeId) return null;
   const qtyKg = Number(line.qtyKg);
@@ -391,6 +440,10 @@ export function normalizeProduct(raw: unknown): Product | null {
     rawGrams: gramsOf(doc.rawGrams),
     cookedGrams: gramsOf(doc.cookedGrams),
     model: Number.isInteger(doc.model) && (doc.model as number) > 0 ? doc.model as number : null,
+    // Model 4. Only a literal 'semi' makes a card semi-finished: missing or anything else is a finished product. A category id is
+    // a non-empty string of at most 64 characters, as the rules keep it; anything else is «no category».
+    kind: doc.kind === 'semi' ? 'semi' : 'finished',
+    categoryId: typeof doc.categoryId === 'string' && doc.categoryId.trim() !== '' && doc.categoryId.length <= 64 ? doc.categoryId : null,
   };
 }
 
@@ -495,6 +548,22 @@ export function ingredientLineCost(line: unknown, ingredient: unknown): Ingredie
 // A product below model 3 is converted first (currentProduct), so its cost is the one it always had.
 export function batchTotals(product: unknown, tables: CostTables = {}): BatchTotals {
   const p = currentProduct(product, tables);
+  return batchTotalsIn(p, tables, rootContext(p));
+}
+
+// Where a semi-finished line is being costed: how many cards deep, and which cards are open above (so a card that contains
+// itself, however far round, is found and not followed for ever).
+interface SemiContext {
+  depth: number;
+  chain: readonly string[];
+}
+
+function rootContext(p: Product | null): SemiContext {
+  return { depth: 0, chain: p && p.id ? [p.id] : [] };
+}
+
+// batchTotals for a product that is already current, with the semi-finished context it is read in.
+function batchTotalsIn(p: Product | null, tables: CostTables, ctx: SemiContext): BatchTotals {
   let cost = 0;
   let partial = false;
   const rows: BatchRow[] = [];
@@ -502,7 +571,18 @@ export function batchTotals(product: unknown, tables: CostTables = {}): BatchTot
   (p ? p.components : []).forEach(component => {
     // ⚠️ THE ONE PLACE A LINE IS COSTED (current app 02839278): the card's own «rate and this amount» under
     // each line (componentLineCost) and this total are the very same call, so they cannot disagree.
-    const line = componentLineCost(component, tables);
+    const line = componentLineCostIn(component, tables, ctx);
+    if (component.kind === 'semi') {
+      if (line.partial) partial = true;
+      const row = { kind: 'semi' as const, id: component.productId, name: line.name, qty: component.qtyKg };
+      if (line.cost === null) {
+        rows.push({ ...row, cost: null, reason: line.reason as SemiLineReason, labour: null });
+        return;
+      }
+      cost += line.cost;
+      rows.push({ ...row, cost: line.cost, reason: null, labour: line.labour ?? null });
+      return;
+    }
     const base = component.kind === 'ingredient'
       ? { kind: 'ingredient' as const, id: component.ingredientId, name: line.name, qty: component.qty, unit: component.unit }
       : { kind: 'recipe' as const, id: component.recipeId, name: line.name, qty: component.qtyKg };
@@ -541,7 +621,55 @@ export function componentLineCost(
   component: unknown,
   tables: CostTables = {},
 ): ComponentLineCost {
+  return componentLineCostIn(component, tables, { depth: 0, chain: [] });
+}
+
+// ⚠️ MISE 2, model 4 — A SEMI-FINISHED LINE (`{ kind: 'semi', productId, qtyKg }`): another Food cost card inside this one.
+// ONE ENGINE, NO SECOND SUM: the card's materials per kilo are the very figure `costPerKg(card, tables, { packaging: false }).total`
+// gives — its batch's lines' cost ÷ its batch's kilos, its own oven loss included — and the line costs qtyKg of it. Its labour per
+// kilo is the card's TOTAL labour (its own minutes, plus the labour of ITS semi-finished lines) ÷ the same kilos, and stays beside
+// the materials, never inside them (labour never enters the food cost %). No labour rate handed in → every labour figure is null.
+//   no card in tables.products         → no cost, reason 'no-card'
+//   the card holds this one → no cost, reason 'card-loop'; deeper than MAX_SEMI_DEPTH → no cost, reason 'card-too-deep'
+//   the card has no price (cost per kilo null) → no cost, reason 'card-no-price'; partly priced → costed and `partial`
+function semiLineCostIn(line: Loose, tables: CostTables, ctx: SemiContext): ComponentLineCost {
+  const productId = line.productId != null ? String(line.productId) : '';
+  const qtyKg = Number(line.qtyKg) || 0;
+  const none = (reason: SemiLineReason, name = ''): ComponentLineCost => ({
+    name, rate: null, rateUnit: null, cost: null, kg: 0, partial: true, reason,
+    materialsPerKg: null, labourPerKg: null, labour: null,
+  });
+  const card = lookup(tables.products, productId) as Loose | null;
+  if (!card) return none('no-card');
+  const name = String(card.name != null ? card.name : '').trim();
+  // The loop test comes FIRST: a card that holds itself is a loop however deep the walk has gone.
+  if (ctx.chain.includes(productId)) return none('card-loop', name);
+  if (ctx.depth >= MAX_SEMI_DEPTH) {
+    // Too deep, or a ring long enough to run out the depth before it closes: a card that can reach itself is a loop.
+    return none(semiReachable(tables.products, productId).has(productId) ? 'card-loop' : 'card-too-deep', name);
+  }
+
+  const inner = currentProduct({ ...card, id: productId }, tables);
+  const next: SemiContext = { depth: ctx.depth + 1, chain: [...ctx.chain, productId] };
+  const batch = batchTotalsIn(inner, tables, next);
+  if (batch.rows.some(row => row.kind === 'semi' && row.reason === 'card-loop')) return none('card-loop', name);
+  if (batch.rows.some(row => row.kind === 'semi' && row.reason === 'card-too-deep')) return none('card-too-deep', name);
+
+  if (!(batch.cost > 0) || !(batch.kg > 0)) return { ...none('card-no-price', name), partial: true };
+  const materialsPerKg = roundTo(batch.cost * (1 / batch.kg), 4);
+  const labourBatch = labourWithSemis(inner, tables, batch);
+  const labourPerKg = labourBatch === null ? null : roundTo(labourBatch / batch.kg, 4);
+  return {
+    name, rate: materialsPerKg, rateUnit: 'kg',
+    cost: roundTo(qtyKg * materialsPerKg, 4), kg: qtyKg, partial: batch.partial, reason: batch.partial ? 'card-no-price' : null,
+    materialsPerKg, labourPerKg,
+    labour: labourBatch === null ? null : roundTo(qtyKg * (labourBatch / batch.kg), 4),
+  };
+}
+
+function componentLineCostIn(component: unknown, tables: CostTables, ctx: SemiContext): ComponentLineCost {
   const line = component as Loose | null | undefined;
+  if (line && line.kind === 'semi') return semiLineCostIn(line, tables, ctx);
   if (line && line.kind === 'ingredient') {
     const ingredient = lookup(tables.ingredients, line.ingredientId) as Loose | null;
     if (!ingredient) {
@@ -770,7 +898,7 @@ export function isLegacyProduct(product: unknown): boolean {
 }
 
 function isLegacy(p: Product): boolean {
-  return p.model === null || p.model < PRODUCT_MODEL;
+  return p.model === null || p.model < RAW_LINES_MODEL;
 }
 
 export function fromLegacyProduct(product: unknown, tables: CostTables = {}): Product | null {
@@ -779,6 +907,8 @@ export function fromLegacyProduct(product: unknown, tables: CostTables = {}): Pr
   let raw = 0;
   let cooked = 0;
   const components = p.components.map<ProductComponent>(component => {
+    // A semi-finished line cannot exist below model 4: kept as it is, its kilos counted like a recipe line's.
+    if (component.kind === 'semi') { raw += component.qtyKg; cooked += component.qtyKg; return component; }
     if (component.kind === 'ingredient') {
       const kg = lineRawKg(component, tables);
       if (kg !== null) { raw += kg; cooked += kg; }
@@ -941,9 +1071,30 @@ export function labourBatchCost(product: unknown, tables: CostTables = {}): numb
   return roundTo(p.labourMinutes / 60 * people * rate, 4);
 }
 
+// ⚠️ MISE 2, model 4: the WHOLE labour of one batch — the card's own work, plus the labour of every semi-finished card it holds
+// (qtyKg of each, at that card's labour per kilo, recursively). null while nothing in it has a labour figure, and ALWAYS null when
+// no labour rate is handed in (the person may not see it): never 0. `batch` is the card's own batchTotals, whose semi rows carry
+// each line's labour. Without semi-finished lines this is labourBatchCost, as it always was.
+function labourWithSemis(p: Product | null, tables: CostTables, batch: BatchTotals): number | null {
+  if (!p) return null;
+  const own = labourBatchCost(p, tables);
+  let semi: number | null = null;
+  for (const row of batch.rows) {
+    if (row.kind === 'semi' && row.labour !== null) semi = (semi ?? 0) + row.labour;
+  }
+  if (own === null && semi === null) return null;
+  return roundTo((own ?? 0) + (semi ?? 0), 4);
+}
+
+// The same, for a card given as it was read (Mise 2 only: the screens ask for the total labour of one batch).
+export function totalLabourBatchCost(product: unknown, tables: CostTables = {}): number | null {
+  const p = currentProduct(product, tables);
+  return labourWithSemis(p, tables, batchTotalsIn(p, tables, rootContext(p)));
+}
+
 // One unit's share of the labour — the same division as its share of the materials.
 function labourPerUnit(p: Product, batch: BatchTotals, tables: CostTables): number | null {
-  const labour = labourBatchCost(p, tables);
+  const labour = labourWithSemis(p, tables, batch);
   if (labour === null) return null;
   const share = perUnitOf(p, batch, labour);
   return share === null ? null : roundTo(share, 4);
@@ -979,7 +1130,8 @@ export function productionCost(product: unknown, tables: CostTables = {}): Produ
     // `p` is there whenever there is a unit cost.
     unit: unitCost === null ? null : saleUnitOf(p as Product),
     // The work, beside the materials — never inside unitCost (see labourBatchCost).
-    labourBatchCost: p ? labourBatchCost(p, tables) : null,
+    // Model 4: with the labour of the semi-finished cards inside (labourWithSemis); the card's own work alone when it holds none.
+    labourBatchCost: p ? labourWithSemis(p, tables, batch) : null,
     labourUnitCost,
     totalUnitCost: unitCost !== null && labourUnitCost !== null ? roundTo(unitCost + labourUnitCost, 4) : null,
     // ⚠️ Packaging that cannot yet be multiplied out — no way of selling said — is missing from the batch
@@ -988,6 +1140,140 @@ export function productionCost(product: unknown, tables: CostTables = {}): Produ
     batch,
     packaging,
   };
+}
+
+// ── Semi-finished cards (Mise 2, model 4, 20 Nov 2026) ───────────────────────
+
+// What one kilo of a card costs, for the screens that show a semi-finished card (the list's pill, the picker, the editor's «Cost
+// per kg», the line row's «X €/kg»). ⚠️ NOTHING HERE IS A SECOND SUM: it is the line cost of a semi-finished line (the same code
+// the line of a card using it is costed by), taken at one kilo.
+//   materialsPerKg   the card's lines' cost ÷ its batch's kilos, or null (no price, no weight)
+//   labourPerKg      its total labour (own + its semi-finished cards') ÷ the same kilos; null without a rate or without minutes
+//   totalPerKg       materials + labour where labour is known, the materials alone otherwise; null with no materials
+//   partial          something in it has no price yet
+//   reason           'card-loop' | 'card-too-deep' | 'card-no-price' when there is no cost per kilo at all
+export interface SemiCardCost {
+  materialsPerKg: number | null;
+  labourPerKg: number | null;
+  totalPerKg: number | null;
+  partial: boolean;
+  reason: SemiLineReason | null;
+}
+
+export function semiCardCost(product: unknown, tables: CostTables = {}): SemiCardCost {
+  const doc = product as Loose | null | undefined;
+  const id = doc && doc.id != null ? String(doc.id).trim() : '';
+  if (!doc || typeof doc !== 'object') return { materialsPerKg: null, labourPerKg: null, totalPerKg: null, partial: true, reason: 'no-card' };
+  // The card is costed exactly as a line holding one kilo of it would be, FROM THE CARD GIVEN (a draft being edited included): it
+  // takes its own id's place in the table, so what it holds is read as it stands now and a loop back to it is seen.
+  const key = id || '__draft__';
+  // ⚠️ DEPTH -1: the card itself is not a level, so ITS lines start at 0 exactly as batchTotals(card) starts them — the «Made of»
+  // total, the «Cost per kg» and the list's pill always agree on how deep is too deep.
+  const line = semiLineCostIn({ kind: 'semi', productId: key, qtyKg: 1 }, withDraft(tables, key, doc), { depth: -1, chain: [] });
+  const materialsPerKg = line.materialsPerKg ?? null;
+  const labourPerKg = line.labourPerKg ?? null;
+  return {
+    materialsPerKg,
+    labourPerKg,
+    totalPerKg: materialsPerKg === null ? null : roundTo(materialsPerKg + (labourPerKg ?? 0), 4),
+    partial: line.partial,
+    reason: line.cost === null ? (line.reason as SemiLineReason) : null,
+  };
+}
+
+// The same tables with one more card in the products table, under the given id.
+function withDraft(tables: CostTables, id: string, doc: Loose): CostTables {
+  const known = tables.products;
+  const copy = new Map<string, unknown>();
+  if (known instanceof Map) known.forEach((value, key) => copy.set(key, value));
+  else if (known) for (const [key, value] of Object.entries(known)) copy.set(key, value);
+  copy.set(id, doc);
+  return { ...tables, products: copy };
+}
+
+// Every card reachable from `fromId` through semi-finished lines (not counting `fromId` itself unless it is on a loop).
+// Pure, with a visited set, so a loop in the data ends.
+export function semiReachable(products: Table | null | undefined, fromId: unknown): Set<string> {
+  const out = new Set<string>();
+  const start = fromId == null ? '' : String(fromId).trim();
+  if (!start) return out;
+  const stack = [start];
+  const done = new Set<string>();
+  while (stack.length) {
+    const id = stack.pop() as string;
+    if (done.has(id)) continue;
+    done.add(id);
+    const card = normalizeProduct(lookup(products, id));
+    if (!card) continue;
+    for (const component of card.components) {
+      if (component.kind !== 'semi') continue;
+      out.add(component.productId);
+      stack.push(component.productId);
+    }
+  }
+  return out;
+}
+
+// Would putting card `candidateId` inside card `productId` make a loop: the card itself, or one that already holds it, however far
+// down. The picker greys those out; costing refuses them anyway ('card-loop').
+export function wouldLoop(products: Table | null | undefined, productId: unknown, candidateId: unknown): boolean {
+  const id = productId == null ? '' : String(productId).trim();
+  const candidate = candidateId == null ? '' : String(candidateId).trim();
+  if (!candidate) return false;
+  if (candidate === id) return true;
+  return id !== '' && semiReachable(products, candidate).has(id);
+}
+
+// How many cards sit inside each other below this one: 0 for a card with no semi-finished line, else 1 + the deepest card it holds.
+// Cycle-safe (a card already on the way down counts 0), so a loop in the data ends.
+function semiHeight(products: Table | null | undefined, id: string, way: readonly string[]): number {
+  if (way.includes(id)) return 0;
+  const card = normalizeProduct(lookup(products, id));
+  if (!card) return 0;
+  let height = 0;
+  for (const component of card.components) {
+    if (component.kind === 'semi') height = Math.max(height, 1 + semiHeight(products, component.productId, [...way, id]));
+  }
+  return height;
+}
+
+// The longest run of semi-finished lines from any card down to `id` (0 for the card itself): how far above it the cards that use it go.
+function semiDepthAbove(products: Table | null | undefined, id: string, way: readonly string[]): number {
+  if (way.includes(id) || !products) return 0;
+  let above = 0;
+  const all: unknown[] = products instanceof Map ? [...products.values()] : Object.values(products as object);
+  for (const raw of all) {
+    const card = normalizeProduct(raw);
+    if (!card || card.id === id || way.includes(card.id)) continue;
+    if (card.components.some(c => c.kind === 'semi' && c.productId === id)) above = Math.max(above, 1 + semiDepthAbove(products, card.id, [...way, id]));
+  }
+  return above;
+}
+
+// Would putting card `candidateId` inside card `productId` stack more than MAX_SEMI_DEPTH cards: for the card itself, and for every
+// card that already holds it (they gain the same levels). The picker greys these out; costing refuses them anyway ('card-too-deep').
+// A loop is wouldLoop's: this answers false for it.
+export function wouldBeTooDeep(products: Table | null | undefined, productId: unknown, candidateId: unknown): boolean {
+  const id = productId == null ? '' : String(productId).trim();
+  const candidate = candidateId == null ? '' : String(candidateId).trim();
+  if (!candidate || wouldLoop(products, id, candidate)) return false;
+  const below = 1 + semiHeight(products, candidate, id ? [id] : []);
+  const above = id === '' ? 0 : semiDepthAbove(products, id, []);
+  return above + below > MAX_SEMI_DEPTH;
+}
+
+// The cards that hold card `cardId` on a semi-finished line, with the kilos each uses — «Used in» on the card. In the order given.
+export function cardsUsing<T>(products: readonly T[] | null | undefined, cardId: unknown): { product: T; qtyKg: number }[] {
+  const id = cardId == null ? '' : String(cardId).trim();
+  if (!id || !Array.isArray(products)) return [];
+  const out: { product: T; qtyKg: number }[] = [];
+  for (const raw of products as T[]) {
+    const p = normalizeProduct(raw);
+    if (!p || p.id === id) continue;
+    const qtyKg = p.components.reduce((sum, c) => (c.kind === 'semi' && c.productId === id ? sum + c.qtyKg : sum), 0);
+    if (p.components.some(c => c.kind === 'semi' && c.productId === id)) out.push({ product: raw, qtyKg });
+  }
+  return out;
 }
 
 // ── Opened from a recipe ─────────────────────────────────────────────────────
@@ -1002,7 +1288,7 @@ export function productsUsingRecipe<T>(products: readonly T[] | null | undefined
   if (!id || !Array.isArray(products)) return [];
   return (products as T[]).filter(raw => {
     const p = normalizeProduct(raw);
-    return !!p && p.components.some(c => c.kind !== 'ingredient' && c.recipeId === id);
+    return !!p && p.components.some(c => c.kind !== 'ingredient' && c.kind !== 'semi' && c.recipeId === id);
   });
 }
 
@@ -1245,6 +1531,10 @@ const UNPRICED_REASON_TEXT = Object.freeze({
   'packaging-no-units': 'fc.unpriced.packagingNoUnits',
   'recipe-no-price': 'fc.unpriced.recipeNoPrice',
   'gone': 'fc.unpriced.gone',
+  // Model 4: a semi-finished card inside this one.
+  'card-no-price': 'fc.unpriced.cardNoPrice',
+  'card-loop': 'fc.unpriced.cardLoop',
+  'card-too-deep': 'fc.unpriced.cardTooDeep',
 } as const);
 
 // The one place an unpriced reason becomes words. ADAPTED: the translator is the last argument. The original
@@ -1302,7 +1592,13 @@ export function unpricedParts(product: unknown, tables: CostTables = {}, t: Pric
   };
 
   p.components.forEach(component => {
-    const line = componentLineCost(component, tables);
+    const line = componentLineCostIn(component, tables, rootContext(p));
+    if (component.kind === 'semi') {
+      // Model 4: a card inside this one that is gone, loops, or has no complete price yet.
+      if (line.reason === 'no-card') add(t('fc.thisCardNoLonger'), '', 'gone');
+      else if (line.reason) add(line.name, '', line.reason);
+      return;
+    }
     if (component.kind === 'ingredient') {
       if (line.reason === 'missing-ingredient') add(t('fc.thisItemNoLonger'), '', 'gone');
       else if (line.cost === null) add(line.name, '', line.reason as string);
@@ -1393,6 +1689,8 @@ export function snapshotWorthTaking(before: unknown, after: unknown, tables: Cos
   const b = currentProduct(after, tables);
   if (!b) return false;
   if (!a) return true;                                  // the first save is a point
+  // A semi-finished card taking its first step as a finished product starts its history here (finished → semi does not: it takes none).
+  if (a.kind === 'semi' && b.kind !== 'semi') return true;
   if (a.sellingPrice !== b.sellingPrice) return true;
   if (a.vatRate !== b.vatRate) return true;             // it changes the net price
   if (a.sellingMode !== b.sellingMode) return true;
@@ -1405,9 +1703,10 @@ export function snapshotWorthTaking(before: unknown, after: unknown, tables: Cos
 // change. Sorted, because the editor can reorder rows and nobody means anything by it.
 function compositionKey(product: Product): string {
   const parts = [
+    // A change of semi-finished lines is a change of composition (model 4); `kind` and `categoryId` alone are not.
     ...product.components.map(c => (c.kind === 'ingredient'
       ? `i:${c.ingredientId}:${c.qty}:${c.unit}`
-      : `r:${c.recipeId}:${c.qtyKg}`)),
+      : c.kind === 'semi' ? `s:${c.productId}:${c.qtyKg}` : `r:${c.recipeId}:${c.qtyKg}`)),
     ...product.packaging.map(p => `p:${p.ingredientId}:${p.qtyPcs}`),
     // Mise 2: the two weights decide what the batch weighs, so what a kilo costs.
     `w:${product.rawGrams ?? ''}:${product.cookedGrams ?? ''}`,
@@ -1463,10 +1762,24 @@ function frozenPricesFor(product: Partial<Product>, tables: CostTables): Record<
     });
   };
 
-  (product.components || []).forEach(c => {
-    if (c.kind === 'ingredient') freezeIngredient(c.ingredientId);
-    else walkRecipe(c.recipeId, 1);
-  });
+  // Model 4: a semi-finished card is walked into its own lines (recipes, ingredients, and cards inside it), with the same depth
+  // guard and a loop guard, so a frozen point can explain a change that came from inside it.
+  const seenCards = new Set<string>();
+  const walkCard = (cardId: string, depth: number): void => {
+    if (depth > MAX_SEMI_DEPTH || seenCards.has(cardId)) return;
+    seenCards.add(cardId);
+    const card = normalizeProduct(lookup(tables.products, cardId));
+    if (card) walkComponents(card.components, depth);
+  };
+  const walkComponents = (components: readonly ProductComponent[], depth: number): void => {
+    components.forEach(c => {
+      if (c.kind === 'ingredient') freezeIngredient(c.ingredientId);
+      else if (c.kind === 'semi') walkCard(c.productId, depth + 1);
+      else walkRecipe(c.recipeId, 1);
+    });
+  };
+  if (product.id) seenCards.add(product.id);
+  walkComponents(product.components || [], 0);
   (product.packaging || []).forEach(item => {
     const ingredient = lookup(tables.ingredients, item.ingredientId) as Loose | null;
     const each = ingredient && ingredient.priceUnit === 'pcs' ? positiveNumber(ingredient.pricePerUnit) : null;

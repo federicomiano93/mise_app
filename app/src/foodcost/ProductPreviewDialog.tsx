@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from 'react';
-import { productPreview } from '@mise/shared/foodcost-model';
+import { productPreview, semiCardCost } from '@mise/shared/foodcost-model';
 import { useT } from '../i18n/useT';
 import { foodcostTranslate } from './foodcostWords';
 import { useMoney } from '../session/useMoney';
@@ -8,6 +8,7 @@ import { Dialog } from '../ui/Dialog';
 import { useStatusMessage } from '../ui/StatusMessage';
 import { useFoodcost } from './FoodcostContext';
 import { PreviewPanel, previewCaption } from './PreviewPanel';
+import { semiFigures } from './semiWords';
 import { summaryExtras } from './summaryExtras';
 
 type Props = {
@@ -48,13 +49,16 @@ export function ProductPreviewDialog({ id, onOpen, onClose }: Props) {
 
   if (product === null || preview === null) return null;
 
+  // Model 4: a semi-finished card has no selling price to preview: it says what a kilo of it costs (the list's own words).
+  const semi = product.kind === 'semi' ? semiFigures(t, money, semiCardCost(product, tables)) : null;
+
   return (
     <Dialog
       isOpen
       dismissable
       onClose={onClose}
       title={product.name === '' ? t('fc.untitledProduct') : product.name}
-      message={previewCaption(t, preview)}
+      message={semi === null ? previewCaption(t, preview) : t('fc.semi.tag')}
       actions={
         <>
           <Button onPress={onClose}>{t('fc.preview.close')}</Button>
@@ -62,7 +66,12 @@ export function ProductPreviewDialog({ id, onOpen, onClose }: Props) {
         </>
       }
     >
-      <PreviewPanel preview={preview} money={money} extras={extras} />
+      {semi === null ? <PreviewPanel preview={preview} money={money} extras={extras} /> : (
+        <>
+          <p><strong>{semi.pill}</strong></p>
+          {semi.sub === '' ? null : <p>{semi.sub}</p>}
+        </>
+      )}
     </Dialog>
   );
 }

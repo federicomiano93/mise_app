@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { Ref } from 'react';
 import { BookOpen, Check } from 'lucide-react';
+import { Radio, RadioGroup } from 'react-aria-components';
 import { useBlocker, useLocation, useNavigate } from 'react-router';
 import type { BlockerFunction } from 'react-router';
 import {
-  PACK_UNITS, currentProduct, productCooking, productsUsingRecipe, vatRatesFor, vatSelection,
+  PACK_UNITS, cardsUsing, currentProduct, labourBatchCost, productCooking, productsUsingRecipe, totalLabourBatchCost, vatRatesFor, vatSelection,
 } from '@mise/shared/foodcost-model';
+import { fcMoney } from '@mise/shared/fc-number';
 import { otherProductsUsing, readWeighing, weighingPatches } from '@mise/shared/foodcost-weighing';
-import type { LineUnit, PackUnit, Product, ProductDraft, SellingMode } from '@mise/shared/foodcost-model';
+import type { LineUnit, PackUnit, Product, ProductDraft, ProductKind, SellingMode } from '@mise/shared/foodcost-model';
 import type { KiloLineUnit } from '@mise/shared/line-quantity';
 import { normalizeLossPct } from '@mise/shared/catalogue-model';
 import { countryOf } from '@mise/shared/market';
@@ -26,13 +28,13 @@ import { useStatusMessage } from '../ui/StatusMessage';
 import { useConfirm } from '../ui/useConfirm';
 import { useMediaQuery } from '../ui/useMediaQuery';
 import { useFoodcost, useFoodcostStore } from './FoodcostContext';
-import { entryPath, historyPath } from './foodcostPath';
+import { entryPath, historyPath, productPath } from './foodcostPath';
 import type { Origin } from './foodcostPath';
 import { FROM_PRODUCT, entryState, pushDepth } from './foodcostNav';
 import { useHandBack } from './handBack';
 import { LineRow } from './LineRow';
 import type { LineKind } from './LineRow';
-import { ingredientOf, lineMoney, lineName, lineNote } from './lineNotes';
+import { ingredientOf, lineMoney, lineName, lineNote, semiLineView } from './lineNotes';
 import { lineUnits, openingUnit } from './lineUnits';
 import { supplierOf } from './supplierOf';
 import { MadeOfFoot } from './MadeOfFoot';
@@ -43,6 +45,8 @@ import type { Choice, PickMode } from './PickDialog';
 import { CardSection, CardStack } from './CardSection';
 import { CookingSection } from './CookingSection';
 import { ProductActions } from './ProductActions';
+import { SemiCostBlock, UsedInBlock } from './SemiSections';
+import { deleteQuestion } from './semiWords';
 import { SuggestedPrice } from './SuggestedPrice';
 import { PerKgBlock } from './PerKgBlock';
 import { ProductSummary } from './ProductSummary';
@@ -361,15 +365,18 @@ export function ProductForm({ id, product, draft, origin, titleRef, onSaved, onB
 
   const addLine = () => {
     setPicking({
-      mode: working.components.length > 0 ? 'line' : 'recipe',
+      // Model 4: a line may be a recipe, an ingredient or a semi-finished card, whether or not the card has lines yet.
+      mode: 'line',
       query: '',
       apply: choice => {
         const key = newLineKey();
         edit(current => ({
           ...current,
-          components: [...current.components, choice.kind === 'recipe'
-            ? { key, kind: 'recipe', recipeId: choice.id, qty: '', unit: RECIPE_LINE_OPENS_IN }
-            : { key, kind: 'ingredient', ingredientId: choice.id, qty: '', unit: openingUnit(ingredientOf(snap.tables, choice.id)) }],
+          components: [...current.components, choice.kind === 'semi'
+            ? { key, kind: 'semi', productId: choice.id, qty: '' }
+            : choice.kind === 'recipe'
+              ? { key, kind: 'recipe', recipeId: choice.id, qty: '', unit: RECIPE_LINE_OPENS_IN }
+              : { key, kind: 'ingredient', ingredientId: choice.id, qty: '', unit: openingUnit(ingredientOf(snap.tables, choice.id)) }],
         }));
         focusQtyOf.current = key;
       },
@@ -398,6 +405,7 @@ export function ProductForm({ id, product, draft, origin, titleRef, onSaved, onB
           ...current,
           components: current.components.map<WorkingComponent>(line => {
             if (line.key !== key) return line;
+            if (line.kind === 'semi') return { ...line, productId: choice.id };
             return line.kind === 'recipe' ? { ...line, recipeId: choice.id } : { ...line, ingredientId: choice.id };
           }),
           packaging: current.packaging.map(line => (line.key === key ? { ...line, ingredientId: choice.id } : line)),
@@ -560,7 +568,7 @@ export function ProductForm({ id, product, draft, origin, titleRef, onSaved, onB
     try {
       const ok = await confirm({
         title: t('fc.deleteProduct'),
-        message: t('fc.deleteProductQ', { name: initial?.name || t('fc.thisProduct') }),
+        message: deleteQuestion(t, initial?.name || t('fc.thisProduct'), cardsUsing(snap.products, id).length),
         okLabel: t('ui.delete'),
         cancelLabel: t('common.cancel'),
         danger: true,
@@ -581,11 +589,25 @@ export function ProductForm({ id, product, draft, origin, titleRef, onSaved, onB
   const vatChoices = vatRatesFor(country);
   const nameInvalid = showNameError && working.name.trim() === '';
   const labourNeedsRate = (costed.labourMinutes ?? 0) > 0 && canManage && snap.settingsLoaded && !(Number(snap.tables.labourCostPerHour) > 0);
+  const semiCard = working.kind === 'semi';
+  const usedIn = id === null ? 0 : cardsUsing(snap.products, id).length;
+  // A category whose document is gone reads as none: the select then shows «No category».
+  const categoryValue = snap.categories.some(category => category.id === working.categoryId) ? working.categoryId : '';
+  // Model 4: the labour of the semi-finished cards inside, apart from the card's own work (said only when both exist).
+  const ownLabour = labourBatchCost(costed, snap.tables);
+  const allLabour = totalLabourBatchCost(costed, snap.tables);
+  const labourSplit = ownLabour !== null && allLabour !== null && ownLabour > 0 && allLabour - ownLabour > 0.00005
+    ? { own: ownLabour, semi: allLabour - ownLabour }
+    : null;
+  // «Used in» opens another card the way the history button does: replacing on the split, one level down on a phone.
+  const openCard = (cardId: string) => {
+    void navigate(productPath(cardId), split ? { replace: true, state } : { state: { ...FROM_PRODUCT, ...pushDepth(state) } });
+  };
   const heading = id === null ? t('fc.newProduct') : (initial?.name ?? '') || t('fc.untitledProduct');
 
   // A phone with no local copies has not heard the recipes or the prices yet: a line is not «gone»
   // until what it points at has been asked for.
-  const loaded = { recipes: snap.recipesLoaded, ingredients: snap.ingredientsLoaded };
+  const loaded = { recipes: snap.recipesLoaded, ingredients: snap.ingredientsLoaded, products: snap.productsLoaded };
 
   const renderLine = (line: WorkingComponent | Working['packaging'][number], kind: LineKind) => (
     <LineRow
@@ -596,6 +618,7 @@ export function ProductForm({ id, product, draft, origin, titleRef, onSaved, onB
       supplier={'kind' in line && line.kind === 'ingredient' ? supplierOf(ingredientOf(snap.tables, line.ingredientId), snap.suppliers) : ''}
       cost={lineMoney(t, money, line, snap.tables).text}
       note={lineNote(t, money, line, snap.tables, loaded)}
+      {...('kind' in line && line.kind === 'semi' ? { semi: semiLineView(t, money, line, snap.tables, loaded) } : {})}
       qty={line.qty}
       unit={'unit' in line ? line.unit : undefined}
       units={'kind' in line && line.kind === 'ingredient' ? lineUnits(ingredientOf(snap.tables, line.ingredientId), line.unit) : undefined}
@@ -656,7 +679,7 @@ export function ProductForm({ id, product, draft, origin, titleRef, onSaved, onB
       />
 
       <div className={shell.body}>
-        <ProductSummary product={costed} tables={snap.tables} />
+        {semiCard ? null : <ProductSummary product={costed} tables={snap.tables} />}
 
         {/* The sections, in the order they are filled (11 Nov 2026: no «Full card» box around them any more, the figures are the
             summary's and the last section is the closed «Cost breakdown»). Nothing here can be closed, so a field Save checks can
@@ -678,6 +701,42 @@ export function ProductForm({ id, product, draft, origin, titleRef, onSaved, onB
             <p className={styles.nameNote} aria-live="polite">{nameNote}</p>
           </div>
 
+          {/* Model 4: the kind of card and its category. The caption under the kind says what the choice means. */}
+          <div className={styles.field}>
+            <RadioGroup
+              className={styles.kind}
+              aria-label={t('fc.kind.label')}
+              value={working.kind}
+              onChange={value => { edit(current => ({ ...current, kind: value as ProductKind })); }}
+            >
+              <span className={styles.label} aria-hidden="true">{t('fc.kind.label')}</span>
+              <div className={styles.segments}>
+                <Radio value="finished" className={styles.segment}>{t('fc.kind.finished')}</Radio>
+                <Radio value="semi" className={styles.segment}>{t('fc.kind.semi')}</Radio>
+              </div>
+            </RadioGroup>
+            <p className={styles.note}>{t(working.kind === 'semi' ? 'fc.kind.semiHint' : 'fc.kind.finishedHint')}</p>
+            {/* A semi-finished card that other cards use, about to become a finished product: said here, no dialog. */}
+            {initial?.kind === 'semi' && working.kind === 'finished' && usedIn > 0
+              ? <p className={styles.note} data-testid="kind-used-note">{t('fc.kind.semiUsedToFinished', { n: usedIn })}</p>
+              : null}
+          </div>
+
+          <div className={styles.field}>
+            <label htmlFor={`${ids}-category`} className={styles.label}>{t('fc.category.label')}</label>
+            <select
+              id={`${ids}-category`}
+              className={styles.select}
+              value={categoryValue}
+              onChange={event => { edit(current => ({ ...current, categoryId: event.target.value })); }}
+            >
+              <option value="">{t('fc.cat.none')}</option>
+              {snap.categories.map(category => <option key={category.id} value={category.id}>{category.name}</option>)}
+            </select>
+          </div>
+
+          {/* How it is sold is for a card that is sold: a semi-finished one has no selling price, no pieces and no pack. */}
+          {semiCard ? null : (<>
           <div className={styles.field}>
             <label htmlFor={`${ids}-mode`} className={styles.label}>{t('fc.sold')}</label>
             <select
@@ -722,6 +781,7 @@ export function ProductForm({ id, product, draft, origin, titleRef, onSaved, onB
               {numberBox('piecesPerBatch', `${ids}-pieces`)}
             </div>
           ) : null}
+          </>)}
         </CardSection>
 
         <CardSection title={t('fc.madeOf')} help={t('fc.help.made')}>
@@ -732,7 +792,7 @@ export function ProductForm({ id, product, draft, origin, titleRef, onSaved, onB
           )}
           <MadeOfFoot product={costed} tables={snap.tables} />
           <Button className={styles.add} onPress={addLine}>
-            {working.components.length > 0 ? t('fc.addRecipeOrIngredient') : t('fc.addRecipe')}
+            {t('fc.addRecipeIngredientSemi')}
           </Button>
         </CardSection>
 
@@ -757,6 +817,7 @@ export function ProductForm({ id, product, draft, origin, titleRef, onSaved, onB
           />
         </CardSection>
 
+        {semiCard ? null : (
         <CardSection title={t('fc.packaging')} help={t('fc.help.pack')}>
           {working.packaging.length === 0 ? null : (
             <>
@@ -770,6 +831,7 @@ export function ProductForm({ id, product, draft, origin, titleRef, onSaved, onB
           )}
           <Button className={styles.add} onPress={addPackaging}>{t('fc.addPackaging')}</Button>
         </CardSection>
+        )}
 
         <CardSection title={t('fc.labour')} help={t('fc.help.work')}>
           <div className={styles.pair}>
@@ -785,8 +847,24 @@ export function ProductForm({ id, product, draft, origin, titleRef, onSaved, onB
           {/* Minutes typed but no rate to turn them into money: say where the rate is set — and only to somebody who can set
               it; an employee is simply shown no labour money. */}
           <p className={styles.note} aria-live="polite">{labourNeedsRate ? t('fc.labourSetRate') : ''}</p>
+          {/* Model 4: the labour of the semi-finished cards inside is part of this card's labour; both halves are said when both exist. */}
+          {labourSplit === null ? null : (
+            <p className={styles.note}>{t('fc.labourSplit', { semi: fcMoney(labourSplit.semi, money), own: fcMoney(labourSplit.own, money) })}</p>
+          )}
         </CardSection>
 
+        {semiCard ? (
+          <>
+            <SemiCostBlock product={costed} tables={snap.tables} labourNote={labourNeedsRate ? t('fc.labourSetRate') : ''} />
+            {id === null ? null : <UsedInBlock cardId={id} onOpen={openCard} />}
+            {/* The price fields are kept in the working copy (they come back if the card is switched back to a finished product),
+                but are neither drawn nor required while it is semi-finished. */}
+            <CardSection title={t('fc.section.price')} help={t('fc.help.price')}>
+              <p className={styles.note}>{t('fc.semi.noPriceSection')}</p>
+            </CardSection>
+          </>
+        ) : (
+        <>
         {/* The price first, then the VAT it includes and the target it is worked against; under them, the price those suggest
             (13 Sep 2026). */}
         <CardSection title={t('fc.section.price')} help={t('fc.help.price')}>
@@ -837,6 +915,8 @@ export function ProductForm({ id, product, draft, origin, titleRef, onSaved, onB
             />
           </CardStack>
         </CardSection>
+        </>
+        )}
         <PerKgBlock product={costed} tables={snap.tables} />
 
         {/* History and Delete stay at the bottom of the box, small and low-key; a new product has neither. */}
@@ -856,6 +936,8 @@ export function ProductForm({ id, product, draft, origin, titleRef, onSaved, onB
         <PickDialog
           mode={picking.mode}
           initialQuery={picking.query}
+          cardId={productId}
+          usedSemiIds={working.components.flatMap(line => (line.kind === 'semi' ? [line.productId] : []))}
           onChoose={choice => {
             const { apply } = picking;
             setPicking(null);

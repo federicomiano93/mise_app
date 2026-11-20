@@ -2704,8 +2704,22 @@ service cloud.firestore {
                'bakery', 'name', 'components', 'packaging', 'sellingMode',
                'piecesPerBatch', 'packSize', 'packUnit', 'sellingPrice', 'vatRate',
                'foodCostTarget', 'model', 'labourMinutes', 'labourPeople', 'noWeightLoss',
-               'rawGrams', 'cookedGrams'
+               'rawGrams', 'cookedGrams', 'kind', 'categoryId'
              ])
+          // Mise 2 model 4 (Federico, 20 Nov 2026 — the cakes plan, step 1): a card is a finished
+          // product or a SEMI-FINISHED one (a ganache, a sponge), the latter priced per kilo and
+          // put inside other cards on a `{kind:'semi', productId, qtyKg}` line (not validated
+          // here, like every line). Absent = finished, so every card saved before stays what it was.
+          && (!('kind' in request.resource.data)
+              || request.resource.data.kind in ['finished', 'semi'])
+          // The card's group in the list: the id of a foodcost-categories document (below), or
+          // null / absent = «no category». An id whose category was removed reads as none, so
+          // removing a category rewrites no card.
+          && (!('categoryId' in request.resource.data)
+              || request.resource.data.categoryId == null
+              || (request.resource.data.categoryId is string
+                  && request.resource.data.categoryId.size() > 0
+                  && request.resource.data.categoryId.size() <= 64))
           && request.resource.data.name is string
           && request.resource.data.name.size() > 0
           && request.resource.data.name.size() <= 200
@@ -2730,7 +2744,7 @@ service cloud.firestore {
           && (!('packUnit' in request.resource.data)
               || request.resource.data.packUnit == null
               || request.resource.data.packUnit in ['g', 'kg', 'pcs'])
-          // ⚠️ The ceiling is the app's PRODUCT_MODEL exactly — Mise 2's, 3 since 10 Nov 2026
+          // ⚠️ The ceiling is the app's PRODUCT_MODEL exactly — Mise 2's, 4 since 20 Nov 2026
           // (shared/src/foodcost-model.ts; the current app's js/foodcost/foodcost-model.js
           // still writes 2), pinned by tests/model-ceiling.test.mjs and
           // shared/src/model-ceiling.spec.ts: a higher number saved by hand would make the
@@ -2739,10 +2753,13 @@ service cloud.firestore {
           // the old-phone guard below, the current app can no longer save over a product Mise 2
           // has saved — it would write raw kilos back as finished ones — and nothing can lower a
           // product back to 2: reverting the app does not undo it.
+          // ⚠️⚠️ 4 (20 Nov 2026) = the card may carry `kind`, `categoryId` and semi-finished lines.
+          // A phone still on model 3 would save a card back WITHOUT them (it writes whole) — the
+          // old-phone guard below refuses it instead. Nothing lowers a card back to 3 either.
           && (!('model' in request.resource.data)
               || (request.resource.data.model is int
                   && request.resource.data.model >= 1
-                  && request.resource.data.model <= 3))
+                  && request.resource.data.model <= 4))
           && (!('labourMinutes' in request.resource.data)
               || request.resource.data.labourMinutes == null
               || (request.resource.data.labourMinutes is number
@@ -2841,6 +2858,33 @@ service cloud.firestore {
 
           allow update, delete: if false;
         }
+      }
+
+      // ── Food cost categories (Federico, 20 Nov 2026 — the cakes plan, step 1) ──
+      // ONE DOCUMENT PER CATEGORY, so renaming one is one write and removing one rewrites no
+      // card: a card holds the category's id (products.categoryId), and an id with no document
+      // reads as «no category». `rank` is the order of the list (the order they were made).
+      // Same gate as the cards themselves, both ways: whoever may read and save a card may
+      // group it. Its OWN collection, never config/{doc} — that block is the Calculator's, and
+      // rules are additive (the config/labels lesson).
+      match /foodcost-categories/{categoryId} {
+        allow read: if cardAccess(lid, 'foodcost', 'foodcost') != 'none';
+
+        allow create, update: if cardAccess(lid, 'foodcost', 'foodcost') != 'none'
+          && stampedFor(lid)
+          && categoryId.size() <= 64
+          && request.resource.data.keys().hasOnly(['bakery', 'name', 'rank'])
+          && request.resource.data.name is string
+          && request.resource.data.name.size() > 0
+          && request.resource.data.name.size() <= 60
+          && request.resource.data.rank is number
+          && request.resource.data.rank >= 0
+          && request.resource.data.rank <= 1000000000000000;
+
+        // Deleting is the managers' only, like deleting a card: whoever may name a group may
+        // not take it away from everybody's list (decided at review, 20 Nov 2026).
+        // No card is rewritten — its categoryId just stops matching a document.
+        allow delete: if canManage(lid, 'foodcost');
       }
 
       // ── The monthly stocktake ───────────────────────────────────────────

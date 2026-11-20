@@ -42,19 +42,21 @@ const optionNames = (dialog: HTMLElement) => within(dialog).getAllByRole('listit
 describe('the chooser', () => {
   const fake = () => editorSource([product('Green')], { recipes: [recipe('Dough'), recipe('Brioche')] });
 
-  it('opens on recipes while the product is made of nothing, and on both once there is a line', async () => {
+  it('offers recipes, ingredients and semi-finished cards together from the first line, and a chip narrows it to one kind', async () => {
     const empty = await open('/food-cost/new', fake());
-    expect(within(madeOf()).getByRole('button', { name: '+ Add recipe' })).toBeInTheDocument();
-    await empty.user.click(within(madeOf()).getByRole('button', { name: '+ Add recipe' }));
-    const recipesOnly = await chooser();
-    expect(within(recipesOnly).getByRole('heading', { level: 2, name: 'Choose a recipe' })).toBeInTheDocument();
-    expect(optionNames(recipesOnly)).toEqual(['Brioche', 'Dough']);
-    expect(within(recipesOnly).queryByRole('heading', { name: 'Ingredients' })).not.toBeInTheDocument();
+    expect(within(madeOf()).getByRole('button', { name: '+ Add recipe, ingredient or semi-finished' })).toBeInTheDocument();
+    await empty.user.click(within(madeOf()).getByRole('button', { name: '+ Add recipe, ingredient or semi-finished' }));
+    const both = await chooser();
+    expect(within(both).getByRole('heading', { level: 2, name: 'Add to the product' })).toBeInTheDocument();
+    expect(within(both).getByRole('heading', { name: 'Ingredients' })).toBeInTheDocument();
+    await empty.user.click(within(both).getByRole('button', { name: 'Recipes' }));
+    expect(optionNames(both)).toEqual(['BriocheRecipe', 'DoughRecipe']);
+    expect(within(both).queryByRole('heading', { name: 'Ingredients' })).not.toBeInTheDocument();
   });
 
   it('offers recipes and ingredients, with headings, no price and never packaging', async () => {
     const { user } = await open('/food-cost/product/Green', fake());
-    await user.click(within(madeOf()).getByRole('button', { name: '+ Add recipe or ingredient' }));
+    await user.click(within(madeOf()).getByRole('button', { name: '+ Add recipe, ingredient or semi-finished' }));
     const dialog = await chooser();
     expect(within(dialog).getByRole('heading', { level: 2, name: 'Add to the product' })).toBeInTheDocument();
     expect(within(dialog).getByRole('heading', { level: 3, name: 'Recipes' })).toBeInTheDocument();
@@ -67,7 +69,7 @@ describe('the chooser', () => {
 
   it('searches by what is typed, accents and capitals aside', async () => {
     const { user } = await open('/food-cost/product/Green', fake());
-    await user.click(within(madeOf()).getByRole('button', { name: '+ Add recipe or ingredient' }));
+    await user.click(within(madeOf()).getByRole('button', { name: '+ Add recipe, ingredient or semi-finished' }));
     const dialog = await chooser();
     await user.type(within(dialog).getByRole('searchbox', { name: 'Search…' }), 'BRI');
     expect(optionNames(dialog)).toEqual(['BriocheRecipe']);
@@ -78,7 +80,7 @@ describe('the chooser', () => {
 
   it('adds the line chosen and puts the focus in its quantity', async () => {
     const { user } = await open('/food-cost/product/Green', fake());
-    await user.click(within(madeOf()).getByRole('button', { name: '+ Add recipe or ingredient' }));
+    await user.click(within(madeOf()).getByRole('button', { name: '+ Add recipe, ingredient or semi-finished' }));
     await user.click(within(await chooser()).getByRole('button', { name: /^Salt/ }));
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
@@ -91,7 +93,7 @@ describe('the chooser', () => {
 
   it('closes with nothing chosen on Escape, and gives the focus back to the button that opened it', async () => {
     const { user } = await open('/food-cost/product/Green', fake());
-    const add = within(madeOf()).getByRole('button', { name: '+ Add recipe or ingredient' });
+    const add = within(madeOf()).getByRole('button', { name: '+ Add recipe, ingredient or semi-finished' });
     await user.click(add);
     await chooser();
     await user.keyboard('{Escape}');
@@ -102,7 +104,7 @@ describe('the chooser', () => {
 
   it('closes with nothing chosen on its Back', async () => {
     const { user } = await open('/food-cost/product/Green', fake());
-    await user.click(within(madeOf()).getByRole('button', { name: '+ Add recipe or ingredient' }));
+    await user.click(within(madeOf()).getByRole('button', { name: '+ Add recipe, ingredient or semi-finished' }));
     await user.click(within(await chooser()).getByRole('button', { name: 'Back' }));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(within(madeOf()).getAllByRole('textbox', { name: 'Quantity' })).toHaveLength(1);
@@ -123,7 +125,7 @@ describe('the chooser', () => {
     const stale = { id: 'sugar', name: 'Sugar', active: false, unit: 'kg', weight: '5 kg' };
     const source = editorSource([product('Green')], { recipes: [recipe('Dough')], ingredients: [FLOUR, SALT, stale, INACTIVE] });
     const { user } = await open('/food-cost/product/Green', source);
-    await user.click(within(madeOf()).getByRole('button', { name: '+ Add recipe or ingredient' }));
+    await user.click(within(madeOf()).getByRole('button', { name: '+ Add recipe, ingredient or semi-finished' }));
     const dialog = await chooser();
     expect(within(dialog).getAllByRole('heading', { level: 3 }).map(node => node.textContent)).toEqual(['Recipes', 'Ingredients', 'Not in use']);
     const section = within(dialog).getByRole('heading', { level: 3, name: 'Not in use' }).closest('section') as HTMLElement;
@@ -134,7 +136,7 @@ describe('the chooser', () => {
 
   it('says there are no recipes yet, and no packaging yet', async () => {
     const { user } = await open('/food-cost/new', editorSource([], { ingredients: [] }));
-    await user.click(within(madeOf()).getByRole('button', { name: '+ Add recipe' }));
+    await user.click(within(madeOf()).getByRole('button', { name: '+ Add recipe, ingredient or semi-finished' }));
     expect(await within(await chooser()).findByText('No recipes yet — add them in the Recipe book.')).toBeInTheDocument();
     await user.keyboard('{Escape}');
     await vi.waitFor(() => { expect(screen.queryByRole('dialog')).not.toBeInTheDocument(); });
@@ -356,8 +358,8 @@ describe('the name suggests recipes', () => {
 describe('a bare new product', () => {
   it('adds a recipe line, and the answer asks for the rest', async () => {
     const { user } = await open('/food-cost/new', editorSource([bareProduct('x')], { recipes: [recipe('Dough')] }));
-    await user.click(within(madeOf()).getByRole('button', { name: '+ Add recipe' }));
-    await user.click(within(await chooser()).getByRole('button', { name: 'Dough' }));
+    await user.click(within(madeOf()).getByRole('button', { name: '+ Add recipe, ingredient or semi-finished' }));
+    await user.click(within(await chooser()).getByRole('button', { name: /^Dough/ }));
     // A new recipe line is in grams: 1000 g is the one kilo of the recipe.
     await user.type(within(madeOf()).getByRole('textbox', { name: 'Quantity' }), '1000');
     expect(within(screen.getByRole('group', { name: 'Summary' })).getByText('Whole batch').closest('div')).toHaveTextContent('£2.00');

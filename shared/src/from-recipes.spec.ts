@@ -76,7 +76,7 @@ describe.each([
       'vatRate', 'foodCostTarget', 'labourMinutes', 'labourPeople']) {
       expect(made[key], key).toBeNull();
     }
-    // POST-SWITCH (10 Nov 2026, «il calo è del prodotto»): change D. The port writes model 3 (PRODUCT_MODEL); the original
+    // POST-SWITCH (10 Nov 2026, «il calo è del prodotto»): change D. The port writes PRODUCT_MODEL (3, 4 since the cakes plan); the original
     // still writes 2, so the comparison with the port's constant no longer holds for js/.
     expect(made['model']).toBe(m === ported ? PRODUCT_MODEL : 2);
     // It survives the normaliser the store runs every product through, unchanged.

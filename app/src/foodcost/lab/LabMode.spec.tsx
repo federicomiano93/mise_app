@@ -160,7 +160,7 @@ describe('the flow, step by step', () => {
     // What was written: the card's own save path, with its margin point.
     const write = fake.saved.find(item => item.kind === 'product');
     expect(write?.data).toMatchObject({
-      rawGrams: 1030, cookedGrams: 927, piecesPerBatch: 12, labourMinutes: 1, labourPeople: 2, model: 3,
+      rawGrams: 1030, cookedGrams: 927, piecesPerBatch: 12, labourMinutes: 1, labourPeople: 2, model: 4,
       components: [
         { kind: 'ingredient', ingredientId: 'flour', qty: 1000, unit: 'g' },
         { kind: 'ingredient', ingredientId: 'salt', qty: 22, unit: 'g' },
@@ -380,7 +380,7 @@ describe('leaving and coming back', () => {
     const draft = startDraft(newDraft({
       id: 'Green', name: 'Green', components: [], packaging: [], sellingMode: 'piece', piecesPerBatch: 10, packSize: null, packUnit: null,
       sellingPrice: null, vatRate: null, foodCostTarget: null, labourMinutes: null, labourPeople: null, noWeightLoss: false,
-      rawGrams: null, cookedGrams: null, model: 3,
+      rawGrams: null, cookedGrams: null, model: 3, kind: 'finished', categoryId: null,
     }), Date.now() - (3_600_000 + 12 * 60_000 + 34_000));
     window.localStorage.setItem(KEY, serializeDraft({ ...draft, step: 'raw' }));
     const { user } = await openCard();

@@ -29,7 +29,7 @@ const source = (fields?: Record<string, unknown>) => editorSource([{ ...GREEN(),
 const CARD: Product = {
   id: 'Green', name: 'Green', components: [], packaging: [], sellingMode: 'piece', piecesPerBatch: 10, packSize: null, packUnit: null,
   sellingPrice: null, vatRate: null, foodCostTarget: null, labourMinutes: null, labourPeople: null, noWeightLoss: false,
-  rawGrams: null, cookedGrams: null, model: 3,
+  rawGrams: null, cookedGrams: null, model: 3, kind: 'finished', categoryId: null,
 };
 const seedDraft = (agoMs: number, step: LabStepId = 'ingredients') => {
   window.localStorage.setItem(KEY, serializeDraft({ ...startDraft(newDraft(CARD), Date.now() - agoMs), step }));

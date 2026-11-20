@@ -4,7 +4,8 @@ import { fcMoney, fcNumber, fcWeight } from '@mise/shared/fc-number';
 import type { MessageKey } from '../i18n/en';
 import { useT } from '../i18n/useT';
 import { useMoney } from '../session/useMoney';
-import { lineMoney, lineName, lineNote } from './lineNotes';
+import { lineMoney, lineName, lineNote, semiLineView } from './lineNotes';
+import type { Category } from './categoriesModel';
 import { MadeOfFoot } from './MadeOfFoot';
 import type { Loaded } from './lineNotes';
 import { piecesShown } from './productEditorModel';
@@ -88,13 +89,19 @@ function NothingYet() {
 }
 
 // ── Product ───────────────────────────────────────────────────────────────────────────────────────
-export function ReadProduct({ product, working }: { product: Product; working: Working }) {
+export function ReadProduct({ product, working, categories }: { product: Product; working: Working; categories: readonly Category[] }) {
   const { t } = useT();
   const money = useMoney();
+  // Model 4: the kind and the category; a category whose document is gone reads as none.
+  const category = categories.find(one => one.id === product.categoryId);
   const rows: Row[] = [
     { label: t('fc.name'), value: product.name.trim() || null },
-    { label: t('fc.sold'), value: product.sellingMode === null ? null : t(SOLD_TEXT[product.sellingMode]) },
+    { label: t('fc.kind.label'), value: t(product.kind === 'semi' ? 'fc.kind.semi' : 'fc.kind.finished') },
+    { label: t('fc.category.label'), value: category ? category.name : t('fc.cat.none') },
   ];
+  // How it is sold is for a card that is sold.
+  if (product.kind === 'semi') return <ReadList rows={rows} />;
+  rows.push({ label: t('fc.sold'), value: product.sellingMode === null ? null : t(SOLD_TEXT[product.sellingMode]) });
   if (product.sellingMode === 'pack') {
     rows.push({
       label: t('fc.packHolds'),
@@ -119,6 +126,17 @@ export function ReadMadeOf({ product, working, tables, loaded }: Lines) {
     const shown = working.components[index];
     if (!shown) return { name: '', missing: false, amount: null, cost: '', note: '' };
     const name = lineName(t, shown, tables, loaded);
+    // A semi-finished card inside: its tag and name, what a kilo of its materials costs and what this amount's materials cost, the labour apart.
+    if (line.kind === 'semi' && shown.kind === 'semi') {
+      const view = semiLineView(t, money, shown, tables, loaded);
+      return {
+        name: `${t('fc.semi.tag')}: ${name.text}`,
+        missing: name.missing,
+        amount: positive(line.qtyKg) ? fcWeight(line.qtyKg, money) : null,
+        cost: view.cost === '' ? view.perKg : `${view.perKg} · ${view.cost}`,
+        note: [view.labour, view.note].filter(Boolean).join(' '),
+      };
+    }
     const amount = line.kind === 'ingredient'
       ? (positive(line.qty) ? amountText(t, money, line.qty, line.unit) : null)
       : (positive(line.qtyKg) ? fcWeight(line.qtyKg, money) : null);
@@ -189,7 +207,7 @@ export function ReadPackaging({ product, working, tables, loaded }: Lines) {
 
 // ── Work time ─────────────────────────────────────────────────────────────────────────────────────
 // `note` is the labour-cost sentence the form decides (only for whoever may set the rate).
-export function ReadLabour({ product, note }: { product: Product; note: string }) {
+export function ReadLabour({ product, note, split = null }: { product: Product; note: string; split?: { own: number; semi: number } | null }) {
   const { t } = useT();
   const money = useMoney();
   const hasMinutes = positive(product.labourMinutes);
@@ -207,6 +225,8 @@ export function ReadLabour({ product, note }: { product: Product; note: string }
         ]}
       />
       {note ? <p className={styles.note}>{note}</p> : null}
+      {/* Model 4: the labour of the semi-finished cards inside, apart from the card's own work (said only when both exist). */}
+      {split === null ? null : <p className={styles.note}>{t('fc.labourSplit', { semi: fcMoney(split.semi, money), own: fcMoney(split.own, money) })}</p>}
     </div>
   );
 }

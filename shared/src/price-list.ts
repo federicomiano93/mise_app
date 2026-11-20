@@ -73,11 +73,15 @@ export type PricedProductFields = {
   readonly sellingPrice: unknown;
   readonly packSize: unknown;
   readonly packUnit: unknown;
+  // Food cost model 4: a card of kind 'semi' (a ganache, a sponge) is never bookable. Absent = a finished product.
+  readonly kind?: unknown;
 };
 
 // A product's line on the price list, or null when it cannot be one: no name, no selling price, no way of selling it
 // (Food cost's «sold by» not chosen), a price past the bound, or a pack whose size is not said.
 export function priceItemOf(product: PricedProductFields): PriceItem | null {
+  // ⚠️ A SEMI-FINISHED CARD IS NEVER BOOKABLE: it has no selling price of its own and is used inside other cards.
+  if (product.kind === 'semi') return null;
   const name = typeof product.name === 'string' ? product.name.trim().slice(0, MAX_PRICE_NAME) : '';
   const price = finitePositive(product.sellingPrice);
   if (product.id === '' || name === '' || price === null || price > MAX_PRICE) return null;

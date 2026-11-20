@@ -15,8 +15,8 @@ test('config/calculator: the rules ceiling is CONFIG_MODEL', () => {
   assert.equal(Number(m[1]), CONFIG_MODEL);
 });
 
-// ⚠️ PRODUCTS, SINCE 10 Nov 2026: Mise 2 writes model 3 (its recipe lines are RAW kilos, the product owns its
-// oven loss) and the current app still writes 2. ONE firestore.rules serves both, so the ceiling is Mise 2's
+// ⚠️ PRODUCTS, SINCE 10 Nov 2026: Mise 2 writes model 3 (4 since 20 Nov 2026: a card may carry kind, categoryId and semi lines; its recipe lines are RAW kilos, the product owns its
+// oven loss) and the rollback copy (js/) still writes 2. ONE firestore.rules serves both, so the ceiling is Mise 2's
 // number exactly — read from its source, as node:test cannot import TypeScript — and the current app's must
 // sit at or under it, or the rules would refuse the app itself.
 test('products: the rules ceiling is Mise 2\'s PRODUCT_MODEL, and the current app writes no more', () => {

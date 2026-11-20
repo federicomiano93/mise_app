@@ -139,6 +139,10 @@ function IngredientsStep(props: Props) {
       const missing = snap.recipesLoaded ? t('fc.thisRecipeNoLonger') : t('session.loading');
       return { name: recipe ? String(recipe.name ?? '').trim() : missing, second: t('fc.recipeWord') };
     }
+    if (line.ref.kind === 'semi') {
+      const card = snap.products.find(product => product.id === (line.ref as { productId: string }).productId);
+      return { name: card ? card.name : t('fc.thisCardNoLonger'), second: t('fc.semi.tag') };
+    }
     const ingredient = snap.ingredients[line.ref.ingredientId];
     return {
       name: ingredient ? ingredientDisplayName(ingredient).trim() : snap.ingredientsLoaded ? t('fc.thisItemNoLonger') : t('session.loading'),

@@ -22,10 +22,12 @@
 
 import { PRODUCT_MODEL, normalizeProduct, normalizeProducts } from '@mise/shared/foodcost-model';
 import { productFromRecipe } from '@mise/shared/from-recipes';
-import type { CostTables, Product } from '@mise/shared/foodcost-model';
+import type { CostTables, Product, ProductKind } from '@mise/shared/foodcost-model';
 import { restoreAfterRefusal } from '@mise/shared/foodcost-weighing';
 import { positiveNumber } from '@mise/shared/price-model';
 import type { KeyValueStorage } from '../session/backend';
+import { nextRank, readCategories } from './categoriesModel';
+import type { Category } from './categoriesModel';
 import type { FoodcostSource, RecipeLossPatch, StoredDoc } from './foodcostSource';
 
 // ⚠️ THE CURRENT APP'S KEYS, WITH THEIR MEANING (both apps share one origin): either app may paint
@@ -45,7 +47,10 @@ export type FoodcostMessage =
   // The hourly labour cost was refused: the old one is back.
   | { readonly kind: 'rate-not-saved' }
   // The products' live stream died.
-  | { readonly kind: 'products-stream-broken' };
+  | { readonly kind: 'products-stream-broken' }
+  // A category's save or removal was refused (model 4): it is back as it was.
+  | { readonly kind: 'category-not-saved'; readonly name: string }
+  | { readonly kind: 'category-not-deleted'; readonly name: string };
 
 export interface FoodcostSnapshot {
   readonly products: readonly Product[];
@@ -68,6 +73,10 @@ export interface FoodcostSnapshot {
   // copy (a venue's supplier names on the phone's storage would need a key of their own; Firestore's own offline copy answers
   // the listener offline anyway).
   readonly suppliers: Readonly<Record<string, StoredDoc>>;
+  // The categories the list groups cards by (model 4), in the order of the list. [] until they arrive, and after a quiet failure:
+  // the list is then drawn plain. Memory only, like the suppliers: Firestore's own copy answers the listener offline.
+  readonly categories: readonly Category[];
+  readonly categoriesLoaded: boolean;
   // What an hour of work costs — null until it arrives, and null for ever for anybody who does not
   // run the place (nothing is ever asked for them).
   readonly labourCostPerHour: number | null;
@@ -128,11 +137,17 @@ export interface FoodcostStore {
   // The products for the recipes he ticked (item 29, current app f8d54f35). ⚠️ NOT LOCAL-FIRST, AND DELIBERATELY: each one is
   // created only after the SERVER says no product is at its id, so offline it FAILS (counted, nothing queued) and a product made
   // on another phone is never overwritten. The live list brings the new products in; no local copy is touched.
-  createProductsFromRecipes(recipes: readonly unknown[]): Promise<CreatedFromRecipes>;
+  // `kinds` says, by recipe id, which of them are semi-finished (model 4: Federico decides each one); any other is finished.
+  createProductsFromRecipes(recipes: readonly unknown[], kinds?: Readonly<Record<string, ProductKind>>): Promise<CreatedFromRecipes>;
   // The state of this product's first save: 'sending' (in the air — a snapshot lacking the product may only be a stale one, so a screen
   // WAITS), 'refused' (the product is going or gone, the refusal has its own message — a screen leaves without saying it was deleted)
   // or null (settled: a product that disappears was deleted).
   firstSave(id: string): FirstSaveState | null;
+  // Model 4: a category made or renamed, LOCAL-FIRST; returns its id. A new one (no id) goes to the end of the list. The name is
+  // trimmed here; the screen has already refused an empty, too long or duplicate one (categoryNameProblem).
+  saveCategory(name: string, id?: string): string;
+  // Removes the category's document only: no card is rewritten, a card holding its id reads as «no category».
+  deleteCategory(id: string): void;
   // The hourly labour cost (null clears it), local-first.
   saveLabourRate(rate: number | null): void;
   // A product's margin history, read once.
@@ -163,6 +178,9 @@ export function toProductDocument(product: Product): Record<string, unknown> {
     ...(product.rawGrams !== null ? { rawGrams: product.rawGrams } : {}),
     ...(product.cookedGrams !== null ? { cookedGrams: product.cookedGrams } : {}),
     model: PRODUCT_MODEL,
+    // Model 4. Written on every save (the card is saved WHOLE): the kind always, the category's id or null.
+    kind: product.kind ?? 'finished',
+    categoryId: product.categoryId ?? null,
   };
 }
 
@@ -216,6 +234,8 @@ export function createFoodcostStore(
   let ingredients: Readonly<Record<string, StoredDoc>> = indexById(bootIngredients);
   let ingredientsLoaded = Array.isArray(bootIngredients);
   let suppliers: Readonly<Record<string, StoredDoc>> = {};
+  let categories: readonly Category[] = [];
+  let categoriesLoaded = false;
   let labourCostPerHour: number | null = null;
   let settingsLoaded = !options.canManage;
   let inFlight = 0;
@@ -233,16 +253,26 @@ export function createFoodcostStore(
   let stops: Array<() => void> = [];
   let started = false;
 
-  let tables: CostTables = { recipes, ingredients, labourCostPerHour };
+  // Every card by id (model 4: what a semi-finished line looks its card up in), rebuilt only when the list of products changes.
+  let productsById: Readonly<Record<string, Product>> = {};
+  let productsIndexed: readonly Product[] | null = null;
+  let tables: CostTables = { recipes, ingredients, products: productsById, labourCostPerHour };
   let snapshot: FoodcostSnapshot = build();
 
   function build(): FoodcostSnapshot {
-    if (tables.recipes !== recipes || tables.ingredients !== ingredients || tables.labourCostPerHour !== labourCostPerHour) {
-      tables = { recipes, ingredients, labourCostPerHour };
+    if (productsIndexed !== products) {
+      const index: Record<string, Product> = {};
+      for (const product of products) if (product.id) index[product.id] = product;
+      productsById = index;
+      productsIndexed = products;
+    }
+    if (tables.recipes !== recipes || tables.ingredients !== ingredients || tables.products !== productsById
+      || tables.labourCostPerHour !== labourCostPerHour) {
+      tables = { recipes, ingredients, products: productsById, labourCostPerHour };
     }
     return {
       products, productsLoaded, productsFromServer, recipes, recipesLoaded, recipesFromServer, recipesFailed, ingredients,
-      ingredientsLoaded, suppliers, labourCostPerHour, settingsLoaded, tables, unsent: inFlight > 0,
+      ingredientsLoaded, suppliers, categories, categoriesLoaded, labourCostPerHour, settingsLoaded, tables, unsent: inFlight > 0,
     };
   }
 
@@ -397,6 +427,20 @@ export function createFoodcostStore(
         () => {},
       ));
 
+      // The categories (model 4): QUIET on failure, like the suppliers — somebody who may not read them sees the plain list. Nothing
+      // is ever written from this list but one document at a time, so an empty answer from this phone's own database does no harm.
+      stops.push(source.watchCategories(
+        remote => {
+          categories = readCategories(remote);
+          categoriesLoaded = true;
+          changed();
+        },
+        () => {
+          categoriesLoaded = true;
+          changed();
+        },
+      ));
+
       // ⚠️ THE HOURLY LABOUR COST IS WATCHED ONLY FOR WHOEVER RUNS THE PLACE: an employee's listener
       // would be refused (noise and a wasted read), and the rate is a wage figure they are not meant
       // to see. Never written to the phone's storage either, so it never lingers on a shared phone.
@@ -451,10 +495,11 @@ export function createFoodcostStore(
     // server (source.createProductIfAbsent), never saveProduct. Nothing he ticked is lost by a failure: the recipes stay in the
     // list and he tries again online. One transaction per product, so one refused costs only itself.
     // ⚠️ A recipe given twice is created once: two transactions racing for one id would both be answered «created».
-    async createProductsFromRecipes(recipeList) {
+    async createProductsFromRecipes(recipeList, kinds = {}) {
       const wanted = new Map<string, Product>();
       for (const recipe of Array.isArray(recipeList) ? recipeList : []) {
-        const made = productFromRecipe(recipe) as unknown as Product | null;
+        const recipeId = recipe && typeof recipe === 'object' ? String((recipe as { id?: unknown }).id ?? '') : '';
+        const made = productFromRecipe(recipe, kinds[recipeId] === 'semi' ? 'semi' : 'finished') as unknown as Product | null;
         if (made && !wanted.has(made.id)) wanted.set(made.id, made);
       }
       // Counted as unsent while it runs, so the app does not reload by itself in the middle of it.
@@ -493,6 +538,42 @@ export function createFoodcostStore(
         deps.warn('Product delete did not sync to Firestore:', err);
         if (prev && saveSeq.get(id) === mine && !listenerWillRevert()) upsertLocal(prev);
         say({ kind: 'product-not-deleted' });
+      });
+    },
+
+    // LOCAL-FIRST, like the products: the list moves at once, offline too; a refusal puts it back and says so.
+    saveCategory(typed, existingId) {
+      const name = typed.trim();
+      const id = existingId ?? source.newCategoryId();
+      const prev = categories.find(category => category.id === id) ?? null;
+      const next: Category = { id, name, rank: prev ? prev.rank : nextRank(categories, deps.now()) };
+      categories = readCategories([...categories.filter(category => category.id !== id), next]);
+      changed();
+      track(source.saveCategory(id, { name, rank: next.rank }), err => {
+        deps.warn('Category did not sync to Firestore:', err);
+        const current = categories.find(category => category.id === id);
+        // Only if nothing newer has landed on top of this write.
+        if (current && current.name === name) {
+          categories = readCategories(prev ? [...categories.filter(category => category.id !== id), prev] : categories.filter(category => category.id !== id));
+          changed();
+        }
+        say({ kind: 'category-not-saved', name });
+      });
+      return id;
+    },
+
+    deleteCategory(id) {
+      const prev = categories.find(category => category.id === id) ?? null;
+      if (!prev) return;
+      categories = categories.filter(category => category.id !== id);
+      changed();
+      track(source.removeCategory(id), err => {
+        deps.warn('Category delete did not sync to Firestore:', err);
+        if (!categories.some(category => category.id === id)) {
+          categories = readCategories([...categories, prev]);
+          changed();
+        }
+        say({ kind: 'category-not-deleted', name: prev.name });
       });
     },
 

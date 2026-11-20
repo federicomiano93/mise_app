@@ -1,9 +1,9 @@
-import { ingredientLineCost, lineRawKg, packagingLineCost } from '@mise/shared/foodcost-model';
+import { componentLineCost, ingredientLineCost, lineRawKg, packagingLineCost } from '@mise/shared/foodcost-model';
 import type { CostTables, IngredientLineReason, Table } from '@mise/shared/foodcost-model';
 import { ingredientDisplayName } from '@mise/shared/ingredient-name';
 import type { Money } from '@mise/shared/currency';
 import { costRecipe } from '@mise/shared/recipe-cost-model';
-import { fcWeight } from '@mise/shared/fc-number';
+import { fcMoney, fcWeight } from '@mise/shared/fc-number';
 import { wholeRecipeKg } from '@mise/shared/from-recipes';
 import { tooMuchOfRecipe } from '@mise/shared/line-quantity';
 import type { MessageKey } from '../i18n/en';
@@ -44,12 +44,17 @@ export type LineName = { text: string; missing: boolean };
 
 // What has been heard from the stores yet. A phone with no local copies has neither at first, and a
 // line must not be called «gone» before what it points at has been asked for.
-export type Loaded = { recipes: boolean; ingredients: boolean };
+export type Loaded = { recipes: boolean; ingredients: boolean; products?: boolean };
 
 // The name a line wears: what the recipe or the item is called now, or that it no longer exists.
 export function lineName(
   t: Translate, line: WorkingComponent | WorkingPackaging, tables: CostTables, loaded: Loaded,
 ): LineName {
+  if ('kind' in line && line.kind === 'semi') {
+    const card = lookup(tables.products, line.productId);
+    if (card) return { text: String(card.name ?? '').trim(), missing: false };
+    return loaded.products === false ? { text: t('session.loading'), missing: false } : { text: t('fc.thisCardNoLonger'), missing: true };
+  }
   if ('kind' in line && line.kind === 'recipe') {
     const recipe = lookup(tables.recipes, line.recipeId);
     if (recipe) return { text: String(recipe.name ?? '').trim(), missing: false };
@@ -71,6 +76,8 @@ export function lineMoney(
   t: Translate, money: Money, line: WorkingComponent | WorkingPackaging, tables: CostTables,
 ): LineCost {
   try {
+    // A semi-finished line draws its own money (semiLineView), not the rate-and-amount text of the other lines.
+    if ('kind' in line && line.kind === 'semi') return { text: '', noPrice: false };
     if ('kind' in line && line.kind === 'recipe') {
       return lineCostView(t, money, { recipeId: line.recipeId, qtyKg: recipeLineKg(line) }, 'recipe', tables);
     }
@@ -91,6 +98,7 @@ export function lineMoney(
 export function lineNote(
   t: Translate, money: Money, line: WorkingComponent | WorkingPackaging, tables: CostTables, loaded: Loaded,
 ): string {
+  if ('kind' in line && line.kind === 'semi') return '';
   if ('kind' in line && line.kind === 'recipe') {
     const recipe = lookup(tables.recipes, line.recipeId);
     // ⚠️ WHAT TO DO, not a second «This recipe no longer exists» under the name that already says it (step 3b, 11 Nov 2026); always in
@@ -129,4 +137,56 @@ export function lineNote(
   // Packaging, counted in pieces, so it has to be BOUGHT by the piece. Said plainly rather than silently costing nothing; a
   // packaging item with no price at all is «No price» above instead, and one priced each says its money there.
   return packagingLineCost(line, ingredient).reason === 'no-piece-price' ? t('fc.pricedByWeightSet') : '';
+}
+
+// ── A semi-finished line (model 4) ───────────────────────────────────────────────────────────────────
+//
+// What the row of a semi-finished card inside «Made of» says: its name, what a kilo of its MATERIALS costs, what this amount's
+// materials cost (the figure that adds up to the total under the rows) and, on a second line, «+ labour X» where the labour is known,
+// and — in plain words — why it cannot be costed.
+// ⚠️ THE FIGURES ARE componentLineCost'S, the very call the batch total is built from; only the words are chosen here. Unknown is
+// never 0: a card with no price shows no money, and labour is left out (not «0») while the labour rate is not handed in.
+export type SemiLineView = {
+  name: string;
+  missing: boolean;
+  // «11,20 €/kg» — the materials; '' when the card has no price.
+  perKg: string;
+  // What the amount's materials cost; '' with no amount or no price.
+  cost: string;
+  // «+ labour 3,10»; '' while labour is not known.
+  labour: string;
+  // What to do or what is wrong, plain; '' when nothing.
+  note: string;
+};
+
+export function semiLineView(
+  t: Translate, money: Money, line: Extract<WorkingComponent, { kind: 'semi' }>, tables: CostTables, loaded: Loaded,
+): SemiLineView {
+  const name = lineName(t, line, tables, loaded);
+  const base: SemiLineView = { name: name.text, missing: name.missing, perKg: '', cost: '', labour: '', note: '' };
+  try {
+    const qtyKg = readQty(line.qty);
+    const costed = componentLineCost({ kind: 'semi', productId: line.productId, qtyKg }, tables);
+    if (costed.reason === 'no-card') return { ...base, note: loaded.products === false ? '' : t('fc.semi.noCard') };
+    if (costed.reason === 'card-loop') return { ...base, note: t('fc.semi.loop') };
+    if (costed.reason === 'card-too-deep') return { ...base, note: t('fc.semi.tooDeep') };
+    const materialsPerKg = costed.materialsPerKg ?? null;
+    if (costed.cost === null || materialsPerKg === null) return { ...base, note: t('fc.semi.noPriceYet') };
+    const labourPerKg = costed.labourPerKg ?? null;
+    const out: SemiLineView = {
+      ...base,
+      perKg: t('fc.semi.perKg', { amount: fcMoney(materialsPerKg, money) }),
+      note: costed.partial ? t('fc.semi.partial') : '',
+    };
+    if (!(qtyKg > 0)) return out;
+    const labour = costed.labour ?? null;
+    return {
+      ...out,
+      cost: fcMoney(costed.cost, money),
+      labour: labour === null ? '' : t('fc.semi.lineLabour', { amount: fcMoney(labour, money) }),
+    };
+  } catch {
+    // A fault here must not take the line down (P17): the row simply shows no money.
+    return base;
+  }
 }

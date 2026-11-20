@@ -41,7 +41,7 @@ function aDraft(): LabDraft {
     noWeightLoss: false,
     rawGrams: null,
     cookedGrams: null,
-    model: 3,
+    model: 3, kind: 'finished', categoryId: null,
   }), 1_700_000_000_000);
   draft = toggleTick(draft, 'l1');
   draft = typeInto(draft, lineField('l0'), '6', PRESETS);

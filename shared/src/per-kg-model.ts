@@ -44,7 +44,7 @@ import { pricePerKg as ingredientPricePerKg, roundTo, positiveNumber } from './p
 import { costRecipe } from './recipe-cost-model';
 import { linkOf } from './catalogue-model';
 import type { RowLink } from './catalogue-model';
-import { currentProduct, productCooking, productionCost, unitsPerBatch, ingredientLineCost } from './foodcost-model';
+import { currentProduct, productCooking, productionCost, unitsPerBatch, ingredientLineCost, componentLineCost, MAX_SEMI_DEPTH } from './foodcost-model';
 import type { CostTables, IngredientLineReason } from './foodcost-model';
 
 // Why a line is in the block but not in the total. The screen turns each into words.
@@ -139,6 +139,30 @@ function labelKey(label: unknown): string {
 // options.packaging false (POST-SWITCH, 11 Nov 2026, «solo l'impasto»): the same answer without packaging — total = the lines'
 // batch cost ÷ kg, partial = the lines' partial, no 'packaging' row, packagingLeftOut false.
 export function costPerKg(product: unknown, tables: CostTables = {}, options: PerKgOptions = {}): PerKgResult {
+  const result = costPerKgCore(product, tables, options, { depth: 0, chain: [] });
+  return {
+    ...result,
+    rows: result.rows.map(row => ({
+      ...row,
+      kg: row.kg === null ? null : roundTo(row.kg, 6),
+      pcs: row.pcs === null ? null : roundTo(row.pcs, 4),
+      cost: row.cost === null ? null : roundTo(row.cost, 4),
+    })),
+  };
+}
+
+// Where a semi-finished card is being opened: how many cards deep, and which are open above it (a loop ends here).
+interface OpenContext {
+  depth: number;
+  chain: readonly string[];
+}
+
+// ⚠️ MISE 2, model 4 — A SEMI-FINISHED LINE IS OPENED INTO THE CARD'S OWN ROWS, exactly as a recipe is: `qtyKg` of it is
+// `qtyKg × (1 ÷ this batch's kilos)` kilos in one kilo of this product, and each row of ONE kilo of that card (its own call of this
+// function, its own loss included, packaging out) is scaled by that, so «flour» in the cake and «flour» in the ganache are one row.
+// Rows are left UNROUNDED until the outermost call, so nesting adds no rounding. Labour is not in this block (materials only, as
+// today). This is the reusable opening the cakes' «what you need» list will read.
+function costPerKgCore(product: unknown, tables: CostTables, options: PerKgOptions, ctx: OpenContext): PerKgResult {
   const p = currentProduct(product, tables);
   const empty: PerKgResult = { kg: null, total: null, partial: false, packagingLeftOut: false, lossy: false, rows: [] };
   if (!p) return empty;
@@ -220,6 +244,29 @@ export function costPerKg(product: unknown, tables: CostTables = {}, options: Pe
   }
 
   for (const component of p.components) {
+    if (component.kind === 'semi') {
+      const line = componentLineCost(component, tables);
+      if (line.reason === 'no-card') continue; // gone: the card already says so, and it has no name
+      const outKg = component.qtyKg * perKg;
+      if (line.cost === null || ctx.chain.includes(component.productId) || ctx.depth >= MAX_SEMI_DEPTH) {
+        uncounted(`semi:${component.productId}`, line.name, outKg > 0 ? outKg : null, 'no-recipe');
+        continue;
+      }
+      if (!(outKg > 0)) continue;
+      const card = lookup(tables.products, component.productId) as Record<string, unknown>;
+      const inner = costPerKgCore({ ...card, id: component.productId }, tables, { packaging: false },
+        { depth: ctx.depth + 1, chain: [...ctx.chain, component.productId] });
+      if (inner.lossy) lossy = true;
+      for (const innerRow of inner.rows) {
+        add({
+          ...innerRow,
+          kg: innerRow.kg === null ? null : innerRow.kg * outKg,
+          pcs: innerRow.pcs === null ? null : innerRow.pcs * outKg,
+          cost: innerRow.cost === null ? null : innerRow.cost * outKg,
+        });
+      }
+      continue;
+    }
     if (component.kind === 'ingredient') {
       const ingredient = lookup(tables.ingredients, component.ingredientId);
       if (!ingredient) continue; // gone: the card already says so, and it has no name
@@ -293,11 +340,6 @@ export function costPerKg(product: unknown, tables: CostTables = {}, options: Pe
     partial,
     packagingLeftOut,
     lossy,
-    rows: rows.map(row => ({
-      ...row,
-      kg: row.kg === null ? null : roundTo(row.kg, 6),
-      pcs: row.pcs === null ? null : roundTo(row.pcs, 4),
-      cost: row.cost === null ? null : roundTo(row.cost, 4),
-    })),
+    rows,
   };
 }

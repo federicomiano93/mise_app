@@ -20,6 +20,8 @@ export type FakeFoodcostSource = FoodcostSource & {
   ingredients: Map<string, StoredDoc>;
   // Orders' suppliers, read for their names (step 4).
   suppliers: Map<string, StoredDoc>;
+  // The categories the list groups cards by (model 4), `foodcost-categories`.
+  categories: Map<string, StoredDoc>;
   prices: Map<string, Record<string, unknown>>;
   settings: Record<string, unknown> | null;
   history: Map<string, StoredDoc[]>;
@@ -30,9 +32,10 @@ export type FakeFoodcostSource = FoodcostSource & {
   releasePriceList(): void;
   // The next calls of this kind fail.
   // `recipes`: the recipes' stream fails when it is opened.
-  refuse: { save: boolean; create: boolean; loss: boolean; remove: boolean; rate: boolean; history: boolean; products: boolean; recipes: boolean; publish?: boolean };
+  // `category`: a category's save or removal is refused.
+  refuse: { save: boolean; create: boolean; loss: boolean; remove: boolean; rate: boolean; history: boolean; products: boolean; recipes: boolean; publish?: boolean; category?: boolean };
   // Every write that reached the source, in order.
-  saved: { kind: 'product' | 'create' | 'loss' | 'remove' | 'rate'; id?: string; data?: unknown; snapshot?: unknown }[];
+  saved: { kind: 'product' | 'create' | 'loss' | 'remove' | 'rate' | 'category' | 'category-remove'; id?: string; data?: unknown; snapshot?: unknown }[];
   // Tells every watcher again (as another phone's write would).
   push(): void;
   // Holds back the first answer of the products until release() (Firestore still loading).
@@ -60,6 +63,7 @@ export function fakeFoodcostSource(seed: {
   recipes?: StoredDoc[];
   ingredients?: StoredDoc[];
   suppliers?: StoredDoc[];
+  categories?: StoredDoc[];
   prices?: Record<string, Record<string, unknown>>;
   settings?: Record<string, unknown> | null;
   history?: Record<string, StoredDoc[]>;
@@ -69,15 +73,17 @@ export function fakeFoodcostSource(seed: {
   const recipes = new Map((seed.recipes ?? []).map(doc => [doc.id, doc] as const));
   const ingredients = new Map((seed.ingredients ?? []).map(doc => [doc.id, doc] as const));
   const suppliers = new Map((seed.suppliers ?? []).map(doc => [doc.id, doc] as const));
+  const categories = new Map((seed.categories ?? []).map(doc => [doc.id, doc] as const));
   const prices = new Map(Object.entries(seed.prices ?? {}));
   const history = new Map(Object.entries(seed.history ?? {}));
   const productWatchers = new Set<ProductsListener>();
   const recipeWatchers = new Set<RecipesListener>();
   const ingredientWatchers = new Set<ListListener>();
   const supplierWatchers = new Set<ListListener>();
+  const categoryWatchers = new Set<ProductsListener>();
   const settingsWatchers = new Set<(data: Record<string, unknown> | null, meta: { readonly fromServer: boolean }) => void>();
   const priceListWatchers = new Set<(data: Record<string, unknown> | null, meta: { readonly fromServer: boolean }) => void>();
-  const refuse = { save: false, create: false, loss: false, remove: false, rate: false, history: false, products: false, recipes: false, publish: false };
+  const refuse = { save: false, create: false, loss: false, remove: false, rate: false, history: false, products: false, recipes: false, publish: false, category: false };
   const saved: FakeFoodcostSource['saved'] = [];
   let held = false;
   let ingredientsHeld = false;
@@ -91,7 +97,7 @@ export function fakeFoodcostSource(seed: {
   const priced = () => withPrices([...ingredients.values()], Object.fromEntries(prices)) as StoredDoc[];
 
   const fake: FakeFoodcostSource = {
-    products, recipes, ingredients, suppliers, prices, history, refuse, saved,
+    products, recipes, ingredients, suppliers, categories, prices, history, refuse, saved,
     settings: seed.settings === undefined ? null : seed.settings,
     priceList: seed.priceList ?? null,
 
@@ -106,6 +112,7 @@ export function fakeFoodcostSource(seed: {
       if (!recipesHeld) for (const w of recipeWatchers) w.onChange([...recipes.values()], FROM_SERVER);
       if (!ingredientsHeld) for (const w of ingredientWatchers) w.onChange(priced());
       if (!suppliersHeld) for (const w of supplierWatchers) w.onChange([...suppliers.values()]);
+      for (const w of categoryWatchers) w.onChange([...categories.values()], FROM_SERVER);
       for (const w of settingsWatchers) w(fake.settings, { fromServer: true });
     },
     hold() { held = true; },
@@ -170,6 +177,29 @@ export function fakeFoodcostSource(seed: {
       supplierWatchers.add(listener);
       queueMicrotask(() => { if (supplierWatchers.has(listener) && !suppliersHeld) onChange([...suppliers.values()]); });
       return () => { supplierWatchers.delete(listener); };
+    }),
+
+    watchCategories: vi.fn<FoodcostSource['watchCategories']>((onChange, onError) => {
+      const listener: ProductsListener = { onChange, onError };
+      categoryWatchers.add(listener);
+      queueMicrotask(() => { if (categoryWatchers.has(listener)) onChange([...categories.values()], FROM_SERVER); });
+      return () => { categoryWatchers.delete(listener); };
+    }),
+
+    newCategoryId: () => `cat-${++ids}`,
+
+    saveCategory: vi.fn<FoodcostSource['saveCategory']>(async (id, data) => {
+      if (refuse.category) throw refused();
+      saved.push({ kind: 'category', id, data });
+      categories.set(id, { ...data, id, bakery: 'bakery' });
+      fake.push();
+    }),
+
+    removeCategory: vi.fn<FoodcostSource['removeCategory']>(async id => {
+      if (refuse.category) throw refused();
+      saved.push({ kind: 'category-remove', id });
+      categories.delete(id);
+      fake.push();
     }),
 
     watchSettings: vi.fn<FoodcostSource['watchSettings']>(onChange => {

@@ -329,4 +329,44 @@ describe('creating a product from the recipe book, as firestore.rules expect it'
     for (const id of ['', 'a/b', '..']) await expect(source.createProductIfAbsent(id, { name: 'x' }), id).rejects.toThrow('Not a document id');
     expect(fs.runTransaction).not.toHaveBeenCalled();
   });
+
+  // Model 4 (20 Nov 2026): the categories of the list, `foodcost-categories/{id}` = { bakery, name, rank } and nothing else.
+  test('⚠️ a category is written WHOLE with its name and rank, stamped for the venue, at its own path', async () => {
+    const { kit, fs } = fakeKit();
+    const source = createFirestoreFoodcostSource(() => Promise.resolve(kit), 'bakery');
+    await source.saveCategory('c1', { name: 'Cakes', rank: 7 });
+    const [ref, data, options] = fs.setDoc.mock.calls[0]!;
+    expect(ref.path).toBe('locations/bakery/foodcost-categories/c1');
+    expect(data).toEqual({ name: 'Cakes', rank: 7, bakery: 'bakery' });
+    expect(options).toBeUndefined();
+  });
+
+  test('removing a category deletes its document only, and an id that could name another path never reaches Firestore', async () => {
+    const { kit, fs } = fakeKit();
+    const source = createFirestoreFoodcostSource(() => Promise.resolve(kit), 'bakery');
+    await source.removeCategory('c1');
+    expect(fs.deleteDoc.mock.calls[0]![0].path).toBe('locations/bakery/foodcost-categories/c1');
+    expect(fs.setDoc).not.toHaveBeenCalled();
+    await expect(source.saveCategory('a/b', { name: 'x', rank: 1 })).rejects.toThrow();
+    await expect(source.removeCategory('')).rejects.toThrow();
+    expect(fs.deleteDoc).toHaveBeenCalledTimes(1);
+  });
+
+  test('the categories are watched live, with the server told from the phone’s own copy, and a refusal reaches the store', async () => {
+    const { kit, live } = fakeKit();
+    const source = createFirestoreFoodcostSource(() => Promise.resolve(kit), 'bakery');
+    const lists: { names: unknown[]; fromServer: boolean }[] = [];
+    const errors: unknown[] = [];
+    const stop = source.watchCategories((list, meta) => lists.push({ names: list.map(doc => doc['name']), fromServer: meta.fromServer }), err => errors.push(err));
+    await settle();
+    const [listener] = live('locations/bakery/foodcost-categories');
+    expect(listener!.options).toEqual({ includeMetadataChanges: true });
+    listener!.next(collectionSnap([{ id: 'c1', name: 'Cakes', rank: 1 }], true));
+    listener!.next(collectionSnap([{ id: 'c1', name: 'Cakes', rank: 1 }], false));
+    expect(lists).toEqual([{ names: ['Cakes'], fromServer: false }, { names: ['Cakes'], fromServer: true }]);
+    listener!.error(new Error('permission-denied'));
+    expect(errors).toHaveLength(1);
+    stop();
+    expect(live('locations/bakery/foodcost-categories')).toEqual([]);
+  });
 });

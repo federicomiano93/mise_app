@@ -106,3 +106,15 @@
   color: var(--ink-2);
   font-weight: 500;
 }
+
+/* A semi-finished card's figure (model 4): its cost per kilo, in a pill — the accent tint is the kind's, the words say the rest. */
+.perKg {
+  padding: var(--s1) var(--s3);
+  border-radius: var(--r-pill);
+  background: var(--accent-tint);
+  color: var(--accent-ink);
+  font-size: var(--fs-md);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}

@@ -206,7 +206,7 @@ describe('the read view is text, not a form', () => {
       expect(within(card).queryAllByRole(role), role).toHaveLength(0);
     }
     expect(within(card).queryByRole('button', { name: 'Use this price' })).not.toBeInTheDocument();
-    expect(within(card).queryByRole('button', { name: '+ Add recipe' })).not.toBeInTheDocument();
+    expect(within(card).queryByRole('button', { name: '+ Add recipe, ingredient or semi-finished' })).not.toBeInTheDocument();
   });
 
   it('says every missing value «Not set» — never 0 or a zero price — and a VAT of 0 as a real answer', async () => {

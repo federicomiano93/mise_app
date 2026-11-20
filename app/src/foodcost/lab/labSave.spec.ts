@@ -34,7 +34,7 @@ const bread: Product = {
   noWeightLoss: false,
   rawGrams: null,
   cookedGrams: null,
-  model: 3,
+  model: 3, kind: 'finished', categoryId: null,
 };
 
 const NOW = 1_700_000_000_000;
