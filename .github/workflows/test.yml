@@ -171,7 +171,9 @@ jobs:
   # gates the server deploy.
   mise2:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # 25, not 15: by 19 Nov 2026 the suites alone took 9-15 minutes (14m50s on a push to main),
+    # so a slow runner turned a green change red at the limit. Still a cap on a hung run.
+    timeout-minutes: 25
     permissions:
       contents: read
     steps:
