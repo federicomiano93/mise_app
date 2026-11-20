@@ -657,6 +657,7 @@ export const it: Messages = {
   'cakes.add.first': 'Aggiungi una scheda',
   'cakes.add.more': 'Aggiungi un’altra scheda',
   'cakes.add.aria': '{part}: aggiungi una scheda',
+  'cakes.add.moreAria': '{part}: aggiungi un’altra scheda',
   'cakes.add.full': 'Una parte tiene al massimo {n} schede.',
   'cakes.pick.usedHere': 'già in questa parte',
   'cakes.pack.title': 'Confezione (per tutta la torta)',

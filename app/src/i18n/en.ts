@@ -700,6 +700,7 @@ export const en = {
   'cakes.add.first': 'Add a card',
   'cakes.add.more': 'Add another card',
   'cakes.add.aria': '{part}: add a card',
+  'cakes.add.moreAria': '{part}: add another card',
   'cakes.add.full': 'A part holds {n} cards at most.',
   'cakes.pick.usedHere': 'already in this part',
   'cakes.pack.title': 'Packaging (for the whole cake)',

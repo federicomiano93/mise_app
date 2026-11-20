@@ -127,7 +127,7 @@ export function TierParts({ cake, edit, tier, onTier, selected, onSelect, showLa
               aria-pressed={index === shown}
               onClick={() => { onTier(index); }}
             >
-              {tierName(index)}
+              {tierName(index)}{' '}
               <small>{t('cakes.row.diameter', { d: diameter })}</small>
             </button>
           ))}
@@ -183,7 +183,7 @@ export function TierParts({ cake, edit, tier, onTier, selected, onSelect, showLa
               <Button
                 className={styles.add}
                 variant="bare"
-                aria-label={t('cakes.add.aria', { part: t(`cakes.part.${part}`) })}
+                aria-label={t(lines.length === 0 ? 'cakes.add.aria' : 'cakes.add.moreAria', { part: t(`cakes.part.${part}`) })}
                 onPress={() => { setPicking({ kind: 'card', part }); }}
               >
                 <Plus aria-hidden="true" />
