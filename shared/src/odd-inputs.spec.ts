@@ -1799,7 +1799,7 @@ describe('price-model: odd inputs', () => {
 
   // ── The writing half (the ingredient card's, step 3e-3) ──
   // The same odd values for both. priceUnitLabel, costReasonText and formatPricePerUnit take the translator
-  // and are run in price-write.spec.ts; keepPriceDate has no original yet (see price-model.spec.ts).
+  // and are run in price-write.spec.ts; keepPriceDate and samePriceMaps are paired below.
   const AT = '2026-10-01T10:00:00.000Z';
   const FORMATS: readonly unknown[] = [undefined, null, 5, 'str', [], {}, { kind: 'carton', count: 4, inner: 'busta' },
     { kind: 'carton', count: null, inner: 'busta' }, { kind: 'carton', count: 50, inner: 'pezzo' }, { kind: 'single', count: null, inner: '' },
@@ -1877,6 +1877,24 @@ describe('price-model: odd inputs', () => {
     ...product([{ name: 'Flour', priceUnit: 'kg', pricePerUnit: 7.2, vatRate: 4 }, { name: 'Flour' }, { priceBasis: 'rate', priceUpdatedAt: AT }, { __proto__: { priceUnit: 'kg' }, name: 'x' }],
       [undefined]),
     ...product(PRICE_DOCS.slice(0, 60))]);
+
+  // keepPriceDate: a stored price (dated, undated, odd) against real pricePatch results, a patch with no date
+  // and odd patches.
+  const DATED_DAY = '2026-09-01T12:00:00.000Z';
+  const BEFORE_PRICES: readonly unknown[] = [...ODD, { name: 'Flour' }, { priceUpdatedAt: DATED_DAY }, { priceUpdatedAt: null, pricePerUnit: 7.2 },
+    { priceUnit: 'kg', pricePerUnit: 7.2, unitWeightKg: null, priceUpdatedAt: DATED_DAY }, { priceUnit: 'kg', pricePerUnit: 7.2, priceUpdatedAt: 5 },
+    { priceUnit: 'kg', pricePerUnit: 0, priceUpdatedAt: DATED_DAY }, { priceUnit: 'kg', pricePerUnit: -1, priceUpdatedAt: DATED_DAY },
+    { priceUnit: 'pcs', pricePerUnit: 0.25, unitWeightKg: 0.06, priceUpdatedAt: DATED_DAY }, { priceUnit: 'pcs', pricePerUnit: 0.25, priceUpdatedAt: DATED_DAY },
+    { ...FLOUR_CASE, priceUpdatedAt: DATED_DAY }, { ...PCS_CASE, priceUpdatedAt: DATED_DAY }, { ...FLOUR_CASE, priceUpdatedAt: '' },
+    ...PRICE_DOCS.slice(0, 40).map(doc => (doc && typeof doc === 'object' ? { ...(doc as object), priceUpdatedAt: DATED_DAY } : doc))];
+  const REAL_PATCHES: readonly unknown[] = [{ priceUnit: 'kg', pricePerUnit: 7.2 }, { priceUnit: 'kg', pricePerUnit: 7.6 }, { priceUnit: 'l', pricePerUnit: 1.2 },
+    { priceUnit: 'pcs', pricePerUnit: 0.25, unitWeightKg: 0.06 }, { priceUnit: 'pcs', pricePerUnit: 0.25, unitWeightKg: 0.07 }, { priceUnit: null, pricePerUnit: null },
+    { priceUnit: 'case', casePrice: 180, caseCount: 1, caseItemSize: 25, caseItemUnit: 'kg' }, FLOUR_CASE, PCS_CASE, {}]
+    .map(input => m.pricePatch(input as never, AT));
+  const ODD_PATCHES: readonly unknown[] = [undefined, null, 5, 'x', {}, { priceUpdatedAt: null }, { priceUpdatedAt: undefined }, { priceUpdatedAt: 5 },
+    { priceUpdatedAt: AT }, { priceUpdatedAt: AT, priceUnit: 'kg', pricePerUnit: 7.2 }, { priceUpdatedAt: AT, priceUnit: 'kg', pricePerUnit: 'x' }];
+  agree('keepPriceDate', m.keepPriceDate as AnyFn, l.keepPriceDate as AnyFn, [...product(BEFORE_PRICES, REAL_PATCHES), ...product(BEFORE_PRICES.slice(0, 30), ODD_PATCHES)]);
+  agree('samePriceMaps', m.samePriceMaps, l.samePriceMaps, product(PRICE_MAPS, PRICE_MAPS));
 
   // The rate and the amount, in a few venues.
   const FEW_VENUES: readonly (readonly [unknown, unknown])[] = [[undefined, undefined], ['£', GB_LAYOUT], ['€', IT_LAYOUT],

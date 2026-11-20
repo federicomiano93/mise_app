@@ -13,8 +13,8 @@
 // price-model.ts is an ADAPTED port, so parity.spec.ts does not pair it. The last block of this file stands
 // in for what pairing would have checked: the same names, the same constants, the same frozen-ness, the same
 // function shapes — except that the arity differs by design where the port is handed something the original
-// reads for itself (the venue's money, the translator; see below), and that the port is one name AHEAD of
-// the original (keepPriceDate, until PR #380 reaches this stack).
+// reads for itself (the venue's money, the translator; see below). The port is ahead of the original by
+// no name (since 20 Nov 2026).
 //
 // THE MONEY. The original formats with the symbol and the layout that the session set in js/currency.js
 // (setCurrency); the port is handed a Money (moneyOf). The tests that format money therefore run each
@@ -506,12 +506,8 @@ describe.each([
 // ── What pairing would have checked ──────────────────────────────────────────
 
 describe('the port against the original', () => {
-  // The names the port exports and the original does not (yet). keepPriceDate is F4, from PR #380
-  // (fix/price-date-only-with-money), which has not reached this stack's js/ file: its tests run against the
-  // port alone (price-write.spec.ts). When main is merged into the stack the original gains it, the second
-  // test below fails, and this list is emptied (the F4 describe in price-write.spec.ts then joins the
-  // describe.each of the whole file).
-  const AHEAD = ['keepPriceDate'];
+  // The port is ahead of nothing since 20 Nov 2026: keepPriceDate and samePriceMaps are paired with the
+  // original in price-write.spec.ts, so the two export exactly the same names.
   // The arity differs by design where the port is handed what the original reads for itself: the venue's
   // money (the original keeps it in a module variable) and the translator (the original reads js/i18n.js).
   const EXTRA_ARGUMENTS: Readonly<Record<string, number>> = {
@@ -523,18 +519,8 @@ describe('the port against the original', () => {
   const port = ported as unknown as Record<string, unknown>;
   const shared = Object.keys(original).sort();
 
-  // PORT OWED (release branch, 8 Nov 2026; deferred until after the switch, item 16): keepPriceDate now exists in js/price-model.js (main, price date kept): pair it in price-write.spec.ts and empty AHEAD — remove .fails when ported
-  test.fails('the original has not gained the names this port is ahead with: pair them in the specs, then empty AHEAD', () => {
-    // If it had, the exclusion would be hiding a name that now has an original to be compared with.
-    for (const name of AHEAD) {
-      expect(original[name], `${name} now exists in js/price-model.js: run its tests against both (price-write.spec.ts) and remove it from AHEAD`)
-        .toBe(undefined);
-    }
-  });
-
-  // PORT OWED (release branch, 8 Nov 2026; deferred until after the switch, item 16): main added keepPriceDate and more to js/price-model.js, not yet in the port — remove .fails when ported
-  test.fails('exports exactly the same names, plus those it is ahead with', () => {
-    expect(Object.keys(port).sort()).toStrictEqual([...shared, ...AHEAD].sort());
+  test('exports exactly the same names as the original', () => {
+    expect(Object.keys(port).sort()).toStrictEqual(shared);
   });
 
   test('every non-function export is strictly equal and frozen the same way', () => {

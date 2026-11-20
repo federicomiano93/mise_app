@@ -29,8 +29,7 @@
 // original, which price-model.spec.ts runs without them), the headline rate under another currency (two
 // lines of the original's currency test) and priceUnitLabel.
 //
-// keepPriceDate (F4, PR #380) has no original in this stack yet: its tests are at the end, against the
-// port alone.
+// Also paired, at the end of the describe.each: keepPriceDate (F4, PR #380) and samePriceMaps.
 //
 // NOT PORTED:
 //   * tests/case-price.test.mjs and tests/pack-case.test.mjs: every test that prices a line (unitCost —
@@ -934,68 +933,95 @@ describe.each([
     expect(m.shownPrice('')).toBe('');
     expect(m.shownPrice(null)).toBe(null);
   });
+
+  // ── keepPriceDate (F4, 20 Oct 2026) ──────────────────────────────────────────
+  // The invoice import keeps an invoice's price only when the invoice is NEWER than the price's date, so a
+  // rename that re-dated an old price as today would silently stop every older-dated invoice from updating it.
+  describe('keepPriceDate', () => {
+    const INVOICE_DAY = '2026-09-01T12:00:00.000Z';
+
+    test('a rename keeps the date of the price in force', () => {
+      const before = { name: 'Flour', priceUnit: 'kg', pricePerUnit: 7.2, unitWeightKg: null, priceUpdatedAt: INVOICE_DAY };
+      const patch = m.keepPriceDate(before, m.pricePatch({ priceUnit: 'kg', pricePerUnit: 7.2 }, AT));
+      expect(patch.priceUpdatedAt).toBe(INVOICE_DAY);
+      expect(patch.pricePerUnit).toBe(7.2);
+    });
+
+    test('the same money written another way keeps the date', () => {
+      // «7.20 a kilo» re-typed as a 25 kg sack at 180: the same cost per kilo, no history entry, no new date.
+      const before = { priceUnit: 'kg', pricePerUnit: 7.2, unitWeightKg: null, priceUpdatedAt: INVOICE_DAY };
+      const patch = m.keepPriceDate(before,
+        m.pricePatch({ priceUnit: 'case', casePrice: 180, caseCount: 1, caseItemSize: 25, caseItemUnit: 'kg' }, AT));
+      expect(m.priceChanged(before, patch)).toBe(false);
+      expect(patch.priceUpdatedAt).toBe(INVOICE_DAY);
+    });
+
+    test('a new price takes today as its date', () => {
+      const before = { priceUnit: 'kg', pricePerUnit: 7.2, unitWeightKg: null, priceUpdatedAt: INVOICE_DAY };
+      expect(m.keepPriceDate(before, m.pricePatch({ priceUnit: 'kg', pricePerUnit: 7.6 }, AT)).priceUpdatedAt).toBe(AT);
+    });
+
+    test('a changed piece weight is a new price, with a new date', () => {
+      const before = { priceUnit: 'pcs', pricePerUnit: 0.25, unitWeightKg: 0.06, priceUpdatedAt: INVOICE_DAY };
+      expect(m.keepPriceDate(before, m.pricePatch({ priceUnit: 'pcs', pricePerUnit: 0.25, unitWeightKg: 0.07 }, AT)).priceUpdatedAt).toBe(AT);
+    });
+
+    test('a first price, or a stored price with no date, takes today', () => {
+      const first = m.pricePatch({ priceUnit: 'kg', pricePerUnit: 7.2 }, AT);
+      expect(m.keepPriceDate(null, first).priceUpdatedAt).toBe(AT);
+      expect(m.keepPriceDate({ name: 'Flour' }, first).priceUpdatedAt).toBe(AT);
+      expect(m.keepPriceDate({ name: 'Flour', priceUpdatedAt: INVOICE_DAY }, first).priceUpdatedAt).toBe(AT);
+      const undated = { priceUnit: 'kg', pricePerUnit: 7.2, unitWeightKg: null, priceUpdatedAt: null };
+      expect(m.keepPriceDate(undated, first).priceUpdatedAt).toBe(AT);
+    });
+
+    test('a removed price still clears its date', () => {
+      const before = { priceUnit: 'kg', pricePerUnit: 7.2, unitWeightKg: null, priceUpdatedAt: INVOICE_DAY };
+      const patch = m.keepPriceDate(before, m.pricePatch({ priceUnit: null, pricePerUnit: null }, AT));
+      expect(patch.pricePerUnit).toBe(null);
+      expect(patch.priceUpdatedAt).toBe(null);
+    });
+
+    test('an employee save (no price keys) is left as it is', () => {
+      expect(m.keepPriceDate({ priceUpdatedAt: INVOICE_DAY }, {})).toStrictEqual({});
+    });
+  });
+
+  // ── samePriceMaps — whether a screen may skip a redraw ───────────────────────
+  describe('samePriceMaps', () => {
+    const flour = { priceUnit: 'kg', pricePerUnit: 7.2, unitWeightKg: null };
+    const yeast = { priceUnit: 'kg', pricePerUnit: 4, unitWeightKg: null };
+
+    test('the same object, or the same ids with the same fields, are the same', () => {
+      const a = { flour, yeast };
+      expect(m.samePriceMaps(a, a)).toBe(true);
+      expect(m.samePriceMaps(a, { flour: { ...flour }, yeast: { ...yeast } })).toBe(true);
+      expect(m.samePriceMaps({}, {})).toBe(true);
+    });
+
+    test('a missing map on either side is different', () => {
+      expect(m.samePriceMaps(null, {})).toBe(false);
+      expect(m.samePriceMaps({}, null)).toBe(false);
+      expect(m.samePriceMaps(undefined, { flour })).toBe(false);
+      expect(m.samePriceMaps({ flour }, undefined)).toBe(false);
+    });
+
+    test('a different number of ids, or an id missing in b, is different', () => {
+      expect(m.samePriceMaps({ flour, yeast }, { flour })).toBe(false);
+      expect(m.samePriceMaps({ flour }, { flour, yeast })).toBe(false);
+      expect(m.samePriceMaps({ flour, yeast }, { flour, salt: yeast })).toBe(false);
+    });
+
+    test('a changed value is different', () => {
+      expect(m.samePriceMaps({ flour }, { flour: { ...flour, pricePerUnit: 7.3 } })).toBe(false);
+    });
+
+    test('the same fields in another order count as different (it may only err towards «different»)', () => {
+      const swapped = { unitWeightKg: null, pricePerUnit: 7.2, priceUnit: 'kg' };
+      expect(m.samePriceMaps({ flour }, { flour: swapped })).toBe(false);
+    });
+  });
 });
 
 // (The six tests of tests/pack-format.test.mjs that replay the card's untouched save are in
 // pack-format.spec.ts, which runs each implementation's own price-model with its own pack-format.)
-
-// ── keepPriceDate (F4, 20 Oct 2026) — the port ALONE ─────────────────────────
-// ⚠️ MUST JOIN THE describe.each ABOVE once main (with PR #380, fix/price-date-only-with-money) is merged into
-// this stack: js/price-model.js then exports keepPriceDate, the name check in price-model.spec.ts ('the port
-// against the original') fails until its AHEAD list is emptied, and these tests run against both files.
-// Until then the original has nothing to compare with, so they pin the port against the tests PR #380 wrote
-// (tests/price-model.test.mjs on that branch).
-//
-// The invoice import keeps an invoice's price only when the invoice is NEWER than the price's date, so a
-// rename that re-dated an old price as today would silently stop every older-dated invoice from updating it.
-
-describe('keepPriceDate (F4 — port only until PR #380 reaches this stack)', () => {
-  const m = ported;
-  const INVOICE_DAY = '2026-09-01T12:00:00.000Z';
-
-  test('a rename keeps the date of the price in force', () => {
-    const before = { name: 'Flour', priceUnit: 'kg', pricePerUnit: 7.2, unitWeightKg: null, priceUpdatedAt: INVOICE_DAY };
-    const patch = m.keepPriceDate(before, m.pricePatch({ priceUnit: 'kg', pricePerUnit: 7.2 }, AT));
-    expect(patch.priceUpdatedAt).toBe(INVOICE_DAY);
-    expect(patch.pricePerUnit).toBe(7.2);
-  });
-
-  test('the same money written another way keeps the date', () => {
-    // «7.20 a kilo» re-typed as a 25 kg sack at 180: the same cost per kilo, no history entry, no new date.
-    const before = { priceUnit: 'kg', pricePerUnit: 7.2, unitWeightKg: null, priceUpdatedAt: INVOICE_DAY };
-    const patch = m.keepPriceDate(before,
-      m.pricePatch({ priceUnit: 'case', casePrice: 180, caseCount: 1, caseItemSize: 25, caseItemUnit: 'kg' }, AT));
-    expect(m.priceChanged(before, patch)).toBe(false);
-    expect(patch.priceUpdatedAt).toBe(INVOICE_DAY);
-  });
-
-  test('a new price takes today as its date', () => {
-    const before = { priceUnit: 'kg', pricePerUnit: 7.2, unitWeightKg: null, priceUpdatedAt: INVOICE_DAY };
-    expect(m.keepPriceDate(before, m.pricePatch({ priceUnit: 'kg', pricePerUnit: 7.6 }, AT)).priceUpdatedAt).toBe(AT);
-  });
-
-  test('a changed piece weight is a new price, with a new date', () => {
-    const before = { priceUnit: 'pcs', pricePerUnit: 0.25, unitWeightKg: 0.06, priceUpdatedAt: INVOICE_DAY };
-    expect(m.keepPriceDate(before, m.pricePatch({ priceUnit: 'pcs', pricePerUnit: 0.25, unitWeightKg: 0.07 }, AT)).priceUpdatedAt).toBe(AT);
-  });
-
-  test('a first price, or a stored price with no date, takes today', () => {
-    const first = m.pricePatch({ priceUnit: 'kg', pricePerUnit: 7.2 }, AT);
-    expect(m.keepPriceDate(null, first).priceUpdatedAt).toBe(AT);
-    expect(m.keepPriceDate({ name: 'Flour' }, first).priceUpdatedAt).toBe(AT);
-    expect(m.keepPriceDate({ name: 'Flour', priceUpdatedAt: INVOICE_DAY }, first).priceUpdatedAt).toBe(AT);
-    const undated = { priceUnit: 'kg', pricePerUnit: 7.2, unitWeightKg: null, priceUpdatedAt: null };
-    expect(m.keepPriceDate(undated, first).priceUpdatedAt).toBe(AT);
-  });
-
-  test('a removed price still clears its date', () => {
-    const before = { priceUnit: 'kg', pricePerUnit: 7.2, unitWeightKg: null, priceUpdatedAt: INVOICE_DAY };
-    const patch = m.keepPriceDate(before, m.pricePatch({ priceUnit: null, pricePerUnit: null }, AT));
-    expect(patch.pricePerUnit).toBe(null);
-    expect(patch.priceUpdatedAt).toBe(null);
-  });
-
-  test('an employee save (no price keys) is left as it is', () => {
-    expect(m.keepPriceDate({ priceUpdatedAt: INVOICE_DAY }, {})).toStrictEqual({});
-  });
-});
