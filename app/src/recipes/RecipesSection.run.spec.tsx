@@ -2,6 +2,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { act, cleanup, screen, waitFor, within } from '@testing-library/react';
 import { scaleCatalogue } from '@mise/shared/catalogue-model';
 import { isBusy } from '../session/busy';
+import { fakePhonePush } from '../testing/fakePhonePush';
 import { LOAD, recipe, renderRecipes, sourceWith } from '../testing/renderRecipes';
 import { isRinging, stopAlarm } from './guidedAlarm';
 import { SESSION_KEY } from './guidedSession';
@@ -697,20 +698,22 @@ describe('the phone', () => {
   });
 
   it('says the honest line: keep the screen open, with or without a wake lock', async () => {
+    // A phone that cannot be registered for push (here: notifications blocked) keeps the honest line, after the reason.
     leaveSession();
-    await openRun();
+    await openRun('/recipes/r1/mix', { phonePush: fakePhonePush({ reason: 'blocked' }) });
     expect(inRun().getByText('Keep this screen open — the alarm cannot ring if you leave the app.')).toBeInTheDocument();
     cleanup();
     Reflect.deleteProperty(navigator, 'wakeLock');
-    await openRun();
+    await openRun('/recipes/r1/mix', { phonePush: fakePhonePush({ reason: 'blocked' }) });
     expect(inRun().getByText('Keep this screen open and awake — the alarm cannot ring if you leave the app.')).toBeInTheDocument();
   });
 
-  it('promises no notification: there is none in Mise 2 yet', async () => {
+  it('promises no notification to a phone that cannot get one: the preview project says only the honest line', async () => {
     leaveSession();
-    await openRun();
+    await openRun('/recipes/r1/mix', { phonePush: fakePhonePush({ reason: 'not-configured' }) });
     expect(inRun().queryByText(/notification/i)).not.toBeInTheDocument();
   });
+
 });
 
 describe('the offer on the list', () => {

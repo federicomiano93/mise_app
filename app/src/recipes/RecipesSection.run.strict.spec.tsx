@@ -1,6 +1,8 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { configure, screen, waitFor, within } from '@testing-library/react';
 import { entriesBehind } from '../testing/recipeLinkHelpers';
+import { fakePhonePush } from '../testing/fakePhonePush';
+import { fakeTimerPush } from '../testing/fakeTimerPush';
 import { LOAD, recipe, renderRecipes, sourceWith } from '../testing/renderRecipes';
 import { isRinging, stopAlarm } from './guidedAlarm';
 import { FROM_RECIPE } from './recipesNav';
@@ -72,6 +74,20 @@ describe('under StrictMode: the guided mix', () => {
     await screen.findByRole('region', { name: 'Focaccia' }, LOAD);
     await waitFor(() => { expect(plays.some(play => !play.muted)).toBe(true); });
     expect(isRinging()).toBe(true);
+  });
+
+  it('⚠️ the double mount cancels nothing, and a timer started afterwards is booked once and still held', async () => {
+    const timed = [{ text: 'Rest', rows: [], seconds: 600, speed: '' }];
+    leaveSession({ stepIndex: 0, endsAt: 0, snapshot: { name: 'Focaccia', ingredients: ROWS, steps: timed, endNote: '', targetGrams: 0 } });
+    const timerPush = fakeTimerPush();
+    const { user } = renderRecipes('/recipes/r1/mix', { source: sourceWith([FOCACCIA]), phonePush: fakePhonePush({ reason: 'granted', owner: 'u1' }), timerPush });
+    const run = await screen.findByRole('region', { name: 'Focaccia' }, LOAD);
+    expect(timerPush.schedule).not.toHaveBeenCalled();
+    expect(timerPush.cancel).not.toHaveBeenCalled();
+    await user.click(within(run).getByRole('button', { name: 'Start the timer' }));
+    await waitFor(() => { expect(timerPush.schedule).toHaveBeenCalledTimes(1); });
+    await Promise.resolve();
+    expect(timerPush.cancel).not.toHaveBeenCalled();
   });
 
   it('⚠️ the offer on the list survives the abandoned first run of its effect', async () => {
