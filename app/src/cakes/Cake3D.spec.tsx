@@ -274,7 +274,9 @@ describe('the callouts', () => {
     expect(label.getAttribute('style')).toMatch(/left/);
     expect((container.querySelector('[data-part="soak"]') as HTMLElement).getAttribute('style')).toMatch(/right/);
     // One thin curve each (a cubic, never a straight line), joined to its point.
-    const paths = [...container.querySelectorAll('svg[viewBox="0 0 900 500"] path')];
+    // Each is drawn twice: a light halo under the line, so it reads on the backdrop.
+    expect(container.querySelectorAll('svg[viewBox="0 0 900 500"] path[data-halo]')).toHaveLength(3);
+    const paths = [...container.querySelectorAll('svg[viewBox="0 0 900 500"] path:not([data-halo])')];
     expect(paths).toHaveLength(3);
     for (const path of paths) expect(path.getAttribute('d')).toMatch(/^M [\d.]+ [\d.]+ C /);
   });

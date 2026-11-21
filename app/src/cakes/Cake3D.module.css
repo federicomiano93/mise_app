@@ -71,7 +71,8 @@
   min-width: 0;
   overflow: hidden;
   border-radius: var(--r-md);
-  background: radial-gradient(circle at 50% 45%, var(--cake-stage-center), var(--cake-stage-edge) 85%);
+  /* The same gradient the scene paints behind the cake (cake3dScene.ts paintBackdrop): an ellipse of 74% by 74% from a core of 8%, so the first frame does not jump. */
+  background: radial-gradient(ellipse 74% 74% at 50% 45%, var(--cake-stage-center) 8%, var(--cake-stage-edge) 100%);
 }
 
 /* The stage is a tab stop: R goes back to the initial view while it has the focus. */
@@ -114,16 +115,26 @@
   height: 100%;
 }
 
+/* Each leader is drawn twice: a wider light halo, then the line on top, so it reads on the grey-blue backdrop whatever its colour. */
+.leaderHalo {
+  stroke: var(--surface);
+  stroke-opacity: 0.85;
+  stroke-width: 4;
+  stroke-linecap: round;
+}
+
+.leaderHalo[data-chosen="true"] {
+  stroke-width: 4.6;
+}
+
 .leader {
   stroke: var(--ink);
-  stroke-opacity: 0.7;
   stroke-width: 1.2;
   stroke-linecap: round;
 }
 
 .leader[data-chosen="true"] {
   stroke: var(--accent);
-  stroke-opacity: 0.9;
   stroke-width: 1.8;
 }
 

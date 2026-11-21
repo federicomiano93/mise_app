@@ -209,6 +209,7 @@ export default function Cake3D({ geometry, selected, tier, onSelect, labels, onO
               const on = sameSelection(selected, { tier, part: label.key as CakePart });
               return (
                 <g key={label.key}>
+                  <path className={styles.leaderHalo} data-halo="true" data-chosen={on} fill="none" d={leaderPath(label)} />
                   <path className={styles.leader} data-chosen={on} fill="none" d={leaderPath(label)} />
                   <circle className={styles.leaderDot} data-chosen={on} cx={label.anchor.x} cy={label.anchor.y} r={3} />
                 </g>
