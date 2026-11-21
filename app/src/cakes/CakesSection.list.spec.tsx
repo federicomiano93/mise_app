@@ -136,6 +136,8 @@ describe('moving about', () => {
   it('«New cake» opens a new cake, and Back hands the focus back to «New cake»', async () => {
     const { user, router } = await open();
     await user.click(screen.getByRole('button', { name: 'New cake' }));
+    // The start dialog comes first (CakesSection.start.spec.tsx); a standard cake is the way it always opened.
+    await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: /^Standard cake/ }));
     expect(router.state.location.pathname).toBe('/cakes/new');
     expect(await screen.findByRole('heading', { level: 2, name: 'New cake' })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Back' }));

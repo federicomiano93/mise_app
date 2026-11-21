@@ -1,20 +1,10 @@
-/* The cake's cost and price. Nothing here clips (no `overflow`). */
+/* The body of the cost step: the cake's cost and price. Nothing here clips (no `overflow`). */
 
 .card {
   display: flex;
   flex-direction: column;
   gap: var(--s2);
   min-width: 0;
-  padding: var(--s4);
-  border: 1px solid var(--line);
-  border-radius: var(--r-lg);
-  background: var(--surface);
-  box-shadow: var(--shadow-1);
-}
-
-.title {
-  margin: 0 0 var(--s1);
-  font-size: var(--fs-lg);
 }
 
 .kv {

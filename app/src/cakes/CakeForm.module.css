@@ -101,8 +101,9 @@
   color: var(--ink);
 }
 
-/* One column below 1280px, in an order that puts the name and measures before the parts (the two groups below stop being boxes);
-   from 1280px two columns: the drawing and the parts, and a 380px side with the measures and the cost. */
+/* One column below 1280px, in an order that puts the drawing first, then the name and measures, then the steps (the two groups below
+   stop being boxes); from 1280px two columns: the drawing, and a 420px side with the measures and the steps (the cost is the last
+   of them). */
 .grid {
   display: flex;
   flex-direction: column;
@@ -126,14 +127,10 @@
   order: 3;
 }
 
-.cost {
-  order: 4;
-}
-
 @media (min-width: 1280px) {
   .grid {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 380px;
+    grid-template-columns: minmax(0, 1fr) 420px;
     align-items: start;
   }
 
@@ -147,8 +144,7 @@
 
   .stage,
   .measures,
-  .parts,
-  .cost {
+  .parts {
     order: 0;
   }
 }

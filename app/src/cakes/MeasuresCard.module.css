@@ -17,15 +17,49 @@
   font-size: var(--fs-lg);
 }
 
-.field {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--s2);
+/* The four measures in one row where the card is wide enough: the name takes the first line, the three numbers share the second. */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--s3);
+  align-items: end;
 }
 
-.label {
+.measure {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+  min-width: 0;
+}
+
+.measure[data-wide="true"] {
+  grid-column: 1 / -1;
+}
+
+.measureLabel {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
   font-weight: 600;
+}
+
+/* The unit sits INSIDE the box, at its right. */
+.unitBox {
+  position: relative;
+  display: block;
+}
+
+.unit {
+  position: absolute;
+  top: 50%;
+  right: var(--s3);
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.input[data-unit="true"] {
+  padding-right: calc(var(--s3) + 2.4em);
 }
 
 .input {

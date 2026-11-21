@@ -1,19 +1,26 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Plus, RotateCcw, X } from 'lucide-react';
-import { CAKE_PARTS, MAX_CARDS_PER_PART, cakeLineCosts, cakeProductId, tierDiameters } from '@mise/shared/cake-model';
+import type { ReactNode } from 'react';
+import { Check, Plus, RotateCcw, X } from 'lucide-react';
+import { MAX_CARDS_PER_PART, cakeLineCosts, cakeProductId, tierDiameters } from '@mise/shared/cake-model';
 import type { Cake, CakeLineCost, CakePart, ResolvedLine } from '@mise/shared/cake-model';
 import type { CostTables } from '@mise/shared/foodcost-model';
 import { fcMoney } from '@mise/shared/fc-number';
+import { localNumber } from '@mise/shared/currency';
 import { useFoodcost } from '../foodcost/FoodcostContext';
 import { lineMoney, lineName } from '../foodcost/lineNotes';
 import { NumberBox } from '../foodcost/NumberBox';
 import { PickDialog } from '../foodcost/PickDialog';
-import type { Choice } from '../foodcost/PickDialog';
+import { useSemiRows } from '../foodcost/useSemiRows';
 import { useT } from '../i18n/useT';
 import { useMoney } from '../session/useMoney';
 import { Button } from '../ui/Button';
 import { addCard, cardsIn, removeCard, removePack, resetGrams, setGrams, setPackQty, addPack } from './cakeEditorModel';
 import type { Selected } from './cakeEditorModel';
+import { STEP_PARTS, partFigures, partKey, stepNumber, toggleStep } from './cakeStepsModel';
+import type { StepKey } from './cakeStepsModel';
+import { RecipeCombo } from './RecipeCombo';
+import type { ComboOption } from './RecipeCombo';
+import { useSpoken } from './useSpoken';
 import styles from './TierParts.module.css';
 
 type Props = {
@@ -25,59 +32,70 @@ type Props = {
   onTier: (tier: number) => void;
   selected: Selected | null;
   onSelect: (selected: Selected) => void;
-  // Labour is shown only where Food cost shows it (a labour rate this person may read).
-  showLabour: boolean;
   // The form finds a packaging box by the ingredient (to focus it when Save refuses its 0 pieces).
   registerPack: (ingredientId: string, node: HTMLInputElement | null) => void;
-  // A second tap on the chosen part in the 3D view: opens that part's «Add a card» (a new object each time, so the same part twice opens twice).
+  // A second tap on the chosen part in the 3D view: opens that part's step and puts the cursor in its search box (a new object each
+  // time, so the same part twice opens twice).
   openRequest?: OpenRequest | null;
-  // Called once the request has been acted on (or turned down), so the form drops it: a remount never reopens an old chooser.
+  // Called once the request has been acted on (or turned down), so the form drops it: a remount never reopens an old step.
   onOpenHandled?: () => void;
+  // The step that is open (UI state kept by the form, never saved), and its move.
+  open: StepKey | null;
+  onOpen: (next: StepKey | null) => void;
+  // The sixth step, «Cost and price»: what its closed row says, and what it shows when open (the form owns the numbers).
+  costSummary: string;
+  costBody: ReactNode;
 };
 
 export interface OpenRequest { part: CakePart }
 
-type Picking = { kind: 'card'; part: CakePart } | { kind: 'pack' };
-
-const NONE_TEXT = {
-  soak: 'cakes.none.soak',
-  decoration: 'cakes.none.decoration',
-  coating: 'cakes.none.other',
-  filling: 'cakes.none.other',
-  base: 'cakes.none.other',
-} as const;
-
-// Keys of the focus hand-over that are not a card line.
+// Key of the focus hand-over that is not a card line: the packaging's «Add» button.
 const PACK_ADD = 'pack-add';
 const packKey = (ingredientId: string): string => `pack|${ingredientId}`;
 
 const lineKey = (line: { tier: number; part: CakePart; productId: string }): string => `${line.tier}|${line.part}|${line.productId}`;
 
-// The parts of one tier, and the packaging of the whole cake.
+// The guided steps of one tier — base, soak, filling, coating, decoration — then the packaging of the whole cake, then «Cost and price».
 //
-// ⚠️ THE ORDER IS THE MOCKUP'S, the order a cake is built in: base first, decoration last (the drawing's labels run the other way,
-// top to bottom, because the cake does).
+// ⚠️ ONE STEP IS OPEN AT A TIME, the rest show their title and what they hold. An open step shows ONLY a search box over the venue's
+// semi-finished cards, and the cards chosen with their grams. A closed step is a button (aria-expanded) that opens it.
 // ⚠️ A GRAMS BOX IS EMPTY WHILE THE RULE DECIDES: its placeholder is the rule's figure, and typing a number is «corrected by hand»
-// (the line says so, with the rule's figure beside it, and a ↺ puts the rule back).
-export function TierParts({ cake, edit, tier, onTier, selected, onSelect, showLabour, registerPack, openRequest = null, onOpenHandled }: Props) {
+// (the line says so, with the rule's figure beside it, and a ↺ puts the rule back). A cake that started «from scratch» has no rule: the
+// placeholder is 0 and every line says «type the grams».
+export function TierParts({
+  cake, edit, tier, onTier, selected, onSelect, registerPack, openRequest = null, onOpenHandled, open, onOpen, costSummary, costBody,
+}: Props) {
   const { t } = useT();
   const money = useMoney();
   const ids = useId();
   const { tables, productsLoaded, recipesLoaded, ingredientsLoaded } = useFoodcost();
-  const [picking, setPicking] = useState<Picking | null>(null);
+  const [pickingPack, setPickingPack] = useState(false);
   const shown = Math.min(Math.max(tier, 0), cake.tiers - 1);
   const diameters = tierDiameters(cake.diameterCm, cake.tiers);
 
-  // The 3D view's second tap: the same dialog the part's «Add» button opens, and nothing where that button is not offered (a part with
-  // no layer to fill, or with all its cards).
+  // The cards the open step lists: Food cost's semi-finished cards, the same rows its chooser offers (useSemiRows).
+  const openPart = open !== null && open !== 'cost' ? open : null;
+  const used = useMemo(() => (openPart === null ? [] : cardsIn(cake, shown, openPart).map(line => line.productId)), [cake, shown, openPart]);
+  const semiRows = useSemiRows(cakeProductId(cake.id), used);
+  const options = useMemo<ComboOption[]>(() => semiRows.map(row => ({
+    id: row.card.id,
+    name: row.card.name.trim(),
+    sub: row.reason === null ? row.figures.pill : row.reason === 'fc.pick.alreadyHere' ? t('cakes.pick.usedHere') : t(row.reason),
+    off: row.reason !== null,
+  })), [semiRows, t]);
+
+  // The 3D view's second tap: the part's step opens and the cursor goes to its search box; nothing to type in for a part with no
+  // layer to fill, or with all its cards (the step still opens, to show it).
+  const focusCombo = useRef<CakePart | null>(null);
   useEffect(() => {
     if (openRequest === null) return;
     const { part } = openRequest;
     onOpenHandled?.();
+    onOpen(part);
     if (part === 'filling' && cake.discs < 2) return;
     if (cardsIn(cake, shown, part).length >= MAX_CARDS_PER_PART) return;
-    setPicking({ kind: 'card', part });
-    // Only a new request opens the dialog, never a later change of the cake.
+    focusCombo.current = part;
+    // Only a new request opens a step, never a later change of the cake.
   }, [openRequest]);
 
   const costs = useMemo(() => {
@@ -85,14 +103,18 @@ export function TierParts({ cake, edit, tier, onTier, selected, onSelect, showLa
     for (const cost of cakeLineCosts(cake, tables)) byKey.set(lineKey(cost.line), cost);
     return byKey;
   }, [cake, tables]);
+  const figures = useMemo(() => partFigures([...costs.values()]), [costs]);
 
   // A card just added: its grams box takes the focus, the next thing to fill in.
   const boxes = useRef(new Map<string, HTMLInputElement>());
   const focusNext = useRef<string | null>(null);
   // ⚠️ A CONTROL THAT IS PRESSED AND THEN GOES AWAY (✕, ↺) HANDS THE FOCUS ON, or the keyboard and the screen reader land on the page:
-  // `focusNext` is the grams (or pieces) box that takes it, `focusAdd` the «Add» button of a part (or the packaging) that has no row left.
-  const addButtons = useRef(new Map<string, HTMLButtonElement>());
-  const focusAdd = useRef<string | null>(null);
+  // `focusNext` is the grams (or pieces) box that takes it, `focusStep` the title of a step (or the packaging's «Add» button) that has
+  // no row left.
+  const stepButtons = useRef(new Map<CakePart, HTMLButtonElement>());
+  const combos = useRef(new Map<CakePart, HTMLInputElement>());
+  const addPackButton = useRef<HTMLButtonElement | null>(null);
+  const focusStep = useRef<CakePart | typeof PACK_ADD | null>(null);
   useLayoutEffect(() => {
     const key = focusNext.current;
     if (key !== null) {
@@ -102,20 +124,25 @@ export function TierParts({ cake, edit, tier, onTier, selected, onSelect, showLa
       node.focus();
       return;
     }
-    const add = focusAdd.current;
-    if (add === null) return;
-    const button = addButtons.current.get(add);
-    if (!button) return;
-    focusAdd.current = null;
-    button.focus();
+    const part = focusCombo.current;
+    if (part !== null) {
+      const node = combos.current.get(part);
+      if (!node) return;
+      focusCombo.current = null;
+      node.focus();
+      return;
+    }
+    const step = focusStep.current;
+    if (step === null) return;
+    const node = step === PACK_ADD ? addPackButton.current : stepButtons.current.get(step);
+    if (!node) return;
+    focusStep.current = null;
+    node.focus();
   });
-  const registerAdd = (key: string) => (node: HTMLButtonElement | null) => {
-    if (node) addButtons.current.set(key, node); else addButtons.current.delete(key);
-  };
-  // The row that takes the focus when `lines[index]` goes: the next one, else the one before, else the part's «Add» button.
-  const handFocusOn = (lines: { tier: number; part: CakePart; productId: string }[], index: number, addKey: string) => {
+  // The row that takes the focus when `lines[index]` goes: the next one, else the one before, else the step's title.
+  const handFocusOn = (lines: { tier: number; part: CakePart; productId: string }[], index: number, part: CakePart) => {
     const neighbour = lines[index + 1] ?? lines[index - 1];
-    if (neighbour) focusNext.current = lineKey(neighbour); else focusAdd.current = addKey;
+    if (neighbour) focusNext.current = lineKey(neighbour); else focusStep.current = part;
   };
   const registerBox = useCallback((key: string, node: HTMLInputElement | null) => {
     if (node) boxes.current.set(key, node); else boxes.current.delete(key);
@@ -143,22 +170,54 @@ export function TierParts({ cake, edit, tier, onTier, selected, onSelect, showLa
     }
   };
 
-  const choose = (choice: Choice) => {
-    const current = picking;
-    setPicking(null);
-    if (current === null) return;
-    if (current.kind === 'pack') {
-      edit(cakeNow => addPack(cakeNow, choice.id));
-      return;
-    }
-    focusNext.current = lineKey({ tier: shown, part: current.part, productId: choice.id });
-    edit(cakeNow => addCard(cakeNow, shown, current.part, choice.id));
+  const pick = (part: CakePart, productId: string) => {
+    focusNext.current = lineKey({ tier: shown, part, productId });
+    edit(cakeNow => addCard(cakeNow, shown, part, productId));
   };
 
   const packLoaded = { recipes: recipesLoaded, ingredients: ingredientsLoaded };
+  const said = useSpoken(open === null ? '' : t('cakes.steps.opened', {
+    n: stepNumber(open), total: STEP_PARTS.length + 1, part: open === 'cost' ? t('cakes.cost.title') : t(`cakes.part.${open}`),
+  }));
+
+  // What a closed step says under its title: each card's name with its grams (or that the grams are still to be typed).
+  const closedLines = (part: CakePart): string[] => cardsIn(cake, shown, part).flatMap(line => {
+    const cost = costs.get(lineKey(line));
+    const name = nameOf(line.productId).text.trim();
+    if (name === '' || !cost) return [];
+    const grams = cost.line.missing ? t('cakes.gramsToType') : t('cakes.grams', { g: localNumber(String(Math.round(cost.line.grams)), money) });
+    return [t('cakes.steps.line', { name, grams })];
+  });
+
+  const header = (
+    key: StepKey, title: string, summary: string[], hasCard: boolean, todo: boolean, onPress: () => void,
+    ref?: (node: HTMLButtonElement | null) => void,
+  ) => {
+    const isOpen = open === key;
+    return (
+      <h4 className={styles.stepName}>
+        <button
+          ref={ref}
+          id={`${ids}-step-${key}`}
+          type="button"
+          className={styles.stepButton}
+          aria-expanded={isOpen}
+          aria-controls={`${ids}-panel-${key}`}
+          onClick={onPress}
+        >
+          <span className={styles.num} data-done={hasCard} aria-hidden="true">{hasCard ? <Check /> : stepNumber(key)}</span>
+          <span className={styles.stepText}>
+            <span className={styles.stepTitle}>{title}</span>
+            {isOpen ? null : summary.map((line, index) => <span key={index} className={styles.stepSub} data-todo={todo}>{line}</span>)}
+          </span>
+          {hasCard ? <span className="visually-hidden">{t('cakes.steps.hasCard')}</span> : null}
+        </button>
+      </h4>
+    );
+  };
 
   return (
-    <div className={styles.parts} data-labour={showLabour}>
+    <div className={styles.parts}>
       {cake.tiers > 1 ? (
         <div className={styles.tabs} role="group" aria-label={t('cakes.tier.group')}>
           {diameters.map((diameter, index) => (
@@ -176,74 +235,71 @@ export function TierParts({ cake, edit, tier, onTier, selected, onSelect, showLa
         </div>
       ) : null}
 
-      <div className={styles.head} aria-hidden="true">
-        <span>{t('cakes.parts.head.card')}</span>
-        <span className={styles.right}>{t('cakes.parts.head.grams')}</span>
-        <span className={styles.right}>{t('cakes.parts.head.materials')}</span>
-        {showLabour ? <span className={styles.right}>{t('cakes.parts.head.labour')}</span> : null}
-        <span />
-      </div>
+      <p className="visually-hidden" role="status">{said}</p>
 
-      {[...CAKE_PARTS].reverse().map(part => {
-        const lines = cardsIn(cake, shown, part);
-        const resolved = lines.map(line => costs.get(lineKey(line))).filter((cost): cost is CakeLineCost => cost !== undefined);
-        const noLayer = part === 'filling' && cake.discs < 2;
-        const full = lines.length >= MAX_CARDS_PER_PART;
-        const isSelected = selected !== null && selected.tier === shown && selected.part === part;
-        const headId = `${ids}-${part}`;
-        return (
-          <section key={part} className={styles.part} data-selected={isSelected} aria-labelledby={headId}>
-            <div className={styles.partHead}>
-              <h4 id={headId} className={styles.partName}>
-                <button type="button" className={styles.choose} aria-pressed={isSelected} onClick={() => { onSelect({ tier: shown, part }); }}>
-                  {t(`cakes.part.${part}`)}
-                </button>
-              </h4>
-              <span className={styles.rule}>{ruleSentence(part)}</span>
-            </div>
+      <ol className={styles.steps} aria-label={t('cakes.steps.list')}>
+        {STEP_PARTS.map(part => {
+          const isOpen = open === part;
+          const lines = cardsIn(cake, shown, part);
+          const resolved = lines.map(line => costs.get(lineKey(line))).filter((cost): cost is CakeLineCost => cost !== undefined);
+          const noLayer = part === 'filling' && cake.discs < 2;
+          const full = lines.length >= MAX_CARDS_PER_PART;
+          const isSelected = selected !== null && selected.tier === shown && selected.part === part;
+          const todo = figures.get(partKey(shown, part))?.missingGrams === true;
+          const partName = t(`cakes.part.${part}`);
+          return (
+            <li key={part} className={styles.step} data-open={isOpen} data-selected={isSelected}>
+              {header(part, partName, closedLines(part), lines.length > 0, todo, () => {
+                onOpen(toggleStep(open, part));
+                onSelect({ tier: shown, part });
+              }, node => { if (node) stepButtons.current.set(part, node); else stepButtons.current.delete(part); })}
 
-            {resolved.length === 0 ? (
-              <p className={styles.none}>{noLayer ? t('cakes.noLayer') : t(NONE_TEXT[part])}</p>
-            ) : resolved.map(cost => (
-              <CakeLineRow
-                key={lineKey(cost.line)}
-                idPrefix={ids}
-                cost={cost}
-                name={nameOf(cost.line.productId)}
-                loss={lossOf(tables.products, cost.line.productId)}
-                showLabour={showLabour}
-                registerBox={registerBox}
-                onGrams={text => { edit(current => setGrams(current, shown, part, cost.line.productId, text)); }}
-                onReset={() => {
-                  focusNext.current = lineKey(cost.line);
-                  edit(current => resetGrams(current, shown, part, cost.line.productId));
-                }}
-                onRemove={() => {
-                  handFocusOn(lines, lines.findIndex(line => line.productId === cost.line.productId), part);
-                  edit(current => removeCard(current, shown, part, cost.line.productId));
-                }}
-              />
-            ))}
+              {isOpen ? (
+                <div id={`${ids}-panel-${part}`} className={styles.stepBody} role="group" aria-labelledby={`${ids}-step-${part}`}>
+                  {noLayer ? (
+                    <p className={styles.none}>{t('cakes.noLayer')}</p>
+                  ) : full ? (
+                    <p className={styles.full}>{t('cakes.add.full', { n: MAX_CARDS_PER_PART })}</p>
+                  ) : (
+                    <RecipeCombo
+                      label={t('cakes.combo.label', { part: partName })}
+                      placeholder={t(lines.length === 0 ? 'cakes.combo.placeholder' : 'cakes.combo.placeholderMore')}
+                      options={options}
+                      emptyText={options.length === 0 ? t('fc.pick.semiEmpty') : t('cakes.combo.empty')}
+                      openLabel={t('cakes.combo.open')}
+                      inputRef={node => { if (node) combos.current.set(part, node); else combos.current.delete(part); }}
+                      onPick={id => { pick(part, id); }}
+                    />
+                  )}
 
-            {noLayer ? null : full ? (
-              <p className={styles.full}>{t('cakes.add.full', { n: MAX_CARDS_PER_PART })}</p>
-            ) : (
-              <Button
-                ref={registerAdd(part)}
-                className={styles.add}
-                variant="bare"
-                aria-label={t(lines.length === 0 ? 'cakes.add.aria' : 'cakes.add.moreAria', { part: t(`cakes.part.${part}`) })}
-                onPress={() => { setPicking({ kind: 'card', part }); }}
-              >
-                <Plus aria-hidden="true" />
-                {t(lines.length === 0 ? 'cakes.add.first' : 'cakes.add.more')}
-              </Button>
-            )}
-          </section>
-        );
-      })}
+                  {resolved.map(cost => (
+                    <CakeLineRow
+                      key={lineKey(cost.line)}
+                      idPrefix={ids}
+                      cost={cost}
+                      name={nameOf(cost.line.productId)}
+                      loss={lossOf(tables.products, cost.line.productId)}
+                      registerBox={registerBox}
+                      onGrams={text => { edit(current => setGrams(current, shown, part, cost.line.productId, text)); }}
+                      onReset={() => {
+                        focusNext.current = lineKey(cost.line);
+                        edit(current => resetGrams(current, shown, part, cost.line.productId));
+                      }}
+                      onRemove={() => {
+                        handFocusOn(lines, lines.findIndex(line => line.productId === cost.line.productId), part);
+                        edit(current => removeCard(current, shown, part, cost.line.productId));
+                      }}
+                    />
+                  ))}
+                  {resolved.length > 0 && ruleSentence(part) !== '' ? <p className={styles.hint}>{ruleSentence(part)}</p> : null}
+                </div>
+              ) : null}
+            </li>
+          );
+        })}
+      </ol>
 
-      <section className={styles.part} aria-labelledby={`${ids}-pack`}>
+      <section className={styles.pack} aria-labelledby={`${ids}-pack`}>
         <div className={styles.partHead}>
           <h4 id={`${ids}-pack`} className={styles.partName}>{t('cakes.pack.title')}</h4>
           <span className={styles.rule}>{t('cakes.pack.rule')}</span>
@@ -273,11 +329,10 @@ export function TierParts({ cake, edit, tier, onTier, selected, onSelect, showLa
               <div className={styles.money} data-missing={price.noPrice}>
                 {price.text === '' ? '—' : price.text}
               </div>
-              {showLabour ? <div className={styles.money} /> : null}
               <div className={styles.actions}>
                 <Button variant="bare" className={styles.icon} aria-label={t('cakes.row.removeAria', { name: name.text })} onPress={() => {
                   const next = cake.packaging[index + 1] ?? cake.packaging[index - 1];
-                  if (next) focusNext.current = packKey(next.ingredientId); else focusAdd.current = PACK_ADD;
+                  if (next) focusNext.current = packKey(next.ingredientId); else focusStep.current = PACK_ADD;
                   edit(current => removePack(current, pack.ingredientId));
                 }}>
                   <X aria-hidden="true" />
@@ -286,22 +341,36 @@ export function TierParts({ cake, edit, tier, onTier, selected, onSelect, showLa
             </div>
           );
         })}
-        <Button ref={registerAdd(PACK_ADD)} className={styles.add} variant="bare" onPress={() => { setPicking({ kind: 'pack' }); }}>
+        <Button ref={addPackButton} className={styles.add} variant="bare" onPress={() => { setPickingPack(true); }}>
           <Plus aria-hidden="true" />
           {t('cakes.pack.add')}
         </Button>
       </section>
 
-      {picking === null ? null : (
+      <p className={styles.divider}>{t('cakes.steps.then')}</p>
+      <ol className={styles.steps} start={STEP_PARTS.length + 1}>
+        <li className={styles.step} data-open={open === 'cost'}>
+          {header('cost', t('cakes.cost.title'), costSummary === '' ? [] : [costSummary], false, false, () => { onOpen(toggleStep(open, 'cost')); })}
+          {open === 'cost' ? (
+            <div id={`${ids}-panel-cost`} className={styles.stepBody} role="group" aria-labelledby={`${ids}-step-cost`}>
+              {costBody}
+              <Button className={styles.finish} variant="primary" onPress={() => { onOpen(null); }}>
+                <Check aria-hidden="true" />
+                {t('cakes.steps.finish')}
+              </Button>
+            </div>
+          ) : null}
+        </li>
+      </ol>
+
+      {pickingPack ? (
         <PickDialog
-          mode={picking.kind === 'pack' ? 'packaging' : 'semi'}
+          mode="packaging"
           cardId={cakeProductId(cake.id)}
-          usedSemiIds={picking.kind === 'card' ? cardsIn(cake, shown, picking.part).map(line => line.productId) : []}
-          usedLabel={t('cakes.pick.usedHere')}
-          onChoose={choose}
-          onClose={() => { setPicking(null); }}
+          onChoose={choice => { setPickingPack(false); edit(cakeNow => addPack(cakeNow, choice.id)); }}
+          onClose={() => { setPickingPack(false); }}
         />
-      )}
+      ) : null}
     </div>
   );
 }
@@ -321,14 +390,14 @@ type RowProps = {
   cost: CakeLineCost;
   name: { text: string; missing: boolean };
   loss: number | null;
-  showLabour: boolean;
   registerBox: (key: string, node: HTMLInputElement | null) => void;
   onGrams: (text: string) => void;
   onReset: () => void;
   onRemove: () => void;
 };
 
-function CakeLineRow({ idPrefix, cost, name, loss, showLabour, registerBox, onGrams, onReset, onRemove }: RowProps) {
+// One card of the open step: its name and how its grams are decided, the grams box, what the card costs, ↺ and ✕.
+function CakeLineRow({ idPrefix, cost, name, loss, registerBox, onGrams, onReset, onRemove }: RowProps) {
   const { t } = useT();
   const money = useMoney();
   const line: ResolvedLine = cost.line;
@@ -361,12 +430,6 @@ function CakeLineRow({ idPrefix, cost, name, loss, showLabour, registerBox, onGr
         {cost.materials === null ? '—' : fcMoney(cost.materials, money)}
         <small>{cost.materials === null ? t('cakes.row.noPrice') : t('cakes.row.materials')}</small>
       </div>
-      {showLabour ? (
-        <div className={styles.money}>
-          {cost.labour === null ? '—' : fcMoney(cost.labour, money)}
-          <small>{t('cakes.row.labour')}</small>
-        </div>
-      ) : null}
       <div className={styles.actions}>
         {line.manual ? (
           <Button variant="bare" className={styles.icon} aria-label={t('cakes.row.resetAria', { name: label })} onPress={onReset}>

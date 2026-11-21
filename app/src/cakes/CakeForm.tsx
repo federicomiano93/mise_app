@@ -3,10 +3,11 @@ import type { Ref } from 'react';
 import { Check, Trash2 } from 'lucide-react';
 import { useBlocker, useNavigate } from 'react-router';
 import type { BlockerFunction } from 'react-router';
-import { MAX_SELLING_PRICE, cakeGeometry, cakeProduct, cakeProductId, cakeTotals, toCakeDocument } from '@mise/shared/cake-model';
+import { MAX_SELLING_PRICE, cakeGeometry, cakeLineCosts, cakeProduct, cakeProductId, cakeTotals, toCakeDocument } from '@mise/shared/cake-model';
 import type { Cake } from '@mise/shared/cake-model';
 import { vatSelection } from '@mise/shared/foodcost-model';
 import { localNumber } from '@mise/shared/currency';
+import { fcMoney } from '@mise/shared/fc-number';
 import { countryOf } from '@mise/shared/market';
 import { firstInvalidNumber } from '@mise/shared/product-limits';
 import { useFoodcost, useFoodcostStore } from '../foodcost/FoodcostContext';
@@ -32,6 +33,9 @@ import { CakeStage } from './CakeStage';
 import type { StageLabels } from './CakeStage';
 import { useCakes } from './CakesContext';
 import { CAKES_PATH, referencePath } from './cakesPath';
+import type { CakeStart } from './cakesPath';
+import { partFigures, partKey, startStep } from './cakeStepsModel';
+import type { StepKey } from './cakeStepsModel';
 import { CostCard } from './CostCard';
 import type { PriceField, PriceTexts } from './CostCard';
 import { MeasuresCard } from './MeasuresCard';
@@ -45,6 +49,8 @@ type Props = {
   id: string | null;
   // The cake as the store holds it now: null when it is not there (a new one, or one deleted on another phone while this stayed open).
   cake: Cake | null;
+  // How a NEW cake starts (the list's «How do you want to start?»): `zero` takes none of the venue's reference grams. Ignored for a saved cake.
+  start?: CakeStart;
   titleRef: Ref<HTMLHeadingElement>;
   // Saved: the editor has nothing more to say (a new cake gets its own address).
   onSaved: (id: string) => void;
@@ -70,7 +76,7 @@ const textOf = (value: number | null): string => (value === null || !Number.isFi
 //
 // ⚠️ SAVE IS ONE WRITE: the cake and its Food cost card travel in the same batch (saveProduct with a companion), so a cake and its card
 // can never be saved apart; Delete removes both the same way.
-export function CakeForm({ id, cake, titleRef, onSaved }: Props) {
+export function CakeForm({ id, cake, start = 'standard', titleRef, onSaved }: Props) {
   const { t } = useT();
   const store = useFoodcostStore();
   const snap = useFoodcost();
@@ -90,13 +96,18 @@ export function CakeForm({ id, cake, titleRef, onSaved }: Props) {
   const cakeId = id ?? newId;
   const productId = cakeProductId(cakeId);
 
-  const [initial, setInitial] = useState<Cake>(() => workingFrom(cake, reference, newId));
+  // ⚠️ «FROM SCRATCH» TAKES NO REFERENCE GRAMS: the cake starts with `ref: null`, so every line needs its grams typed, and the bands about
+  // the venue's reference grams stay quiet for it (the person chose to ignore them).
+  const [fromScratch] = useState(() => id === null && start === 'zero');
+  const [initial, setInitial] = useState<Cake>(() => workingFrom(cake, fromScratch ? null : reference, newId));
   const [working, setWorking] = useState<Cake>(initial);
   const [texts, setTexts] = useState<PriceTexts>(() => {
     const vat = vatSelection(initial.vatRate, country);
     return { price: textOf(initial.sellingPrice), target: textOf(initial.foodCostTarget), vatSelect: vat.select, vatOther: vat.other };
   });
   const [tier, setTier] = useState(0);
+  // The step that is open: the first one for a new cake, none for a saved one.
+  const [openStepKey, setOpenStepKey] = useState<StepKey | null>(() => startStep(id !== null));
   const [selected, setSelected] = useState<Selected | null>(null);
   // The 3D view's second tap on the chosen part: TierParts opens that part's «Add a card».
   const [openRequest, setOpenRequest] = useState<OpenRequest | null>(null);
@@ -204,6 +215,16 @@ export function CakeForm({ id, cake, titleRef, onSaved }: Props) {
   // ── Focus ─────────────────────────────────────────────────────────────────────────────────────
   const nameBox = useRef<HTMLInputElement>(null);
   const priceBoxes = useRef<Partial<Record<PriceField, HTMLInputElement | null>>>({});
+  // The box Save refused, waiting for its step to open (see save()).
+  const revealAfterRender = useRef<PriceField | null>(null);
+  useLayoutEffect(() => {
+    const field = revealAfterRender.current;
+    if (field === null) return;
+    const node = priceBoxes.current[field];
+    if (!node) return;
+    revealAfterRender.current = null;
+    reveal(node);
+  });
   const registerPrice = useCallback((field: PriceField, node: HTMLInputElement | null) => { priceBoxes.current[field] = node; }, []);
   const packBoxes = useRef(new Map<string, HTMLInputElement>());
   const registerPack = useCallback((ingredientId: string, node: HTMLInputElement | null) => {
@@ -267,6 +288,9 @@ export function CakeForm({ id, cake, titleRef, onSaved }: Props) {
     const invalid = firstInvalidNumber(product) ?? (product.sellingPrice !== null && product.sellingPrice > MAX_SELLING_PRICE ? 'sellingPrice' : null);
     if (invalid === 'sellingPrice' || invalid === 'vatRate' || invalid === 'foodCostTarget') {
       setBadNumber(invalid);
+      // The price, VAT and target boxes live in the cost step: it opens, and the box takes the focus once it is on the page.
+      setOpenStepKey('cost');
+      revealAfterRender.current = invalid;
       reveal(priceBoxes.current[invalid]);
       say(t('fc.checkNumber', { field: t(NUMBER_LABEL[invalid]) }));
       return;
@@ -342,6 +366,12 @@ export function CakeForm({ id, cake, titleRef, onSaved }: Props) {
   const heading = id === null ? t('cakes.new') : initial.name.trim() === '' ? t('cakes.untitled') : initial.name;
 
   const cardNames = useMemo(() => new Map(snap.products.map(card => [card.id, card.name] as const)), [snap.products]);
+  // What each part of each tier holds, for its callout on the 3D view: grams and the raw-material cost of its cards.
+  const figures = useMemo(() => partFigures(cakeLineCosts(working, snap.tables)), [working, snap.tables]);
+  // «Raw materials so far»: the cake's raw materials as the cost step says them (a figure with «+?» is a floor, not the cost).
+  const partial = totals.partial || totals.unpricedIds.length > 0 || totals.missingLines > 0;
+  const rawText = totals.materials === null ? '—' : `${fcMoney(totals.materials, money)}${partial ? ' +?' : ''}`;
+  const hasParts = working.lines.some(line => line.tier < working.tiers) || working.packaging.length > 0;
   const labels = useMemo<StageLabels>(() => ({
     summary: t('cakes.stage.summary', { n: working.tiers, discs: t('cakes.stage.discCount', { n: working.discs }) }),
     part: {
@@ -351,12 +381,20 @@ export function CakeForm({ id, cake, titleRef, onSaved }: Props) {
     cardName: cardId => (cardNames.get(cardId) ?? '').trim(),
     grams: grams => t('cakes.grams', { g: localNumber(String(Math.round(grams)), money) }),
     diameter: diameterCm => t('cakes.row.diameter', { d: diameterCm }),
-  }), [t, money, working.tiers, working.discs, cardNames]);
+    callout: (tierIndex, part) => {
+      const held = figures.get(partKey(tierIndex, part));
+      if (!held) return '';
+      if (held.missingGrams) return t('cakes.gramsToType');
+      const grams = t('cakes.grams', { g: localNumber(String(Math.round(held.grams)), money) });
+      return t('cakes.callout.figures', { grams, cost: held.materials === null ? t('cakes.row.noPrice') : fcMoney(held.materials, money) });
+    },
+    total: hasParts ? t('cakes.stage.total', { cost: rawText }) : '',
+  }), [t, money, working.tiers, working.discs, cardNames, figures, hasParts, rawText]);
 
   const venueRef = reference;
-  const refDiffers = referenceChanged(working, venueRef);
+  const refDiffers = !fromScratch && referenceChanged(working, venueRef);
   // An existing cake with none of its own does not claim «no reference» before the venue's has answered.
-  const noReference = working.ref === null && venueRef === null && (id === null || referenceLoaded);
+  const noReference = !fromScratch && working.ref === null && venueRef === null && (id === null || referenceLoaded);
 
   return (
     <section className={styles.editor} aria-labelledby={titleId}>
@@ -410,6 +448,11 @@ export function CakeForm({ id, cake, titleRef, onSaved }: Props) {
                 />
               </PartBoundary>
             </div>
+          </div>
+          <div className={styles.side}>
+            <div className={styles.measures}>
+              <MeasuresCard cake={working} edit={edit} nameRef={nameBox} nameInvalid={showNameError && working.name.trim() === ''} />
+            </div>
             <section className={`${styles.card} ${styles.parts}`} aria-labelledby={`${ids}-parts`}>
               <h3 id={`${ids}-parts`} className={styles.cardTitle}>
                 {t('cakes.parts.title')}
@@ -423,43 +466,38 @@ export function CakeForm({ id, cake, titleRef, onSaved }: Props) {
                   onTier={next => { setTier(next); }}
                   selected={selected}
                   onSelect={next => { setSelected(next); }}
-                  showLabour={showLabour}
                   registerPack={registerPack}
                   openRequest={openRequest}
                   onOpenHandled={() => { setOpenRequest(null); }}
+                  open={openStepKey}
+                  onOpen={setOpenStepKey}
+                  costSummary={hasParts ? t('cakes.steps.costSummary', { cost: rawText }) : ''}
+                  costBody={
+                    <CostCard
+                      totals={totals}
+                      sellingPrice={forCost.sellingPrice}
+                      texts={texts}
+                      showLabour={showLabour}
+                      invalid={badNumber}
+                      slices={working.slices}
+                      onSlices={n => { edit(current => setMeasure(current, 'slices', n)); }}
+                      assemblyMinutes={working.assemblyMinutes}
+                      onAssembly={n => { edit(current => setMeasure(current, 'assemblyMinutes', n)); }}
+                      onPrice={setPriceText}
+                      onTarget={setTargetText}
+                      onVatSelect={setVatSelect}
+                      onVatOther={setVatOther}
+                      onVatGuide={applyVatRate}
+                      registerBox={registerPrice}
+                      onOpenNeeds={opener => {
+                        needsOpener.current = opener;
+                        setNeedsOpen(true);
+                      }}
+                    />
+                  }
                 />
               </PartBoundary>
             </section>
-          </div>
-          <div className={styles.side}>
-            <div className={styles.measures}>
-              <MeasuresCard cake={working} edit={edit} nameRef={nameBox} nameInvalid={showNameError && working.name.trim() === ''} />
-            </div>
-            <div className={styles.cost}>
-              <PartBoundary>
-                <CostCard
-                  totals={totals}
-                  sellingPrice={forCost.sellingPrice}
-                  texts={texts}
-                  showLabour={showLabour}
-                  invalid={badNumber}
-                  slices={working.slices}
-                  onSlices={n => { edit(current => setMeasure(current, 'slices', n)); }}
-                  assemblyMinutes={working.assemblyMinutes}
-                  onAssembly={n => { edit(current => setMeasure(current, 'assemblyMinutes', n)); }}
-                  onPrice={setPriceText}
-                  onTarget={setTargetText}
-                  onVatSelect={setVatSelect}
-                  onVatOther={setVatOther}
-                  onVatGuide={applyVatRate}
-                  registerBox={registerPrice}
-                  onOpenNeeds={opener => {
-                    needsOpener.current = opener;
-                    setNeedsOpen(true);
-                  }}
-                />
-              </PartBoundary>
-            </div>
           </div>
         </div>
       </div>

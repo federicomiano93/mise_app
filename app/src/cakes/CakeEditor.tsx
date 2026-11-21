@@ -10,7 +10,7 @@ import { useT } from '../i18n/useT';
 import { FormBar } from '../ui/FormBar';
 import { CakeForm } from './CakeForm';
 import { useCakes } from './CakesContext';
-import { CAKES_PATH, cakePath } from './cakesPath';
+import { CAKES_PATH, cakePath, startOf } from './cakesPath';
 import styles from './CakeEditor.module.css';
 
 // One cake's screen: a cake by its address (`id`), or a new one (`id` null).
@@ -91,7 +91,7 @@ export function CakeEditor({ id }: { id: string | null }) {
       </section>
     );
   }
-  return <CakeForm key={shown.serial} id={id} cake={cake} titleRef={title} onSaved={saved} />;
+  return <CakeForm key={shown.serial} id={id} cake={cake} start={startOf(state)} titleRef={title} onSaved={saved} />;
 }
 
 // A cake address whose cake is not among the cakes, once the server has said so.

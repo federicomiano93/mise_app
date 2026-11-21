@@ -14,7 +14,7 @@ import { CakesDetail } from './CakesDetail';
 import { CakesList } from './CakesList';
 import { cakesMessageText } from './cakesMessages';
 import { CAKES_PATH, cakePath, newCakePath, parseCakesPath, referencePath } from './cakesPath';
-import type { CakesView } from './cakesPath';
+import type { CakeStart, CakesView } from './cakesPath';
 import styles from './CakesSection.module.css';
 
 // Cakes: the cakes by name, and ONE LEVEL AT A TIME at every width: a cake, a new cake or the settings open over the whole page, and
@@ -69,17 +69,18 @@ function CakesLayout({ view }: { view: CakesView }) {
 
   // A cake, a new cake or the settings opens one level down, so Back steps up to the list. The list is hidden behind what opens, and
   // the page shrinks to it: the place in the list is written down now.
-  const openScreen = (to: string) => {
+  const openScreen = (to: string, extra: object = {}) => {
     if (view.kind === 'list') listTop.current = scrollArea()?.scrollTop ?? null;
-    void navigate(to, { state: FROM_LIST });
+    void navigate(to, { state: { ...FROM_LIST, ...extra } });
   };
   const openCake = (id: string) => {
     handBack.expect(productOpener(id));
     openScreen(cakePath(id));
   };
-  const openNew = () => {
+  // How the new cake starts (the list's question) travels in the state, so the editor needs no address of its own for it.
+  const openNew = (start: CakeStart) => {
     handBack.expect(NEW_OPENER);
-    openScreen(newCakePath);
+    openScreen(newCakePath, { cakeStart: start });
   };
   const openReference = () => {
     handBack.expect(SETTINGS_OPENER);

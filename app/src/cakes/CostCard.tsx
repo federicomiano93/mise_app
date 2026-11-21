@@ -65,8 +65,8 @@ const VAT_WORDS: Readonly<Record<string, MessageKey>> = {
   'fc.vat.zero': 'fc.vat.zero',
 };
 
-// What the cake costs and what it is sold for: the raw materials, the labour (only where Food cost shows it), the cost of a slice, the
-// price with its VAT and target, the food cost with its light, and the price that would hit the target.
+// The body of the sixth step, «Cost and price» (its title is the step's own): what the cake costs and what it is sold for — the raw
+// materials, the labour (only where Food cost shows it), the cost of a slice, the price with its VAT and target, the food cost with its light, and the price that would hit the target.
 //
 // ⚠️ A FIGURE SHOWN ALONE IS ALWAYS THE MATERIALS (Food cost's rule since PR #589): «Raw materials» and the slice's cost never turn into
 // «materials + labour» for somebody who can read the labour rate; the total is a line of its own, and the slice's total says so.
@@ -110,9 +110,7 @@ export function CostCard({ totals, sellingPrice, texts, showLabour, invalid, sli
   };
 
   return (
-    <section className={styles.card} aria-labelledby={`${ids}-title`}>
-      <h3 id={`${ids}-title`} className={styles.title}>{t('cakes.cost.title')}</h3>
-
+    <div className={styles.card}>
       <div className={styles.kv}>
         <span>{t('cakes.cost.materials')}<span className={styles.muted}>{t('cakes.cost.materialsSub')}</span></span>
         <b className={styles.num}>{amount(totals.materials)}</b>
@@ -279,6 +277,6 @@ export function CostCard({ totals, sellingPrice, texts, showLabour, invalid, sli
           onClose={() => { setGuideOpen(false); }}
         />
       ) : null}
-    </section>
+    </div>
   );
 }

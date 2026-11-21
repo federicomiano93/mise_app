@@ -22,9 +22,8 @@ const NEW_DIAMETER_CM = 20;
 const NEW_DISCS = 3;
 const NEW_SLICES = 12;
 
-// The diameter stepper stops here (the rules allow 60: nobody bakes that, and a tap too many should not reach it).
+// The diameter stops here (the rules allow 60: nobody bakes that, and a slip of the finger should not reach it).
 export const EDITOR_MAX_DIAMETER_CM = 40;
-export const DIAMETER_STEP_CM = 2;
 export const ASSEMBLY_STEP_MIN = 5;
 const MAX_ASSEMBLY_MINUTES = 100000;
 const MAX_PACK_PCS = 1000;

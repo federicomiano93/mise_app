@@ -31,15 +31,17 @@ const heading = (name: string | RegExp) => screen.findByRole('heading', { level:
 
 describe('a stored cake', () => {
   it('opens named, with the «On the price list» tag, its drawing, its parts, its measures and its cost', async () => {
-    await open('/cakes/c1');
+    const { user } = await open('/cakes/c1');
     expect(await heading('Sacher')).toBeInTheDocument();
     expect(screen.getByText('On the price list')).toBeInTheDocument();
     expect(await screen.findByRole('img', { name: /^Section drawing of the cake: 1 tier, 2 discs per tier/ })).toBeInTheDocument();
     expect(screen.getByRole('heading', { level: 3, name: /^Parts of the cake/ })).toBeInTheDocument();
     expect(screen.getByRole('heading', { level: 3, name: 'Measures' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { level: 3, name: 'Cost and price' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Cost and price/ })).toHaveAttribute('aria-expanded', 'false');
     expect(screen.getByRole('textbox', { name: 'Name' })).toHaveValue('Sacher');
-    // 1000 g of the sponge at £2.00 a kilo.
+    // Every step is closed when a saved cake opens; the first one holds the sponge, 1000 g of it at £2.00 a kilo.
+    expect(screen.getByRole('button', { name: /^Base/ })).toHaveTextContent(/Sponge · 1,?000 g/);
+    await user.click(screen.getByRole('button', { name: /^Base/ }));
     expect(screen.getByRole('textbox', { name: 'Sponge: grams' })).toHaveValue('1000');
     expect(screen.getByText('adjusted by hand · the rule says 600 g')).toBeInTheDocument();
   });
@@ -155,6 +157,7 @@ describe('leaving', () => {
   it('a change that is undone is not a change', async () => {
     const { user, router } = await open('/cakes/c1');
     await heading('Sacher');
+    await user.click(screen.getByRole('button', { name: /^Cost and price/ }));
     await user.click(screen.getByRole('button', { name: 'One slice more' }));
     await user.click(screen.getByRole('button', { name: 'One slice fewer' }));
     await user.click(screen.getByRole('button', { name: 'Back' }));

@@ -1,5 +1,6 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
+import type { UserEvent } from '@testing-library/user-event';
 import { fakeCakesSource } from '../testing/fakeCakesSource';
 import { BOX, PACKAGING_PRICES } from '../testing/foodcostEditorFixtures';
 import { REFERENCE, SPONGE, cakeDoc, renderCakes, storedReference } from '../testing/renderCakes';
@@ -7,8 +8,9 @@ import { FLOUR, FLOUR_PRICES, LOAD, product } from '../testing/renderFoodcost';
 import { fakeFoodcostSource } from '../testing/fakeFoodcostSource';
 import type { StoredDoc } from '../foodcost/foodcostSource';
 
-// The parts of a cake: the tiers, the cards in each part, the grams (the rule, or typed by hand), the packaging, and the bands about the
-// reference grams. The measures and the cost are in CakeForm.cost.spec.tsx.
+// The parts of a cake: the tiers, the cards in each step, the grams (the rule, or typed by hand), the packaging, and the bands about the
+// reference grams. The steps themselves (one open at a time, the search box) are in CakeForm.steps.spec.tsx; the measures and the cost
+// are in CakeForm.cost.spec.tsx.
 
 beforeAll(async () => { await import('./CakesSection'); }, 60_000);
 beforeEach(() => { window.localStorage.clear(); });
@@ -36,9 +38,16 @@ const open = async (path = '/cakes/c1', cake = PLAIN, options: Parameters<typeof
   return view;
 };
 
+// A saved cake opens with every step closed: a step is a button, named by its title (and what it holds).
+const step = (part: string) => screen.getByRole('button', { name: new RegExp(`^${part}`) });
+const openStep = async (user: UserEvent, part: string) => {
+  if (step(part).getAttribute('aria-expanded') !== 'true') await user.click(step(part));
+};
+const search = (part: string) => screen.getByRole('combobox', { name: `Search a recipe for ${part}` });
 describe('the cards in a part', () => {
   it('the grams box is empty and shows the rule’s figure while the rule decides; the line says «ready»', async () => {
-    await open();
+    const { user } = await open();
+    await openStep(user, 'Base');
     const box = screen.getByRole('textbox', { name: 'Sponge: grams' });
     expect(box).toHaveValue('');
     expect(box).toHaveAttribute('placeholder', '900');
@@ -48,6 +57,7 @@ describe('the cards in a part', () => {
 
   it('typing grams is «adjusted by hand», with the rule’s figure beside it, and ↺ gives the rule back', async () => {
     const { user } = await open();
+    await openStep(user, 'Base');
     const box = screen.getByRole('textbox', { name: 'Sponge: grams' });
     await user.type(box, '700');
     expect(box).toHaveValue('700');
@@ -58,65 +68,69 @@ describe('the cards in a part', () => {
     expect(screen.queryByRole('button', { name: 'Back to the rule: Sponge' })).not.toBeInTheDocument();
   });
 
-  it('adds a card from the chooser, which names the cards the part already holds and cannot pick them', async () => {
+  it('adds another card from the search box, which lists the cards the part already holds and cannot pick them', async () => {
     const { user } = await open();
-    await user.click(screen.getByRole('button', { name: 'Base: add another card' }));
-    const dialog = await screen.findByRole('dialog', undefined, LOAD);
-    const sponge = within(dialog).getByRole('button', { name: /Sponge/ });
-    expect(sponge).toBeDisabled();
-    expect(within(dialog).getByText('already in this part')).toBeInTheDocument();
-    expect(within(dialog).queryByText('already on this card')).not.toBeInTheDocument();
-    await user.click(within(dialog).getByRole('button', { name: /Cream/ }));
+    await openStep(user, 'Base');
+    await user.click(search('Base'));
+    const sponge = await screen.findByRole('option', { name: /Sponge/ }, LOAD);
+    expect(sponge).toHaveAttribute('aria-disabled', 'true');
+    expect(within(sponge).getByText('already in this part')).toBeInTheDocument();
+    await user.click(screen.getByRole('option', { name: /Cream/ }));
     // The new card's grams box takes the focus, and the rule is shared: 900 g between two cards.
     const box = await screen.findByRole('textbox', { name: 'Cream: grams' });
-    expect(box).toHaveFocus();
+    await waitFor(() => { expect(box).toHaveFocus(); });
     expect(box).toHaveAttribute('placeholder', '450');
     expect(screen.getByRole('textbox', { name: 'Sponge: grams' })).toHaveAttribute('placeholder', '450');
+    // The box is empty again, ready for one more.
+    expect(search('Base')).toHaveValue('');
   });
 
   it('the same card may sit in another part', async () => {
     const { user } = await open();
-    await user.click(screen.getByRole('button', { name: 'Soak: add a card' }));
-    const dialog = await screen.findByRole('dialog', undefined, LOAD);
-    expect(within(dialog).getByRole('button', { name: /Sponge/ })).toBeEnabled();
+    await openStep(user, 'Soak');
+    await user.click(search('Soak'));
+    expect(await screen.findByRole('option', { name: /Sponge/ }, LOAD)).not.toHaveAttribute('aria-disabled', 'true');
   });
 
   it('never offers a whole cake, only semi-finished cards', async () => {
     const { user } = await open('/cakes/c1', PLAIN, { foodcost: foodcost([product('cake-other', { name: 'Another cake', kind: 'finished', model: 4 })]) });
-    await user.click(screen.getByRole('button', { name: 'Soak: add a card' }));
-    const dialog = await screen.findByRole('dialog', undefined, LOAD);
-    expect(within(dialog).queryByText('Another cake')).not.toBeInTheDocument();
+    await openStep(user, 'Soak');
+    await user.click(search('Soak'));
+    await screen.findByRole('option', { name: /Sponge/ }, LOAD);
+    expect(screen.queryByRole('option', { name: /Another cake/ })).not.toBeInTheDocument();
   });
 
-  it('removes a card, and the part says so', async () => {
+  it('removes a card, and the step shows its search box with nothing chosen', async () => {
     const { user } = await open();
+    await openStep(user, 'Base');
     await user.click(screen.getByRole('button', { name: 'Remove Sponge' }));
     expect(screen.queryByRole('textbox', { name: 'Sponge: grams' })).not.toBeInTheDocument();
-    expect(screen.getAllByText('No card').length).toBeGreaterThan(0);
-    expect(screen.getByText('No soak')).toBeInTheDocument();
-    expect(screen.getByText('No decoration')).toBeInTheDocument();
+    expect(search('Base')).toHaveAttribute('placeholder', 'Search a recipe…');
+    expect(step('Base')).not.toHaveTextContent('Sponge');
   });
 
-  it('a part with six cards offers no «add» and says why', async () => {
+  it('a part with six cards offers no search box and says why', async () => {
     const names = ['A', 'B', 'C', 'D', 'E', 'F'].map(letter => semi(`S${letter}`, `Card ${letter}`));
     const six = cakeDoc('c1', 'Plain', {
       diameterCm: 22, discs: 3, ref: REFERENCE,
       lines: names.map(card => ({ tier: 0, part: 'filling', productId: card.id, grams: null })),
     });
-    await open('/cakes/c1', six, { foodcost: foodcost(names) });
-    expect(screen.queryByRole('button', { name: 'Filling: add a card' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Filling: add another card' })).not.toBeInTheDocument();
+    const { user } = await open('/cakes/c1', six, { foodcost: foodcost(names) });
+    await openStep(user, 'Filling');
+    expect(screen.queryByRole('combobox', { name: 'Search a recipe for Filling' })).not.toBeInTheDocument();
     expect(screen.getByText('A part holds 6 cards at most.')).toBeInTheDocument();
   });
 
-  it('a filling with one disc says «No layer with a single disc» and offers no «add»', async () => {
-    await open('/cakes/c1', cakeDoc('c1', 'Plain', { diameterCm: 22, discs: 1, ref: REFERENCE, lines: [] }));
+  it('a filling with one disc says «No layer with a single disc» and offers no search box', async () => {
+    const { user } = await open('/cakes/c1', cakeDoc('c1', 'Plain', { diameterCm: 22, discs: 1, ref: REFERENCE, lines: [] }));
+    await openStep(user, 'Filling');
     expect(screen.getByText('No layer with a single disc')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Filling: add a card' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: 'Search a recipe for Filling' })).not.toBeInTheDocument();
   });
 
   it('a card that is not on the books is named as gone and counts 0 g until grams are typed', async () => {
-    await open('/cakes/c1', cakeDoc('c1', 'Plain', { diameterCm: 22, discs: 3, ref: REFERENCE, lines: [{ tier: 0, part: 'base', productId: 'GHOST', grams: null }] }));
+    const { user } = await open('/cakes/c1', cakeDoc('c1', 'Plain', { diameterCm: 22, discs: 3, ref: REFERENCE, lines: [{ tier: 0, part: 'base', productId: 'GHOST', grams: null }] }));
+    await openStep(user, 'Base');
     expect(screen.getByText('This card no longer exists')).toBeInTheDocument();
   });
 });
@@ -134,6 +148,7 @@ describe('the tiers', () => {
 
   it('two tiers have «Bottom tier Ø 24» and «Top tier Ø 18», each with its own cards', async () => {
     const { user } = await open('/cakes/c1', TWO);
+    await openStep(user, 'Base');
     const tabs = screen.getByRole('group', { name: 'Tier' });
     expect(within(tabs).getByRole('button', { name: 'Bottom tier Ø 24' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('textbox', { name: 'Sponge: grams' })).toBeInTheDocument();
@@ -148,12 +163,12 @@ describe('the tiers', () => {
     expect(screen.getByRole('button', { name: 'Middle tier Ø 20' })).toBeInTheDocument();
   });
 
-  it('choosing a part in the list marks it', async () => {
+  it('opening a step marks the part in the drawing’s list', async () => {
     const { user } = await open('/cakes/c1', TWO);
-    const choose = screen.getByRole('button', { name: 'Base' });
-    expect(choose).toHaveAttribute('aria-pressed', 'false');
-    await user.click(choose);
-    expect(choose).toHaveAttribute('aria-pressed', 'true');
+    const row = step('Base').closest('li');
+    expect(row).toHaveAttribute('data-selected', 'false');
+    await user.click(step('Base'));
+    expect(row).toHaveAttribute('data-selected', 'true');
   });
 });
 
@@ -167,22 +182,25 @@ describe('the focus is never dropped on the page', () => {
     packaging: [{ ingredientId: 'box', qtyPcs: 1 }],
   });
 
-  it('removing a card hands the focus to the next row, or the one before, or the part’s «Add» button', async () => {
+  it('removing a card hands the focus to the next row, or the one before, or the step’s title', async () => {
     const { user } = await open('/cakes/c1', TWO);
+    await openStep(user, 'Base');
     await user.click(screen.getByRole('button', { name: 'Remove Sponge' }));
     expect(screen.getByRole('textbox', { name: 'Cream: grams' })).toHaveFocus();
     await user.click(screen.getByRole('button', { name: 'Remove Cream' }));
-    expect(screen.getByRole('button', { name: 'Base: add a card' })).toHaveFocus();
+    expect(step('Base')).toHaveFocus();
   });
 
   it('removing the last row of a part with others hands the focus to the row before', async () => {
     const { user } = await open('/cakes/c1', TWO);
+    await openStep(user, 'Base');
     await user.click(screen.getByRole('button', { name: 'Remove Cream' }));
     expect(screen.getByRole('textbox', { name: 'Sponge: grams' })).toHaveFocus();
   });
 
   it('going back to the rule keeps the focus in the grams box of the same row', async () => {
     const { user } = await open('/cakes/c1', TWO);
+    await openStep(user, 'Base');
     await user.click(screen.getByRole('button', { name: 'Back to the rule: Cream' }));
     expect(screen.getByRole('textbox', { name: 'Cream: grams' })).toHaveFocus();
   });
@@ -193,13 +211,13 @@ describe('the focus is never dropped on the page', () => {
     expect(screen.getByRole('button', { name: 'Add packaging' })).toHaveFocus();
   });
 
-  it('a stepper pressed up to its limit hands the focus to its other button', async () => {
+  it('a stepper pressed down to its limit hands the focus to its other button', async () => {
     const { user } = await open('/cakes/c1', TWO);
-    const more = screen.getByRole('button', { name: 'One disc more' });
-    await user.click(more);
-    await user.click(screen.getByRole('button', { name: 'One disc more' }));
-    expect(screen.getByRole('button', { name: 'One disc more' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'One disc fewer' })).toHaveFocus();
+    await user.click(screen.getByRole('button', { name: /^Cost and price/ }));
+    await user.click(screen.getByRole('button', { name: 'Five minutes more' }));
+    await user.click(screen.getByRole('button', { name: 'Five minutes fewer' }));
+    expect(screen.getByRole('button', { name: 'Five minutes fewer' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Five minutes more' })).toHaveFocus();
   });
 });
 
@@ -235,6 +253,7 @@ describe('the reference grams', () => {
   it('a cake made with other grams offers to take the current ones, and the rule follows', async () => {
     const older = cakeDoc('c1', 'Plain', { diameterCm: 22, discs: 3, ref: { ...REFERENCE, baseG: 200 } });
     const { user } = await open('/cakes/c1', older);
+    await openStep(user, 'Base');
     expect(screen.getByText('The reference grams have changed since this cake was made.')).toBeInTheDocument();
     expect(screen.getByText('200 g per disc × 3 discs, scaled to Ø 22')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Update this cake to the current reference grams' }));
@@ -251,6 +270,7 @@ describe('the reference grams', () => {
       foodcost: foodcost(),
     });
     await screen.findByRole('heading', { level: 2, name: 'Plain' }, LOAD);
+    await openStep(view.user, 'Base');
     expect(screen.getByText('There are no reference grams yet, so every line needs its grams typed by hand.')).toBeInTheDocument();
     expect(screen.getAllByText('no reference grams yet: type the grams').length).toBeGreaterThan(0);
     const band = screen.getByText('There are no reference grams yet, so every line needs its grams typed by hand.').parentElement as HTMLElement;

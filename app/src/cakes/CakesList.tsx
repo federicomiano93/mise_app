@@ -1,19 +1,22 @@
 import { useCallback, useId, useMemo, useState } from 'react';
-import { Plus, Search, Settings } from 'lucide-react';
+import { PencilLine, Plus, Scale, Search, Settings } from 'lucide-react';
 import { useFoodcost } from '../foodcost/FoodcostContext';
 import { NEW_OPENER, SETTINGS_OPENER, productOpener, useHandBack } from '../foodcost/handBack';
 import { percentText, statusWord } from '../foodcost/productRowModel';
 import { useT } from '../i18n/useT';
 import { useMoney } from '../session/useMoney';
 import { Button } from '../ui/Button';
+import { Dialog } from '../ui/Dialog';
 import { useCakes } from './CakesContext';
 import { cakeSubLine, costCakes, matchingCakes } from './cakesListModel';
 import type { CakeRowData } from './cakesListModel';
+import type { CakeStart } from './cakesPath';
 import styles from './CakesList.module.css';
 
 type Props = {
   onOpenCake: (id: string) => void;
-  onOpenNew: () => void;
+  // The question «How do you want to start?» is answered here, so the editor opens already knowing.
+  onOpenNew: (start: CakeStart) => void;
   onOpenReference: () => void;
 };
 
@@ -37,6 +40,7 @@ export function CakesList({ onOpenCake, onOpenNew, onOpenReference }: Props) {
   // ⚠️ THE SEARCH BOX IS NEVER REMOUNTED BY A DATA SNAPSHOT: a controlled input in a part that stays mounted, and only the rows
   // below it are redrawn, so a snapshot landing mid-keystroke finds the text and the keyboard where the person left them.
   const [query, setQuery] = useState('');
+  const [starting, setStarting] = useState(false);
   const found = useMemo(() => matchingCakes(costed, query), [costed, query]);
 
   const newRef = useCallback((node: HTMLButtonElement | null) => { handBack.register(NEW_OPENER, node); }, [handBack]);
@@ -45,7 +49,7 @@ export function CakesList({ onOpenCake, onOpenNew, onOpenReference }: Props) {
   return (
     <div className={styles.column}>
       <div className={styles.actions}>
-        <Button ref={newRef} variant="primary" className={styles.add} onPress={onOpenNew}>
+        <Button ref={newRef} variant="primary" className={styles.add} onPress={() => { setStarting(true); }}>
           <Plus aria-hidden="true" />
           {t('cakes.new')}
         </Button>
@@ -94,6 +98,31 @@ export function CakesList({ onOpenCake, onOpenNew, onOpenReference }: Props) {
         <Settings aria-hidden="true" />
         {t('cakes.referenceLink')}
       </Button>
+
+      {/* ⚠️ ONLY A NEW CAKE ASKS: a saved cake opens straight on its steps. Cancelling (or Escape) stays on the list. */}
+      <Dialog
+        isOpen={starting}
+        onClose={() => { setStarting(false); }}
+        title={t('cakes.start.title')}
+        actions={<Button onPress={() => { setStarting(false); }}>{t('common.cancel')}</Button>}
+      >
+        <div className={styles.choices}>
+          <button type="button" className={styles.choice} onClick={() => { setStarting(false); onOpenNew('standard'); }}>
+            <Scale aria-hidden="true" />
+            <span className={styles.choiceText}>
+              <b>{t('cakes.start.standard')}</b>
+              <span>{t('cakes.start.standardSub')}</span>
+            </span>
+          </button>
+          <button type="button" className={styles.choice} onClick={() => { setStarting(false); onOpenNew('zero'); }}>
+            <PencilLine aria-hidden="true" />
+            <span className={styles.choiceText}>
+              <b>{t('cakes.start.zero')}</b>
+              <span>{t('cakes.start.zeroSub')}</span>
+            </span>
+          </button>
+        </div>
+      </Dialog>
     </div>
   );
 }
