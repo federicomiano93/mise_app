@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import type { MouseEvent, RefObject } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, Ellipsis } from 'lucide-react';
 import { Link, NavLink, Outlet, useHref, useLocation, useNavigate } from 'react-router';
 import { RouterProvider as AriaRouterProvider } from 'react-aria-components';
 import { PartBoundary } from '../errors/PartBoundary';
@@ -28,9 +28,10 @@ const sectionOf = (pathname: string): string => pathname.split('/')[1] ?? '';
 // tablet's Home (and on a kiosk phone's Home, for «Standby» and «Exit»), and the section itself in the middle.
 //
 // ⚠️ BOTH NAVIGATIONS ARE ALWAYS IN THE DOM; CSS MEDIA QUERIES DECIDE WHICH ONE SHOWS. No
-// script measures the width: a tablet turned from landscape to portrait, or a window resized,
+// script measures the width or the height: a tablet turned from landscape to portrait, or a window resized,
 // changes the layout with no render at all, and `display: none` keeps the hidden one out of the
-// tab order and away from screen readers.
+// tab order and away from screen readers. The same goes for the rail's «More» item: the data says which links CAN spill
+// (`data-spill`, and `data-items` on the rail), the stylesheet decides WHEN, by window height.
 // This person's holiday is held here, at the venue level, so the Home's band, Settings' row and the once-a-day reminder agree.
 export function AppShell() {
   return (
@@ -141,15 +142,28 @@ function SkipLink({ target }: { target: RefObject<HTMLElement | null> }) {
 // outside every landmark is skipped by people who move from landmark to landmark (axe «region»).
 function Rail() {
   const { t } = useT();
-  const { railTop, railBottom } = useVisibleSections();
+  const { pathname } = useLocation();
+  const { railTop, railBottom, railSpill } = useVisibleSections();
 
   return (
-    <div className={styles.rail}>
+    <div className={styles.rail} data-items={railTop.length + railBottom.length}>
       <nav className={styles.railNav} aria-label={t('nav.rail')}>
         <div className={styles.mark} aria-hidden="true">{t('app.name').charAt(0)}</div>
-        {railTop.map(section => <RailLink key={section.id} section={section} />)}
+        {railTop.map(section => <RailLink key={section.id} section={section} spill={railSpill.includes(section)} />)}
+        {/* Hidden by CSS until a short window hides the spilled links (AppShell.module.css, the last step). A plain Link: «More»
+            also stands for every section it holds here. */}
+        {railSpill.length === 0 ? null : (
+          <Link
+            to={MORE.path}
+            className={`${styles.railItem} ${styles.railMore}`}
+            aria-current={moreIsCurrent(pathname, railSpill) ? 'page' : undefined}
+          >
+            <Ellipsis className={styles.railIcon} />
+            <span>{t(MORE.label)}</span>
+          </Link>
+        )}
         <div className={styles.spacer} />
-        {railBottom.map(section => <RailLink key={section.id} section={section} />)}
+        {railBottom.map(section => <RailLink key={section.id} section={section} spill={false} />)}
       </nav>
       <AccountAvatar />
     </div>
@@ -172,12 +186,12 @@ function AccountAvatar() {
   );
 }
 
-function RailLink({ section }: { section: Section }) {
+function RailLink({ section, spill }: { section: Section; spill: boolean }) {
   const { t } = useT();
   const Icon = section.icon;
 
   return (
-    <NavLink to={section.path} className={styles.railItem}>
+    <NavLink to={section.path} className={styles.railItem} data-spill={spill ? '' : undefined}>
       <Icon className={styles.railIcon} />
       <span>{t(section.label)}</span>
     </NavLink>

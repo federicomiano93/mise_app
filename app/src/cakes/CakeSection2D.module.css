@@ -1,0 +1,96 @@
+/* The cake in section. Every colour is a token: the parts' own fills are --cake-* (tokens.css), outlines and words are the neutrals. */
+
+.draw {
+  display: flex;
+  justify-content: center;
+  min-width: 0;
+}
+
+.draw svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.draw text {
+  font-family: var(--font);
+}
+
+.hit {
+  cursor: pointer;
+}
+
+.board {
+  fill: var(--cake-board);
+  stroke: var(--line-2);
+}
+
+.base {
+  fill: var(--cake-base);
+}
+
+.soak {
+  fill: var(--cake-soak);
+  fill-opacity: 0.55;
+}
+
+.filling {
+  fill: var(--cake-filling);
+  stroke: var(--line-2);
+  stroke-width: 0.5;
+}
+
+.coating {
+  fill: var(--cake-coating);
+  stroke: var(--line-2);
+}
+
+.decoration {
+  fill: var(--cake-decoration);
+}
+
+/* The part chosen in the parts list. */
+.chosen {
+  stroke: var(--accent);
+  stroke-width: 2.5;
+}
+
+.diameter {
+  fill: var(--ink);
+  font-size: 12px;
+}
+
+.leader {
+  stroke: var(--ink-3);
+  stroke-opacity: 0.55;
+  stroke-width: 1.2;
+}
+
+.leader[data-chosen="true"] {
+  stroke: var(--accent);
+  stroke-opacity: 1;
+  stroke-width: 2;
+}
+
+.leaderDot {
+  fill: var(--ink-3);
+}
+
+.leaderDot[data-chosen="true"] {
+  fill: var(--accent);
+}
+
+.noteTitle {
+  fill: var(--ink);
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.noteTitle[data-chosen="true"] {
+  fill: var(--accent-ink);
+}
+
+.noteSub {
+  fill: var(--ink-2);
+  font-size: 12px;
+}

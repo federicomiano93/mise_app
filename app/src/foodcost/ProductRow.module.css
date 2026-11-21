@@ -118,3 +118,20 @@
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+
+/* The «Cake» tag on a cake's card: its own colour is the kind's, the word says the rest. */
+.cakeTag {
+  flex: none;
+  padding: 2px var(--s2);
+  border-radius: var(--r-sm);
+  background: var(--accent-tint);
+  color: var(--accent-ink);
+  font-size: var(--fs-sm);
+  font-weight: 650;
+}
+
+.nameLine {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}

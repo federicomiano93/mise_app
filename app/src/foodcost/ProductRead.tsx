@@ -1,11 +1,12 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { Ref } from 'react';
 import { Pencil } from 'lucide-react';
-import { useLocation, useNavigate } from 'react-router';
+import { Link, useLocation, useNavigate } from 'react-router';
 import { cardsUsing, currentProduct, labourBatchCost, productionCost, totalLabourBatchCost } from '@mise/shared/foodcost-model';
 import type { CostTables, Product } from '@mise/shared/foodcost-model';
 import { countryOf } from '@mise/shared/market';
 import { useT } from '../i18n/useT';
+import { KEEP_FOCUS } from '../shell/Page';
 import { useSession } from '../session/SessionContext';
 import { Button } from '../ui/Button';
 import { FormBar } from '../ui/FormBar';
@@ -45,6 +46,9 @@ type Props = {
   // name says why — 'coming' while the server's recipes may still arrive; 'failed' when the recipes stream died with a recipe of
   // the product's lines missing from this phone (only a new visit to Food cost listens again, so «once they arrive» would be a lie).
   editWaits?: 'coming' | 'failed' | null;
+  // A cake's own card (its id starts with `cake-`): the address of its editor in Cakes. Set, the card is READ-ONLY here — no pencil,
+  // no lab mode, no delete — and a band sends the person to Cakes, where the cake is changed. null: an ordinary card.
+  cakeHref?: string | null;
 };
 
 // Whether the summary has anything to show: something is costed. A fault in the cost model counts as «nothing».
@@ -66,7 +70,7 @@ export function summaryShows(product: unknown, tables: CostTables): boolean {
 // split alike.
 // ⚠️ NOTHING IN IT IS A CONTROL BUT THE BAR'S BUTTONS, THE «?» OF EACH SECTION, «DETAILS», «WHICH?», «COST BREAKDOWN», HISTORY AND
 // DELETE: a box sneaking in would be a form that looks like text.
-export function ProductRead({ id, product: stored, gone, origin, titleRef, onEdit, editWaits = null }: Props) {
+export function ProductRead({ id, product: stored, gone, origin, titleRef, onEdit, editWaits = null, cakeHref = null }: Props) {
   const { t } = useT();
   const store = useFoodcostStore();
   const snap = useFoodcost();
@@ -154,7 +158,7 @@ export function ProductRead({ id, product: stored, gone, origin, titleRef, onEdi
         titleId={titleId}
         titleRef={titleRef}
         sub={waitNote ? <p id={waitId} className={shell.sub}>{waitNote}</p> : undefined}
-        action={
+        action={cakeHref !== null ? undefined : (
           // ⚠️ HELD WITH aria-disabled, NEVER THE disabled ATTRIBUTE (spec and third code review, 11 Nov 2026): browsers send a
           // tap's pointer events to a disabled button, and React Aria starts a press on them that no click ever ends — the first
           // tap once the pencil was free went into finishing that press and opened nothing; and a disabled button drops the focus.
@@ -168,12 +172,21 @@ export function ProductRead({ id, product: stored, gone, origin, titleRef, onEdi
           >
             <Pencil aria-hidden="true" />
           </Button>
-        }
+        )}
       />
 
       <div className={shell.body}>
+        {cakeHref === null ? null : (
+          // ⚠️ THE CAKE'S OWN CARD IS A VIEW OF THE CAKE: Cakes writes both, and an edit here would be overwritten by the next cake
+          // Save. The link carries `fromFoodcost` so Back from the cake returns to this card.
+          <div className={shell.cakeBand}>
+            <h3 className={shell.cakeTitle}>{t('fc.cakeCard.title')}</h3>
+            <p className={shell.cakeBody}>{t('fc.cakeCard.body')}</p>
+            <Link to={cakeHref} state={{ ...KEEP_FOCUS, fromFoodcost: true }} className={shell.cakeOpen}>{t('fc.cakeCard.open')}</Link>
+          </div>
+        )}
         {semiCard ? null : <ProductSummary product={product} tables={snap.tables} />}
-        <LabEntry productId={id} held={waitNote} onHeld={() => say(waitNote)} onOpen={() => { setLabOpen(true); }} />
+        {cakeHref === null ? <LabEntry productId={id} held={waitNote} onHeld={() => say(waitNote)} onOpen={() => { setLabOpen(true); }} /> : null}
         <CardSection title={t('fc.section.product')} help={t('fc.help.prod')}>
           <ReadProduct product={product} working={working} categories={snap.categories} />
         </CardSection>
@@ -219,7 +232,7 @@ export function ProductRead({ id, product: stored, gone, origin, titleRef, onEdi
             // phone it is one level down and Back is the browser's.
             void navigate(historyPath(id, origin), split ? { replace: true, state } : { state: { ...FROM_PRODUCT, ...pushDepth(state) } });
           }}
-          onDelete={canManage ? () => { void remove(); } : null}
+          onDelete={canManage && cakeHref === null ? () => { void remove(); } : null}
         />
       </div>
       {confirmDialog}

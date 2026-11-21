@@ -5,6 +5,7 @@ import { en } from '../i18n/en';
 import { hasScreen } from './sectionScreens';
 import {
   MORE,
+  RAIL_PLACES_SHORT,
   SECTIONS,
   STOCKTAKE_UNAVAILABLE_SCREEN,
   arrangeSections,
@@ -18,7 +19,7 @@ import type { SectionId } from './sections';
 describe('the section list', () => {
   it('is in the order the rail shows it', () => {
     expect(SECTIONS.map(section => section.id)).toEqual([
-      'home', 'bookings', 'orders', 'suppliers', 'recipes', 'labels', 'calculator', 'clients', 'pastries', 'stocktake', 'foodcost', 'settings',
+      'home', 'bookings', 'orders', 'suppliers', 'recipes', 'labels', 'calculator', 'clients', 'pastries', 'stocktake', 'foodcost', 'cakes', 'settings',
     ]);
   });
 
@@ -35,13 +36,30 @@ describe('the section list', () => {
   it('splits the sections between the rail, the tabs and «More»', () => {
     const arranged = arrangeSections(new Set(SECTIONS.map(section => section.id)));
     expect(arranged.railTop.map(section => section.id)).toEqual([
-      'home', 'bookings', 'orders', 'suppliers', 'recipes', 'labels', 'calculator', 'clients', 'pastries', 'stocktake', 'foodcost',
+      'home', 'bookings', 'orders', 'suppliers', 'recipes', 'labels', 'calculator', 'clients', 'pastries', 'stocktake', 'foodcost', 'cakes',
     ]);
     expect(arranged.railBottom.map(section => section.id)).toEqual(['settings']);
     // Nobody is shown both the Calculator and Clients (session/visibility.ts), so no real tab bar holds five.
     expect(arranged.tabs.map(section => section.id)).toEqual(['home', 'orders', 'recipes', 'calculator', 'clients']);
-    expect(arranged.more.map(section => section.id)).toEqual(['bookings', 'suppliers', 'labels', 'pastries', 'stocktake', 'foodcost', 'settings']);
+    expect(arranged.more.map(section => section.id)).toEqual(['bookings', 'suppliers', 'labels', 'pastries', 'stocktake', 'foodcost', 'cakes', 'settings']);
     expect(arranged.first.id).toBe('home');
+  });
+
+  // The rail holds RAIL_PLACES_SHORT places on the shortest windows: the last sections before the bottom group spill under «More».
+  it('spills the last two sections of the fullest rail, and nothing from a rail of 11 or fewer', () => {
+    expect(RAIL_PLACES_SHORT).toBe(11);
+    expect(fullest.railTop.length + fullest.railBottom.length).toBe(12);
+    expect(ids(fullest.railSpill)).toEqual(['foodcost', 'cakes']);
+    // Without Cakes (or without Food cost) the rail has 11 places and nothing spills.
+    const noCakes = arrangeSections(new Set(SECTIONS.map(section => section.id).filter(id => id !== 'clients' && id !== 'cakes')));
+    expect(noCakes.railTop.length + noCakes.railBottom.length).toBe(11);
+    expect(noCakes.railSpill).toEqual([]);
+    const employee = arrangeSections(new Set<SectionId>(['home', 'orders', 'suppliers', 'recipes', 'calculator', 'pastries', 'settings']));
+    expect(employee.railSpill).toEqual([]);
+  });
+
+  it('keeps the spill inside the main stack, whatever the bottom group holds', () => {
+    for (const spilled of fullest.railSpill) expect(spilled.inRail).toBe('top');
   });
 
   // D1 (the roles plan): Clients is a phone tab. The sales owner's tab bar is Home, Clients and «More» (Food cost, Settings), the rail
@@ -74,6 +92,8 @@ describe('the section list', () => {
 
 const everything = arrangeSections(new Set(SECTIONS.map(section => section.id)));
 const ids = (list: readonly { id: SectionId }[]) => list.map(section => section.id);
+// Nobody is shown Clients with the Calculator, so the fullest rail is every section but Clients: 12 places.
+const fullest = arrangeSections(new Set(SECTIONS.map(section => section.id).filter(id => id !== 'clients')));
 
 describe('arrangeSections', () => {
   it('leaves out what the person is not shown, keeping the order', () => {
@@ -110,6 +130,8 @@ describe('moreIsCurrent', () => {
     ['/pastries', true],
     ['/stocktake', true],
     ['/food-cost', true],
+    ['/cakes', true],
+    ['/cakes/reference', true],
     ['/settings', true],
     ['/settings/language', true],
     ['/orders', false],
@@ -117,6 +139,7 @@ describe('moreIsCurrent', () => {
     ['/calculator', false],
     ['/clients', false],
     ['/home', false],
+    ['/cakesX', false],
     ['/', false],
     ['/no-such-section', false],
     ['/suppliers-archive', false],
@@ -131,9 +154,30 @@ describe('moreIsCurrent', () => {
     expect(moreIsCurrent('/pastries', restaurant.more)).toBe(false);
     expect(moreIsCurrent('/more', restaurant.more)).toBe(true);
   });
+
+  // The rail's «More» item stands for the sections that spilled, and for the More page itself.
+  it('stands, on the rail, for the spilled sections and /more only', () => {
+    expect(moreIsCurrent('/cakes', fullest.railSpill)).toBe(true);
+    expect(moreIsCurrent('/food-cost/product/p1', fullest.railSpill)).toBe(true);
+    expect(moreIsCurrent('/more', fullest.railSpill)).toBe(true);
+    expect(moreIsCurrent('/stocktake', fullest.railSpill)).toBe(false);
+    expect(moreIsCurrent('/settings', fullest.railSpill)).toBe(false);
+  });
 });
 
 describe('screenNameFor', () => {
+  it.each([
+    ['/cakes', 'cakes'],
+    ['/cakes/', 'cakes'],
+    ['/cakes/new', 'cakes-editor'],
+    ['/cakes/c-1', 'cakes-editor'],
+    ['/cakes/reference', 'cakes-reference'],
+    ['/cakes/c-1/extra', 'cakes'],
+    ['/cakesX', 'not-found'],
+  ])('%s → %s', (pathname, expected) => {
+    expect(screenNameFor(pathname)).toBe(expected);
+  });
+
   it.each([
     ['/home', 'home'],
     ['/home/', 'home'],
@@ -290,6 +334,7 @@ describe('screenNameFor', () => {
       'stocktake-product', 'stocktake-cost', STOCKTAKE_UNAVAILABLE_SCREEN,
       'foodcost-product', 'foodcost-history', 'foodcost-settings', 'client-orders',
       'clients-editor', 'clients-orders', 'clients-ordering',
+      'cakes-editor', 'cakes-reference',
     ];
     for (const name of names) expect(`m2:${name}`).toMatch(SCREEN_RE);
   });
@@ -300,6 +345,7 @@ describe('titleKeyFor', () => {
     ['/home', 'section.home'],
     ['/orders', 'section.orders'],
     ['/food-cost', 'section.foodcost'],
+    ['/cakes/reference', 'section.cakes'],
     ['/settings/language', 'section.settings'],
     ['/more', 'section.more'],
     ['/', 'notFound.title'],

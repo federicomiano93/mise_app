@@ -1,0 +1,233 @@
+/* The cake in 3D: a toolbar (cut-away or whole, the initial view), then the stage — the canvas, and over it the labels and their leader
+   lines. The cake's own colours are the --cake-* tokens, read by the scene; everything here is the neutrals. */
+
+.stage {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  min-width: 0;
+}
+
+.bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+}
+
+.views {
+  display: flex;
+  gap: var(--s2);
+}
+
+.view,
+.home {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s2);
+  min-height: var(--hit);
+  padding: 0 var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.home svg {
+  flex: none;
+  width: 18px;
+  height: 18px;
+}
+
+.view:focus-visible,
+.home:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.view[aria-checked="true"] {
+  border-color: var(--accent);
+  background: var(--accent-tint);
+  color: var(--accent-ink);
+}
+
+@media (hover: hover) {
+  .view[aria-checked="false"]:hover,
+  .home:hover {
+    background: var(--sunken);
+  }
+}
+
+/* As tall as the mockup on a PC (about 580px at 1440), proportionally shorter on smaller screens. */
+.viewport {
+  position: relative;
+  height: clamp(380px, 40vw, 600px);
+  min-width: 0;
+  overflow: hidden;
+  border-radius: var(--r-md);
+  background: var(--sunken);
+}
+
+/* The stage is a tab stop: R goes back to the initial view while it has the focus. */
+.viewport:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.canvasHost {
+  position: absolute;
+  inset: 0;
+}
+
+.canvasHost canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  /* One finger scrolls the page, two turn and zoom the cake (the scene sets the same inline, after the controls wrote none). */
+  touch-action: pan-y;
+  outline: none;
+}
+
+/* The labels and lines are hidden while the cake moves and come back when it stops. */
+.overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 1;
+  transition: opacity 0.18s var(--ease);
+}
+
+.overlay[data-moving="true"] {
+  opacity: 0;
+}
+
+.leaders {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.leader {
+  stroke: var(--ink-3);
+  stroke-opacity: 0.55;
+  stroke-width: 1.2;
+  stroke-linecap: round;
+}
+
+.leader[data-chosen="true"] {
+  stroke: var(--accent);
+  stroke-opacity: 0.9;
+  stroke-width: 1.8;
+}
+
+.leaderDot {
+  fill: var(--surface);
+  stroke: var(--ink-3);
+  stroke-width: 1.5;
+}
+
+.leaderDot[data-chosen="true"] {
+  stroke: var(--accent);
+}
+
+.label {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  box-sizing: border-box;
+  padding: var(--s1) var(--s2);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--ink);
+  line-height: 1.25;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.label[data-hover="true"] {
+  border-color: var(--line-2);
+}
+
+.label[data-chosen="true"] {
+  border-color: var(--accent);
+  background: var(--accent-tint);
+}
+
+.title {
+  overflow: hidden;
+  font-size: var(--fs-sm);
+  font-weight: 650;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.names {
+  overflow: hidden;
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* The hint for a touch screen only. */
+.touchHint {
+  display: none;
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+@media (pointer: coarse) {
+  .touchHint {
+    display: block;
+  }
+}
+
+/* A stage too narrow for labels beside the cake: the cake takes the width, a shorter stage, and the labels stand in a list under it. */
+.stage[data-stacked="true"] .viewport {
+  height: clamp(280px, 90vw, 340px);
+}
+
+.notes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+.note {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: var(--hit);
+  padding: var(--s1) var(--s2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--ink);
+  line-height: 1.25;
+  cursor: pointer;
+}
+
+.note[data-hover="true"] {
+  border-color: var(--line-2);
+}
+
+.note[data-chosen="true"] {
+  border-color: var(--accent);
+  background: var(--accent-tint);
+}
+
+.note .title,
+.note .names {
+  white-space: normal;
+  text-overflow: clip;
+}

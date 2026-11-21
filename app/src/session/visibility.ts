@@ -47,6 +47,9 @@ const GATES: ReadonlyArray<{ id: SectionId; section: VenueSection; card: CardId 
   { id: 'pastries', section: 'pastries', card: 'pastries' },
   { id: 'stocktake', section: 'foodcost', card: 'inventory' },
   { id: 'foodcost', section: 'foodcost', card: 'foodcost' },
+  // «Cakes» (20 Nov 2026) is Food cost's companion (its cakes ARE Food cost products), so it is behind Food cost's very gate: the same
+  // section and the same card, shown exactly to whoever is shown Food cost. ⚠️ NO CARD ID OF ITS OWN, for the reason given at Labels.
+  { id: 'cakes', section: 'foodcost', card: 'foodcost' },
   // Customer bookings at the counter (Mise 2 only, 18 Nov 2026): every role, employees included, unless the venue hides the card
   // from them («Sections for employees»); the sales owner has it, the kitchen owner does not (ROLE_CARDS; the rules refuse them too).
   { id: 'bookings', section: 'bookings', card: 'bookings' },

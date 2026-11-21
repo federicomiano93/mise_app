@@ -32,6 +32,8 @@ type Props = {
   // would hold it again (a loop), one that would pile up too many levels, or the same card twice. Only the semi-finished choices read them.
   cardId?: string;
   usedSemiIds?: readonly string[];
+  // What a card already held says instead of «already on this card» (a cake's parts say «already in this part»).
+  usedLabel?: string;
   // Escape, Back: nothing was chosen.
   onClose: () => void;
 };
@@ -67,7 +69,7 @@ const byName = (a: { name: string }, b: { name: string }): number => a.name.loca
 // ingredient says its supplier on a second, smaller line under its name, so two packs of the same flour from two suppliers can be
 // told apart. Not a recipe (bought from nobody) and not packaging (its line already says its price). An ingredient with no
 // supplier, or whose supplier has not arrived yet, has no second line at all: the chooser never waits for the suppliers.
-export function PickDialog({ mode, initialQuery = '', cardId = '', usedSemiIds = [], onChoose, onClose }: Props) {
+export function PickDialog({ mode, initialQuery = '', cardId = '', usedSemiIds = [], usedLabel, onChoose, onClose }: Props) {
   const { t } = useT();
   const money = useMoney();
   const { recipes, ingredients, suppliers, products, categories, tables } = useFoodcost();
@@ -173,7 +175,7 @@ export function PickDialog({ mode, initialQuery = '', cardId = '', usedSemiIds =
       name: row.card.name.trim(),
       invoiceName: '',
       meta: row.figures.pill,
-      supplier: row.reason !== null ? t(row.reason) : row.figures.sub,
+      supplier: row.reason === null ? row.figures.sub : row.reason === 'fc.pick.alreadyHere' && usedLabel !== undefined ? usedLabel : t(row.reason),
       off: row.reason !== null,
     });
     const groups = categories.length === 0

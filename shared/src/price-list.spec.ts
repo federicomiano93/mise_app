@@ -20,6 +20,12 @@ describe('priceItemOf', () => {
     expect(priceItemOf(product({ sellingMode: 'pack', packSize: 250, packUnit: 'g' }))).toMatchObject({ per: 'pack', packSize: 250, packUnit: 'g' });
   });
 
+  it('the card of a cake is on the price list like any finished product with a price (Cakes changes nothing here)', () => {
+    expect(priceItemOf(product({ id: 'cake-c1', name: 'Sacher', kind: 'finished', sellingMode: 'piece', sellingPrice: 48 })))
+      .toMatchObject({ productId: 'cake-c1', name: 'Sacher', per: 'piece', price: 48 });
+    expect(priceItemOf(product({ id: 'cake-c1', name: 'Sacher', kind: 'finished', sellingMode: 'piece', sellingPrice: null }))).toBeNull();
+  });
+
   it('⚠️ never copies a cost, a margin or a VAT rate', () => {
     const item = priceItemOf({ ...product(), vatRate: 10, foodCostTarget: 30, components: [{ qty: 1 }] } as never);
     expect(Object.keys(item ?? {}).sort()).toEqual(['favourite', 'name', 'packSize', 'packUnit', 'per', 'perPiece', 'price', 'productId', 'removable', 'weights']);

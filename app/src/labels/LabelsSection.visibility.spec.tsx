@@ -90,7 +90,7 @@ describe('where «Labels» sits', () => {
   it('on a phone: under «More» (the five tabs are fixed), between Suppliers and Pastries as the list orders them', () => {
     const { more, tabs } = arrangeSections(visibleSectionIds({}, true, 'owner'));
     expect(tabs.map(section => section.id)).toEqual(['home', 'orders', 'recipes', 'calculator']);
-    expect(more.map(section => section.id)).toEqual(['bookings', 'suppliers', 'labels', 'pastries', 'stocktake', 'foodcost', 'settings']);
+    expect(more.map(section => section.id)).toEqual(['bookings', 'suppliers', 'labels', 'pastries', 'stocktake', 'foodcost', 'cakes', 'settings']);
   });
 
   it('is current in the rail on its own screens', async () => {

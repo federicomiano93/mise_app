@@ -22,6 +22,11 @@ export function cameFromList(state: unknown): boolean {
   return typeof state === 'object' && state !== null && 'fromList' in state;
 }
 
+// A cake's editor opened with the «Open in Cakes» link of the cake's card in Food cost: Back is the browser's Back, into that card.
+export function cameFromFoodcost(state: unknown): boolean {
+  return typeof state === 'object' && state !== null && 'fromFoodcost' in state;
+}
+
 export function cameFromProduct(state: unknown): boolean {
   return typeof state === 'object' && state !== null && 'fromProduct' in state;
 }
@@ -43,7 +48,8 @@ export function cameFromProduct(state: unknown): boolean {
 export function useLeave(fallback: string, onLeaving: () => void, narrowed = false): () => void {
   const navigate = useNavigate();
   const { state } = useLocation();
-  const fromList = cameFromList(state);
+  // A cake opened from its Food cost card steps back like a screen opened from a list: the entry behind it IS that card.
+  const fromList = cameFromList(state) || cameFromFoodcost(state);
   const depth = recipeDepth(state);
   const toNarrowed = narrowed && depth !== null && depth >= 2 ? depth - 1 : null;
 

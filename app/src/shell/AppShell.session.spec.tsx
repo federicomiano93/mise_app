@@ -42,7 +42,10 @@ describe('the shell for an employee', () => {
 
   it('shows a manager everything the venue bought', () => {
     renderApp('/orders', { session: { ...EMPLOYEE, canManage: true, role: 'manager' } });
-    expect(linkNames(rail())).toHaveLength(11);
+    // Twelve places, plus the rail's «More» item (always in the DOM when a place can spill; jsdom applies no media query).
+    expect(linkNames(rail())).toHaveLength(13);
+    expect(linkNames(rail())).toContain('Cakes');
+    expect(linkNames(rail()).at(-2)).toBe('More');
   });
 
   it('says «not available» for an address typed by hand', async () => {
@@ -212,5 +215,42 @@ describe('the venue in the top bar', () => {
 
     expect(await screen.findByRole('alertdialog', { name: 'Not sent yet' })).toBeInTheDocument();
     expect(store.switchLocation).not.toHaveBeenCalled();
+  });
+});
+
+// The rail's «More» item (20 Nov 2026): present in the DOM exactly when some rail link CAN spill; CSS decides when it shows.
+describe('the rail «More» item', () => {
+  it('stands after the last section, links to the More page and marks the spilled links', () => {
+    renderApp('/orders', { session: { ...EMPLOYEE, canManage: true, role: 'manager' } });
+    const more = rail().getByRole('link', { name: 'More' });
+    expect(more).toHaveAttribute('href', expect.stringMatching(/\/more$/));
+    expect(more).not.toHaveAttribute('aria-current');
+    expect(rail().getByRole('link', { name: 'Food cost' })).toHaveAttribute('data-spill');
+    expect(rail().getByRole('link', { name: 'Cakes' })).toHaveAttribute('data-spill');
+    expect(rail().getByRole('link', { name: 'Stocktake' })).not.toHaveAttribute('data-spill');
+    expect(rail().getByRole('link', { name: 'Settings' })).not.toHaveAttribute('data-spill');
+    expect(rail().getAllByRole('link').filter(link => link.hasAttribute('data-spill'))).toHaveLength(2);
+  });
+
+  it.each(['/cakes', '/food-cost', '/more'])('is the current item on %s', path => {
+    renderApp(path, { session: { ...EMPLOYEE, canManage: true, role: 'manager' } });
+    expect(rail().getByRole('link', { name: 'More' })).toHaveAttribute('aria-current', 'page');
+  });
+
+  it('is not the current item on a section that stays in the rail', () => {
+    renderApp('/stocktake', { session: { ...EMPLOYEE, canManage: true, role: 'manager' } });
+    expect(rail().getByRole('link', { name: 'More' })).not.toHaveAttribute('aria-current');
+  });
+
+  it('is absent, and nothing is marked, for a rail of 11 places or fewer', () => {
+    renderApp('/orders', { session: EMPLOYEE });
+    expect(rail().queryByRole('link', { name: 'More' })).not.toBeInTheDocument();
+    expect(rail().getAllByRole('link').some(link => link.hasAttribute('data-spill'))).toBe(false);
+    expect(document.querySelector('[data-items]')).toHaveAttribute('data-items', '9');
+  });
+
+  it('counts the places on the rail, for the stylesheet', () => {
+    renderApp('/orders', { session: { ...EMPLOYEE, canManage: true, role: 'manager' } });
+    expect(document.querySelector('[data-items]')).toHaveAttribute('data-items', '12');
   });
 });

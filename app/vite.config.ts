@@ -28,9 +28,9 @@ export default defineConfig({
     // (CSS nesting, for one, needs Chrome 120).
     target: ['chrome101', 'edge101', 'firefox104', 'safari16'],
     cssTarget: ['chrome101', 'edge101', 'firefox104', 'safari16'],
-    // Firestore's lazy chunk is ~554 KB by itself and expected (session/firebaseBackend.ts): the
-    // default 500 KB warning would print on every build and hide a real one.
-    chunkSizeWarningLimit: 600,
+    // Firestore's lazy chunk is ~554 KB by itself and expected (session/firebaseBackend.ts), and three.js's (the cake's 3D view, ~560 KB,
+    // ~138 KB gzipped, loaded on demand) is the other: the default 500 KB warning would print on every build and hide a real one.
+    chunkSizeWarningLimit: 800,
     rollupOptions: {
       output: {
         // The libraries in chunks of their own (step 2c). A release of Mise 2 changes its own
@@ -39,11 +39,17 @@ export default defineConfig({
         // compiled code. Firestore is not listed: it is loaded on first use
         // (session/firebaseBackend.ts) and Vite already gives it a chunk of its own.
         manualChunks(id: string) {
+          // The file that names what the 3D scene takes from three goes WITH three: the view loads one file, and no small precached
+          // chunk statically imports the one the worker leaves out.
+          if (/[\\/]src[\\/]cakes[\\/]threeParts\.ts$/.test(id)) return 'three';
           if (!id.includes('node_modules')) return undefined;
           if (/[\\/]node_modules[\\/](react|react-dom|scheduler)[\\/]/.test(id)) return 'react';
           if (/[\\/]node_modules[\\/](react-aria-components|react-aria|react-stately|@react-aria|@react-stately|@react-types|@internationalized|@swc)[\\/]/.test(id)) return 'react-aria';
           if (/[\\/]node_modules[\\/](react-router|@remix-run|cookie-es)[\\/]/.test(id)) return 'router';
           if (/[\\/]node_modules[\\/]@firebase[\\/](app|auth|component|logger|util)[\\/]|[\\/]node_modules[\\/]firebase[\\/](app|auth)[\\/]/.test(id)) return 'firebase-auth';
+          // three.js (the cake's 3D view, loaded only when it is shown): ONE chunk made of nothing else, so the worker can leave it out of the
+          // precache by what it holds (sw-plugin.ts, ON_DEMAND_PACKAGES). Its addons live in the same package.
+          if (/[\\/]node_modules[\\/]three[\\/]/.test(id)) return 'three';
           return undefined;
         },
       },

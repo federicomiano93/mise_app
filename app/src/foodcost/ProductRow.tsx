@@ -17,6 +17,9 @@ type Props = {
   // Model 4: a semi-finished card shows its cost per kilo as the figure and «materials X · labour Y» under its name (semiWords.ts),
   // not a food cost % — it has no selling price. null: a finished product, as before.
   semi?: { pill: string; sub: string } | null;
+  // A cake's own card (its id starts with `cake-`): a «Cake» tag by the name. Nothing else changes — the line under the name is the
+  // card's own cost and margin, as for any finished product.
+  cake?: boolean;
 };
 
 // One product on the list: its name, ONE line under it (what it earns, or the first thing still
@@ -26,7 +29,7 @@ type Props = {
 // line under the name («On target · £0.35 cost · £1.15 margin»), and the dot is hidden from a
 // screen reader because that word already says it. A product that cannot be costed has no dot
 // colour and no figure («—»): the line says what is missing instead.
-export function ProductRow({ id, name, result, money, isOpen, onOpen, semi = null }: Props) {
+export function ProductRow({ id, name, result, money, isOpen, onOpen, semi = null, cake = false }: Props) {
   const { t } = useT();
   const handBack = useHandBack();
   // Back from this product's screen hands the focus back to this button.
@@ -46,7 +49,10 @@ export function ProductRow({ id, name, result, money, isOpen, onOpen, semi = nul
         onClick={onOpen}
       >
         <span className={styles.main}>
-          <span className={styles.name}>{name === '' ? t('fc.untitledProduct') : name}</span>
+          <span className={styles.nameLine}>
+            <span className={styles.name}>{name === '' ? t('fc.untitledProduct') : name}</span>
+            {cake ? <span className={styles.cakeTag}>{t('fc.cakeTag')}</span> : null}
+          </span>
           {semi === null
             ? <span className={styles.sub} data-todo={!costed}>{subLine(t, result, money)}</span>
             : <span className={styles.sub}>{semi.sub === '' ? t('fc.semi.tag') : semi.sub}</span>}

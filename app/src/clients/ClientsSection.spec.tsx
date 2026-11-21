@@ -272,11 +272,11 @@ describe('who is shown the page', () => {
     expect(await main().findByRole('heading', { level: 2, name: 'Orders received' }, LOAD)).toBeInTheDocument();
   });
 
-  it('shows the sales owner Home, Bookings, Clients, Food cost and Settings, and not the Calculator', async () => {
+  it('shows the sales owner Home, Bookings, Clients, Food cost, Cakes and Settings, and not the Calculator', async () => {
     await opened('/clients');
     const names = rail().getAllByRole('link').map(link => link.textContent);
     // Bookings (18 Nov 2026) are the sales side's: customers at the counter.
-    expect(names).toEqual(['Home', 'Bookings', 'Clients', 'Food cost', 'Settings']);
+    expect(names).toEqual(['Home', 'Bookings', 'Clients', 'Food cost', 'Cakes', 'Settings']);
   });
 
   it('is « not available » to an owner who runs the Calculator', async () => {

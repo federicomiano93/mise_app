@@ -1,0 +1,14 @@
+/* What stands in for the cake's form while it is not there: loading, or «this cake no longer exists». Nothing on the card may clip: the
+   form bar sticks to the top of the scroll area. */
+
+.editor {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+.loading {
+  padding: var(--s6);
+  color: var(--ink-2);
+}

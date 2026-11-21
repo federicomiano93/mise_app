@@ -1,0 +1,701 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mockup · Torte passo 2</title>
+<style>
+:root{
+  --bg:oklch(0.970 0.006 85);--surface:oklch(0.996 0.002 85);--sunken:oklch(0.945 0.008 85);
+  --ink:oklch(0.205 0.012 60);--ink-2:oklch(0.420 0.012 60);--ink-3:oklch(0.530 0.010 60);
+  --line:oklch(0.900 0.008 85);--line-2:oklch(0.820 0.010 85);
+  --rail:oklch(0.225 0.012 60);--rail-ink:oklch(0.800 0.008 85);--rail-ink-strong:oklch(0.985 0.004 85);--rail-on:oklch(0.290 0.012 60);
+  --accent:oklch(0.500 0.170 262);--accent-tint:oklch(0.945 0.028 262);--accent-tint-2:oklch(0.900 0.050 262);--accent-ink:oklch(0.400 0.150 262);--on-accent:oklch(0.990 0.004 262);
+  --danger-ink:oklch(0.460 0.170 27);--warn-ink:oklch(0.470 0.100 65);--warn-tint:oklch(0.965 0.045 88);
+  --ok-ink:oklch(0.430 0.110 152);--ok-tint:oklch(0.955 0.035 152);
+  --new-line:oklch(0.75 0.15 78);--new-ink:oklch(0.45 0.12 65);--new-tint:oklch(0.95 0.06 88);
+  --scrim:oklch(0.2 0.01 60 / 0.38);
+  --shadow-1:0 1px 2px oklch(0.2 0.01 60 / 0.06),0 1px 1px oklch(0.2 0.01 60 / 0.04);
+  --shadow-3:0 24px 64px oklch(0.2 0.01 60 / 0.20);
+}
+:root{--font:"Segoe UI Variable","Segoe UI",system-ui,sans-serif;--r-sm:8px;--r-md:12px;--r-lg:16px;--r-pill:999px}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:var(--font);font-size:16px}
+button{font:inherit;color:inherit;cursor:pointer}
+.num{font-variant-numeric:tabular-nums}
+/* mockup switcher, not part of the app */
+.mk{position:fixed;top:0;left:0;right:0;height:44px;display:flex;align-items:center;gap:6px;padding:0 12px;background:#1d1b19;color:#ddd;font-size:13px;z-index:50;overflow-x:auto;white-space:nowrap}
+.mk b{color:#fff;margin-right:8px}
+.mk button{color:#ddd;background:#34302c;border:0;border-radius:6px;padding:6px 10px;font-size:13px}
+.mk button[aria-pressed=true]{background:#f3c969;color:#1d1b19;font-weight:600}
+.mk .note{margin-left:auto;color:#a99;padding-left:12px}
+.app{position:fixed;top:44px;left:0;right:0;bottom:0;display:flex}
+.rail{width:104px;flex:none;background:var(--rail);display:flex;flex-direction:column;align-items:center;padding:10px 0;gap:2px}
+.rail a{width:88px;padding:9px 0;border-radius:var(--r-md);color:var(--rail-ink);text-align:center;font-size:12px;display:flex;flex-direction:column;align-items:center;gap:4px}
+.rail a.on{background:var(--rail-on);color:var(--rail-ink-strong);font-weight:600}
+.rail svg{width:22px;height:22px}
+.rail .grow{flex:1}
+.main{flex:1;display:flex;flex-direction:column;min-width:0}
+.topbar{height:60px;flex:none;display:flex;align-items:center;padding:0 24px;border-bottom:1px solid var(--line);background:var(--surface);gap:12px}
+.topbar h1{font-size:18px;margin:0;font-weight:650}
+.topbar .venue{color:var(--ink-3);font-size:14px}
+.back{height:44px;display:inline-flex;align-items:center;gap:4px;border:0;background:transparent;color:var(--accent-ink);font-weight:600;padding:0 8px 0 0;font-size:15px}
+.back svg{width:20px;height:20px}
+.cols{flex:1;display:flex;min-height:0}
+.list{width:340px;flex:none;border-right:1px solid var(--line);background:var(--surface);display:flex;flex-direction:column;min-height:0}
+.listhead{padding:16px;display:flex;flex-direction:column;gap:10px;border-bottom:1px solid var(--line)}
+.search{height:44px;border:1px solid var(--line-2);border-radius:var(--r-md);display:flex;align-items:center;padding:0 12px;color:var(--ink-3);gap:8px;background:var(--surface)}
+.row2{display:flex;gap:8px}
+.btn{min-height:44px;border-radius:var(--r-md);border:1px solid var(--line-2);background:var(--surface);color:var(--ink);font-size:15px;font-weight:550;padding:0 14px;display:inline-flex;align-items:center;justify-content:center;gap:8px}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn.ghost{border-color:transparent;color:var(--accent-ink);background:transparent;padding:0 8px}
+.btn.grow{flex:1}
+.btn svg{width:18px;height:18px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.scroll{overflow:auto;flex:1}
+.group{padding:14px 16px 6px;font-size:13px;font-weight:650;color:var(--ink-2);text-transform:uppercase;letter-spacing:.04em}
+.item{margin:2px 8px;padding:12px;border-radius:var(--r-md);display:flex;justify-content:space-between;align-items:center;gap:8px;cursor:pointer;border:0;background:transparent;width:calc(100% - 16px);text-align:left}
+.item:hover{background:var(--sunken)}
+.item.on{background:var(--accent-tint);box-shadow:inset 0 0 0 1px var(--accent-tint-2)}
+.item .n{font-weight:600}
+.item .s{font-size:13px;color:var(--ink-3);margin-top:2px}
+.pill{font-size:13px;font-weight:650;border-radius:var(--r-pill);padding:3px 10px;white-space:nowrap}
+.pill.ok{background:var(--ok-tint);color:var(--ok-ink)}
+.pill.warn{background:var(--warn-tint);color:var(--warn-ink)}
+.pill.kg{background:var(--sunken);color:var(--ink-2)}
+.pill.cake{background:var(--accent-tint);color:var(--accent-ink)}
+.door{margin:0;padding:12px;border-radius:var(--r-md);border:1px solid var(--accent-tint-2);background:var(--accent-tint);display:flex;align-items:center;gap:12px;cursor:pointer;width:100%;text-align:left}
+.door svg.ic{width:28px;height:28px;color:var(--accent-ink);flex:none}
+.door b{display:block;font-size:16px}
+.door span{font-size:13px;color:var(--ink-2)}
+.door .chev{margin-left:auto;color:var(--accent-ink);font-size:26px;line-height:1}
+.listfoot{padding:12px 16px;border-top:1px solid var(--line)}
+.detail{flex:1;overflow:auto;padding:20px 28px 48px;min-width:0}
+.dhead{display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap}
+.dhead h2{margin:0;font-size:26px;font-weight:700}
+.dhead .sp{flex:1}
+.iconbtn{width:44px;height:44px;border-radius:var(--r-sm);display:inline-flex;align-items:center;justify-content:center;color:var(--ink-3);border:0;background:transparent}
+.iconbtn svg{width:18px;height:18px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);padding:18px 20px;margin-bottom:16px;box-shadow:var(--shadow-1)}
+.card h3{margin:0 0 12px;font-size:17px;display:flex;align-items:center;gap:8px}
+.card h3 .sp{flex:1}
+.caption{color:var(--ink-3);font-size:14px;margin-top:4px;line-height:1.4}
+.hint{font-size:14px;color:var(--ink-2);background:var(--sunken);border-radius:var(--r-md);padding:10px 12px;margin-top:12px;line-height:1.4}
+.warnbox{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-radius:var(--r-md);background:var(--warn-tint);color:var(--warn-ink);font-size:14px;font-weight:550;margin-top:12px;line-height:1.4}
+.warnbox svg{width:20px;height:20px;flex:none;margin-top:1px}
+.two{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:16px;align-items:start}
+.new{outline:2px dashed var(--new-line);outline-offset:4px;border-radius:6px}
+.newnote{display:inline-block;font-size:12px;font-weight:700;color:var(--new-ink);background:var(--new-tint);border-radius:6px;padding:2px 8px;vertical-align:middle}
+.prompt{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;min-height:240px;padding:24px;border:1px dashed var(--line-2);border-radius:var(--r-lg);color:var(--ink-2);text-align:center;max-width:820px}
+.prompt p{margin:0;max-width:440px;line-height:1.4}.prompt .pt{color:var(--ink);font-size:18px;font-weight:650}
+.seg{display:inline-flex;background:var(--sunken);border-radius:var(--r-md);padding:4px;gap:4px;flex-wrap:wrap}
+.segb{min-height:40px;padding:0 14px;border-radius:var(--r-sm);display:inline-flex;align-items:center;font-weight:600;color:var(--ink-2);border:0;background:transparent;font-size:15px}
+.segb.on{background:var(--surface);color:var(--accent-ink);box-shadow:var(--shadow-1)}
+.segb small{font-weight:500;color:var(--ink-3);margin-left:6px;font-size:13px}
+/* drawing */
+.draw{display:flex;justify-content:center}
+.draw svg{width:100%;height:auto;max-height:330px}
+.draw .hit{cursor:pointer}
+.draw text{font-family:var(--font)}
+/* parts */
+.part{border-top:1px solid var(--line);padding:12px 0}
+.part:first-of-type{border-top:0;padding-top:0}
+.part.sel{background:var(--accent-tint);margin:0 -12px;padding:12px;border-radius:var(--r-md);border-top-color:transparent}
+.phead{display:flex;align-items:baseline;gap:10px;margin-bottom:6px}
+.phead b{font-size:16px}
+.phead .rule{font-size:13px;color:var(--ink-3)}
+.pline{display:grid;grid-template-columns:minmax(0,1fr) 112px 84px 84px 40px;gap:10px;align-items:center;padding:6px 0}
+.pline .what{font-weight:600;min-width:0}
+.pline .what small{display:block;font-weight:400;font-size:13px;color:var(--ink-3)}
+.pline .what small.man{color:var(--accent-ink);font-weight:600}
+.qty{height:44px;border:1px solid var(--line-2);border-radius:var(--r-sm);display:flex;align-items:center;justify-content:flex-end;padding:0 10px;background:var(--surface)}
+.qty.man{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.money{text-align:right;font-size:15px}
+.money small{display:block;font-size:12px;color:var(--ink-3)}
+.money.miss{color:var(--warn-ink);font-weight:650}
+.plhead{display:grid;grid-template-columns:minmax(0,1fr) 112px 84px 84px 40px;gap:10px;font-size:12px;color:var(--ink-3);font-weight:650;text-transform:uppercase;letter-spacing:.04em;padding-bottom:8px;border-bottom:1px solid var(--line);margin-bottom:10px}
+.plhead span:not(:first-child){text-align:right}
+.none{color:var(--ink-3);font-style:italic;padding:6px 0}
+.addr{margin-top:2px}
+/* measures */
+.mrow{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 0;border-top:1px solid var(--line)}
+.mrow:first-of-type{border-top:0;padding-top:0}
+.mrow .l b{display:block;font-size:15px}
+.mrow .l span{font-size:13px;color:var(--ink-3)}
+.step{display:flex;align-items:center;gap:6px}
+.step button{width:44px;height:44px;border-radius:var(--r-sm);border:1px solid var(--line-2);background:var(--surface);font-size:20px;line-height:1}
+.step button:disabled{opacity:.4;cursor:not-allowed}
+.step output{min-width:64px;text-align:center;font-weight:650;font-size:16px}
+.limit{flex-basis:100%;font-size:13px;color:var(--warn-ink);font-weight:600;background:var(--warn-tint);border-radius:var(--r-sm);padding:6px 10px}
+.mrow{flex-wrap:wrap}
+/* costs */
+.kv{display:flex;justify-content:space-between;gap:12px;padding:7px 0}
+.kv .muted{color:var(--ink-3);font-size:13px;display:block}
+.kv.total{border-top:1px solid var(--line);margin-top:4px;padding-top:11px;font-weight:700}
+.pricebox{background:var(--sunken);border-radius:var(--r-md);padding:12px;margin-top:10px}
+.pricebox .lab{font-size:14px;color:var(--ink-2);font-weight:550;margin-bottom:6px}
+.fcrow{display:flex;align-items:center;justify-content:space-between;margin-top:10px;gap:8px}
+.fcrow .big{font-size:28px;font-weight:750}
+.sugg{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px;font-size:14px;flex-wrap:wrap}
+/* dialogs */
+.scrim{position:fixed;inset:44px 0 0 0;background:var(--scrim);display:none;align-items:center;justify-content:center;z-index:20;padding:16px}
+.scrim.show{display:flex}
+.dialog{background:var(--surface);border-radius:var(--r-lg);box-shadow:var(--shadow-3);width:620px;max-width:100%;max-height:100%;display:flex;flex-direction:column}
+.dialog.wide{width:760px}
+.dialog header{padding:18px 20px 8px;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.dialog header h3{margin:0;font-size:20px}
+.dialog .body{padding:8px 20px 16px;overflow:auto}
+.dialog footer{padding:12px 20px 18px;display:flex;justify-content:flex-end;gap:8px;border-top:1px solid var(--line);flex-wrap:wrap;align-items:center}
+.dialog footer .sp{flex:1}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
+.chip{min-height:36px;border-radius:var(--r-pill);border:1px solid var(--line-2);padding:0 14px;display:inline-flex;align-items:center;font-size:14px;font-weight:550;background:var(--surface)}
+.chip.on{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.pick{display:flex;justify-content:space-between;align-items:center;padding:12px;border-radius:var(--r-md);gap:8px}
+.pick:hover{background:var(--sunken)}
+.pick.off{opacity:.55}
+.pick .s{font-size:13px;color:var(--ink-3)}
+table.need{width:100%;border-collapse:collapse;font-size:15px}
+table.need th{text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-3);font-weight:650;padding:8px 6px;border-bottom:1px solid var(--line)}
+table.need td{padding:10px 6px;border-bottom:1px solid var(--line);vertical-align:top}
+table.need td.r,table.need th.r{text-align:right}
+table.need td small{display:block;color:var(--ink-3);font-size:13px}
+table.need tr.tot td{font-weight:700;border-bottom:0}
+/* reference grams */
+.refgrid{display:grid;grid-template-columns:minmax(0,1fr) 150px;gap:10px 16px;align-items:center}
+.refgrid .l b{display:block}
+.refgrid .l span{font-size:13px;color:var(--ink-3)}
+.ex{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin-top:8px}
+.ex div{background:var(--sunken);border-radius:var(--r-md);padding:10px;font-size:13px;color:var(--ink-2)}
+.ex b{display:block;font-size:17px;color:var(--ink);margin-top:2px}
+.ro .pline{grid-template-columns:minmax(0,1fr) 112px 100px}.ro .qty{border:0;background:transparent;box-shadow:none}
+.tag{font-size:12px;font-weight:650;border-radius:6px;padding:3px 8px;background:var(--sunken);color:var(--ink-2)}
+.tag.semi{background:var(--accent-tint);color:var(--accent-ink)}
+.view{display:none}.view.on{display:block}
+.rail a{cursor:pointer}
+.rail a.new{outline-offset:-2px}
+.morerow{display:flex;align-items:center;gap:14px;width:100%;min-height:56px;border:0;background:transparent;padding:0 12px;border-radius:var(--r-md);text-align:left;font-size:16px;font-weight:600}
+.morerow+.morerow{border-top:1px solid var(--line);border-radius:0}
+.morerow:hover{background:var(--sunken)}
+.morerow .mi svg{width:22px;height:22px;display:block;color:var(--ink-2)}
+.morerow .ml{flex:1}.morerow .chev{color:var(--ink-3);font-size:24px}
+.home{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:24px;max-width:1152px;align-items:start}
+.hrow{display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-top:1px solid var(--line)}
+.card h3+.hrow,.card h3+.caption+.hrow{border-top:0}
+.hrow .s,.hcake .s{font-size:13px;color:var(--ink-3);margin-top:2px}
+.tick{width:22px;height:22px;border-radius:6px;border:2px solid var(--line-2);flex:none;margin-top:1px}
+.hcake{display:flex;justify-content:space-between;align-items:center;gap:8px;width:100%;text-align:left;border:0;background:transparent;padding:10px 0;border-top:1px solid var(--line);min-height:48px}
+.hcake:hover{background:var(--sunken)}
+.hic svg{width:22px;height:22px;color:var(--accent-ink);display:block}
+@media (max-width:860px){.home{grid-template-columns:minmax(0,1fr)}}
+/* narrow screens (tablet): the list and the editor are one level each */
+@media (max-width:1240px){
+  .two{grid-template-columns:minmax(0,1fr)}
+  body.editing .list{display:none}
+  .list{width:300px}
+}
+@media (max-width:860px){
+  .pline,.plhead{grid-template-columns:minmax(0,1fr) 100px 76px 40px}
+  .pline .lab-c,.plhead .lab-c{display:none}
+  .ex{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .rail{width:84px}.rail a{width:72px}
+}
+</style>
+</head>
+<body>
+<div class="mk" role="toolbar" aria-label="Mockup">
+  <b>Mockup Torte · passo 2</b>
+  <button data-v="0">0 · «Altro» sul tablet piccolo</button>
+  <button data-v="1">1 · Elenco torte</button>
+  <button data-v="2">2 · Torta a listino</button>
+  <button data-v="3">3 · Due piani</button>
+  <button data-v="4">4 · Scegli la scheda</button>
+  <button data-v="5">5 · Cosa serve</button>
+  <button data-v="6">6 · Grammi di riferimento</button>
+  <button data-v="7">7 · La torta nel Food cost</button>
+  <span class="note">Dati inventati · bordo giallo tratteggiato = nuovo · i − e + funzionano</span>
+</div>
+
+<div class="app">
+  <nav class="rail" id="rail" aria-label="Sezioni"></nav>
+
+  <div class="main">
+    <div class="topbar" id="topbar"></div>
+    <div class="cols">
+      <section class="list" id="list" aria-label="Elenco"></section>
+      <section class="detail" id="detail">
+        <div id="edWrap" style="display:none"><div id="edHead"></div>
+          <div class="card new" id="stageCard"><h3>La torta<span class="sp"></span><span class="seg" role="tablist" aria-label="Vista"><button class="segb on" role="tab" data-sv="3d">3D</button><button class="segb" role="tab" data-sv="2d">Disegno semplice</button></span></h3>
+            <iframe id="st3d" src="stage3d.html" title="La torta in 3D" style="width:100%;height:600px;border:0;border-radius:12px;display:block;background:#c3ccd6"></iframe>
+            <div id="st2d" class="draw" style="display:none"></div>
+            <p class="caption" id="stCap" style="margin:8px 0 0"></p></div>
+          <div class="two"><div id="edParts"></div><div id="edSide"></div></div></div>
+        <div id="detOther"></div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<!-- 4: choose a card for a part -->
+<div class="scrim" id="dlgPick"><div class="dialog" role="dialog" aria-modal="true" aria-labelledby="pkT">
+  <header><h3 id="pkT">Farcitura · aggiungi una scheda</h3><button class="iconbtn" data-close aria-label="Chiudi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg></button></header>
+  <div class="body">
+    <p class="caption" style="margin-top:0">Le schede arrivano dal Food cost: il costo al kg è quello della loro scheda, calo e lavoro compresi.</p>
+    <div class="search">Cerca una scheda…</div>
+    <div class="chips"><span class="chip">Tutte</span><span class="chip on">Semilavorati</span><span class="chip">Torte</span><span class="chip">Pane</span><span class="chip">Senza categoria</span></div>
+    <div class="group" style="padding-left:0">Semilavorati</div>
+    <div class="pick"><div><b>Crema chantilly</b><div class="s">già in questa parte</div></div><span class="pill kg">5,40 €/kg</span></div>
+    <div class="pick"><div><b>Frutta fresca pulita</b><div class="s">già in questa parte</div></div><span class="pill kg">8,20 €/kg</span></div>
+    <div class="pick"><div><b>Ganache fondente</b><div class="s">materie 11,20 · lavoro 3,10 al kg</div></div><span class="pill kg">11,20 €/kg</span></div>
+    <div class="pick"><div><b>Crema pasticcera</b><div class="s">materie 5,10 · lavoro 1,70 al kg</div></div><span class="pill kg">5,10 €/kg</span></div>
+    <div class="pick"><div><b>Decorazioni in pasta di zucchero</b><div class="s">la sua scheda non ha ancora un prezzo</div></div><span class="pill warn">senza prezzo</span></div>
+    <div class="pick off"><div><b>Torta Sacher 22 cm</b><div class="s">è una torta intera: non va dentro un’altra torta</div></div></div>
+  </div>
+  <footer><span class="caption" style="margin:0">Manca la scheda? Creala nel Food cost e torna qui.</span><span class="sp"></span><button class="btn" data-close>Annulla</button></footer>
+</div></div>
+
+<!-- 5: what you need -->
+<div class="scrim" id="dlgNeed"><div class="dialog wide" role="dialog" aria-modal="true" aria-labelledby="ndT">
+  <header><h3 id="ndT">Cosa serve</h3><button class="iconbtn" data-close aria-label="Chiudi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg></button></header>
+  <div class="body" id="needBody"></div>
+  <footer><span class="caption" style="margin:0" id="needFoot"></span><span class="sp"></span><button class="btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z"/></svg>Stampa</button><button class="btn primary"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12M7 10l5 5 5-5M4 21h16"/></svg>Scarica PDF</button></footer>
+</div></div>
+
+<script>
+/* ---------- rail ---------- */
+const RAIL=[{id:'Home',svg:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 10l9-7 9 7v10a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>'},{id:'Prenotazioni',svg:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M8 2v4M16 2v4M3 10h18M9 15l2 2 4-4"/></svg>'},{id:'Ordini',svg:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="20" r="1"/><circle cx="18" cy="20" r="1"/><path d="M2 3h3l3 12h11l2-8H6"/></svg>'},{id:'Fornitori',svg:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 7h11v9H2zM13 10h4l4 4v2h-8z"/><circle cx="6" cy="18" r="2"/><circle cx="17" cy="18" r="2"/></svg>'},{id:'Ricettario',svg:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 4h7a3 3 0 0 1 3 3v14a2 2 0 0 0-2-2H2zM22 4h-7a3 3 0 0 0-3 3v14a2 2 0 0 1 2-2h8z"/></svg>'},{id:'Etichette',svg:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12V4h8l10 10-8 8z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg>'},{id:'Calcolatore',svg:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M8 6h8M8 11h2M14 11h2M8 15h2M14 15h2M8 19h2M14 19h2"/></svg>'},{id:'Paste',svg:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 16c0-5 4-9 8-9s8 4 8 9l-3 2-2-3-3 3-3-3-2 3z"/></svg>'},{id:'Magazzino',svg:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21V8l9-5 9 5v13M7 21v-8h10v8M7 17h10"/></svg>'},{id:'Food cost',svg:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12A9 9 0 1 1 12 3v9z"/><path d="M15 3.5A9 9 0 0 1 20.5 9H15z"/></svg>'},{id:'Torte',svg:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 21h16M5 21v-6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v6M7 13v-2a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v2M5 17c1.5 1 3 1 4.5 0s3-1 4.5 0 3 1 4.5 0M12 10V7"/></svg>'}];
+const RAIL_BOTTOM={id:'Impostazioni',svg:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg>'};
+const MORE_ICON='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>';
+/* ---------- invented data ---------- */
+const CARDS = {
+  pds:     {name:'Pan di Spagna classico', mat:3.60, lab:2.30, calo:12, ing:[['Uova',.45],['Zucchero',.27],['Farina 00',.14],['Fecola di patate',.14]]},
+  bagna:   {name:'Bagna al limoncello',    mat:3.70, lab:0.40, calo:0,  ing:[['Acqua',.55],['Zucchero',.30],['Limoncello',.15]]},
+  chant:   {name:'Crema chantilly',        mat:5.40, lab:1.80, calo:0,  ing:[['Latte intero',.40],['Panna fresca',.30],['Zucchero',.12],['Tuorli',.12],['Amido di mais',.04],['Vaniglia',.02]]},
+  frutta:  {name:'Frutta fresca pulita',   mat:8.20, lab:1.30, calo:10, ing:[['Fragole',.50],['Kiwi',.25],['Mirtilli',.25]]},
+  ricci:   {name:'Riccioli di cioccolato', mat:16.50,lab:4.00, calo:0,  ing:[['Cioccolato fondente',1]]},
+  panna:   {name:'Panna montata',          mat:4.90, lab:0.60, calo:0,  ing:[['Panna fresca',.90],['Zucchero a velo',.10]]},
+  ganache: {name:'Ganache fondente',       mat:11.20,lab:3.10, calo:8,  ing:[['Cioccolato fondente',.50],['Panna fresca',.50]]},
+  pdz:     {name:'Decorazioni in pasta di zucchero', mat:null, lab:9.00, calo:0, ing:[['Zucchero a velo',.80],['Sciroppo di glucosio',.20]]},
+};
+const REF = {d:22, discs:3, discH:3, base:300, bagna:90, farc:280, cop:450, dec:200};
+const RATE = 18; // € per hour, invented
+const PARTS = [
+  ['dec','Decorazione'],['cop','Copertura'],['farc','Farcitura'],['bagna','Bagna'],['base','Base']
+];
+const CAKES = {
+  A:{name:'Torta frutta e chantilly', d:24, n:3, tiers:1, slices:12, price:60, mins:25,
+     t:[{base:['pds'],bagna:['bagna'],farc:['chant','frutta'],cop:['panna'],dec:['frutta','ricci']}],
+     pack:[['Vassoio oro 26 cm + scatola alta',2.10]], man:{}},
+  B:{name:'Compleanno a due piani', d:20, n:2, tiers:2, slices:22, price:68, mins:50,
+     t:[{base:['pds'],bagna:['bagna'],farc:['chant'],cop:['panna'],dec:[]},
+        {base:['pds'],bagna:[],farc:['ganache'],cop:['panna'],dec:['pdz']}],
+     pack:[['Vassoio oro 26 cm + scatola alta 30',2.60],['Sottotorta 16 cm + 4 perni',0.85]], man:{'0.farc.chant':600}},
+};
+const OTHERS = [['Sacher','Ø 22 · 2 dischi',27],['Cassata al forno','Ø 26 · 2 dischi',33]];
+const state = {v:'0', cake:'A', tier:0, sel:null};
+
+/* ---------- maths (same rules as the plan) ---------- */
+const fmt = (x,d=2)=>x.toLocaleString('it-IT',{minimumFractionDigits:d,maximumFractionDigits:d});
+const g0 = x=>Math.round(x).toLocaleString('it-IT');
+const tierD = (c,i)=>c.d-6*i;
+const surf = (d,n)=>Math.PI*(d/2)**2 + Math.PI*d*(n*REF.discH);
+function ruleGrams(c,i,part){
+  const d=tierD(c,i), a=(d/REF.d)**2, n=c.n;
+  switch(part){
+    case 'base': return REF.base*a*n;
+    case 'bagna': return REF.bagna*a*n;
+    case 'farc': return REF.farc*a*(n-1);
+    case 'cop': return REF.cop*surf(d,n)/surf(REF.d,REF.discs);
+    case 'dec': return REF.dec*a;
+  }
+}
+function ruleText(c,i,part){
+  const n=c.n;
+  return {base:`${REF.base} g a disco × ${n} dischi, scalato su Ø ${tierD(c,i)}`,
+          bagna:`${REF.bagna} g a disco × ${n} dischi`,
+          farc:`${REF.farc} g a strato × ${n-1} strati`,
+          cop:`sopra e lati, scalata sulla superficie`,
+          dec:`scalata sull’area del piano`}[part];
+}
+function lines(c){
+  const out=[];
+  c.t.slice(0,c.tiers).forEach((tp,i)=>{
+    PARTS.forEach(([p])=>{
+      const ids=tp[p]||[]; if(!ids.length) return;
+      const each=ruleGrams(c,i,p)/ids.length;
+      ids.forEach(id=>{
+        const key=`${i}.${p}.${id}`, man=c.man[key];
+        const g=man!=null?man:each, card=CARDS[id];
+        out.push({tier:i,part:p,id,key,g,auto:each,man:man!=null,
+          mat:card.mat==null?null:g/1000*card.mat, lab:g/1000*card.lab});
+      });
+    });
+  });
+  return out;
+}
+function totals(c){
+  const L=lines(c);
+  const missing=[...new Set(L.filter(l=>l.mat==null).map(l=>CARDS[l.id].name))];
+  const packs=[c.pack[0]]; for(let j=1;j<c.tiers;j++) packs.push([`Sottotorta ${tierD(c,j)} cm + 4 perni`,0.85]);
+  const mat=L.reduce((s,l)=>s+(l.mat||0),0)+packs.reduce((s,p)=>s+p[1],0);
+  const labSemi=L.reduce((s,l)=>s+l.lab,0), labAsm=c.mins/60*RATE;
+  const net=c.price/1.10, fc=mat/net*100;
+  const sugg=Math.ceil(mat/0.30*1.10*2)/2;
+  return {L,missing,mat,labSemi,labAsm,lab:labSemi+labAsm,net,fc,sugg,packs};
+}
+
+/* ---------- pieces ---------- */
+const ICON = {
+  back:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M15 18l-6-6 6-6"/></svg>',
+  cake:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 21h16M5 21v-6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v6M7 13v-2a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v2M5 17c1.5 1 3 1 4.5 0s3-1 4.5 0 3 1 4.5 0M12 10V7M12 4.5v.01"/></svg>',
+  warn:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18v.01"/></svg>',
+  trash:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M6 6l1 15h10l1-15"/></svg>',
+  x:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  list:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6h12M9 12h12M9 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>',
+  scale:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v18M5 7h14M5 7l-3 7a3 3 0 0 0 6 0zM19 7l-3 7a3 3 0 0 0 6 0zM8 21h8"/></svg>',
+  search:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>',
+};
+
+function topbar(){
+  const t=document.getElementById('topbar');
+  const narrowEdit = innerWidth<=1240 && ['2','3','6'].includes(state.v);
+  if(state.v==='0'){t.innerHTML='<h1>Altro</h1><span class="venue">Panificio di prova</span>';return;}
+  if(state.v==='7'){t.innerHTML='<h1>Food cost</h1><span class="venue">Panificio di prova</span>';return;}
+  t.innerHTML = narrowEdit
+    ? `<button class="back" data-go="1">${ICON.back}Torte</button>`
+    : `<h1>Torte</h1><span class="venue">Panificio di prova</span>`;
+}
+
+function foodcostList(cakeOpen){
+  return `<div class="listhead">
+    <div class="search">${ICON.search}Cerca un prodotto</div>
+    <div class="row2"><span class="btn primary grow">+ Nuovo prodotto</span><span class="btn">${ICON.list}Categorie</span></div>
+  </div>
+  <div class="scroll">
+    <div class="group">Semilavorati · 6</div>
+    <div class="item"><div><div class="n">Crema chantilly</div><div class="s">materie 5,40 · lavoro 1,80</div></div><span class="pill kg">5,40 €/kg</span></div>
+    <div class="item"><div><div class="n">Pan di Spagna classico</div><div class="s">materie 3,60 · lavoro 2,30</div></div><span class="pill kg">3,60 €/kg</span></div>
+    <div class="item"><div><div class="n">…</div><div class="s">altre 4 schede</div></div></div>
+    <div class="group">Torte · 3</div>
+    <div class="item ${cakeOpen?'on':''}"><div><div class="n">Torta frutta e chantilly</div><div class="s">dalle Torte · Ø 24, 3 dischi</div></div><span class="pill ok">${fmt(totals(CAKES.A).fc,0)}%</span></div>
+    <div class="item"><div><div class="n">Sacher</div><div class="s">dalle Torte · Ø 22, 2 dischi</div></div><span class="pill ok">27%</span></div>
+    <div class="item"><div><div class="n">Cassata al forno</div><div class="s">dalle Torte · Ø 26, 2 dischi</div></div><span class="pill warn">33%</span></div>
+    <div class="group">Pane · 2</div>
+    <div class="item"><div><div class="n">Pagnotta di semola</div><div class="s">0,62 € di costo · 2,10 € di margine</div></div><span class="pill ok">23%</span></div>
+  </div>`;
+}
+
+function cakeList(){
+  const item=(k,c)=>{const T=totals(c);return `<button class="item ${state.cake===k&&['2','3'].includes(state.v)?'on':''}" data-cake="${k}"><div><div class="n">${c.name}</div><div class="s">${c.tiers>1?c.tiers+' piani · ':''}Ø ${c.d} · ${c.n} dischi${T.missing.length?' · costo incompleto':''}</div></div><span class="pill ${T.missing.length||T.fc>30?'warn':'ok'}">${T.missing.length?'?':fmt(T.fc,0)+'%'}</span></button>`;};
+  return `<div class="listhead">
+    <div class="search">${ICON.search}Cerca una torta</div>
+    <span class="btn primary">+ Nuova torta</span>
+  </div>
+  <div class="scroll">
+    <div class="group">A listino · 3</div>
+    ${item('A',CAKES.A)}${item('B',CAKES.B)}
+    ${OTHERS.map(o=>`<div class="item"><div><div class="n">${o[0]}</div><div class="s">${o[1]}</div></div><span class="pill ${o[2]>30?'warn':'ok'}">${o[2]}%</span></div>`).join('')}
+    <p class="caption" style="padding:4px 16px">I preventivi arrivano con il passo 4, in un elenco loro.</p>
+  </div>
+  <div class="listfoot"><button class="btn grow new" style="width:100%" data-go="6">${ICON.scale}Grammi di riferimento</button></div>`;
+}
+
+/* 2D cross-section */
+function drawing(c){
+  const W=640,H=330, maxD=c.d, k=300/maxD, ky=Math.min(k*2.2, 250/((c.n*REF.discH)*c.tiers+3)); // heights drawn taller than true, for legibility
+  const cx=222, board=H-24; let y=board, svg='';
+  const col={base:'#e7c27d',bagna:'#c98f3a',chant:'#f7ebc7',frutta:'#e0574b',ganache:'#5b3a29',panna:'#fffbf2',ricci:'#6b4226',pdz:'#f2b6c8'};
+  svg+=`<rect x="${cx-(maxD*k)/2-24}" y="${board}" width="${maxD*k+48}" height="8" rx="3" fill="#ffffff" stroke="#c9c4bb"/>`;
+  const labels=[];
+  for(let i=0;i<c.tiers;i++){
+    const d=tierD(c,i), w=d*k, x=cx-w/2, tp=c.t[i], discH=REF.discH*ky*0.72, fH=REF.discH*ky*0.28, cop=Math.max(5,0.6*k);
+    const top=y-c.n*REF.discH*ky+fH, selT = state.tier===i;
+    const hl=p=> selT&&state.sel===p ? ' stroke="#2b5fd9" stroke-width="2.5"' : '';
+    // coating behind
+    if(tp.cop.length) svg+=`<rect class="hit" data-part="${i}.cop" x="${x-cop}" y="${top-cop}" width="${w+2*cop}" height="${y-top+cop}" rx="4" fill="${col.panna}" stroke="#e2d8c6"${hl('cop')}/>`;
+    let yy=y, baseYs=[], farcYs=[];
+    for(let j=0;j<c.n;j++){
+      svg+=`<rect class="hit" data-part="${i}.base" x="${x}" y="${yy-discH}" width="${w}" height="${discH}" fill="${col.base}"${hl('base')}/>`;
+      if(tp.bagna.length) svg+=`<rect class="hit" data-part="${i}.bagna" x="${x}" y="${yy-discH}" width="${w}" height="${Math.max(2,discH*0.22)}" fill="${col.bagna}" opacity=".55"${hl('bagna')}/>`;
+      baseYs.push(yy-discH/2); yy-=discH;
+      if(j<c.n-1){
+        const ids=tp.farc; const seg=w/Math.max(1,ids.length);
+        if(ids.length===2){
+          svg+=`<rect class="hit" data-part="${i}.farc" x="${x}" y="${yy-fH}" width="${w}" height="${fH}" fill="${col[ids[0]]||'#eee'}"${hl('farc')}/>`;
+          for(let b=0;b<Math.floor(w/14);b++) svg+=`<circle class="hit" data-part="${i}.farc" cx="${x+7+b*14}" cy="${yy-fH/2}" r="${Math.min(4,fH/2-0.5)}" fill="${col[ids[1]]}"/>`;
+        } else svg+=`<rect class="hit" data-part="${i}.farc" x="${x}" y="${yy-fH}" width="${w}" height="${fH}" fill="${col[ids[0]]||'#eee'}"${hl('farc')}/>`;
+        farcYs.push(yy-fH/2); yy-=fH;
+      }
+    }
+    if(tp.dec.length){
+      const n=Math.max(3,Math.floor(w/22));
+      for(let b=0;b<n;b++){const id=tp.dec[b%tp.dec.length];svg+=`<circle class="hit" data-part="${i}.dec" cx="${x+w*(b+0.5)/n}" cy="${top-cop-6}" r="${id==='ricci'?4:6}" fill="${col[id]}"${hl('dec')}/>`;}
+    }
+    if(selT){
+      const right=x+w+cop;
+      const ys={dec:top-cop-6,cop:(top+y)/2,bagna:baseYs[baseYs.length-1]-discH*0.4,farc:farcYs[farcYs.length-1],base:baseYs[0]};
+      PARTS.forEach(([p,name])=>{ if(ys[p]==null||!(tp[p]||[]).length) return; labels.push({p,name,y:ys[p],x:p==='cop'?right:x+w-6,tier:i}); });
+    }
+    svg+=`<text x="${x-cop-10}" y="${(top+y)/2}" text-anchor="end" font-size="13" fill="#6f6a64">Ø ${d}</text>`;
+    y=top-(tp.dec.length?14:cop);
+  }
+  // labels on the right, stacked in order: lines never cross
+  const LX=448; const T=totals(c);
+  labels.sort((a,b)=>a.y-b.y);
+  const step=Math.max(42,(H-40)/Math.max(1,labels.length));
+  const start=Math.max(18,Math.min(labels[0]?labels[0].y-10:18,H-20-step*(labels.length-1)));
+  labels.forEach((l,ix)=>{
+    const ly=start+ix*step;
+    const tp=c.t[l.tier], ids=tp[l.p], g=T.L.filter(x=>x.tier===l.tier&&x.part===l.p).reduce((s,x)=>s+x.g,0);
+    const sel=state.sel===l.p;
+    svg+=`<path d="M${l.x} ${l.y} C ${l.x+60} ${l.y}, ${LX-60} ${ly}, ${LX-6} ${ly}" fill="none" stroke="${sel?'#2b5fd9':'#8f8a83'}" stroke-opacity="${sel?1:.55}" stroke-width="${sel?2:1.2}"/>`;
+    svg+=`<circle cx="${l.x}" cy="${l.y}" r="3" fill="${sel?'#2b5fd9':'#8f8a83'}"/>`;
+    svg+=`<g class="hit" data-part="${l.tier}.${l.p}"><text x="${LX}" y="${ly-3}" font-size="14" font-weight="650" fill="${sel?'#1f4fb8':'#1f1a16'}">${l.name} · ${g0(g)} g</text><text x="${LX}" y="${ly+14}" font-size="12.5" fill="#6f6a64">${ids.map(id=>CARDS[id].name).join(' + ').slice(0,38)}</text></g>`;
+  });
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Disegno in sezione della torta: ${c.tiers} piani, ${c.n} dischi per piano. L’elenco delle parti qui sotto dice le stesse cose.">${svg}</svg>`;
+}
+
+function partsCard(c){
+  const T=totals(c), i=Math.min(state.tier,c.tiers-1), tp=c.t[i];
+  const tabs = c.tiers>1 ? `<div class="seg new" role="tablist" style="margin-bottom:14px">${c.t.slice(0,c.tiers).map((_,j)=>`<button class="segb ${j===i?'on':''}" role="tab" aria-selected="${j===i}" data-tier="${j}">${j===0?'Piano sotto':j===c.tiers-1?'Piano sopra':'Piano di mezzo'}<small>Ø ${tierD(c,j)}</small></button>`).join('')}</div>` : '';
+  const rows = PARTS.slice().reverse().map(([p,name])=>{
+    const L=T.L.filter(l=>l.tier===i&&l.part===p);
+    const body = L.length ? L.map(l=>{
+      const card=CARDS[l.id];
+      return `<div class="pline"><div class="what">${card.name}<small class="${l.man?'man':''}">${l.man?`corretto a mano · dalla regola ${g0(l.auto)} g`:(card.calo?`pronto, dopo il calo del ${card.calo}%`:'pronto')}</small></div>
+        <div class="qty num ${l.man?'man':''}">${g0(l.g)} g</div>
+        <div class="money num ${l.mat==null?'miss':''}">${l.mat==null?'—':fmt(l.mat)+' €'}<small>${l.mat==null?'senza prezzo':'materie'}</small></div>
+        <div class="money num lab-c">${fmt(l.lab)} €<small>lavoro</small></div>
+        <button class="iconbtn" aria-label="Togli ${card.name}">${ICON.x}</button></div>`;}).join('')
+      : `<div class="none">${p==='bagna'?'Nessuna bagna':p==='dec'?'Nessuna decorazione':'Nessuna scheda'}</div>`;
+    return `<div class="part ${state.sel===p?'sel':''}" data-p="${p}"><div class="phead" data-part="${i}.${p}" style="cursor:pointer"><b>${name}</b><span class="rule">${ruleText(c,i,p)}</span></div>${body}
+      <button class="btn ghost addr" data-pick="${name}">+ ${L.length?'Aggiungi un’altra scheda':'Aggiungi una scheda'}</button></div>`;
+  }).join('');
+  const pack = `<div class="part"><div class="phead"><b>Confezione</b><span class="rule">dagli imballaggi del Food cost</span></div>
+    ${T.packs.map(p=>`<div class="pline"><div class="what">${p[0]}<small>1 pezzo</small></div><div class="qty num">1 pz</div><div class="money num">${fmt(p[1])} €<small>materie</small></div><div class="money lab-c"></div><button class="iconbtn" aria-label="Togli">${ICON.x}</button></div>`).join('')}
+    <button class="btn ghost addr">+ Aggiungi un imballaggio</button></div>`;
+  return `<div class="card"><h3>Parti della torta<span class="sp"></span><span class="caption" style="margin:0;font-weight:400">${c.tiers>1?'ogni piano ha le sue schede':'grammi calcolati, si possono correggere'}</span></h3>${tabs}
+    <div class="plhead"><span>Scheda del Food cost</span><span>Grammi</span><span>Materie</span><span class="lab-c">Lavoro</span><span></span></div>${rows}${pack}</div>`;
+}
+
+function measuresCard(c){
+  const can3 = c.d-6*c.tiers>=10;
+  const minT = c.tiers<3 && !can3;
+  return `<div class="card"><h3>Misure</h3>
+    <div class="mrow"><div class="l"><b>Diametro</b><span>del piano più grande</span></div><div class="step"><button data-m="d" data-s="-2" aria-label="Diametro meno 2 cm" ${c.d-6*(c.tiers-1)-2<10||c.d<=14?'disabled':''}>−</button><output class="num">${c.d} cm</output><button data-m="d" data-s="2" aria-label="Diametro più 2 cm" ${c.d>=30?'disabled':''}>+</button></div></div>
+    <div class="mrow"><div class="l"><b>Piani</b><span>ogni piano 6 cm più stretto</span></div><div class="step"><button data-m="tiers" data-s="-1" aria-label="Un piano in meno" ${c.tiers<=1?'disabled':''}>−</button><output class="num">${c.tiers}</output><button data-m="tiers" data-s="1" aria-label="Un piano in più" ${c.tiers>=3||!can3?'disabled':''}>+</button></div>${minT?`<div class="limit new">Un altro piano verrebbe ${c.d-6*c.tiers} cm: il più piccolo deve essere almeno 10 cm. Allarga il diametro per aggiungerlo.</div>`:''}</div>
+    <div class="mrow"><div class="l"><b>Dischi per piano</b><span>altezza e strati di farcia</span></div><div class="step"><button data-m="n" data-s="-1" aria-label="Un disco in meno" ${c.n<=1?'disabled':''}>−</button><output class="num">${c.n}</output><button data-m="n" data-s="1" aria-label="Un disco in più" ${c.n>=5?'disabled':''}>+</button></div></div>
+    <div class="mrow"><div class="l"><b>Fette</b><span>solo per il costo a fetta</span></div><div class="step"><button data-m="slices" data-s="-1" aria-label="Una fetta in meno">−</button><output class="num">${c.slices}</output><button data-m="slices" data-s="1" aria-label="Una fetta in più">+</button></div></div>
+    <div class="mrow"><div class="l"><b>Montaggio</b><span>minuti per comporre e decorare</span></div><div class="step"><button data-m="mins" data-s="-5" aria-label="Cinque minuti in meno">−</button><output class="num">${c.mins} min</output><button data-m="mins" data-s="5" aria-label="Cinque minuti in più">+</button></div></div>
+  </div>`;
+}
+
+function costCard(c){
+  const T=totals(c);
+  const miss=T.missing.length;
+  return `<div class="card"><h3>Costo e prezzo</h3>
+    <div class="kv"><span>Materie prime<span class="muted">schede + confezione</span></span><b class="num">${fmt(T.mat)} €${miss?' +?':''}</b></div>
+    <div class="kv"><span>Lavoro<span class="muted">${fmt(T.labSemi)} dai semilavorati + ${fmt(T.labAsm)} di montaggio</span></span><span class="num">${fmt(T.lab)} €</span></div>
+    <div class="kv total"><span>Costo totale<span class="muted" style="font-weight:400">materie + lavoro</span></span><span class="num">${fmt(T.mat+T.lab)} €${miss?' +?':''}</span></div>
+    <div class="kv"><span class="muted" style="font-size:14px">A fetta, su ${c.slices} fette</span><span class="num" style="color:var(--ink-2);font-size:14px">${fmt((T.mat+T.lab)/c.slices)} € di costo · ${fmt(c.price/c.slices)} € di prezzo</span></div>
+    <div class="pricebox"><div class="lab">Prezzo di vendita della torta intera (IVA 10% compresa)</div>
+      <div class="step"><button data-m="price" data-s="-0.5" aria-label="Prezzo meno 50 centesimi">−</button><output class="num" style="min-width:110px">${fmt(c.price)} €</output><button data-m="price" data-s="0.5" aria-label="Prezzo più 50 centesimi">+</button></div>
+      <div class="fcrow"><span>Food cost<span class="caption" style="display:block;margin:0">materie prime sul prezzo netto · obiettivo 30%</span></span><span class="big num" style="color:${miss?'var(--warn-ink)':T.fc>30?'var(--warn-ink)':'var(--ok-ink)'}">${miss?'?':fmt(T.fc,0)+'%'}</span></div>
+      ${miss?'':`<div class="sugg"><span>Prezzo per il 30%: <b class="num">${fmt(T.sugg)} €</b></span>${Math.abs(T.sugg-c.price)>0.01?`<button class="btn ghost" data-use="${T.sugg}">Usa questo prezzo</button>`:'<span class="pill ok">è già questo</span>'}</div>`}
+    </div>
+    ${miss?`<div class="warnbox">${ICON.warn}<span>Costo incompleto: ${T.missing.join(', ')} non ha ancora un prezzo nella sua scheda Food cost. Il costo vero è più alto.</span></div>`:''}
+  </div>
+  <div class="card new"><h3>Cosa serve</h3><p class="caption" style="margin-top:0">Quanto preparare di ogni semilavorato, già con il calo, e quanto di ogni ingrediente. Si stampa per il laboratorio.</p>
+    <button class="btn" data-need style="width:100%">${ICON.list}Apri «Cosa serve»</button></div>`;
+}
+
+function fillEditor(k){
+  const c=CAKES[k];
+  document.getElementById('edHead').innerHTML=edHead(c);
+  document.getElementById('edParts').innerHTML=partsCard(c);
+  document.getElementById('edSide').innerHTML=measuresCard(c)+costCard(c);
+  document.getElementById('st2d').innerHTML=drawing(c);
+  const three=state.sv!=='2d';
+  document.getElementById('st3d').style.display=three?'block':'none';
+  document.getElementById('st2d').style.display=three?'none':'flex';
+  document.querySelectorAll('[data-sv]').forEach(b=>{const on=b.dataset.sv===(three?'3d':'2d');b.classList.toggle('on',on);b.setAttribute('aria-selected',on)});
+  document.getElementById('stCap').textContent=three?'Trascina per girarla, rotella per lo zoom. Tocca uno strato o il suo nome per sceglierlo, toccalo di nuovo per cambiare la scheda.':'La versione semplice: serve quando il 3D non può girare e per chi usa un lettore di schermo.';
+  send3d();
+}
+/* What the 3D frame shows: his prototype's recipes stand in for the look; names, grams and costs come from this mockup. */
+const TO3D_PART={dec:'deco',cop:'cop',farc:'farcia',bagna:'bagna',base:'base'};
+const FROM3D_PART={deco:'dec',cop:'cop',farcia:'farc',bagna:'bagna',base:'base'};
+const TO3D_BOOK={pds:'ps',bagna:'limoncello',chant:'chantilly',frutta:'frutta',ricci:'riccioli',panna:'panna',ganache:'ganache',pdz:'topper'};
+function send3d(){
+  const f=document.getElementById('st3d'); if(!f||!f.contentWindow) return;
+  const c=CAKES[state.cake], T=totals(c), i=Math.min(state.tier,c.tiers-1), ch={}, info={};
+  Object.entries(TO3D_PART).forEach(([mine,his])=>{
+    let ids=c.t[i][mine]||[];
+    if(mine==='dec'){for(let j=c.tiers-1;j>=0;j--){if((c.t[j].dec||[]).length){ids=c.t[j].dec;break;}}}
+    if(ids.length) ch[his]=TO3D_BOOK[ids[0]]; else if(mine==='bagna') ch[his]='none';
+    const L=T.L.filter(l=>l.part===mine);
+    const names=[...new Set(L.map(l=>CARDS[l.id].name))];
+    const g=L.reduce((s,l)=>s+l.g,0), miss=L.some(l=>l.mat==null), mat=L.reduce((s,l)=>s+(l.mat||0),0);
+    info[his]=L.length?{recipe:names.join(' + '),qty:g0(g)+' g',cost:miss?'senza prezzo':fmt(mat)+' €'}:{recipe:mine==='bagna'?'Nessuna bagna':'Nessuna',qty:'—',cost:''};
+  });
+  info.conf={recipe:T.packs.map(p=>p[0]).join(' + '),qty:T.packs.length+' pz',cost:fmt(T.packs.reduce((s,p)=>s+p[1],0))+' €'};
+  f.contentWindow.postMessage({cake:{d:c.d,n:c.n,tiers:c.tiers,slices:c.slices,price:c.price,ch,sel:TO3D_PART[state.sel]||null,ext:{info,unpriced:T.missing}}},'*');
+}
+addEventListener('message',e=>{
+  const m=e.data||{};
+  if(m.ready){send3d();return;}
+  if(m.sel){state.sel=FROM3D_PART[m.sel]||null;fillEditor(state.cake);return;}
+  if(m.pick&&FROM3D_PART[m.pick]){const name=PARTS.find(x=>x[0]===FROM3D_PART[m.pick])[1];document.getElementById('pkT').textContent=name+' · aggiungi una scheda';state.pick=true;render();}
+});
+function edHead(c){
+  return `<div class="dhead"><h2>${c.name}</h2><span class="pill cake">a listino</span><span class="sp"></span><button class="iconbtn" aria-label="Elimina la torta">${ICON.trash}</button><button class="btn primary">Salva a listino</button></div>`;
+}
+
+function refScreen(){
+  const ex={d:26,n:3,tiers:1};
+  const exg=p=>ruleGrams(ex,0,p);
+  const row=(b,s,v,u)=>`<div class="l"><b>${b}</b><span>${s}</span></div><div class="qty num">${v} ${u}</div>`;
+  return `<div class="dhead"><h2>Grammi di riferimento</h2><span class="sp"></span><button class="btn primary">Salva</button></div>
+  <div style="max-width:820px">
+  <div class="card new"><h3>La torta tipo</h3>
+    <p class="caption" style="margin-top:0">Scrivi una volta i grammi di una torta che fai spesso. Ogni torta nuova parte da questi numeri, scalati sulla sua misura; poi ogni riga si può correggere a mano.</p>
+    <div class="refgrid" style="margin-top:12px">
+      ${row('Diametro','della torta tipo',REF.d,'cm')}
+      ${row('Dischi','quanti dischi ha',REF.discs,'')}
+      ${row('Altezza di un disco','con il suo strato di farcia',REF.discH,'cm')}
+    </div></div>
+  <div class="card new"><h3>Grammi per parte</h3>
+    <div class="refgrid">
+      ${row('Base','grammi di un disco, pronto',REF.base,'g')}
+      ${row('Bagna','grammi per disco',REF.bagna,'g')}
+      ${row('Farcitura','grammi per strato (tra due dischi)',REF.farc,'g')}
+      ${row('Copertura','per tutta la torta tipo: sopra e lati',REF.cop,'g')}
+      ${row('Decorazione','per tutta la torta tipo: sopra',REF.dec,'g')}
+    </div>
+    <div class="hint">Come si scala: base, bagna e farcitura con l’area (una torta da 30 cm ha quasi il doppio di una da 22); la copertura con la superficie da coprire, sopra e lati; la decorazione con l’area del piano più alto. Con due schede nella stessa parte, i grammi si dividono a metà.</div>
+  </div>
+  <div class="card"><h3>Prova: una torta da 26 cm a 3 dischi</h3>
+    <div class="ex">${[['Base','base'],['Bagna','bagna'],['Farcitura','farc'],['Copertura','cop'],['Decorazione','dec']].map(([n,p])=>`<div>${n}<b class="num">${g0(exg(p))} g</b></div>`).join('')}</div>
+  </div></div>`;
+}
+
+function fcCakeCard(){
+  const c=CAKES.A, T=totals(c);
+  return `<div class="dhead"><h2>${c.name}</h2><span class="pill cake">dalle Torte</span></div>
+  <div style="max-width:820px">
+  <div class="card new" style="background:var(--accent-tint);border-color:var(--accent-tint-2)"><h3>Questa scheda è una torta</h3>
+    <p class="caption" style="margin:0 0 12px;color:var(--ink-2)">Parti, grammi e misure si cambiano nelle Torte: qui si vedono soltanto, così i conti restano uguali nei due posti.</p>
+    <button class="btn primary" data-cake="A">Apri nelle Torte</button></div>
+  <div class="card ro"><h3>Composto da</h3>
+    ${(()=>{const agg={};T.L.forEach(l=>{agg[l.id]=(agg[l.id]||0)+l.g});return Object.entries(agg).map(([id,g])=>`<div class="pline"><div class="what"><span class="tag semi">Semilavorato</span> ${CARDS[id].name}</div><div class="qty num">${fmt(g/1000,3)} kg</div><div class="money num">${fmt(g/1000*CARDS[id].mat)} €</div></div>`).join('')})()}
+    ${T.packs.map(p=>`<div class="pline"><div class="what"><span class="tag">Imballaggio</span> ${p[0]}</div><div class="qty num">1 pz</div><div class="money num">${fmt(p[1])} €</div></div>`).join('')}
+  </div>
+  <div class="card"><h3>Prezzo e margine</h3>
+    <div class="kv"><span>Prezzo di vendita (IVA 10% compresa)</span><b class="num">${fmt(c.price)} €</b></div>
+    <div class="kv"><span>Materie prime · food cost</span><span class="num">${fmt(T.mat)} € · <b style="color:var(--ok-ink)">${fmt(T.fc,0)}%</b></span></div>
+    <div class="kv"><span>Lavoro</span><span class="num">${fmt(T.lab)} €</span></div>
+    <div class="hint">La storia dei margini funziona come per ogni scheda: si aggiorna quando salvi la torta o cambiano i prezzi delle sue schede.</div>
+  </div></div>`;
+}
+
+function needBody(){
+  const c=CAKES[state.cake], T=totals(c), q=state.qty||1;
+  const agg={}; T.L.forEach(l=>{agg[l.id]=(agg[l.id]||0)+l.g*q});
+  const semi=Object.entries(agg).map(([id,g])=>{const cd=CARDS[id];return {id,name:cd.name,ready:g,raw:g/(1-cd.calo/100),calo:cd.calo}});
+  const ing={}; semi.forEach(s=>CARDS[s.id].ing.forEach(([n,f])=>{(ing[n]=ing[n]||{g:0,from:new Set()});ing[n].g+=s.raw*f;ing[n].from.add(CARDS[s.id].name)}));
+  const ingRows=Object.entries(ing).sort((a,b)=>b[1].g-a[1].g);
+  const tab=state.needTab||'semi';
+  document.getElementById('ndT').textContent=`Cosa serve · ${c.name}`;
+  document.getElementById('needFoot').textContent=tab==='semi'?'Pronto = quello che va nella torta. Da preparare = con il calo in forno.':'Le ricette di ogni semilavorato aperte fino agli ingredienti, sommate.';
+  return `<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px">
+    <div class="seg" role="tablist"><button class="segb ${tab==='semi'?'on':''}" data-ntab="semi" role="tab" aria-selected="${tab==='semi'}">Per semilavorato</button><button class="segb ${tab==='ing'?'on':''}" data-ntab="ing" role="tab" aria-selected="${tab==='ing'}">Fino agli ingredienti</button></div>
+    <div class="step new"><span style="font-size:14px;color:var(--ink-2);margin-right:4px">Quante torte</span><button data-q="-1" aria-label="Una torta in meno" ${q<=1?'disabled':''}>−</button><output class="num" style="min-width:40px">${q}</output><button data-q="1" aria-label="Una torta in più">+</button></div>
+  </div>
+  ${tab==='semi'?`<table class="need"><thead><tr><th>Semilavorato</th><th class="r">Pronto</th><th class="r">Calo</th><th class="r">Da preparare</th></tr></thead><tbody>
+    ${semi.map(s=>`<tr><td><b>${s.name}</b></td><td class="r num">${g0(s.ready)} g</td><td class="r num">${s.calo?s.calo+'%':'—'}</td><td class="r num"><b>${g0(s.raw)} g</b></td></tr>`).join('')}
+    <tr class="tot"><td>Totale</td><td class="r num">${g0(semi.reduce((a,s)=>a+s.ready,0))} g</td><td></td><td class="r num">${g0(semi.reduce((a,s)=>a+s.raw,0))} g</td></tr></tbody></table>`
+  :`<table class="need"><thead><tr><th>Ingrediente</th><th class="r">Quanto</th></tr></thead><tbody>
+    ${ingRows.map(([n,o])=>`<tr><td><b>${n}</b><small>${[...o.from].join(' · ')}</small></td><td class="r num"><b>${o.g>=1000?fmt(o.g/1000,2)+' kg':g0(o.g)+' g'}</b></td></tr>`).join('')}</tbody></table>`}
+  ${c.tiers>1?'<p class="caption">Sommato su tutti i piani.</p>':''}`;
+}
+
+/* The rail shows what fits in the screen's height; what does not fit goes under «Altro», in order from the bottom of the list. */
+function railCurrent(){return state.v==='0'?'Altro':state.v==='7'?'Food cost':'Torte';}
+function railFit(){
+  const ITEM=61, avail=document.getElementById('rail').clientHeight-20;
+  const slots=state.compact?11:Math.floor(avail/ITEM);          // forced: the lab tablet's 11
+  const need=RAIL.length+1;                                       // + Impostazioni
+  if(need<=slots) return {shown:RAIL,more:[]};
+  const keep=slots-2;                                             // room for «Altro» and Impostazioni
+  return {shown:RAIL.slice(0,keep),more:RAIL.slice(keep)};
+}
+function drawRail(){
+  const r=document.getElementById('rail'), cur=railCurrent(), f=railFit();
+  const a=it=>`<a class="${it.id===cur?'on':''} ${it.id==='Torte'?'new':''}" ${it.id==='Torte'?'data-go="1"':it.id==='Food cost'?'data-go="7"':''}>${it.svg}${it.id}</a>`;
+  r.innerHTML=f.shown.map(it=>a(it)).join('')+(f.more.length?`<a class="new ${cur==='Altro'||f.more.some(m=>m.id===cur)?'on':''}" data-go="0">${MORE_ICON}Altro</a>`:'')+'<div class="grow"></div>'+a(RAIL_BOTTOM);
+  state.moreList=f.more;
+}
+function morePage(){
+  const m=state.moreList&&state.moreList.length?state.moreList:RAIL.slice(-2);
+  return `<div style="max-width:640px"><p class="caption" style="margin:0 0 12px">Le sezioni che non entrano nella barra di questo schermo.</p>
+    <div class="card new" style="padding:6px 8px">${m.map(it=>`<button class="morerow" ${it.id==='Torte'?'data-go="1"':it.id==='Food cost'?'data-go="7"':''}><span class="mi">${it.svg}</span><span class="ml">${it.id}</span><span class="chev">›</span></button>`).join('')}</div></div>`;
+}
+
+/* ---------- render ---------- */
+function render(){
+  const v=state.v;
+  document.querySelectorAll('.mk button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.v===v));
+  document.body.classList.toggle('editing',['2','3','6'].includes(v));
+  topbar();
+  const list=document.getElementById('list'), det=document.getElementById('detail');
+  drawRail();
+  list.style.display=v==='0'?'none':'';
+  const other=document.getElementById('detOther'), ed=document.getElementById('edWrap');
+  const isEd=v==='2'||v==='3'; ed.style.display=isEd?'':'none'; other.style.display=isEd?'none':'';
+  if(v==='0'){list.innerHTML='';other.innerHTML=morePage();}
+  else if(v==='7'){list.innerHTML=foodcostList(true);other.innerHTML=fcCakeCard();}
+  else{
+    list.innerHTML=cakeList();
+    if(v==='1') other.innerHTML='<div class="prompt"><p class="pt">Scegli una torta</p><p>Tocca una torta a sinistra per vederne parti, costo e prezzo, oppure «+ Nuova torta».</p></div>';
+    else if(v==='6') other.innerHTML=refScreen();
+    else fillEditor(state.cake);
+  }
+  if(innerWidth<=1240 && v==='1'){list.style.width='100%';det.style.display='none';} else {list.style.width='';det.style.display='';}
+  document.getElementById('dlgPick').classList.toggle('show',state.pick===true);
+  document.getElementById('dlgNeed').classList.toggle('show',state.need===true);
+  if(state.need) document.getElementById('needBody').innerHTML=needBody();
+}
+function go(v){
+  state.v=v; state.pick=false; state.need=false; state.compact=(v==='0');
+  if(v==='2'){state.cake='A';state.tier=0;state.sel=null;}
+  if(v==='3'){state.cake='B';state.tier=1;state.sel='dec';}
+  if(v==='4'){state.v='2';state.cake='A';state.tier=0;state.sel='farc';state.pick=true;render();document.querySelector('.mk button[data-v="4"]').setAttribute('aria-pressed','true');document.querySelector('.mk button[data-v="2"]').setAttribute('aria-pressed','false');return;}
+  if(v==='5'){state.v='2';state.cake='A';state.need=true;state.needTab='semi';render();document.querySelector('.mk button[data-v="5"]').setAttribute('aria-pressed','true');document.querySelector('.mk button[data-v="2"]').setAttribute('aria-pressed','false');return;}
+  document.getElementById('detail').scrollTop=0;
+  render();
+}
+document.addEventListener('click',e=>{
+  const t=e.target.closest('[data-v],[data-go],[data-cake],[data-tier],[data-m],[data-use],[data-part],[data-pick],[data-need],[data-close],[data-ntab],[data-q],[data-sv]');
+  if(!t){ if(e.target.classList.contains('scrim')){state.pick=false;state.need=false;render();} return; }
+  const c=CAKES[state.cake];
+  if(t.dataset.v){go(t.dataset.v);return;}
+  if(t.dataset.go){go(t.dataset.go);return;}
+  if(t.dataset.cake){state.cake=t.dataset.cake;state.v=t.dataset.cake==='A'?'2':'3';state.tier=0;state.sel=null;render();return;}
+  if(t.dataset.sv){state.sv=t.dataset.sv;fillEditor(state.cake);return;}
+  if(t.dataset.tier){state.tier=+t.dataset.tier;state.sel=null;render();return;}
+  if(t.dataset.m){const k=t.dataset.m, s=+t.dataset.s; c[k]=Math.round((c[k]+s)*100)/100;
+    if(k==='tiers'){c.tiers=Math.max(1,Math.min(3,c.tiers));while(c.t.length<c.tiers)c.t.push({base:['pds'],bagna:['bagna'],farc:['chant'],cop:['panna'],dec:[]});state.tier=Math.min(state.tier,c.tiers-1);}
+    if(k==='slices')c.slices=Math.max(1,c.slices); if(k==='mins')c.mins=Math.max(0,c.mins); if(k==='n')c.n=Math.max(1,Math.min(5,c.n));
+    render();return;}
+  if(t.dataset.use){c.price=+t.dataset.use;render();return;}
+  if(t.dataset.part){const [i,p]=t.dataset.part.split('.');state.tier=+i;state.sel=p;render();const el=document.querySelector(`.part[data-p="${p}"]`);el&&el.scrollIntoView({block:'nearest',behavior:'smooth'});return;}
+  if(t.dataset.pick){document.getElementById('pkT').textContent=t.dataset.pick+' · aggiungi una scheda';state.pick=true;render();return;}
+  if(t.hasAttribute('data-need')){state.need=true;state.needTab='semi';render();return;}
+  if(t.hasAttribute('data-close')){state.pick=false;state.need=false;render();return;}
+  if(t.dataset.ntab){state.needTab=t.dataset.ntab;render();return;}
+  if(t.dataset.q){state.qty=Math.max(1,(state.qty||1)+(+t.dataset.q));render();return;}
+});
+addEventListener('resize',render);
+go(new URLSearchParams(location.search).get('v')||'0');
+</script>
+</body>
+</html>

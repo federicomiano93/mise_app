@@ -151,6 +151,64 @@
   }
 }
 
+/* ⚠️ TWELVE PLACES (Cakes, 20 Nov 2026): the fullest rail holds 12, and the steps above (written for 11) are one item short, so a rail
+   marked `data-items="12"` (AppShell.tsx) steps up one item earlier: 64px up to 971px of height (it needs 972), 56px up to 875px (876),
+   52px without the brand letter up to 767px (768), 49px tightened up to 687px (688). Below that THE LAST TWO SECTIONS (`data-spill`: the
+   ones arrangeSections puts in railSpill) go under «More» and the rail holds 11 places, which need 637: the lab tablet's 648 fits. A rail
+   of 11 or fewer carries `data-items="11"` (its own count), which no step below matches (they match only "12"), so it keeps the steps above exactly. The data says which links CAN spill; these queries
+   decide WHEN. Qualified by the attribute, so they outrank the unqualified steps. railHeight.spec.ts adds it up. */
+.railItem.railMore {
+  display: none;
+}
+
+@media (max-height: 971px) {
+  .rail[data-items="12"] .railItem {
+    min-height: 56px;
+    padding: 4px 0;
+    gap: 3px;
+  }
+}
+
+@media (max-height: 875px) {
+  .rail[data-items="12"] .railItem {
+    min-height: 52px;
+    padding: 3px 0;
+    gap: 2px;
+  }
+
+  .rail[data-items="12"] .mark {
+    display: none;
+  }
+}
+
+@media (max-height: 767px) {
+  .rail[data-items="12"] {
+    gap: 2px;
+    padding-top: var(--s2);
+    padding-bottom: var(--s2);
+  }
+
+  .rail[data-items="12"] .railNav {
+    gap: 2px;
+  }
+
+  .rail[data-items="12"] .railItem {
+    min-height: 49px;
+    padding: 2px 0;
+    gap: 1px;
+  }
+}
+
+@media (max-height: 687px) {
+  .rail[data-items="12"] .railItem[data-spill] {
+    display: none;
+  }
+
+  .rail[data-items="12"] .railItem.railMore {
+    display: flex;
+  }
+}
+
 /* Qualified by .railItem so it outranks base.css's `svg.lucide` size of 20px. */
 .railItem .railIcon {
   width: 27px;

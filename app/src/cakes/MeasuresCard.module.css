@@ -1,0 +1,124 @@
+/* The cake's name and measures. Nothing here clips (no `overflow`). */
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  min-width: 0;
+  padding: var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+}
+
+.title {
+  margin: 0;
+  font-size: var(--fs-lg);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s2);
+}
+
+.label {
+  font-weight: 600;
+}
+
+.input,
+.select {
+  width: 100%;
+  min-height: var(--hit);
+  padding: 0 var(--s3);
+  border: 1.5px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: 450 var(--fs-md) var(--font);
+}
+
+.input:focus,
+.select:focus {
+  border-color: var(--accent);
+}
+
+.input[data-invalid="true"],
+.input[data-invalid="true"]:focus {
+  border-color: var(--danger);
+  background: var(--danger-tint);
+}
+
+/* A measure: what it is on the left, «−» value «+» on the right; a note (why «+» is blocked) takes a row of its own. */
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2) var(--s3);
+  padding-top: var(--s3);
+  border-top: 1px solid var(--line);
+}
+
+.what {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.what span {
+  color: var(--ink-3);
+  font-size: var(--fs-sm);
+}
+
+.step {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.stepButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--hit-lg);
+  height: var(--hit-lg);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font: 500 var(--fs-xl) var(--font);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.stepButton[data-disabled] {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.stepButton[data-focus-visible] {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.value {
+  min-width: 64px;
+  font-size: var(--fs-md);
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+  text-align: center;
+}
+
+.limit {
+  flex-basis: 100%;
+  margin: 0;
+  padding: var(--s2) var(--s3);
+  border-radius: var(--r-sm);
+  background: var(--warn-tint);
+  color: var(--warn-ink);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}

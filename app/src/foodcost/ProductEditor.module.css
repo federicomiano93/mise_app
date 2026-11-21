@@ -36,3 +36,51 @@
     padding: var(--s6);
   }
 }
+
+/* A cake's own card (read only, Food cost): the band that says so and sends the person to Cakes. */
+.cakeBand {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s3);
+  padding: var(--s4);
+  border: 1px solid var(--accent-tint-2);
+  border-radius: var(--r-lg);
+  background: var(--accent-tint);
+}
+
+.cakeTitle {
+  margin: 0;
+  font-size: var(--fs-lg);
+  font-weight: 650;
+}
+
+.cakeBody {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--fs-md);
+}
+
+.cakeOpen {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--hit);
+  padding: 0 var(--s6);
+  border-radius: var(--r-md);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+@media (hover: hover) {
+  .cakeOpen:hover {
+    background: var(--accent-hover);
+  }
+}
+
+.cakeOpen:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}

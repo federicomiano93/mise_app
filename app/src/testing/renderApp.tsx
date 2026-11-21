@@ -21,6 +21,7 @@ import type { Session } from '../session/session';
 import { fakeBookingsSource } from './fakeBookingsSource';
 import { fakeCalculatorSource } from './fakeCalculatorSource';
 import { fakeClientOrdersSource } from './fakeClientOrdersSource';
+import { fakeCakesSource } from './fakeCakesSource';
 import { fakeFoodcostSource } from './fakeFoodcostSource';
 import { fakeOrdersSource } from './fakeOrdersSource';
 import { fakeRecipesSource } from './fakeRecipesSource';
@@ -68,7 +69,7 @@ export function renderApp(path: string, { lang = 'en', routes = appRoutes, sessi
   const messages = lang === 'it' ? italian : en;
   const store = fakeStore(session);
   const services: DataServices = { pastries: () => fakePastriesSource(), stocktake: () => fakeStocktakeSource(),
-    foodcost: () => fakeFoodcostSource(), calculator: () => fakeCalculatorSource(),
+    foodcost: () => fakeFoodcostSource(), cakes: () => fakeCakesSource(), calculator: () => fakeCalculatorSource(),
     clientOrders: () => fakeClientOrdersSource(), recipes: () => fakeRecipesSource(),
     photo: () => ({ readRecipe: () => Promise.reject(new Error('no photo reader in this spec')), setRecipePhoto: () => Promise.reject(new Error('no photo switch in this spec')) }),
     suppliers: () => fakeSuppliersSource(), invoiceImport: () => fakeImportSource(),

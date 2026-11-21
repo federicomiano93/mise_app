@@ -316,8 +316,27 @@ the only other one is `client-accounts` (managers, or the account itself — aud
   cost», never 0.
 - `foodcost-categories/{id}` — `{ bakery, name (1–60), rank (number ≥ 0, the order of the list; the
   clock at creation) }`, nothing else. One document per category, so a rename is one write and a
-  removal deletes the document only. Read, create, update and delete: whoever may read and save
-  the cards (`cardAccess(lid, 'foodcost', 'foodcost')`). Never `config/{doc}`.
+  removal deletes the document only. Read, create and update: whoever may read and save the cards
+  (`cardAccess(lid, 'foodcost', 'foodcost')`); delete: `canManage(lid, 'foodcost')` only, like
+  deleting a card. Never `config/{doc}`.
+- `cakes/{id}` (20 Nov 2026, the cakes plan step 2) — a cake on the price list, composed in the
+  Cakes section: `{ bakery, name (1–200), diameterCm (10–60), tiers (int 1–3; each tier 6 cm
+  narrower, the smallest ≥ 10 cm, so `diameterCm − 6·(tiers−1) ≥ 10`), discs (int 1–5), slices
+  (int 1–200), lines[] (≤ 90 maps: tier, part, productId of a Food cost card, grams: a number, or null = «from the rule»; no `manual` key),
+  packaging[] (≤ 20), assemblyMinutes, sellingPrice, vatRate (0 real), foodCostTarget, categoryId,
+  ref (the reference grams as the cake took them, the shape below, or null), model (CAKE_MODEL =
+  1, never lowered), updatedAt }`, written WHOLE (`shared/src/cake-model.ts`). ⚠️ Its money lives
+  in Food cost: «Salva a listino» writes this document AND the product `cake-<id>` (an ordinary
+  model-4 product, its components the semi lines summed per card, assembly minutes as labour) and,
+  when worth it, the product's margin snapshot, in ONE batch; deleting removes both in one batch.
+  Read, create, update: `cardAccess(lid, 'foodcost', 'foodcost')` (Cakes is shown to exactly
+  whoever is shown Food cost); delete: `canManage(lid, 'foodcost')`. Lines are judged only by
+  their count, like a product's.
+- `cake-settings/reference` — `{ bakery, grams: { diameterCm, discs, discHeightCm, baseG, soakG,
+  fillingG, coatingG, decorationG }, updatedAt }`: the grams of ONE reference cake, scaled by area
+  (coating by surface) to every new cake. All eight keys required (`isCakeReference`). Read:
+  `cardAccess(lid, 'foodcost', 'foodcost')`; write: `canManage(lid, 'foodcost')`; never deleted.
+  Its own collection, never `config/{doc}`.
 - `foodcost-settings/main` — `{ bakery, labourCostPerHour, updatedAt }`; read and write
   `canManage(lid,'foodcost')` only, never deleted: an employee shown Food cost must not learn the
   rate.

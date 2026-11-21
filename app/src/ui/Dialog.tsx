@@ -23,6 +23,8 @@ type Props = {
   forced?: boolean;
   // A small dialog, its words centred (the same question).
   small?: boolean;
+  // A card for a table (Cakes' «What you need»): roomier than the 440px of a question.
+  wide?: boolean;
   children?: ReactNode;
   actions: ReactNode;
 };
@@ -33,7 +35,7 @@ type Props = {
 //
 // ⚠️ NEVER THE BROWSER'S confirm() / alert() — they cannot be styled, translated or tested, and
 // a phone can suppress them.
-export function Dialog({ isOpen, onClose, title, message, role = 'dialog', dismissable = false, forced = false, small = false, children, actions }: Props) {
+export function Dialog({ isOpen, onClose, title, message, role = 'dialog', dismissable = false, forced = false, small = false, wide = false, children, actions }: Props) {
   const messageId = useId();
   const paragraphs = message === undefined ? [] : typeof message === 'string' ? [message] : message;
 
@@ -45,7 +47,7 @@ export function Dialog({ isOpen, onClose, title, message, role = 'dialog', dismi
       isKeyboardDismissDisabled={forced}
       className={styles.overlay}
     >
-      <Modal className={small ? `${styles.modal} ${styles.small}` : styles.modal}>
+      <Modal className={small ? `${styles.modal} ${styles.small}` : wide ? `${styles.modal} ${styles.wide}` : styles.modal}>
         <AriaDialog
           role={role}
           // ⚠️ WITHOUT A TITLE THE MESSAGE IS THE NAME: an unnamed dialog is announced as just

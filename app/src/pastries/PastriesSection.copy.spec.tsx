@@ -28,7 +28,7 @@ const THURSDAY = [['Cornetti', 24, '9x3'], ['Krapfen', 12], ['Sfogliatelle', 8]]
 const FRIDAY = [['Brioche', 6], ['Bomboloni', 4]] as const;
 const COPIED = 'The list of Thursday has been copied here. Check it, then tap Save to keep it.';
 
-const dialog = (name: string) => screen.findByRole('alertdialog', { name });
+const dialog = (name: string) => screen.findByRole('alertdialog', { name }, LOAD);
 const copyButton = () => screen.getByRole('button', { name: 'Copy day' });
 const nameBoxes = () => screen.getAllByRole('combobox', { name: 'Pastry name' }) as HTMLInputElement[];
 const qtyBoxes = () => screen.getAllByRole('spinbutton') as HTMLInputElement[];

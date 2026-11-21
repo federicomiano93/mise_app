@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigationType } from 'react-router';
 import { ChevronRight, Plus, Search, Settings, Tags } from 'lucide-react';
+import { isCakeProductId } from '@mise/shared/cake-model';
 import { nameMatches, productsUsingRecipe, semiCardCost, sortByMargin } from '@mise/shared/foodcost-model';
 import { recipesWithoutProducts } from '@mise/shared/from-recipes';
 import { useT } from '../i18n/useT';
@@ -105,6 +106,7 @@ export function FoodcostList({ openProductId, onOpenProduct, onOpenNew, onOpenSe
       isOpen={product.id === openProductId}
       onOpen={() => onOpenProduct(product.id)}
       semi={product.kind === 'semi' ? semiFigures(t, money, semiCardCost(product, tables)) : null}
+      cake={isCakeProductId(product.id)}
     />
   );
   const groupHeadId = useId();

@@ -1,6 +1,7 @@
 import {
   BookOpen,
   Calculator,
+  CakeSlice,
   CalendarCheck,
   ChartPie,
   Croissant,
@@ -17,6 +18,7 @@ import type { LucideIcon } from 'lucide-react';
 import { isMonthId } from '@mise/shared/inventory-model';
 import { isWeekday } from '@mise/shared/pastries-model';
 import { bookingsScreenName } from '../bookings/bookingsPath';
+import { cakesScreenName } from '../cakes/cakesPath';
 import { clientsScreenName } from '../clients/clientsPath';
 import type { MessageKey } from '../i18n/en';
 import { labelsScreenName } from '../labels/labelsPath';
@@ -37,6 +39,7 @@ export type SectionId =
   | 'pastries'
   | 'stocktake'
   | 'foodcost'
+  | 'cakes'
   | 'settings';
 
 export type Section = {
@@ -78,6 +81,10 @@ export const SECTIONS: readonly Section[] = [
   { id: 'pastries', path: '/pastries', label: 'section.pastries', icon: Croissant, inRail: 'top', inTabs: false },
   { id: 'stocktake', path: '/stocktake', label: 'section.stocktake', icon: Warehouse, inRail: 'top', inTabs: false },
   { id: 'foodcost', path: '/food-cost', label: 'section.foodcost', icon: ChartPie, inRail: 'top', inTabs: false },
+  // «Cakes» (20 Nov 2026, Mise 2 only): the cake price list and its «what we need» sheets. A COMPANION of Food cost, like Labels of
+  // the catalogue: shown to exactly whoever is shown Food cost (session/visibility.ts), right after it because this list IS the order.
+  // No tab: the phone's tabs are fixed, so on a phone it is under «More».
+  { id: 'cakes', path: '/cakes', label: 'section.cakes', icon: CakeSlice, inRail: 'top', inTabs: false },
   { id: 'settings', path: '/settings', label: 'section.settings', icon: Settings, inRail: 'bottom', inTabs: false },
 ];
 
@@ -91,9 +98,16 @@ type ArrangedSections = {
   readonly tabs: readonly Section[];
   // What «More» holds: every shown section that has no tab of its own.
   readonly more: readonly Section[];
+  // The LAST rail sections a short window moves under «More» in the rail (see RAIL_PLACES_SHORT): empty while everything fits.
+  readonly railSpill: readonly Section[];
   // Where the address with no section in it lands: the first section a person is shown.
   readonly first: Section;
 };
+
+// How many places (sections plus the bottom group) the rail holds on the SHORTEST windows (AppShell.module.css, the 687px step). A
+// venue showing more than this lets the last sections before the bottom group spill under a «More» item there; the stylesheet
+// decides WHEN (a media query), this decides WHICH. railHeight.spec.ts pins the number against the stylesheet.
+export const RAIL_PLACES_SHORT = 11;
 
 // The sections a person is shown, split between the rail, the tab bar and «More», in list order.
 //
@@ -104,9 +118,14 @@ type ArrangedSections = {
 // Home and Settings are always shown (session/visibility.ts), so `first` always exists and is Home.
 export function arrangeSections(visible: ReadonlySet<SectionId>): ArrangedSections {
   const shown = SECTIONS.filter(section => visible.has(section.id));
+  const railTop = shown.filter(section => section.inRail === 'top');
+  const railBottom = shown.filter(section => section.inRail === 'bottom');
+  // One place of the short rail is the «More» item itself, so a rail over the limit keeps (limit − 1 − bottom group) sections.
+  const railSpill = railTop.length + railBottom.length > RAIL_PLACES_SHORT ? railTop.slice(RAIL_PLACES_SHORT - 1 - railBottom.length) : [];
   return {
-    railTop: shown.filter(section => section.inRail === 'top'),
-    railBottom: shown.filter(section => section.inRail === 'bottom'),
+    railTop,
+    railBottom,
+    railSpill,
     tabs: shown.filter(section => section.inTabs),
     more: shown.filter(section => !section.inTabs),
     first: shown[0] ?? sectionById('home'),
@@ -151,6 +170,8 @@ export function screenNameFor(pathname: string): string | null {
   if (section.id === 'pastries') return pastriesScreenName(pathname, section.path);
   if (section.id === 'stocktake') return stocktakeScreenName(pathname, section.path);
   if (section.id === 'foodcost') return foodcostScreenName(pathname, section.path);
+  // Cakes (20 Nov 2026): the list, one cake's editor (new or existing) and the reference grams.
+  if (section.id === 'cakes') return cakesScreenName(pathname.slice(section.path.length));
   if (section.id === 'calculator') return calculatorScreenName(pathname, section.path);
   if (section.id === 'clients') return clientsScreenName(pathname.slice(section.path.length));
   if (section.id === 'recipes') return recipesScreenName(pathname, section.path);

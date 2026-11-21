@@ -1,9 +1,11 @@
 import { useContext, useEffect, useId, useRef, useState } from 'react';
 import type { Ref } from 'react';
 import { useLocation, useNavigate } from 'react-router';
+import { cakeIdOfProduct } from '@mise/shared/cake-model';
 import { draftFromRecipe } from '@mise/shared/foodcost-model';
 import type { Product } from '@mise/shared/foodcost-model';
 import { useT } from '../i18n/useT';
+import { sectionById } from '../shell/sections';
 import { useOnline } from '../shell/useOnline';
 import { FormBar } from '../ui/FormBar';
 import { useFoodcost, useFoodcostStore } from './FoodcostContext';
@@ -46,6 +48,12 @@ export function ProductEditor({ id, origin }: { id: string | null; origin: Origi
   const title = useRef<HTMLHeadingElement>(null);
 
   const product = id === null ? null : products.find(candidate => candidate.id === id) ?? null;
+
+  // ⚠️ A CAKE'S OWN CARD (`cake-<id>`) IS NEVER EDITED HERE: Cakes writes the card and the cake in one batch, and a form here would
+  // be overwritten by the next cake Save. It is the READ view for everybody (an employee too), with a link to the cake in Cakes —
+  // built from the section's address and the shared id rule, since Food cost imports nothing from `cakes/`.
+  const cakeId = cakeIdOfProduct(id);
+  const cakeHref = cakeId === null ? null : `${sectionById('cakes').path}/${encodeURIComponent(cakeId)}`;
 
   // A NEW product opened from a recipe is prefilled from it (draftFromRecipe). ⚠️ It waits for the recipe
   // like a product address waits for its product: the recipe in the store's recipes, or the server's word
@@ -119,7 +127,7 @@ export function ProductEditor({ id, origin }: { id: string | null; origin: Origi
     : !hasForm ? null
       : justSaved !== null && justSaved === id ? { id, edit: false, fromRead: false }
         // A product whose form may not open yet is read, whatever it shows (above).
-        : { id, edit: formTrusted && (id === null || product === null || !summaryShows(product, tables)), fromRead: false };
+        : { id, edit: cakeHref === null && formTrusted && (id === null || product === null || !summaryShows(product, tables)), fromRead: false };
   if (mode !== null && mode !== chosen) setChosen(mode);
 
   // The focus follows a switch the person made (the pencil, Save, Back from the form): to the new view's own title.
@@ -133,7 +141,7 @@ export function ProductEditor({ id, origin }: { id: string | null; origin: Origi
     title.current?.focus();
   }, [mode?.edit, mode?.id]);
   const edit = () => {
-    if (product === null || !formTrusted) return;
+    if (product === null || !formTrusted || cakeHref !== null) return;
     switched.current = true;
     setChosen({ id, edit: true, fromRead: true });
   };
@@ -197,6 +205,7 @@ export function ProductEditor({ id, origin }: { id: string | null; origin: Origi
         titleRef={title}
         onEdit={edit}
         editWaits={formTrusted ? null : recipesFailed ? 'failed' : 'coming'}
+        cakeHref={cakeHref}
       />
     );
   }
