@@ -602,6 +602,7 @@ export const it: Messages = {
   'cakes.band.refChanged': 'I grammi di riferimento sono cambiati da quando questa torta è stata fatta.',
   'cakes.band.refUpdate': 'Aggiorna questa torta ai grammi di riferimento attuali',
   'cakes.band.refNone': 'Non ci sono ancora i grammi di riferimento: ogni riga ha bisogno dei suoi grammi, scritti a mano.',
+  'cakes.band.refOpen': 'Compila la torta tipo',
   'cakes.measures.title': 'Misure',
   'cakes.measure.diameter': 'Diametro',
   'cakes.measure.diameterSub': 'del piano più grande',

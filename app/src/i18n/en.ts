@@ -645,6 +645,7 @@ export const en = {
   'cakes.band.refChanged': 'The reference grams have changed since this cake was made.',
   'cakes.band.refUpdate': 'Update this cake to the current reference grams',
   'cakes.band.refNone': 'There are no reference grams yet, so every line needs its grams typed by hand.',
+  'cakes.band.refOpen': 'Fill in the reference cake',
   'cakes.measures.title': 'Measures',
   'cakes.measure.diameter': 'Diameter',
   'cakes.measure.diameterSub': 'of the biggest tier',

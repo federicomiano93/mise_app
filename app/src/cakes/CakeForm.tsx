@@ -152,8 +152,8 @@ export function CakeForm({ id, cake, titleRef, onSaved }: Props) {
     danger: true,
   });
 
-  // ⚠️ EVERY WAY OUT GOES THROUGH THE ROUTER'S BLOCKER, not through the Back button: the browser's Back, a cake picked in the split's
-  // list, the rail and the tab bar all navigate. Staying on the same address is never blocked.
+  // ⚠️ EVERY WAY OUT GOES THROUGH THE ROUTER'S BLOCKER, not through the Back button: the browser's Back, the rail and the tab bar
+  // all navigate. Staying on the same address is never blocked.
   const shouldBlock = useCallback<BlockerFunction>(
     ({ currentLocation, nextLocation }) => dirtyRef.current && currentLocation.pathname !== nextLocation.pathname,
     [],
@@ -392,7 +392,7 @@ export function CakeForm({ id, cake, titleRef, onSaved }: Props) {
         {noReference ? (
           <div className={styles.band} role="note">
             <p>{t('cakes.band.refNone')}</p>
-            <Button onPress={() => { void navigate(referencePath, { state: FROM_LIST }); }}>{t('cakes.referenceLink')}</Button>
+            <Button onPress={() => { void navigate(referencePath, { state: FROM_LIST }); }}>{t('cakes.band.refOpen')}</Button>
           </div>
         ) : null}
 
