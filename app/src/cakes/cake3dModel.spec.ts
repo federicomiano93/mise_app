@@ -6,6 +6,7 @@ import {
   sceneSignature, slotHeights, stageDecision, tapAction, webglAvailable,
 } from './cake3dModel';
 import type { Anchor, LabelBox, PlacedLabel } from './cake3dModel';
+import { cakeLooks, looksKey } from './cakeLook';
 
 const REF = { diameterCm: 22, discs: 3, discHeightCm: 3, baseG: 300, soakG: 90, fillingG: 280, coatingG: 450, decorationG: 200 };
 const FULL: Cake = {
@@ -297,6 +298,24 @@ describe('what the scene is rebuilt on', () => {
     expect(tiersOf(cake => cake, 'whole')).not.toBe(base);
     expect(tiersOf(cake => ({ ...cake, lines: cake.lines.filter(line => line.part !== 'soak') }))).not.toBe(base);
     expect(tiersOf(cake => ({ ...cake, lines: [...cake.lines, { tier: 1, part: 'coating', productId: 'F', grams: null }] }))).not.toBe(base);
+  });
+});
+
+describe('what the scene is rebuilt on: the look the names give', () => {
+  const NAMES: Record<string, string> = { A: 'Pan di spagna', B: 'Bagna al rum', C: 'Crema pasticcera', D: 'Panna', E: 'Frutti di bosco' };
+  // The signature the 3D view computes: the layout, the view and the looks of the names.
+  const signatureOf = (cake: Cake, names: Record<string, string>) =>
+    sceneSignature(cakeLayout(cakeGeometry(cake)), 'cut', looksKey(cakeLooks(cakeGeometry(cake), id => names[id] ?? '')));
+  const base = signatureOf(FULL, NAMES);
+
+  it('a recipe that looks different rebuilds: a chocolate coating instead of a cream one', () => {
+    expect(signatureOf(FULL, { ...NAMES, D: 'Glassa al cioccolato' })).not.toBe(base);
+    expect(signatureOf(FULL, { ...NAMES, E: 'Riccioli di cioccolato' })).not.toBe(base);
+    expect(signatureOf(FULL, { ...NAMES, B: 'Bagna al caffè' })).not.toBe(base);
+  });
+  it('typing grams, or a rename that looks the same, does not', () => {
+    expect(signatureOf({ ...FULL, lines: FULL.lines.map(line => ({ ...line, grams: 321 })) }, NAMES)).toBe(base);
+    expect(signatureOf(FULL, { ...NAMES, A: 'Genoise', D: 'Chantilly' })).toBe(base);
   });
 });
 

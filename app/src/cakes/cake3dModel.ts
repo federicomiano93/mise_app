@@ -437,7 +437,8 @@ export function webglAvailable(doc: Document = document): boolean {
 
 // What the scene is built from, as one string: the same string means the same meshes. The layout holds only numbers that decide the
 // shape (diameters, discs, which parts have cards), never grams or names, so typing a weight or renaming a card does not rebuild the
-// scene (and does not make the labels dip). The view (cut-away or whole) is part of it.
-export function sceneSignature(layout: CakeLayout, view: StageView): string {
-  return `${view}|${JSON.stringify(layout)}`;
+// scene (and does not make the labels dip). The view (cut-away or whole) is part of it, and so is the LOOK the names of the cards give
+// (cakeLook.ts `looksKey`): another recipe that looks different repaints the cake, a rename that looks the same does not.
+export function sceneSignature(layout: CakeLayout, view: StageView, looks = ''): string {
+  return `${view}|${looks}|${JSON.stringify(layout)}`;
 }
