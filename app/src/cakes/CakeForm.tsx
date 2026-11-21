@@ -444,8 +444,8 @@ export function CakeForm({ id, cake, titleRef, onSaved }: Props) {
                   onVatOther={setVatOther}
                   onVatGuide={applyVatRate}
                   registerBox={registerPrice}
-                  onOpenNeeds={() => {
-                    needsOpener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+                  onOpenNeeds={opener => {
+                    needsOpener.current = opener;
                     setNeedsOpen(true);
                   }}
                 />

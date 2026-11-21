@@ -46,7 +46,8 @@ type Props = {
   onVatGuide: (rate: number) => void;
   registerBox: (field: PriceField, node: HTMLInputElement | null) => void;
   // «Open “What you need”»: the dialog is the form's, so the working copy it reads is the form's.
-  onOpenNeeds: () => void;
+  // Given the button itself: a tap does not always focus a button (Safari), so the opener cannot be read from the page's focus.
+  onOpenNeeds: (opener: HTMLElement) => void;
 };
 
 // Keys, resolved when the menu is drawn.
@@ -235,7 +236,7 @@ export function CostCard({ totals, sellingPrice, texts, showLabour, invalid, sli
 
       <div className={styles.needs}>
         <p className={styles.note}>{t('cakes.need.openNote')}</p>
-        <Button onPress={onOpenNeeds}>
+        <Button onPress={event => { const target = event.target; onOpenNeeds(target.closest('button') ?? (target as HTMLElement)); }}>
           <ListChecks aria-hidden="true" />
           {t('cakes.need.open')}
         </Button>
