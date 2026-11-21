@@ -180,6 +180,21 @@ function BookingsScreen() {
     area.scrollTop = kind === 'list' && before.kind !== 'list' ? listTop.current : 0;
   }, [pathname]);
 
+  // ⚠️ BACK FROM THE SETTINGS HANDS THE FOCUS TO THE GEAR that opened them, as in the other sections (their hand-back): the gear is
+  // owed the focus from the press, so the browser's own Back gives it too. It is drawn only on the list and a booking, so the focus is
+  // given once the list is the view again, and only then.
+  const gearRef = useRef<HTMLButtonElement>(null);
+  const gearOwed = useRef(false);
+  const openSettings = () => {
+    gearOwed.current = true;
+    void navigate(settingsPath(), { state: FROM_LIST });
+  };
+  useLayoutEffect(() => {
+    if (kind !== 'list' || !gearOwed.current) return;
+    gearOwed.current = false;
+    gearRef.current?.focus();
+  }, [kind]);
+
   // ⚠️ A BOOKING OPEN IN THE LIST (the split) IS CLOSED BY REPLACING THE ADDRESS, never by Back: a Back could land on an older entry
   // carrying another day (a saved booking's), and the day being looked at would jump. The browser's own Back still pops to the list.
   const closeBooking = useCallback(() => {
@@ -217,7 +232,7 @@ function BookingsScreen() {
       title={t('section.bookings')}
       ownHeading={view.kind === 'booking' && !split}
       band={canManage && (view.kind === 'list' || view.kind === 'booking')
-        ? <SettingsGear onPress={() => { void navigate(settingsPath(), { state: FROM_LIST }); }} />
+        ? <SettingsGear ref={gearRef} onPress={openSettings} />
         : null}
     >
       <FormDayContext.Provider value={reportFormDays}>

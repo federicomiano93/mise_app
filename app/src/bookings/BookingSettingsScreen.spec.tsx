@@ -61,6 +61,19 @@ describe('the address', () => {
     await opened();
   });
 
+  it('Back from the settings hands the focus to the gear that opened them', async () => {
+    const { user, router } = show();
+    await opened();
+    await user.click(screen.getByRole('button', { name: 'Back' }));
+    await waitFor(() => { expect(router.state.location.pathname).toBe('/bookings'); });
+    const gear = await screen.findByRole('button', { name: 'Settings' });
+    await user.click(gear);
+    await opened();
+    await user.click(screen.getByRole('button', { name: 'Back' }));
+    await waitFor(() => { expect(router.state.location.pathname).toBe('/bookings'); });
+    await waitFor(() => { expect(screen.getByRole('button', { name: 'Settings' })).toHaveFocus(); });
+  });
+
   it('…and an employee has no «Settings» button', async () => {
     renderApp('/bookings', { session: { canManage: false, role: 'staff' }, data: { bookings: () => fakeBookingsSource() } });
     await screen.findByRole('button', { name: 'Receipt printer' }, LOAD);
