@@ -227,8 +227,10 @@
   -webkit-tap-highlight-color: transparent;
 }
 
-.icon:hover {
-  background: var(--sunken);
+@media (hover: hover) {
+  .icon:hover {
+    background: var(--sunken);
+  }
 }
 
 .icon svg {

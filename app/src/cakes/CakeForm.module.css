@@ -66,9 +66,11 @@
   -webkit-tap-highlight-color: transparent;
 }
 
-.trash:hover {
-  background: var(--sunken);
-  color: var(--danger-ink);
+@media (hover: hover) {
+  .trash:hover {
+    background: var(--sunken);
+    color: var(--danger-ink);
+  }
 }
 
 .trash:focus-visible {
