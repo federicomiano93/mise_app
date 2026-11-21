@@ -322,7 +322,7 @@ the only other one is `client-accounts` (managers, or the account itself — aud
 - `cakes/{id}` (20 Nov 2026, the cakes plan step 2) — a cake on the price list, composed in the
   Cakes section: `{ bakery, name (1–200), diameterCm (10–60), tiers (int 1–3; each tier 6 cm
   narrower, the smallest ≥ 10 cm, so `diameterCm − 6·(tiers−1) ≥ 10`), discs (int 1–5), slices
-  (int 1–200), lines[] (≤ 90 maps: tier, part, productId of a Food cost card, grams, manual),
+  (int 1–200), lines[] (≤ 90 maps: tier, part, productId of a Food cost card, grams: a number, or null = «from the rule»; no `manual` key),
   packaging[] (≤ 20), assemblyMinutes, sellingPrice, vatRate (0 real), foodCostTarget, categoryId,
   ref (the reference grams as the cake took them, the shape below, or null), model (CAKE_MODEL =
   1, never lowered), updatedAt }`, written WHOLE (`shared/src/cake-model.ts`). ⚠️ Its money lives

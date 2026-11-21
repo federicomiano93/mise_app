@@ -155,7 +155,7 @@
    marked `data-items="12"` (AppShell.tsx) steps up one item earlier: 64px up to 971px of height (it needs 972), 56px up to 875px (876),
    52px without the brand letter up to 767px (768), 49px tightened up to 687px (688). Below that THE LAST TWO SECTIONS (`data-spill`: the
    ones arrangeSections puts in railSpill) go under «More» and the rail holds 11 places, which need 637: the lab tablet's 648 fits. A rail
-   of 11 or fewer carries no such attribute and keeps the steps above exactly. The data says which links CAN spill; these queries
+   of 11 or fewer carries `data-items="11"` (its own count), which no step below matches (they match only "12"), so it keeps the steps above exactly. The data says which links CAN spill; these queries
    decide WHEN. Qualified by the attribute, so they outrank the unqualified steps. railHeight.spec.ts adds it up. */
 .railItem.railMore {
   display: none;
