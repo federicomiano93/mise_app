@@ -1008,3 +1008,7 @@ Packaging section. (4) In the read view the semi row's money is one text line (r
 section, not in the summary panel (a semi card has no summary).
 
 **Not covered by the specs** (jsdom, no layout): the row at 1024 beside the list, 360 and 296 wide; the look of the group headers and chips; Chrome 101 on the tablet.
+
+## Cakes (Mise 2 only, 20 Nov 2026)
+
+A new section with no original in the current app: a cake is a Food cost price-list card (`products/cake-<id>`, shown in the list with a «Torta» tag and opened READ-ONLY, with a link «Apri nelle Torte») plus its own document in `cakes/`, saved in the same batch. Its cost and food cost come from this section's engine (`costProduct` on the product built from the cake); «Cosa serve» is `cakeNeeds`, which opens each semi-finished card with `costPerKg` (dough only), so a card with no price is named «non aperta». How it is built: `docs/architecture.md`, the `cakes/` bullet.
