@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { CakeGeometry, CakePart } from '@mise/shared/cake-model';
 import type { Selected } from './cakeEditorModel';
@@ -25,17 +26,26 @@ type Props = {
   labels: StageLabels;
 };
 
-// The picture's frame, and its scale: the widest tier fills 300 units of the width.
-const WIDTH = 640;
-const HEIGHT = 330;
-const CENTRE_X = 222;
-const BOARD_Y = HEIGHT - 24;
-const LABEL_X = 448;
-const FULL_WIDTH_UNITS = 300;
+// ⚠️ THE PICTURE'S UNITS ARE SCREEN PIXELS: the viewBox is as wide as the stage really is (measured), so a 12px label is 12px on
+// screen at every width. A fixed 640-unit viewBox shrank every word to 7px on the split. Before the stage is measured (and where
+// nothing measures, as in a test) it is 640 wide.
+const DEFAULT_WIDTH = 640;
+const MIN_WIDTH = 200;
+const HEIGHT_WIDE = 330;
+// Narrow stages stack three short lines per label (name, grams, card), which needs more height.
+const HEIGHT_NARROW = 372;
+// Left of the cake: the diameter words.
+const LEFT_MARGIN = 46;
+const LABEL_SHARE = 0.36;
+const LABEL_MIN = 96;
+const LABEL_MAX = 240;
+// Under this label column the part's name and grams do not fit on one line.
+const NARROW_LABEL = 190;
+const MAX_CAKE_UNITS = 440;
+const CHAR_UNITS = 6.4;
 // Heights are drawn taller than true (as in the mockup): a real cake is wide and low, and its layers would be slivers.
 const HEIGHT_EXAGGERATION = 2.2;
 const DISC_SHARE = 0.72;
-const MAX_NAME_CHARS = 38;
 
 // Parts from the top of the cake to the bottom: the order the labels stack in.
 const PART_CLASS: Readonly<Record<CakePart, string>> = {
@@ -53,11 +63,36 @@ interface Label { part: CakePart; y: number; x: number; tier: number }
 // ⚠️ THE PART AREAS ARE A MOUSE CONVENIENCE: they select the part in the parts list, but they are not in the tab order and say
 // nothing to a screen reader — the parts list is the keyboard and screen-reader path, and the picture itself is one named image.
 export function CakeSection2D({ geometry, selected, tier: shownTier, onSelect, labels }: Props) {
+  const drawRef = useRef<HTMLDivElement>(null);
+  const [measured, setMeasured] = useState(0);
+  useLayoutEffect(() => {
+    const node = drawRef.current;
+    if (!node) return undefined;
+    const read = () => { setMeasured(node.clientWidth); };
+    read();
+    if (typeof ResizeObserver === 'undefined') return undefined;
+    const observer = new ResizeObserver(read);
+    observer.observe(node);
+    return () => { observer.disconnect(); };
+  }, []);
+
   const tiers = geometry.tiers;
   const first = tiers[0];
   if (!first) return null;
 
-  const scale = FULL_WIDTH_UNITS / first.diameterCm;
+  const width2d = measured > 0 ? Math.max(MIN_WIDTH, Math.round(measured)) : DEFAULT_WIDTH;
+  const labelWidth = Math.max(LABEL_MIN, Math.min(LABEL_MAX, Math.round(width2d * LABEL_SHARE)));
+  const narrow = labelWidth < NARROW_LABEL;
+  const HEIGHT = narrow ? HEIGHT_NARROW : HEIGHT_WIDE;
+  const BOARD_Y = HEIGHT - 24;
+  const LABEL_X = width2d - labelWidth;
+  const maxNameChars = Math.floor((labelWidth - 4) / CHAR_UNITS);
+  // The cake takes what the diameter words and the label column leave, up to a size past which it only gets wider than it is tall.
+  const cakeRoom = LABEL_X - LEFT_MARGIN - 18;
+  const fullWidthUnits = Math.max(60, Math.min(MAX_CAKE_UNITS, cakeRoom - 16));
+  const CENTRE_X = LEFT_MARGIN + cakeRoom / 2;
+
+  const scale = fullWidthUnits / first.diameterCm;
   const discCm = first.discHeightCm;
   const heightScale = Math.min(scale * HEIGHT_EXAGGERATION, 250 / (first.discs * discCm * tiers.length + 3));
   const coat = Math.max(5, 0.6 * scale);
@@ -159,23 +194,36 @@ export function CakeSection2D({ geometry, selected, tier: shownTier, onSelect, l
 
   // The names go on the right in the order of their height, so the lines that join them never cross.
   marks.sort((a, b) => a.y - b.y);
-  const step = Math.max(42, (HEIGHT - 40) / Math.max(1, marks.length));
+  const step = Math.max(narrow ? 62 : 42, (HEIGHT - 40) / Math.max(1, marks.length));
   const start = Math.max(18, Math.min(marks[0] ? marks[0].y - 10 : 18, HEIGHT - 20 - step * (marks.length - 1)));
   const notes = marks.map((mark, index) => {
     const ly = start + index * step;
     const tier = tiers[mark.tier];
     const part = tier ? tier.parts[mark.part] : { productIds: [], grams: 0 };
     const names = part.productIds.map(labels.cardName).filter(name => name !== '').join(' + ');
-    const short = names.length > MAX_NAME_CHARS ? `${names.slice(0, MAX_NAME_CHARS - 1)}…` : names;
+    const short = names.length > maxNameChars ? `${names.slice(0, maxNameChars - 1)}…` : names;
     const on = sameSelection(selected, mark.tier, mark.part);
+    const reach = Math.min(60, (LABEL_X - 6 - mark.x) / 2);
+    const partName = labels.part[mark.part];
+    const grams = labels.grams(part.grams);
     return (
       <g key={`${mark.tier}-${mark.part}-note`}>
         <path className={styles.leader} data-chosen={on} fill="none"
-          d={`M${mark.x} ${mark.y} C ${mark.x + 60} ${mark.y}, ${LABEL_X - 60} ${ly}, ${LABEL_X - 6} ${ly}`} />
+          d={`M${mark.x} ${mark.y} C ${mark.x + reach} ${mark.y}, ${LABEL_X - 6 - reach} ${ly}, ${LABEL_X - 6} ${ly}`} />
         <circle className={styles.leaderDot} data-chosen={on} cx={mark.x} cy={mark.y} r={3} />
         <g className={styles.hit} onClick={select(mark.tier, mark.part)}>
-          <text className={styles.noteTitle} data-chosen={on} x={LABEL_X} y={ly - 3}>{`${labels.part[mark.part]} · ${labels.grams(part.grams)}`}</text>
-          <text className={styles.noteSub} x={LABEL_X} y={ly + 14}>{short}</text>
+          {narrow ? (
+            <>
+              <text className={styles.noteTitle} data-chosen={on} x={LABEL_X} y={ly - 3}>{partName}</text>
+              <text className={styles.noteTitle} data-chosen={on} x={LABEL_X} y={ly + 14}>{grams}</text>
+              <text className={styles.noteSub} x={LABEL_X} y={ly + 31}>{short}</text>
+            </>
+          ) : (
+            <>
+              <text className={styles.noteTitle} data-chosen={on} x={LABEL_X} y={ly - 3}>{`${partName} · ${grams}`}</text>
+              <text className={styles.noteSub} x={LABEL_X} y={ly + 14}>{short}</text>
+            </>
+          )}
         </g>
       </g>
     );
@@ -183,8 +231,8 @@ export function CakeSection2D({ geometry, selected, tier: shownTier, onSelect, l
 
   const boardWidth = first.diameterCm * scale + 48;
   return (
-    <div className={styles.draw}>
-      <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} role="img" aria-label={labels.summary}>
+    <div ref={drawRef} className={styles.draw}>
+      <svg viewBox={`0 0 ${width2d} ${HEIGHT}`} role="img" aria-label={labels.summary}>
         <rect className={styles.board} x={CENTRE_X - boardWidth / 2} y={BOARD_Y} width={boardWidth} height={8} rx={3} />
         {shapes}
         {notes}

@@ -3,12 +3,13 @@
 .draw {
   display: flex;
   justify-content: center;
+  min-width: 0;
 }
 
 .draw svg {
+  display: block;
   width: 100%;
   height: auto;
-  max-height: 330px;
 }
 
 .draw text {
@@ -55,8 +56,8 @@
 }
 
 .diameter {
-  fill: var(--ink-2);
-  font-size: 13px;
+  fill: var(--ink);
+  font-size: 12px;
 }
 
 .leader {
@@ -91,5 +92,5 @@
 
 .noteSub {
   fill: var(--ink-2);
-  font-size: 12.5px;
+  font-size: 12px;
 }
