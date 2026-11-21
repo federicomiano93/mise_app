@@ -63,6 +63,7 @@ describe('a cake\'s own card', () => {
     expect(await screen.findByRole('textbox', { name: 'Name' }, LOAD)).toHaveValue('Sacher');
     expect(router.state.location.pathname).toBe('/cakes/c1');
     expect(router.state.location.state).toMatchObject({ fromFoodcost: true });
+    expect(document.activeElement).toBe(screen.getByRole('heading', { level: 2, name: 'Sacher' }));
     await user.click(screen.getByRole('button', { name: 'Back' }));
     expect(await screen.findByRole('link', { name: 'Open in Cakes' }, LOAD)).toBeInTheDocument();
     expect(router.state.location.pathname).toBe('/food-cost/product/cake-c1');

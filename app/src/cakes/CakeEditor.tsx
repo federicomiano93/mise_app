@@ -3,7 +3,7 @@ import type { Ref } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { cakeProductId } from '@mise/shared/cake-model';
 import { useFoodcost, useFoodcostStore } from '../foodcost/FoodcostContext';
-import { cameFromList, useLeave } from '../foodcost/foodcostNav';
+import { cameFromFoodcost, cameFromList, useLeave } from '../foodcost/foodcostNav';
 import { NEW_OPENER, productOpener, useHandBack } from '../foodcost/handBack';
 import { useT } from '../i18n/useT';
 import { FormBar } from '../ui/FormBar';
@@ -65,9 +65,10 @@ export function CakeEditor({ id }: { id: string | null }) {
     leave();
   }, [mine, cake, firstSave, leave]);
 
-  // Opened from the list, the page does not move the focus: it goes to this title (once, when the screen first appears).
+  // Opened from the list, or from the cake's card in Food cost, the page does not move the focus (KEEP_FOCUS): it goes to this title
+  // (once, when the screen first appears).
   useEffect(() => {
-    if ((hasForm || gone) && cameFromList(state)) title.current?.focus();
+    if ((hasForm || gone) && (cameFromList(state) || cameFromFoodcost(state))) title.current?.focus();
   }, [hasForm, gone]);
 
   const saved = (savedId: string) => {
