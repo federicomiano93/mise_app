@@ -227,19 +227,15 @@ describe('the labels', () => {
 
 describe('which drawing the stage shows', () => {
   it('is the 3D by default', () => {
-    expect(stageDecision({ choice: null, reducedMotion: false, failure: null })).toEqual({ show: '3d', note: null });
+    expect(stageDecision({ reducedMotion: false, failure: null })).toEqual({ show: '3d', note: null });
   });
-  it('is the simple drawing, with a note, when the device asks for less motion, and 3D is still a choice away', () => {
-    expect(stageDecision({ choice: null, reducedMotion: true, failure: null })).toEqual({ show: '2d', note: 'motion' });
-    expect(stageDecision({ choice: '3d', reducedMotion: true, failure: null })).toEqual({ show: '3d', note: null });
+  it('is the simple drawing, with a note, when the device asks for less motion', () => {
+    expect(stageDecision({ reducedMotion: true, failure: null })).toEqual({ show: '2d', note: 'motion' });
   });
-  it('keeps what the person chose', () => {
-    expect(stageDecision({ choice: '2d', reducedMotion: false, failure: null })).toEqual({ show: '2d', note: null });
-  });
-  it('falls back to the drawing, with the reason, whenever the 3D failed, whatever was chosen', () => {
-    expect(stageDecision({ choice: '3d', reducedMotion: false, failure: 'webgl' })).toEqual({ show: '2d', note: 'webgl' });
-    expect(stageDecision({ choice: null, reducedMotion: true, failure: 'load' })).toEqual({ show: '2d', note: 'load' });
-    expect(stageDecision({ choice: '3d', reducedMotion: false, failure: 'error' })).toEqual({ show: '2d', note: 'error' });
+  it('falls back to the drawing, with the reason, whenever the 3D failed', () => {
+    expect(stageDecision({ reducedMotion: false, failure: 'webgl' })).toEqual({ show: '2d', note: 'webgl' });
+    expect(stageDecision({ reducedMotion: true, failure: 'load' })).toEqual({ show: '2d', note: 'load' });
+    expect(stageDecision({ reducedMotion: false, failure: 'error' })).toEqual({ show: '2d', note: 'error' });
   });
 });
 

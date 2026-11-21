@@ -1,7 +1,7 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import { fakeCakesSource } from '../testing/fakeCakesSource';
-import { cakeDoc, incompleteCake, renderCakes, splitCakes } from '../testing/renderCakes';
+import { cakeDoc, incompleteCake, renderCakes } from '../testing/renderCakes';
 import { LOAD } from '../testing/renderFoodcost';
 
 // The Cakes list: the rows and their costs (complete and incomplete), the search, the empty state, and how the section moves — one level
@@ -107,8 +107,7 @@ describe('with no cakes', () => {
 });
 
 describe('moving about', () => {
-  it('even on a wide screen a cake opens one level down over the whole page: the list is not beside it, and Back returns to the list', async () => {
-    splitCakes();
+  it('a cake opens one level down over the whole page: the list is not beside it, and Back returns to the list', async () => {
     const { user, router } = await open();
     expect(screen.queryByText('Choose a cake')).not.toBeInTheDocument();
     await user.click(await screen.findByRole('button', { name: /^Sacher/ }, LOAD));

@@ -1,5 +1,5 @@
-/* The reference grams: a card holding the form bar and, under it, the cards of the mockup. Like Food cost's settings, it is the
-   right-hand pane from 1280px and replaces the list below that.
+/* The reference grams: a card holding the form bar and, under it, the cards of the mockup. Like Food cost's settings, it is a
+   full page one level below the list.
 
    ⚠️ NOTHING ON THE OUTER CARD MAY CLIP (no `overflow`): the form bar sticks to the top of the shell's scrolling area, and a clipping
    ancestor would turn it into an ordinary row. */

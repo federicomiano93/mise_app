@@ -1,5 +1,5 @@
-/* The left column of Cakes: «New cake», the search, the cakes as one card of rows, and the reference grams at the foot. The card does
-   not clip (no `overflow`), so nothing that sticks inside the section is ever cut. */
+/* The Cakes list page: «New cake», the search, the cakes as one card of rows, and the reference grams (Settings) at the foot. The card
+   does not clip (no `overflow`), so nothing that sticks inside the section is ever cut. */
 
 .column {
   display: flex;
@@ -125,12 +125,8 @@
   outline-offset: -3px;
 }
 
-.row[data-open="true"] {
-  background: var(--accent-tint);
-}
-
 @media (hover: hover) {
-  .row[data-open="false"]:hover {
+  .row:hover {
     background: var(--sunken);
   }
 }

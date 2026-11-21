@@ -71,7 +71,7 @@ export function CakeStage(props: CakeStageProps) {
   const reducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
   const [failure, setFailure] = useState<StageFailure | null>(null);
   const [Cake3D] = useState(lazyCake3D);
-  const decision = stageDecision({ choice: null, reducedMotion, failure });
+  const decision = stageDecision({ reducedMotion, failure });
   const said = useSpoken(decision.note ? t(`cakes.stage.note.${decision.note}`) : '');
   const { onOpenPart, ...flat } = props;
 

@@ -362,20 +362,18 @@ export function cakeShare(box: LabelBox): { share: number; centre: number } {
 
 // ── Which drawing the stage shows ────────────────────────────────────────────
 
-export type StageChoice = '3d' | '2d';
 // Why the 3D cannot be drawn: no WebGL 2 on the device, the library did not arrive, or the drawing stopped working (a bug, or a graphics
 // context lost for good). The first two are EXPECTED and are reported by the 3D view itself (onUnavailable), never thrown.
 export type StageFailure = 'webgl' | 'load' | 'error';
 export type StageNote = StageFailure | 'motion';
 
-export interface StageDecision { show: StageChoice; note: StageNote | null }
+export interface StageDecision { show: '3d' | '2d'; note: StageNote | null }
 
-// The 3D view is the default; the simple drawing is shown, with a one-line note, when the 3D cannot be (no WebGL, the library did not
-// load) or when the device asks for less motion (then 3D is still one tap away). A choice made by the person wins over the motion
-// preference, never over a failure.
-export function stageDecision(opts: { choice: StageChoice | null; reducedMotion: boolean; failure: StageFailure | null }): StageDecision {
+// The 3D view is always the first choice; the simple section drawing is shown instead, with a one-line note, when the 3D cannot be
+// drawn (no WebGL, the library did not load, it stopped working) or when the device asks for less motion. There is no switch between
+// the two: the person cannot override either reason.
+export function stageDecision(opts: { reducedMotion: boolean; failure: StageFailure | null }): StageDecision {
   if (opts.failure !== null) return { show: '2d', note: opts.failure };
-  if (opts.choice !== null) return { show: opts.choice, note: null };
   return opts.reducedMotion ? { show: '2d', note: 'motion' } : { show: '3d', note: null };
 }
 

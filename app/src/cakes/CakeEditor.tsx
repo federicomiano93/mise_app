@@ -23,9 +23,9 @@ import styles from './CakeEditor.module.css';
 // empty one from a database that never synced. And not while its own FIRST SAVE is in the air: a snapshot taken before the write lacks
 // it for a moment (the store's `firstSave`).
 //
-// ⚠️ THE SECTION DOES NOT REMOUNT THIS COMPONENT when the split goes from one cake to another (the focus would leave the row that was
-// pressed), so it follows `id` itself: the form is keyed on the id, and a form copies its cake once, when it mounts. A new cake that is
-// saved gets its own address, and the form (which holds the id it made) is NOT remounted for it.
+// ⚠️ THE SECTION DOES NOT REMOUNT THIS COMPONENT from one address to the next, so it follows `id` itself: the form is keyed on the id,
+// and a form copies its cake once, when it mounts. A new cake that is saved gets its own address, and the form (which holds the id it
+// made) is NOT remounted for it.
 export function CakeEditor({ id }: { id: string | null }) {
   const { t } = useT();
   const { state } = useLocation();

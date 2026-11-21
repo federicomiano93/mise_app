@@ -12,18 +12,17 @@ import type { CakeRowData } from './cakesListModel';
 import styles from './CakesList.module.css';
 
 type Props = {
-  // The cake whose screen is the one open beside the list (the split).
-  openCakeId: string | null;
   onOpenCake: (id: string) => void;
   onOpenNew: () => void;
   onOpenReference: () => void;
 };
 
-// The left column: «New cake» over the cakes by name, and Settings (the reference grams) at the foot.
+// The list page: «New cake» over the cakes by name, and Settings (the reference grams) at the foot. A cake, a new cake or Settings
+// opens as a full page one level down.
 //
 // ⚠️ A ROW IS COSTED FROM FOOD COST'S TABLES (products, recipes, prices), so the list waits for all of them: a cake would read
 // «incomplete» only because its numbers were still on their way.
-export function CakesList({ openCakeId, onOpenCake, onOpenNew, onOpenReference }: Props) {
+export function CakesList({ onOpenCake, onOpenNew, onOpenReference }: Props) {
   const { t } = useT();
   const money = useMoney();
   const handBack = useHandBack();
@@ -77,7 +76,7 @@ export function CakesList({ openCakeId, onOpenCake, onOpenNew, onOpenReference }
           <h2 id={headId} className={styles.group}>{t('cakes.group.listed', { n: found.length })}</h2>
           <ul className={styles.rows}>
             {found.map(row => (
-              <CakeRow key={row.cake.id} row={row} isOpen={row.cake.id === openCakeId} onOpen={() => { onOpenCake(row.cake.id); }} money={money} />
+              <CakeRow key={row.cake.id} row={row} onOpen={() => { onOpenCake(row.cake.id); }} money={money} />
             ))}
           </ul>
         </section>
@@ -103,7 +102,7 @@ export function CakesList({ openCakeId, onOpenCake, onOpenNew, onOpenReference }
 // a card in the cake has no price yet (the figure would be too low).
 //
 // ⚠️ THE LIGHT IS A DOT AND A WORD, NEVER COLOUR ALONE (P18): the word is on screen under the figure (Food cost's own row says it too); the dot is hidden from a screen reader.
-function CakeRow({ row, isOpen, onOpen, money }: { row: CakeRowData; isOpen: boolean; onOpen: () => void; money: ReturnType<typeof useMoney> }) {
+function CakeRow({ row, onOpen, money }: { row: CakeRowData; onOpen: () => void; money: ReturnType<typeof useMoney> }) {
   const { t } = useT();
   const handBack = useHandBack();
   const { cake, partial, status } = row;
@@ -119,8 +118,6 @@ function CakeRow({ row, isOpen, onOpen, money }: { row: CakeRowData; isOpen: boo
         ref={opener}
         type="button"
         className={styles.row}
-        aria-current={isOpen ? 'true' : undefined}
-        data-open={isOpen}
         onClick={onOpen}
       >
         <span className={styles.main}>

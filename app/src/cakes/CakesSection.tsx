@@ -61,10 +61,10 @@ function CakesLayout({ view }: { view: CakesView }) {
   const handBack = useHandBackState();
 
   // ⚠️ CAKES OWNS THE SCROLL for the moves inside itself (shell/scrollArea.tsx), as Food cost does: its list and its screens are separate
-  // addresses, and the shell's reset to the top at every address sent the list back to the top at each cake on the split, and brought Back
-  // on a phone to the top of the list while the focus went to a row far below. The effects below handle every move.
+  // addresses, and the shell's reset to the top at every address would bring Back to the top of the list while the focus went to a
+  // row far below. The effects below handle every move.
   const scrollArea = useOwnScrollArea();
-  // Where the list was scrolled to when a screen opened over it below the split, until Back restores it.
+  // Where the list was scrolled to when a screen opened over it, until Back restores it.
   const listTop = useRef<number | null>(null);
 
   // A cake, a new cake or the settings opens one level down, so Back steps up to the list. The list is hidden behind what opens, and
@@ -110,14 +110,13 @@ function CakesLayout({ view }: { view: CakesView }) {
     if (view.kind === 'list') handBack.deliver();
   }, [view.kind, handBack]);
 
-  const openCakeId = view.kind === 'cake' ? view.id : null;
   return (
     <HandBackProvider value={handBack}>
       <Page title={t('section.cakes')}>
         <div className={styles.layout} data-view={view.kind === 'list' ? 'list' : 'detail'}>
           <div className={styles.list}>
             <PartBoundary>
-              <CakesList openCakeId={openCakeId} onOpenCake={openCake} onOpenNew={openNew} onOpenReference={openReference} />
+              <CakesList onOpenCake={openCake} onOpenNew={openNew} onOpenReference={openReference} />
             </PartBoundary>
           </div>
           <div className={styles.detail}>
