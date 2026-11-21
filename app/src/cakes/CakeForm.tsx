@@ -338,7 +338,7 @@ export function CakeForm({ id, cake, titleRef, onSaved }: Props) {
 
   const cardNames = useMemo(() => new Map(snap.products.map(card => [card.id, card.name] as const)), [snap.products]);
   const labels = useMemo<StageLabels>(() => ({
-    summary: t('cakes.stage.summary', { n: working.tiers, discs: working.discs }),
+    summary: t('cakes.stage.summary', { n: working.tiers, discs: t('cakes.stage.discCount', { n: working.discs }) }),
     part: {
       decoration: t('cakes.part.decoration'), coating: t('cakes.part.coating'), filling: t('cakes.part.filling'),
       soak: t('cakes.part.soak'), base: t('cakes.part.base'),

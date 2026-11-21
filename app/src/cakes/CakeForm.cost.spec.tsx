@@ -96,6 +96,12 @@ describe('the cost', () => {
     expect(cost.getByText('?')).toBeInTheDocument();
   });
 
+  it('says «1 disc» and «out of 1 slice» in the singular', async () => {
+    await open(cakeDoc('c1', 'Mini', { diameterCm: 22, discs: 1, slices: 1, ref: REFERENCE }));
+    expect(screen.getByRole('img', { name: /^Section drawing of the cake: 1 tier, 1 disc per tier/ })).toBeInTheDocument();
+    expect(within(card('Cost and price')).getByText('Per slice, out of 1 slice')).toBeInTheDocument();
+  });
+
   it('the food cost word is on screen, not for a screen reader only', async () => {
     await open();
     expect(within(card('Cost and price')).getByText('On target').className).not.toMatch(/srOnly/);
