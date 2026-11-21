@@ -100,6 +100,8 @@ export function CakeForm({ id, cake, titleRef, onSaved }: Props) {
   const [showNameError, setShowNameError] = useState(false);
   const [badNumber, setBadNumber] = useState<PriceField | null>(null);
   const [needsOpen, setNeedsOpen] = useState(false);
+  // The button that opened «What you need»: the focus goes back to it on close (the dialog is opened by state, so nothing else would).
+  const needsOpener = useRef<HTMLElement | null>(null);
 
   // ⚠️ DIRTY IS «DIFFERENT FROM WHAT WAS LAST SAVED» (what Save would write), also kept in a ref: the router's blocker reads it at the
   // moment of a navigation, and a state value read there could be one render behind. `touched` NEVER goes back to false: a cake deleted
@@ -442,7 +444,10 @@ export function CakeForm({ id, cake, titleRef, onSaved }: Props) {
                   onVatOther={setVatOther}
                   onVatGuide={applyVatRate}
                   registerBox={registerPrice}
-                  onOpenNeeds={() => { setNeedsOpen(true); }}
+                  onOpenNeeds={() => {
+                    needsOpener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+                    setNeedsOpen(true);
+                  }}
                 />
               </PartBoundary>
             </div>
@@ -452,7 +457,16 @@ export function CakeForm({ id, cake, titleRef, onSaved }: Props) {
       {confirmDialog}
       {needsOpen ? (
         <PartBoundary>
-          <NeedDialog cake={working} onClose={() => { setNeedsOpen(false); }} />
+          <NeedDialog
+            cake={working}
+            onClose={() => {
+              setNeedsOpen(false);
+              const opener = needsOpener.current;
+              needsOpener.current = null;
+              // After the dialog's own focus restore (it runs on the next frame) so the opener has the last word.
+              if (opener) requestAnimationFrame(() => { requestAnimationFrame(() => { if (opener.isConnected) opener.focus(); }); });
+            }}
+          />
         </PartBoundary>
       ) : null}
     </section>

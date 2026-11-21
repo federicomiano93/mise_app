@@ -142,6 +142,23 @@ describe('the two tabs and the count', () => {
   });
 });
 
+describe('focus and the scrolling table', () => {
+  it('Close gives the focus back to the button that opened it', async () => {
+    const view = await open();
+    const opener = await screen.findByRole('button', { name: 'Open “What you need”' }, LOAD);
+    const dialog = await openNeeds(view);
+    await view.user.click(within(dialog).getByRole('button', { name: 'Close' }));
+    await waitFor(() => { expect(document.activeElement).toBe(opener); });
+  });
+
+  it('the scrolling table region can be reached by keyboard and is named', async () => {
+    const view = await open();
+    const dialog = await openNeeds(view);
+    const region = within(dialog).getByRole('region', { name: 'By semi-finished' });
+    expect(region).toHaveAttribute('tabindex', '0');
+  });
+});
+
 describe('the PDF', () => {
   it('opens the export sheet above the dialog (the file itself is built lazily, on the person’s tap)', async () => {
     const view = await open();
