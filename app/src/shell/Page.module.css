@@ -45,7 +45,7 @@
    (below): on a phone a sticky band of five buttons would take the rows' room (the trap in docs/architecture.md). */
 .band {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: var(--s2);
   border-bottom: 0;
@@ -53,6 +53,22 @@
 
 .band .title {
   margin-right: var(--s2);
+}
+
+/* One gear beside the title (every band but Orders'): the title may shrink and wrap on itself, the gear never leaves its side
+   (measured 22 Nov 2026: «Ingredienti e fornitori» at 296px pushed it to a line of its own). */
+.band:not(.bandWraps) .title {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+
+.band:not(.bandWraps) > :not(.title) {
+  flex: none;
+}
+
+.bandWraps {
+  flex-wrap: wrap;
 }
 
 .title {

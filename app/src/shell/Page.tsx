@@ -24,6 +24,9 @@ type Props = {
   // The band sticks to the top of the scroll area on the split (Orders, whose pane and search box stick under it). The other
   // sections' bands scroll away: their panes stick at the very top, and a stuck band would cover them.
   stickyBand?: boolean;
+  // The band's controls drop to a line of their own on a narrow phone (Orders: five of them do not fit beside «Orders» at 296px).
+  // Every other band holds one gear: it stays beside the title, and a long title («Ingredienti e fornitori») wraps on itself.
+  bandWraps?: boolean;
   // The screen draws its OWN h1 (a booking, whose h1 is the customer's name: bookings rebuild step 3) and moves the focus to it
   // itself: the page then draws no title bar, and `title` names only the browser tab.
   ownHeading?: boolean;
@@ -31,7 +34,7 @@ type Props = {
 
 // Every screen is a Page: one h1 (the screen's name), the browser tab's title, and the
 // focus moved onto the new screen after a client-side navigation.
-export function Page({ title, children, action, band, stickyBand = false, ownHeading = false }: Props) {
+export function Page({ title, children, action, band, stickyBand = false, bandWraps = false, ownHeading = false }: Props) {
   const { t } = useT();
   const location = useLocation();
   const navigationType = useNavigationType();
@@ -53,7 +56,7 @@ export function Page({ title, children, action, band, stickyBand = false, ownHea
     headingRef.current?.focus();
   }, [location.key]);
 
-  const headClass = band !== undefined ? `${styles.head} ${styles.band}${stickyBand ? ` ${styles.stickyBand}` : ''}` : action ? `${styles.head} ${styles.withAction}` : styles.head;
+  const headClass = band !== undefined ? `${styles.head} ${styles.band}${bandWraps ? ` ${styles.bandWraps}` : ''}${stickyBand ? ` ${styles.stickyBand}` : ''}` : action ? `${styles.head} ${styles.withAction}` : styles.head;
   return (
     <>
       {ownHeading ? null : (
