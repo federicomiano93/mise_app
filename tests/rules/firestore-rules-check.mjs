@@ -2484,6 +2484,13 @@ async function products() {
   await expectDenied('a 61 cm cake', () => wholeWrite(`${CK}/K3`, cake({ diameterCm: 61 })));
   await expectDenied('six discs', () => wholeWrite(`${CK}/K3`, cake({ discs: 6 })));
   await expectDenied('no slices', () => wholeWrite(`${CK}/K3`, cake({ slices: 0 })));
+  await expectAllowed('200 slices', () => wholeWrite(`${CK}/K3`, cake({ slices: 200 })));
+  await expectDenied('201 slices', () => wholeWrite(`${CK}/K3`, cake({ slices: 201 })));
+  await expectDenied('discs sent as a decimal', () => wholeWrite(`${CK}/K3`, cake({ discs: 2.5 })));
+  await expectDenied('assembly of 0 minutes (absent or null says «not said»)', () => wholeWrite(`${CK}/K3`, cake({ assemblyMinutes: 0 })));
+  await expectAllowed('a price of exactly 100000', () => wholeWrite(`${CK}/K3`, cake({ sellingPrice: 100000 })));
+  await expectDenied('a price over 100000', () => wholeWrite(`${CK}/K3`, cake({ sellingPrice: 100000.01 })));
+  await expectDenied('a reference with decimal discs', () => wholeWrite(`${CK}/K3`, cake({ ref: { ...REF, discs: 2.5 } })));
   await expectDenied('an empty cake name', () => wholeWrite(`${CK}/K3`, cake({ name: '' })));
   await expectDenied('a cake name of 201 characters', () => wholeWrite(`${CK}/K3`, cake({ name: 'n'.repeat(201) })));
   await expectAllowed('90 lines', () =>
@@ -4705,6 +4712,24 @@ async function staffCards() {
   };
   const refGrams = { diameterCm: 22, discs: 3, discHeightCm: 3, baseG: 300, soakG: 90, fillingG: 280, coatingG: 450, decorationG: 200 };
   await expectAllowed('…saves a cake', () => wholeWrite(`${L}/cakes/C1`, cakeDoc, asAccount(SAM)));
+  // «Salva a listino» as the shown employee sends it: the cake, its model-4 product and the margin snapshot in ONE commit.
+  const docName = path => `projects/${PROJECT}/databases/(default)/documents/${path}`;
+  await expectAllowed('…and «Salva a listino» whole: cake + product + snapshot in one batch', () =>
+    fetch(`${FS.replace(/\/documents$/, '')}/documents:commit`, {
+      method: 'POST', headers: asAccount(SAM),
+      body: JSON.stringify({ writes: [
+        { update: { name: docName(`${L}/cakes/C2`), fields: toFields(cakeDoc) } },
+        { update: { name: docName(`${L}/products/cake-C2`), fields: toFields({
+          ...stamp, name: 'Torta', components: [{ kind: 'semi', productId: 'P1', qtyKg: 0.4 }], packaging: [],
+          sellingMode: 'piece', piecesPerBatch: 1, sellingPrice: 40, vatRate: 10, foodCostTarget: 30,
+          model: 4, kind: 'finished', categoryId: null,
+        }) } },
+        { update: { name: docName(`${L}/products/cake-C2/snapshots/S1`), fields: toFields({
+          ...stamp, recordedAt: '2026-11-21', unitCost: 12, foodCostPct: 33, sellingPrice: 40,
+          vatRate: 10, sellingMode: 'piece', frozenPrices: { flour: 0.72 },
+        }) } },
+      ] }),
+    }));
   await expectAllowed('…and reads it', readAs(SAM, `${L}/cakes/C1`));
   await expectDenied('⚠️ but deleting a cake stays with whoever runs the place',
     () => deleteWrite(`${L}/cakes/C1`, asAccount(SAM)));
