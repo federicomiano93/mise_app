@@ -120,7 +120,7 @@ describe('Save', () => {
     expect(data).toMatchObject({ name: 'Torta di prova', tiers: 1, discs: 3, lines: [], ref: REFERENCE });
     await waitFor(() => { expect(router.state.location.pathname).toBe(`/cakes/${cakeId}`); });
     expect(router.state.historyAction).toBe('REPLACE');
-    expect(screen.getByRole('heading', { level: 2, name: 'New cake' })).toBeInTheDocument();
+    expect(await heading('New cake')).toBeInTheDocument();
   });
 });
 
