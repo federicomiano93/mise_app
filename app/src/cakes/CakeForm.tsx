@@ -3,7 +3,7 @@ import type { Ref } from 'react';
 import { Check, Trash2 } from 'lucide-react';
 import { useBlocker, useNavigate } from 'react-router';
 import type { BlockerFunction } from 'react-router';
-import { cakeGeometry, cakeProduct, cakeProductId, cakeTotals, toCakeDocument } from '@mise/shared/cake-model';
+import { MAX_SELLING_PRICE, cakeGeometry, cakeProduct, cakeProductId, cakeTotals, toCakeDocument } from '@mise/shared/cake-model';
 import type { Cake } from '@mise/shared/cake-model';
 import { vatSelection } from '@mise/shared/foodcost-model';
 import { localNumber } from '@mise/shared/currency';
@@ -257,7 +257,9 @@ export function CakeForm({ id, cake, titleRef, onSaved }: Props) {
 
     // ⚠️⚠️ A NUMBER THE DATABASE WILL REFUSE STOPS THE SAVE HERE, WHILE THE WORK IS ON SCREEN (shared/product-limits): past this point
     // the save is local-first, the screen leaves, the refusal arrives later and the rollback throws the cake away.
-    const invalid = firstInvalidNumber(cakeProduct(working));
+    // The cakes rule also caps the price (products have no ceiling), so the form asks for it too.
+    const product = cakeProduct(working);
+    const invalid = firstInvalidNumber(product) ?? (product.sellingPrice !== null && product.sellingPrice > MAX_SELLING_PRICE ? 'sellingPrice' : null);
     if (invalid === 'sellingPrice' || invalid === 'vatRate' || invalid === 'foodCostTarget') {
       setBadNumber(invalid);
       reveal(priceBoxes.current[invalid]);

@@ -168,6 +168,19 @@ describe('the price', () => {
     expect(written.saved).toHaveLength(0);
   });
 
+  it('a price above 100,000 (the rules ceiling) stops Save before it asks, marks the box and names it', async () => {
+    const { user, foodcost: written } = await open();
+    const box = screen.getByRole('textbox', { name: PRICE });
+    await user.clear(box);
+    await user.type(box, '100001');
+    await user.click(screen.getByRole('button', { name: 'Save to the price list' }));
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(box).toHaveFocus();
+    expect(box).toHaveAttribute('aria-invalid', 'true');
+    expect(await screen.findByText(/^Check «Selling price including VAT»/)).toBeInTheDocument();
+    expect(written.saved).toHaveLength(0);
+  });
+
   it('the price, the VAT, the target and the category travel with the cake', async () => {
     const { user, foodcost: written } = await open();
     const box = screen.getByRole('textbox', { name: PRICE });

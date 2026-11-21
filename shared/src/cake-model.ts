@@ -34,6 +34,8 @@ export const MAX_CARDS_PER_PART = 6;
 export const MAX_PACKAGING = 20;
 export const MAX_SLICES = 200;
 export const MAX_LINE_GRAMS = 100000;
+// The cakes rule's ceiling on the whole cake's selling price (products have none).
+export const MAX_SELLING_PRICE = 100000;
 export const CAKE_PRODUCT_PREFIX = 'cake-';
 
 // Only used to draw a cake whose venue has no reference grams yet (cakeGeometry); no cost depends on it.
@@ -213,7 +215,7 @@ export function normalizeCake(raw: unknown): Cake | null {
     packaging: (Array.isArray(raw.packaging) ? raw.packaging : []).map(normalizePacking)
       .filter((p): p is PackagingLine => !!p).slice(0, MAX_PACKAGING),
     assemblyMinutes: positiveOrNull(raw.assemblyMinutes, 100000),
-    sellingPrice: positiveOrNull(raw.sellingPrice, 100000),
+    sellingPrice: positiveOrNull(raw.sellingPrice, MAX_SELLING_PRICE),
     vatRate: vat === null || vat < 0 ? null : Math.min(100, vat),
     foodCostTarget: positiveOrNull(raw.foodCostTarget, 100),
     categoryId: typeof raw.categoryId === 'string' && raw.categoryId.trim() !== '' && raw.categoryId.length <= 64 ? raw.categoryId : null,
