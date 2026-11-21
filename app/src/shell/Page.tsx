@@ -21,6 +21,9 @@ type Props = {
   // A section's own title BAND (Orders, 16 Nov 2026): the controls drawn right after the title on its line, the bar white, with no
   // line under it, and stuck to the top of the scroll area on the split. Instead of `action`, never with it.
   band?: ReactNode;
+  // The band sticks to the top of the scroll area on the split (Orders, whose pane and search box stick under it). The other
+  // sections' bands scroll away: their panes stick at the very top, and a stuck band would cover them.
+  stickyBand?: boolean;
   // The screen draws its OWN h1 (a booking, whose h1 is the customer's name: bookings rebuild step 3) and moves the focus to it
   // itself: the page then draws no title bar, and `title` names only the browser tab.
   ownHeading?: boolean;
@@ -28,7 +31,7 @@ type Props = {
 
 // Every screen is a Page: one h1 (the screen's name), the browser tab's title, and the
 // focus moved onto the new screen after a client-side navigation.
-export function Page({ title, children, action, band, ownHeading = false }: Props) {
+export function Page({ title, children, action, band, stickyBand = false, ownHeading = false }: Props) {
   const { t } = useT();
   const location = useLocation();
   const navigationType = useNavigationType();
@@ -50,7 +53,7 @@ export function Page({ title, children, action, band, ownHeading = false }: Prop
     headingRef.current?.focus();
   }, [location.key]);
 
-  const headClass = band !== undefined ? `${styles.head} ${styles.band}` : action ? `${styles.head} ${styles.withAction}` : styles.head;
+  const headClass = band !== undefined ? `${styles.head} ${styles.band}${stickyBand ? ` ${styles.stickyBand}` : ''}` : action ? `${styles.head} ${styles.withAction}` : styles.head;
   return (
     <>
       {ownHeading ? null : (
@@ -60,8 +63,8 @@ export function Page({ title, children, action, band, ownHeading = false }: Prop
           {action && band === undefined ? <div className={styles.action}>{action}</div> : null}
         </header>
       )}
-      {/* Under the title of every screen while the device is offline (the top bar that used to say it is the Home's only). */}
-      <OfflineBanner onHome={location.pathname.split('/')[1] === 'home'} />
+      {/* Under the title of every screen while the device is offline (from 700px the top bar says it instead; CSS hides the strip). */}
+      <OfflineBanner />
       <div className={styles.body}>{children}</div>
     </>
   );

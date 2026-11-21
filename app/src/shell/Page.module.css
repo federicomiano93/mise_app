@@ -94,15 +94,20 @@
   }
 }
 
-/* ⚠️ THE BAND STICKS ONLY ON THE SPLIT, and only because nothing between it and the scroll area (the shell's main) clips. */
+/* ⚠️ A BAND IS ONE LINE HIGH on the split; it STICKS only where the section asks (`.stickyBand`: Orders), and only because nothing
+   between it and the scroll area (the shell's main) clips. The other sections' panes stick at the top of the scroll area, so a band
+   that stuck would cover their first 56px. */
 @media (min-width: 1000px) {
-  /* ONE line high and exactly --band-h tall: the parts that stick under it (Orders' search box and pane) read that token. */
+  /* Exactly --band-h tall: the parts that stick under it (Orders' search box and pane) read that token. */
   .band {
-    position: sticky;
-    top: 0;
-    z-index: 5;
     flex-wrap: nowrap;
     height: var(--band-h);
     padding-block: 0;
+  }
+
+  .stickyBand {
+    position: sticky;
+    top: 0;
+    z-index: 5;
   }
 }

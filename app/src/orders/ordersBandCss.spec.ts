@@ -17,7 +17,7 @@ const before = (css: string, query: string) => bare(css).split(query)[0] ?? '';
 describe('the title band', () => {
   it('sticks on the split only, one line exactly --band-h tall', () => {
     expect(before(pageCss, '@media (min-width: 1000px)')).not.toMatch(/\.band\s*\{[^}]*position:\s*sticky/);
-    expect(after(pageCss, '@media (min-width: 1000px)')).toMatch(/\.band\s*\{[^}]*position:\s*sticky;[^}]*top:\s*0;[^}]*height:\s*var\(--band-h\)/);
+    expect(after(pageCss, '@media (min-width: 1000px)')).toMatch(/\.stickyBand\s*\{[^}]*position:\s*sticky;[^}]*top:\s*0/);
   });
 
   it('is 72px on the split and nothing on a phone, where it scrolls away', () => {

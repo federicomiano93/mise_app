@@ -51,7 +51,7 @@
    - The list column spans both rows; its head (tabs + search) is its own top-left part (OrdersHead.module.css).
    - .top (right, first row): «Incoming» / «To re-order», then «Choose a supplier» or the debt banner.
    - .detail (right, second row): the open screen or the notices. It sticks under the title band and scrolls on its own, never taller
-     than the window less the band (the top bar is the Home's only, so --topbar-h is 0 here): a supplier opened far down a long list
+     than the window less the band (and the top bar, --topbar-h, which is on every section): a supplier opened far down a long list
      opens in view (the trap in docs/architecture.md). ⚠️ NO `overscroll-behavior: contain`: a scroll that reaches the pane's end goes
      on to the page. */
 @media (min-width: 1000px) {
