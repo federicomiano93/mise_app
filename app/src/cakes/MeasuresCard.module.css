@@ -154,3 +154,27 @@
   font-size: var(--fs-sm);
   font-weight: 600;
 }
+
+/* A phone: the card is 230px wide at 296, so three boxes share ~70px each. Tighter gaps and padding, and a unit that takes only the room
+   «cm» needs, keep the number (22) fully visible; the labels may wrap and the cells may shrink. */
+@media (max-width: 420px) {
+  .grid {
+    gap: var(--s2);
+  }
+
+  .input {
+    padding: 0 var(--s2);
+  }
+
+  .input[data-unit="true"] {
+    padding-right: calc(var(--s2) + 1.6em);
+  }
+
+  .unit {
+    right: var(--s2);
+  }
+
+  .measureLabel {
+    overflow-wrap: anywhere;
+  }
+}
