@@ -725,6 +725,7 @@ export const it: Messages = {
     other: 'Non aperte: {names} — le loro schede non hanno ancora un prezzo',
   },
   'cakes.need.empty': 'Aggiungi una scheda a una parte per vedere cosa serve.',
+  'cakes.need.totalLeavesOut': 'Il totale non conta le righe senza peso.',
   'cakes.need.readyShort': 'pronto {g}',
   'cakes.need.pdf': 'Scarica PDF',
   'cakes.need.print': 'Stampa',

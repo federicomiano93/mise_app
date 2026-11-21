@@ -10,7 +10,9 @@ import { useMoney } from '../session/useMoney';
 import { Button } from '../ui/Button';
 import { Dialog } from '../ui/Dialog';
 import { useExportSheet } from '../ui/ExportSheet';
-import { MAX_CAKES, MIN_CAKES, ingredientTable, needExportModel, needTitle, notOpenedText, semiTable } from './needModel';
+import {
+  MAX_CAKES, MIN_CAKES, ingredientTable, needExportModel, needTitle, notOpenedText, semiTable, totalLabelText, totalNoteText,
+} from './needModel';
 import type { NeedTab } from './needModel';
 import { NeedPrintSheet } from './NeedPrintSheet';
 import type { NeedSheetWords } from './NeedPrintSheet';
@@ -40,6 +42,7 @@ export function NeedDialog({ cake, onClose }: Props) {
   const semi = useMemo(() => semiTable(needs, money), [needs, money]);
   const ingredients = useMemo(() => ingredientTable(needs, t, money), [needs, t, money]);
   const title = needTitle(t, cake.name, count);
+  const totalNote = totalNoteText(tab, needs, t);
   const notOpened = tab === 'ingredients' ? notOpenedText(needs, t) : null;
   const empty = needs.semis.length === 0;
   const foot = t(tab === 'semi' ? 'cakes.need.footSemi' : 'cakes.need.footIngredients');
@@ -54,6 +57,7 @@ export function NeedDialog({ cake, onClose }: Props) {
     colIngredient: t('cakes.need.colIngredient'),
     colAmount: t('cakes.need.colAmount'),
     total: t('cat.total'),
+    totalNote,
     foot,
     allTiers,
     notOpened,
@@ -64,7 +68,7 @@ export function NeedDialog({ cake, onClose }: Props) {
     const model = needExportModel(tab, needs, t, money, cake.name, count);
     openExport({
       model,
-      totalLabel: t('cat.total'),
+      totalLabel: totalLabelText(tab, needs, t),
       fileName: (ext, fallback) => titleFileName(model.name, ext, fallback),
     });
   };
@@ -85,7 +89,7 @@ export function NeedDialog({ cake, onClose }: Props) {
           <tbody>
             {semi.rows.map(row => (
               <tr key={row.key}>
-                <th scope="row" className={styles.name}>{row.name}</th>
+                <th scope="row">{row.name}</th>
                 <td className={styles.r}>{row.ready}</td>
                 <td className={styles.r}>{row.loss}</td>
                 <td className={styles.r}><b>{row.prepare}</b></td>
@@ -112,7 +116,7 @@ export function NeedDialog({ cake, onClose }: Props) {
           <tbody>
             {ingredients.map(row => (
               <tr key={row.key}>
-                <th scope="row" className={styles.name}>
+                <th scope="row">
                   {row.name}
                   <small>{row.from}</small>
                 </th>
@@ -123,6 +127,7 @@ export function NeedDialog({ cake, onClose }: Props) {
         </table>
         </div>
       )}
+      {totalNote === null || empty ? null : <p className={styles.caption}>{totalNote}</p>}
       {allTiers === null || empty ? null : <p className={styles.caption}>{allTiers}</p>}
       {notOpened === null ? null : <p className={styles.warn} role="note">{notOpened}</p>}
       {empty ? null : <p className={styles.caption}>{foot}</p>}

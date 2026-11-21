@@ -9,7 +9,9 @@ import { format } from '../i18n/i18n';
 import { it as itMessages } from '../i18n/it';
 import type { MessageKey } from '../i18n/en';
 import type { MessageParams } from '../i18n/i18n';
-import { gramsText, ingredientTable, kgText, needExportModel, needTitle, notOpenedText, semiTable } from './needModel';
+import {
+  gramsText, ingredientTable, kgText, needExportModel, needTitle, notOpenedText, semiTable, totalLabelText, totalNoteText,
+} from './needModel';
 
 // «What you need» as text: the rows the dialog, the printed sheet and the PDF all read. Invented cards and amounts only.
 
@@ -28,9 +30,10 @@ const INGREDIENTS: Record<string, Doc> = {
 const SPONGE: Doc = { id: 'SPONGE', name: 'Sponge', kind: 'semi', model: 4, components: [gram('FLOUR', 500), gram('SUGAR', 500)] };
 const GANACHE: Doc = { id: 'GANACHE', name: 'Ganache', kind: 'semi', model: 4, components: [gram('BUTTER', 500), gram('SUGAR', 500)], cookedGrams: 800 };
 const CREAM: Doc = { id: 'CREAM', name: 'Cream', kind: 'semi', model: 4, components: [gram('VANILLA', 10)] };
+const EMPTY: Doc = { id: 'EMPTY', name: 'Empty card', kind: 'semi', model: 4, components: [] };
 const TABLES: CostTables = {
   ingredients: INGREDIENTS,
-  products: new Map([SPONGE, GANACHE, CREAM].map(card => [card['id'] as string, card])),
+  products: new Map([SPONGE, GANACHE, CREAM, EMPTY].map(card => [card['id'] as string, card])),
   labourCostPerHour: null,
 };
 
@@ -60,6 +63,26 @@ describe('the semi-finished table', () => {
   });
 });
 
+describe('a row with no weight', () => {
+  const cake = cakeOf([line(0, 'base', 'SPONGE', 500), line(0, 'decoration', 'EMPTY', 100)]);
+  it('shows «—», is left out of the total, and the screen, the sheet and the PDF all say so', () => {
+    const table = semiTable(needs(cake), ITALY);
+    expect(table.rows.map(row => row.prepare)).toEqual(['500 g', '—']);
+    expect(table.totalPrepare).toBe('500 g');
+    expect(totalNoteText('semi', needs(cake), tEn)).toBe('The total leaves out the rows with no weight.');
+    expect(totalNoteText('semi', needs(cake), tIt)).toBe('Il totale non conta le righe senza peso.');
+    expect(totalNoteText('ingredients', needs(cake), tEn)).toBeNull();
+    expect(totalLabelText('semi', needs(cake), tEn)).toBe('Total · The total leaves out the rows with no weight.');
+    const model = needExportModel('semi', needs(cake), tEn, ITALY, 'Torta di prova', 1);
+    expect(model.rows.map(row => rowTextOf(row).trim())).toEqual(['500 g', '—']);
+    expect(printedTotalGrams(model.rows)).toBe(500);
+  });
+  it('says nothing when every row has a weight', () => {
+    expect(totalNoteText('semi', needs(CAKE), tEn)).toBeNull();
+    expect(totalLabelText('semi', needs(CAKE), tEn)).toBe('Total');
+  });
+});
+
 describe('the ingredient table', () => {
   it('has one row per ingredient, summed over every part, with the cards it comes from', () => {
     const rows = ingredientTable(needs(CAKE), tEn, ITALY);
@@ -67,6 +90,13 @@ describe('the ingredient table', () => {
     expect(sugar).toHaveLength(1);
     expect(sugar[0]?.from).toBe('Sponge · Ganache');
     expect(rows.find(row => row.name === 'Flour')?.amount).toBe('600 g');
+  });
+  it('marks an ingredient with a part that has no price', () => {
+    const base = needs(CAKE);
+    const marked = { ...base, ingredients: base.ingredients.map((row, index) => (index === 0 ? { ...row, unpriced: true } : row)) };
+    const rows = ingredientTable(marked, tIt, ITALY);
+    expect(rows[0]?.from.endsWith(' · senza prezzo')).toBe(true);
+    expect(rows[1]?.from).not.toContain('senza prezzo');
   });
   it('writes a kilo or more in kilos and a speck as «< 1 g»', () => {
     expect(kgText(1.25, ITALY)).toBe('1,25 kg');

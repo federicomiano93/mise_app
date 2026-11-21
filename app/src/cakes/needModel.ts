@@ -85,8 +85,14 @@ export function ingredientTable(needs: CakeNeeds, t: Translate, money: Money): I
     key: row.key,
     name: row.name,
     amount: ingredientAmount(row, t, money),
-    from: row.from.join(' · '),
+    from: [...row.from, ...(row.unpriced ? [t('cakes.row.noPrice')] : [])].join(' · '),
   }));
+}
+
+// «The total leaves out the rows with no weight.»: under the semi-finished total (screen, sheet) when some row has no weight, else null.
+export function totalNoteText(tab: NeedTab, needs: CakeNeeds, t: Translate): string | null {
+  if (tab !== 'semi' || !needs.semis.some(semi => semi.prepareKg === null)) return null;
+  return t('cakes.need.totalLeavesOut');
 }
 
 // «Non aperte: A, B — …»: the cards cakeNeeds could not open into ingredients (they have no price yet). Null when there are none.
@@ -103,6 +109,12 @@ export function needTitle(t: Translate, cakeName: string, count: number): string
   return `${t('cakes.need.title')}${name === '' ? '' : ` · ${name}`} × ${count}`;
 }
 
+// The Total's label in the PDF: the word, and the note when the total leaves rows out (the model has no footnote of its own).
+export function totalLabelText(tab: NeedTab, needs: CakeNeeds, t: Translate): string {
+  const note = totalNoteText(tab, needs, t);
+  return note === null ? t('cat.total') : `${t('cat.total')} · ${note}`;
+}
+
 // ⚠️ THE PDF MODEL IS THE ONE TAB THE PERSON SEES. A row prints «name ..... amount»: the semi-finished's name carries what is ready,
 // and the amount is what to PREPARE (the Total adds those up); an ingredient weighed in kilos prints in kilos with the screen's own
 // number, one under a kilo in whole grams, pieces as pieces (they weigh nothing in the Total).
@@ -112,11 +124,11 @@ export function needExportModel(
   const rows: ExportRowInput[] = [];
   if (tab === 'semi') {
     for (const semi of needs.semis) {
-      const shown = semi.prepareKg ?? semi.readyKg;
-      rows.push({
-        name: semi.prepareKg === null ? semi.name : `${semi.name} · ${t('cakes.need.readyShort', { g: gramsText(semi.readyKg, money) })}`,
-        value: gramsOf(shown), unit: 'g', factor: 1, decimals: 0,
-      });
+      const ready = `${semi.name} · ${t('cakes.need.readyShort', { g: gramsText(semi.readyKg, money) })}`;
+      // ⚠️ A card with no weight prints «—» and counts for nothing, as on screen: the Total says it leaves such rows out.
+      rows.push(semi.prepareKg === null
+        ? { name: ready, value: 0, unit: '', factor: 1, decimals: 0, text: '—' }
+        : { name: ready, value: gramsOf(semi.prepareKg), unit: 'g', factor: 1, decimals: 0 });
     }
   } else {
     for (const row of needs.ingredients) {

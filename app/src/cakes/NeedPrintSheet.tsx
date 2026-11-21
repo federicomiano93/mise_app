@@ -12,6 +12,8 @@ export interface NeedSheetWords {
   colIngredient: string;
   colAmount: string;
   total: string;
+  // «The total leaves out the rows with no weight.», only on the semi-finished list and only when a row has none.
+  totalNote: string | null;
   // The line under the table: what «Ready» and «To prepare» mean, or what the ingredient list is.
   foot: string;
   // «Added up over every tier», only for a cake with more than one.
@@ -78,6 +80,7 @@ export function NeedPrintSheet({ tab, semi, ingredients, words }: Props) {
           </tbody>
         </table>
       )}
+      {words.totalNote === null ? null : <p>{words.totalNote}</p>}
       {words.allTiers === null ? null : <p>{words.allTiers}</p>}
       {words.notOpened === null ? null : <p>{words.notOpened}</p>}
       <p>{words.foot}</p>

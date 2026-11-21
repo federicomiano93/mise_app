@@ -768,6 +768,7 @@ export const en = {
     other: 'Not opened: {names} — their cards have no price yet',
   },
   'cakes.need.empty': 'Add a card to a part to see what you need.',
+  'cakes.need.totalLeavesOut': 'The total leaves out the rows with no weight.',
   'cakes.need.readyShort': 'ready {g}',
   'cakes.need.pdf': 'Download PDF',
   'cakes.need.print': 'Print',

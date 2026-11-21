@@ -458,6 +458,8 @@ export interface NeedIngredient {
   kg: number | null;
   pcs: number | null;
   from: string[];
+  // Some of this ingredient has no price (its row was keyed apart by the cost-per-kilo block); the amounts are still summed.
+  unpriced: boolean;
 }
 
 export interface CakeNeeds {
@@ -507,11 +509,17 @@ export function cakeNeeds(product: Product, tables: CostTables, count: number): 
       if (row.kind === 'packaging') continue;
       const kg = row.kg === null ? null : row.kg * readyKg;
       const pcs = row.pcs === null ? null : row.pcs * readyKg;
-      const known = merged.get(row.key);
+      // ⚠️ ONE ROW PER INGREDIENT: the cost block keys a part it could not price as `ing:X:no-price`, apart from `ing:X`, which would put the
+      // same flour on the sheet twice. Here they are one row, marked «unpriced» when any part was.
+      const reason = row.reason;
+      const unpriced = reason !== null;
+      const key = reason !== null && row.key.startsWith('ing:') && row.key.endsWith(`:${reason}`) ? row.key.slice(0, -(reason.length + 1)) : row.key;
+      const known = merged.get(key);
       if (!known) {
-        merged.set(row.key, { key: row.key, kind: row.kind, name: row.name, kg, pcs, from: [name] });
+        merged.set(key, { key, kind: row.kind, name: row.name, kg, pcs, from: [name], unpriced });
         continue;
       }
+      if (unpriced) known.unpriced = true;
       if (kg !== null) known.kg = (known.kg ?? 0) + kg;
       if (pcs !== null) known.pcs = (known.pcs ?? 0) + pcs;
       if (!known.from.includes(name)) known.from.push(name);

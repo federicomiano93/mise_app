@@ -111,6 +111,23 @@ describe('the two tabs and the count', () => {
     expect(within(dialog).getByRole('button', { name: 'One cake more' })).toHaveFocus();
   });
 
+  it('says the total leaves out a row with no weight', async () => {
+    const EMPTY = product('EMPTY', { name: 'Empty card', kind: 'semi', model: 4, sellingMode: null, sellingPrice: null, vatRate: null, piecesPerBatch: null, components: [] });
+    const cake = cakeDoc('c1', 'Sacher', {
+      diameterCm: 22, discs: 2, ref: REFERENCE,
+      lines: [{ tier: 0, part: 'base', productId: 'SPONGE', grams: 1000 }, { tier: 0, part: 'decoration', productId: 'EMPTY', grams: 100 }],
+    });
+    const view = await open('/cakes/c1', cake, [SPONGE, EMPTY]);
+    const dialog = await openNeeds(view);
+    expect(within(dialog).getByText('The total leaves out the rows with no weight.')).toBeInTheDocument();
+  });
+
+  it('does not say it when every row has a weight', async () => {
+    const view = await open();
+    const dialog = await openNeeds(view);
+    expect(within(dialog).queryByText('The total leaves out the rows with no weight.')).not.toBeInTheDocument();
+  });
+
   it('a card with no price is named as «not opened» on the ingredient tab, never silently left out', async () => {
     const cake = cakeDoc('c1', 'Cassata', {
       lines: [{ tier: 0, part: 'base', productId: 'SPONGE', grams: 500 }, { tier: 0, part: 'filling', productId: 'MARZIPAN', grams: 500 }],
