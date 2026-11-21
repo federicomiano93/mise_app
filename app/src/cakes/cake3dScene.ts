@@ -176,8 +176,8 @@ export function createCakeScene(lib: Three, Controls: OrbitControlsClass, canvas
         group.add(face);
       }
     };
-    const slab = (radius: number, height: number, y: number, mat: T.MeshStandardMaterial, tag: Tag) => {
-      track(mat, tag);
+    const slab = (radius: number, height: number, y: number, mat: T.MeshStandardMaterial, tag: Tag | null) => {
+      if (tag) track(mat, tag);
       const cylinder = mesh(new lib.CylinderGeometry(radius, radius, height, SEGMENTS, 1, false, start, length), mat, tag);
       cylinder.position.y = y;
       group.add(cylinder);
@@ -186,18 +186,17 @@ export function createCakeScene(lib: Three, Controls: OrbitControlsClass, canvas
 
     // The board under everything, and the boards that carry the tiers above the bottom one.
     const boardMat = material(palette.board, { roughness: 0.4 });
-    group.add(Object.assign(mesh(new lib.CylinderGeometry(layout.boardRadius, layout.boardRadius, BOARD_THICKNESS_CM, SEGMENTS), boardMat, null),
-      { position: new lib.Vector3(0, -BOARD_THICKNESS_CM / 2, 0) }));
+    const underBoard = mesh(new lib.CylinderGeometry(layout.boardRadius, layout.boardRadius, BOARD_THICKNESS_CM, SEGMENTS), boardMat, null);
+    underBoard.position.y = -BOARD_THICKNESS_CM / 2;
+    group.add(underBoard);
 
     const decorationGeometry = new lib.SphereGeometry(0.6, 24, 16);
     decorationGeometry.scale(1, 0.85, 1);
     for (const tier of layout.tiers) {
       const first = tier.index === 0;
       if (!first) {
-        const r = tier.radius + tier.coatingCm + 0.25;
-        const board = mesh(new lib.CylinderGeometry(r, r, TIER_BOARD_CM, SEGMENTS), boardMat, null);
-        board.position.y = tier.yBase - TIER_BOARD_CM / 2;
-        group.add(board);
+        // Cut like the tiers are, or it would hide what the cut shows of the tier below.
+        slab(tier.radius + tier.coatingCm + 0.25, TIER_BOARD_CM, tier.yBase - TIER_BOARD_CM / 2, boardMat, null);
       }
       const kinds = {
         base: material(palette.base, { roughness: 0.95 }),
@@ -228,7 +227,9 @@ export function createCakeScene(lib: Three, Controls: OrbitControlsClass, canvas
       const tag = { tier: tier.index, part: 'decoration' as const };
       const mat = material(palette.decoration, { roughness: 0.35 });
       track(mat, tag);
-      const ring = (tier.radius + tier.coatingCm) * 0.78;
+      const outer = tier.radius + tier.coatingCm;
+      // Under another tier the berries sit on the part of the top that tier leaves bare.
+      const ring = tier.upperEdge === null ? outer * 0.78 : (tier.upperEdge + outer) / 2;
       const count = Math.max(5, Math.round((Math.PI * 2 * ring) / 1.6));
       const skipped = (angle: number) => {
         if (whole) return false;
@@ -247,7 +248,7 @@ export function createCakeScene(lib: Three, Controls: OrbitControlsClass, canvas
         berry(p.x, p.z);
       }
       // A second, smaller ring on a broad tier, and one in the middle.
-      if (tier.radius > 8) {
+      if (tier.upperEdge === null && tier.radius > 8) {
         const inner = ring * 0.5;
         const n = Math.max(4, Math.round((Math.PI * 2 * inner) / 1.8));
         for (let i = 0; i < n; i += 1) {
@@ -257,7 +258,7 @@ export function createCakeScene(lib: Three, Controls: OrbitControlsClass, canvas
           berry(p.x, p.z);
         }
       }
-      berry(0, 0);
+      if (tier.upperEdge === null) berry(0, 0);
     }
 
     applyHighlights();

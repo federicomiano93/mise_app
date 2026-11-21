@@ -51,6 +51,18 @@ describe('the cake in space', () => {
     expect(layout.height).toBeGreaterThan(top!.yTop);
   });
 
+  it('knows what stands on a tier, so its decoration goes on the ring of the top that is left bare', () => {
+    expect(top!.upperEdge).toBeNull();
+    expect(bottom!.upperEdge).toBe(9);
+    const withDeco = cakeLayout(cakeGeometry({ ...FULL, lines: [...FULL.lines, { tier: 0, part: 'decoration', productId: 'E', grams: null }] }));
+    const low = partAnchors(withDeco.tiers[0]!, 'cut').decoration!;
+    const ring = Math.hypot(low.x, low.z);
+    // Between the upper tier's edge (9) and this tier's coating (12.5): never under the tier above.
+    expect(ring).toBeGreaterThan(9);
+    expect(ring).toBeLessThan(12.5);
+    expect(low.z).toBeGreaterThan(0);
+  });
+
   it('puts the board wider than the bottom tier', () => {
     expect(layout.boardRadius).toBeGreaterThan(bottom!.radius + 0.5);
   });
@@ -81,7 +93,7 @@ describe('the camera’s home view', () => {
   });
 
   it('backs off when the labels leave the cake a narrow share of the stage', () => {
-    expect(homeView(layout, 1.5, 0.5).distance).toBeGreaterThan(homeView(layout, 1.5, 1).distance);
+    expect(homeView(layout, 0.6, 0.5).distance).toBeGreaterThan(homeView(layout, 0.6, 1).distance);
     expect(homeView(layout, 0.3).distance).toBeGreaterThan(homeView(layout, 2).distance);
   });
 });
@@ -132,7 +144,7 @@ describe('the labels', () => {
 
   it('never crosses two leader lines, whatever the anchors (two columns and one)', () => {
     const random = seeded(42);
-    for (const box of [wide, labelBoxFor(1100, 600), labelBoxFor(360, 320), labelBoxFor(300, 330)]) {
+    for (const box of [wide, labelBoxFor(1100, 600), labelBoxFor(360, 380), labelBoxFor(340, 400)]) {
       for (let trial = 0; trial < 300; trial += 1) {
         const placed = placeLabels(anchorsOf(random, 1 + (trial % 5), box), box);
         expect(placed).toHaveLength(1 + (trial % 5));
@@ -160,9 +172,17 @@ describe('the labels', () => {
     const placed = placeLabels([{ key: 'l', x: 300, y: 200 }, { key: 'r', x: 600, y: 250 }], wide);
     expect(placed.find(p => p.key === 'l')?.side).toBe('left');
     expect(placed.find(p => p.key === 'r')?.side).toBe('right');
-    const narrow = labelBoxFor(320, 330);
+    const narrow = labelBoxFor(400, 400);
     expect(narrow.columns).toBe(1);
     expect(placeLabels([{ key: 'l', x: 40, y: 100 }], narrow)[0]?.side).toBe('right');
+  });
+
+  it('gives a stage under 330px no columns at all: the cake takes the width and the labels stand in a list under it', () => {
+    const stacked = labelBoxFor(260, 320);
+    expect(stacked.columns).toBe(0);
+    expect(placeLabels([{ key: 'a', x: 100, y: 100 }], stacked)).toEqual([]);
+    expect(cakeShare(stacked)).toEqual({ share: 1, centre: 130 });
+    expect(labelBoxFor(330, 380).columns).toBe(1);
   });
 
   it('hands labels to the other column when one would not fit the stage’s height', () => {
@@ -191,10 +211,10 @@ describe('the labels', () => {
 
   it('reserves a column each side on a wide stage and one on a narrow one for the cake’s share', () => {
     expect(cakeShare(labelBoxFor(900, 520)).share).toBeLessThan(0.7);
-    expect(cakeShare(labelBoxFor(320, 330)).share).toBeGreaterThanOrEqual(0.3);
+    expect(cakeShare(labelBoxFor(400, 400)).share).toBeGreaterThanOrEqual(0.3);
     const wideBox = labelBoxFor(900, 520);
     expect(cakeShare(wideBox).centre).toBeCloseTo(450, 6);
-    expect(cakeShare(labelBoxFor(320, 330)).centre).toBeLessThan(160);
+    expect(cakeShare(labelBoxFor(400, 400)).centre).toBeLessThan(200);
   });
 });
 

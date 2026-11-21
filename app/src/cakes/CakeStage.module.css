@@ -57,7 +57,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  height: clamp(300px, 40vw, 600px);
+  height: clamp(380px, 40vw, 600px);
   border-radius: var(--r-md);
   background: var(--sunken);
   color: var(--ink-2);

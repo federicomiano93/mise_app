@@ -158,9 +158,22 @@ export default function Cake3D({ geometry, selected, tier, onSelect, labels, onO
   const box = labelBoxFor(Math.max(size.width, 1), Math.max(size.height, 1));
   const shown = geometry.tiers[Math.min(tier, geometry.tiers.length - 1)];
   const narrow = box.columns === 1;
+  const stacked = box.columns === 0;
+  // The parts the chosen tier has, top to bottom (the labels of a stage with no room beside the cake).
+  const listed = (['decoration', 'coating', 'filling', 'soak', 'base'] as const).filter(part => {
+    const info = shown?.parts[part];
+    return info !== undefined && info.productIds.length > 0 && !(part === 'filling' && (shown?.discs ?? 0) < 2);
+  });
+  const noteOf = (part: CakePart) => {
+    const info = shown?.parts[part];
+    return {
+      title: `${labels.part[part]} · ${labels.grams(info?.grams ?? 0)}`,
+      names: (info?.productIds ?? []).map(labels.cardName).filter(name => name !== '').join(' + '),
+    };
+  };
 
   return (
-    <div className={styles.stage}>
+    <div className={styles.stage} data-stacked={stacked}>
       <div className={styles.bar}>
         <div role="radiogroup" aria-label={t('cakes.stage.cutGroup')} className={styles.views}>
           {(['cut', 'whole'] as const).map(choice => (
@@ -183,7 +196,7 @@ export default function Cake3D({ geometry, selected, tier, onSelect, labels, onO
       </div>
       <div ref={viewport} className={styles.viewport} role="img" aria-label={labels.summary}>
         <div ref={canvasHost} className={styles.canvasHost} aria-hidden="true" />
-        <div className={styles.overlay} data-moving={moving || !ready} aria-hidden="true">
+        <div className={styles.overlay} data-moving={moving || !ready || stacked} aria-hidden="true">
           <svg className={styles.leaders} viewBox={`0 0 ${String(Math.max(size.width, 1))} ${String(Math.max(size.height, 1))}`} focusable="false">
             {placed.map(label => {
               const on = sameSelection(selected, { tier, part: label.key as CakePart });
@@ -231,6 +244,26 @@ export default function Cake3D({ geometry, selected, tier, onSelect, labels, onO
           })}
         </div>
       </div>
+      {stacked ? (
+        <div className={styles.notes} aria-hidden="true">
+          {listed.map(part => {
+            const note = noteOf(part);
+            return (
+              <div
+                key={part}
+                className={styles.note}
+                data-chosen={sameSelection(selected, { tier, part })}
+                data-hover={sameSelection(hover, { tier, part })}
+                data-part={part}
+                onClick={() => { act({ tier, part }); }}
+              >
+                <span className={styles.title}>{note.title}</span>
+                <span className={styles.names}>{note.names}</span>
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
     </div>
   );
 }

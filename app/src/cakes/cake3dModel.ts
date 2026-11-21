@@ -48,6 +48,9 @@ export interface TierLayout {
   hasFilling: boolean;
   hasCoating: boolean;
   hasDecoration: boolean;
+  // The outer edge (coating included) of the tier standing on this one; null for the top tier. A decoration on a tier with another on top
+  // goes on the ring of its top that is left uncovered.
+  upperEdge: number | null;
 }
 
 export interface CakeLayout {
@@ -99,6 +102,7 @@ export function tierLayout(tier: CakeGeometryTier, yBase: number): TierLayout {
     hasFilling,
     hasCoating,
     hasDecoration,
+    upperEdge: null,
   };
 }
 
@@ -108,6 +112,8 @@ export function cakeLayout(geometry: CakeGeometry): CakeLayout {
   for (const tier of geometry.tiers) {
     if (tiers.length > 0) yBase += TIER_BOARD_CM;
     const laid = tierLayout(tier, yBase);
+    const below = tiers[tiers.length - 1];
+    if (below) below.upperEdge = laid.radius + laid.coatingCm;
     tiers.push(laid);
     yBase = laid.yTop;
   }
@@ -150,7 +156,11 @@ export function partAnchors(tier: TierLayout, view: StageView): Partial<Record<C
   const filling = layerMid(tier, 'filling', 'last');
   if (filling !== null) out.filling = view === 'cut' ? inside(-half, 0.55, filling) : side(-0.75, filling);
   if (tier.hasCoating) out.coating = side(view === 'cut' ? half + 0.5 : 1.05, tier.yBase + tier.stackHeight * 0.55);
-  if (tier.hasDecoration) out.decoration = { x: 0, y: tier.yTop + 0.9, z: -tier.radius * 0.35 };
+  if (tier.hasDecoration) {
+    out.decoration = tier.upperEdge === null
+      ? { x: 0, y: tier.yTop + 0.9, z: -tier.radius * 0.35 }
+      : around(half + 0.7, (tier.upperEdge + skin) / 2, tier.yTop + 0.9);
+  }
   return out;
 }
 
@@ -171,7 +181,10 @@ export function homeView(layout: CakeLayout, aspect: number, share = 1): HomeVie
   const tanV = Math.tan((CAMERA_FOV_DEG * Math.PI) / 360);
   const tanH = tanV * Math.max(0.2, aspect);
   const targetY = Math.max(2, layout.height * 0.42);
-  const wide = layout.boardRadius * 1.1 / (tanH * Math.min(1, Math.max(0.2, share)));
+  // The bottom tier and a little board around it must fit the width; the board's far scalloped edge may go a little past it.
+  const bottom = layout.tiers[0];
+  const need = bottom ? bottom.radius + bottom.coatingCm + 1.6 : layout.boardRadius;
+  const wide = (need * 1.12) / (tanH * Math.min(1, Math.max(0.2, share)));
   const high = (layout.height * 0.75 + layout.boardRadius * 0.35) / tanV;
   const distance = Math.max(wide, high, 20);
   return {
@@ -232,8 +245,9 @@ export interface LabelBox {
   labelHeight: number;
   gap: number;
   margin: number;
-  // One column on the right only (a narrow stage), or one on each side.
-  columns: 1 | 2;
+  // One column on each side, one on the right only (a narrow stage), or none: a stage under STACKED_UNDER px wide has no room for the cake beside
+  // its labels, so the cake takes the whole width and the labels stand in a list under it, with no leader lines.
+  columns: 0 | 1 | 2;
 }
 
 const distance = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -265,8 +279,9 @@ export function slotHeights(wanted: readonly number[], box: LabelBox): number[] 
 // stage holds five parts at most, so every pairing is tried. Left or right: by which side of the stage's middle the anchor is on
 // (all on the right in a narrow stage).
 export function placeLabels(anchors: readonly Anchor[], box: LabelBox): PlacedLabel[] {
+  if (box.columns === 0) return [];
   const sides: Record<'left' | 'right', Anchor[]> = { left: [], right: [] };
-  for (const anchor of anchors) sides[box.columns === 1 || anchor.x >= box.width / 2 ? 'right' : 'left'].push(anchor);
+  for (const anchor of anchors) sides[box.columns !== 2 || anchor.x >= box.width / 2 ? 'right' : 'left'].push(anchor);
   // A column that would hold more than the stage's height allows hands its extra to the other column.
   const fits = Math.max(1, Math.floor((box.height - 2 * box.margin + box.gap) / (box.labelHeight + box.gap)));
   if (box.columns === 2) {
@@ -321,8 +336,10 @@ export function leadersCross(a: PlacedLabel, b: PlacedLabel): boolean {
 }
 
 // How the stage lays out its labels for a width: two columns when there is room, one on the right when there is not.
+export const STACKED_UNDER = 330;
+
 export function labelBoxFor(width: number, height: number): LabelBox {
-  const columns: 1 | 2 = width >= 560 ? 2 : 1;
+  const columns: 0 | 1 | 2 = width < STACKED_UNDER ? 0 : width >= 560 ? 2 : 1;
   const labelWidth = columns === 2
     ? Math.round(Math.min(210, Math.max(140, width * 0.24)))
     : Math.round(Math.min(150, Math.max(112, width * 0.38)));
@@ -331,6 +348,7 @@ export function labelBoxFor(width: number, height: number): LabelBox {
 
 // The share of the stage's width the cake may use: what the label columns leave.
 export function cakeShare(box: LabelBox): { share: number; centre: number } {
+  if (box.columns === 0) return { share: 1, centre: box.width / 2 };
   const reserved = (box.columns === 2 ? 2 : 1) * (box.labelWidth + box.margin + 8);
   const left = box.columns === 2 ? box.labelWidth + box.margin + 8 : 0;
   const share = Math.max(0.3, (box.width - reserved) / box.width);
