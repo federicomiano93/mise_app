@@ -44,6 +44,9 @@ export default defineConfig({
           if (/[\\/]node_modules[\\/](react-aria-components|react-aria|react-stately|@react-aria|@react-stately|@react-types|@internationalized|@swc)[\\/]/.test(id)) return 'react-aria';
           if (/[\\/]node_modules[\\/](react-router|@remix-run|cookie-es)[\\/]/.test(id)) return 'router';
           if (/[\\/]node_modules[\\/]@firebase[\\/](app|auth|component|logger|util)[\\/]|[\\/]node_modules[\\/]firebase[\\/](app|auth)[\\/]/.test(id)) return 'firebase-auth';
+          // three.js (the cake's 3D view, loaded only when it is shown): ONE chunk made of nothing else, so the worker can leave it out of the
+          // precache by what it holds (sw-plugin.ts, ON_DEMAND_PACKAGES). Its addons live in the same package.
+          if (/[\\/]node_modules[\\/]three[\\/]/.test(id)) return 'three';
           return undefined;
         },
       },

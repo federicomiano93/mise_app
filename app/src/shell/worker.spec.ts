@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import vm from 'node:vm';
 import { afterEach, describe, expect, test } from 'vitest';
-import { composeWorker, miseServiceWorker, neverLoadedChunk, revOf, type PrecacheEntry } from '../../sw-plugin';
+import { composeWorker, miseServiceWorker, neverLoadedChunk, onDemandChunk, revOf, type PrecacheEntry } from '../../sw-plugin';
 import { BASE, createWorld, loadWorker, ORIGIN, SCOPE, type World } from '../testing/swHarness';
 
 const ENTRY = `${BASE}assets/index-abc123.js`;
@@ -297,5 +297,33 @@ describe('the build plugin', () => {
     expect(urls).not.toContain('assets/html2canvas-x1.js');
     expect(urls).toContain('assets/index-abc123.js');
     expect(vm.runInContext('LEFT_OUT', context)).toEqual(['assets/html2canvas-x1.js']);
+  });
+
+  test('⚠️ three.js is loaded on demand: its chunk (and only a chunk made of it) is left out of the precache', () => {
+    expect(onDemandChunk(['/x/node_modules/three/build/three.core.js', '/x/node_modules/three/examples/jsm/controls/OrbitControls.js'])).toBe(true);
+    expect(onDemandChunk(['C:\\x\\node_modules\\three\\build\\three.module.js'])).toBe(true);
+    expect(onDemandChunk(['/x/node_modules/three/build/three.core.js', '/x/app/src/cakes/Cake3D.tsx'])).toBe(false);
+    expect(onDemandChunk(['/x/node_modules/threejs-helper/a.js'])).toBe(false);
+    expect(onDemandChunk([])).toBe(false);
+
+    dir = mkdtempSync(join(tmpdir(), 'mise2-sw-'));
+    const out = join(dir, 'dist');
+    mkdirSync(join(out, 'assets'), { recursive: true });
+    for (const [file, body] of Object.entries(FILES)) writeFileSync(join(out, file), body);
+    writeFileSync(join(out, 'assets/three-x1.js'), 'export default 1');
+    writeFileSync(join(out, 'assets/Cake3D-x1.js'), 'export default 1');
+    const plugin = miseServiceWorker(join(__dirname, '..', '..', '..'));
+    (plugin.configResolved as (c: unknown) => void)({ root: dir, base: BASE, build: { outDir: 'dist' } });
+    (plugin.generateBundle as (o: unknown, b: unknown) => void)({}, {
+      'assets/three-x1.js': { type: 'chunk', fileName: 'assets/three-x1.js', modules: { '/r/app/node_modules/three/build/three.core.js': {} } },
+      'assets/Cake3D-x1.js': { type: 'chunk', fileName: 'assets/Cake3D-x1.js', modules: { '/r/app/src/cakes/Cake3D.tsx': {} } },
+    });
+    (plugin.closeBundle as () => void)();
+    const context = vm.createContext({ self: { location: new URL(`${SCOPE}sw.js`), addEventListener: () => {} }, URL, Map });
+    vm.runInContext(readFileSync(join(out, 'sw.js'), 'utf8'), context);
+    const urls = (vm.runInContext('PRECACHE', context) as PrecacheEntry[]).map(e => e.url);
+    expect(urls.some(url => /three/.test(url))).toBe(false);
+    expect(urls).toContain('assets/Cake3D-x1.js');
+    expect(vm.runInContext('LEFT_OUT', context)).toEqual(['assets/three-x1.js']);
   });
 });

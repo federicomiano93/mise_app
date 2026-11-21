@@ -73,7 +73,7 @@ export function composeWorker(opts: { base: string; precache: readonly PrecacheE
     `const PAGE_NEEDS = ${JSON.stringify(opts.pageNeeds)};`,
     `const TAKE_OVER = ${JSON.stringify(takesOver(opts.base))};`,
     `const LEGACY_ROUTES = ${JSON.stringify(LEGACY_ROUTES)};`,
-    '// Built, deliberately NOT precached (never loaded: sw-plugin.ts, NEVER_LOADED_PACKAGES). Read by sw/verify-build.mjs only.',
+    '// Built, deliberately NOT precached (never loaded, or loaded on demand: sw-plugin.ts, NEVER_LOADED_PACKAGES / ON_DEMAND_PACKAGES). Read by sw/verify-build.mjs only.',
     `const LEFT_OUT = ${JSON.stringify([...(opts.leftOut ?? [])].sort())};`,
     '',
   ].join('\n');
@@ -102,6 +102,16 @@ export function neverLoadedChunk(moduleIds: readonly string[]): boolean {
   return moduleIds.length > 0 && moduleIds.every(id => NEVER_LOADED.test(id));
 }
 
+// ⚠️ three.js IS LOADED, BUT ONLY WHEN A CAKE EDITOR SHOWS THE 3D VIEW (cakes/Cake3D.tsx: import('three')). Precached, every phone would download
+// ~0.5 MB at every update for a view most never open, so its chunk (vite.config.ts names it 'three') is left out and fetched from the network on
+// demand. A chunk made ONLY of these packages: by the modules it holds, never by a file-name glob.
+export const ON_DEMAND_PACKAGES = ['three'] as const;
+const ON_DEMAND = new RegExp(`[\\\\/]node_modules[\\\\/](${ON_DEMAND_PACKAGES.join('|')})[\\\\/]`);
+
+export function onDemandChunk(moduleIds: readonly string[]): boolean {
+  return moduleIds.length > 0 && moduleIds.every(id => ON_DEMAND.test(id));
+}
+
 // What is NOT precached: the worker itself, source maps, Vite's own manifest folder, the never-loaded chunks above,
 // and any page other than index.html (none today).
 export function precached(path: string, leftOut: ReadonlySet<string> = new Set()): boolean {
@@ -127,7 +137,9 @@ export function miseServiceWorker(repoRoot = join(HERE, '..')): Plugin {
     },
     generateBundle(_options, bundle) {
       for (const file of Object.values(bundle)) {
-        if (file.type === 'chunk' && neverLoadedChunk(Object.keys(file.modules))) leftOut.add(file.fileName);
+        if (file.type !== 'chunk') continue;
+        const modules = Object.keys(file.modules);
+        if (neverLoadedChunk(modules) || onDemandChunk(modules)) leftOut.add(file.fileName);
       }
     },
     closeBundle() {

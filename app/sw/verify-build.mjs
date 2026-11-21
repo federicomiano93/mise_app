@@ -45,7 +45,7 @@ for (const file of LEFT_OUT) {
   for (const entry of PRECACHE.filter(e => e.url.endsWith('.js'))) {
     if (statically.test(readFileSync(join(dir, entry.url), 'utf8'))) say(`left out but statically imported by ${entry.url}: ${file}`);
   }
-  if (!/^assets\/(html2canvas|purify\.es|index\.es)-/.test(file)) say(`left out, and not one of jsPDF's optional parts: ${file}`);
+  if (!/^assets\/(html2canvas|purify\.es|index\.es|three)-/.test(file)) say(`left out, and neither a jsPDF optional part nor three.js: ${file}`);
 }
 for (const pattern of [/^assets\/alarm-[^/]+\.wav$/, /^manifest\.json$/, /^icons\/icon-192\.png$/, /^icons\/icon-512\.png$/, /^index\.html$/]) {
   if (!PRECACHE.some(e => pattern.test(e.url))) say(`not precached: ${pattern}`);
