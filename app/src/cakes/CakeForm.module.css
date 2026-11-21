@@ -38,10 +38,21 @@
 .actions {
   display: flex;
   align-items: center;
+  max-width: 100%;
   gap: var(--s2);
 }
 
+/* ⚠️ THE TRASH NEVER SHRINKS: at 296px the long «Save to the price list» squeezed it to 40px; the Save label wraps instead. */
+.actions > button:last-child {
+  min-width: 0;
+  padding-block: var(--s2);
+  padding-inline: var(--s4);
+  line-height: 1.2;
+  text-align: left;
+}
+
 .trash {
+  flex: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
