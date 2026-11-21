@@ -25,7 +25,7 @@ import { FormBar } from '../ui/FormBar';
 import { useStatusMessage } from '../ui/StatusMessage';
 import { useConfirm } from '../ui/useConfirm';
 import {
-  costable, firstEmptyPack, isDirty, referenceChanged, setPrice, setTarget, setVat, takeReference, vatFromSelect, workingFrom,
+  costable, firstEmptyPack, isDirty, referenceChanged, setMeasure, setPrice, setTarget, setVat, takeReference, vatFromSelect, workingFrom,
 } from './cakeEditorModel';
 import type { Selected } from './cakeEditorModel';
 import { CakeStage } from './CakeStage';
@@ -444,6 +444,9 @@ export function CakeForm({ id, cake, titleRef, onSaved }: Props) {
                   showLabour={showLabour}
                   invalid={badNumber}
                   slices={working.slices}
+                  onSlices={n => { edit(current => setMeasure(current, 'slices', n)); }}
+                  assemblyMinutes={working.assemblyMinutes}
+                  onAssembly={n => { edit(current => setMeasure(current, 'assemblyMinutes', n)); }}
                   onPrice={setPriceText}
                   onTarget={setTargetText}
                   onVatSelect={setVatSelect}

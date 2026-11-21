@@ -31,7 +31,7 @@ async function openForm(cakes = withReference(), options = {}) {
 describe('somebody who may not change it', () => {
   it('reads the figures as plain text: no box, no Save, and the note saying who can change them', async () => {
     renderCakes('/cakes/reference', { cakes: withReference(), session: EMPLOYEE });
-    expect(await screen.findByRole('heading', { level: 2, name: 'Reference grams' }, LOAD)).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 2, name: 'Settings' }, LOAD)).toBeInTheDocument();
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
     expect(screen.getByText('Only an owner or a manager can change these grams.')).toBeInTheDocument();
@@ -159,7 +159,7 @@ describe('saving', () => {
     await user.click(within(await question()).getByRole('button', { name: 'Save' }));
     expect(await screen.findByText(/The reference grams were not saved — only an owner or a manager can change them\. They are back as they were\./)).toBeInTheDocument();
     // Opened again, the figures are the old ones.
-    await user.click(await screen.findByRole('button', { name: 'Reference grams' }, LOAD));
+    await user.click(await screen.findByRole('button', { name: 'Settings' }, LOAD));
     expect(await box('Base')).toHaveValue('300');
   });
 });

@@ -98,12 +98,6 @@ export function setName(cake: Cake, name: string): Cake {
   return name === cake.name ? cake : { ...cake, name };
 }
 
-// '' = no category.
-export function setCategory(cake: Cake, categoryId: string): Cake {
-  const next = categoryId === '' ? null : categoryId;
-  return next === cake.categoryId ? cake : { ...cake, categoryId: next };
-}
-
 // The selling price (gross, VAT in) and the target, typed: '' is none, junk is NaN (refused at Save).
 export function setPrice(cake: Cake, text: string): Cake {
   return { ...cake, sellingPrice: readNumber(text) };

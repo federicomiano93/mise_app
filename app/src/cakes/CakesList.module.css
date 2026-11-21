@@ -13,12 +13,13 @@
   gap: var(--s2);
 }
 
+/* «New cake» and «Settings» are as wide as their words, on the left: never stretched across the page (his ask, 21 Nov 2026). */
 .add {
-  flex: 1 1 160px;
+  flex: none;
 }
 
 .foot {
-  align-self: stretch;
+  align-self: flex-start;
 }
 
 .loading {
@@ -43,22 +44,9 @@
 }
 
 .empty {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--s3);
-  padding: var(--s6);
-  border: 1px dashed var(--line-2);
-  border-radius: var(--r-lg);
-}
-
-.emptyTitle {
-  font-size: var(--fs-lg);
-  font-weight: 650;
-}
-
-.emptySub {
+  padding: var(--s1);
   color: var(--ink-2);
+  font-size: var(--fs-lg);
 }
 
 .search {

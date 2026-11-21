@@ -1,5 +1,5 @@
 import { useCallback, useId, useMemo, useState } from 'react';
-import { Plus, Scale, Search } from 'lucide-react';
+import { Plus, Search, Settings } from 'lucide-react';
 import { useFoodcost } from '../foodcost/FoodcostContext';
 import { NEW_OPENER, SETTINGS_OPENER, productOpener, useHandBack } from '../foodcost/handBack';
 import { percentText, statusWord } from '../foodcost/productRowModel';
@@ -19,7 +19,7 @@ type Props = {
   onOpenReference: () => void;
 };
 
-// The left column: «New cake» over the cakes by name, and the reference grams at the foot.
+// The left column: «New cake» over the cakes by name, and Settings (the reference grams) at the foot.
 //
 // ⚠️ A ROW IS COSTED FROM FOOD COST'S TABLES (products, recipes, prices), so the list waits for all of them: a cake would read
 // «incomplete» only because its numbers were still on their way.
@@ -70,11 +70,8 @@ export function CakesList({ openCakeId, onOpenCake, onOpenNew, onOpenReference }
       {!ready ? (
         <p className={styles.loading} aria-busy="true">{t('cakes.loading')}</p>
       ) : costed.length === 0 ? (
-        <div className={styles.empty}>
-          <p className={styles.emptyTitle}>{t('cakes.empty.title')}</p>
-          <p className={styles.emptySub}>{t('cakes.empty.sub')}</p>
-          <Button onPress={onOpenNew}>{t('cakes.new')}</Button>
-        </div>
+        // Only the words: «New cake» is the one blue bar above (his ask, 21 Nov 2026).
+        <p className={styles.empty}>{t('cakes.empty.title')}</p>
       ) : found.length === 0 ? null : (
         <section aria-labelledby={headId}>
           <h2 id={headId} className={styles.group}>{t('cakes.group.listed', { n: found.length })}</h2>
@@ -95,7 +92,7 @@ export function CakesList({ openCakeId, onOpenCake, onOpenNew, onOpenReference }
       </div>
 
       <Button ref={referenceRef} variant="secondary" className={styles.foot} onPress={onOpenReference}>
-        <Scale aria-hidden="true" />
+        <Settings aria-hidden="true" />
         {t('cakes.referenceLink')}
       </Button>
     </div>

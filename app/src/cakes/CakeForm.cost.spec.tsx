@@ -92,7 +92,7 @@ describe('the cost', () => {
     const cake = cakeDoc('c1', 'Plain', { ref: null, lines: [{ tier: 0, part: 'base', productId: 'SPONGE', grams: null }] });
     await open(cake, { cakes: fakeCakesSource({ cakes: [cake], reference: null }) });
     const cost = within(card('Cost and price'));
-    expect(cost.getByText('1 line without grams: type the grams or fill in the Reference grams.')).toBeInTheDocument();
+    expect(cost.getByText('1 line without grams: type the grams or fill in the reference cake in Settings.')).toBeInTheDocument();
     expect(cost.getByText('?')).toBeInTheDocument();
   });
 
@@ -187,7 +187,7 @@ describe('the price', () => {
     expect(written.saved).toHaveLength(0);
   });
 
-  it('the price, the VAT, the target and the category travel with the cake', async () => {
+  it('the price, the VAT and the target travel with the cake (the category is Food cost’s «Cakes» group, never a choice here)', async () => {
     const { user, foodcost: written } = await open();
     const box = screen.getByRole('textbox', { name: PRICE });
     await user.clear(box);
@@ -195,13 +195,13 @@ describe('the price', () => {
     await user.selectOptions(screen.getByRole('combobox', { name: 'VAT rate' }), '5');
     await user.clear(screen.getByRole('textbox', { name: 'Food cost target (%)' }));
     await user.type(screen.getByRole('textbox', { name: 'Food cost target (%)' }), '28');
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Category' }), 'Celebration cakes');
+    expect(screen.queryByRole('combobox', { name: 'Category' })).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Save to the price list' }));
     await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Save' }));
     await waitFor(() => { expect(written.saved).toHaveLength(1); });
     const write = written.saved[0];
-    expect((write?.companion as { data: unknown }).data).toMatchObject({ sellingPrice: 14.5, vatRate: 5, foodCostTarget: 28, categoryId: 'cat1' });
-    expect(write?.data).toMatchObject({ sellingPrice: 14.5, vatRate: 5, foodCostTarget: 28, categoryId: 'cat1' });
+    expect((write?.companion as { data: unknown }).data).toMatchObject({ sellingPrice: 14.5, vatRate: 5, foodCostTarget: 28 });
+    expect(write?.data).toMatchObject({ sellingPrice: 14.5, vatRate: 5, foodCostTarget: 28 });
   });
 });
 
@@ -213,14 +213,17 @@ describe('the measures', () => {
     expect(measures.getByText('24 cm')).toBeInTheDocument();
     await user.click(measures.getByRole('button', { name: 'One disc more' }));
     expect(measures.getByText('3', { selector: 'output' })).toBeInTheDocument();
-    await user.click(measures.getByRole('button', { name: 'One slice more' }));
-    expect(measures.getByText('9', { selector: 'output' })).toBeInTheDocument();
-    expect(measures.getByText('0 min')).toBeInTheDocument();
-    await user.click(measures.getByRole('button', { name: 'Five minutes more' }));
-    expect(measures.getByText('5 min')).toBeInTheDocument();
-    await user.click(measures.getByRole('button', { name: 'Five minutes fewer' }));
-    expect(measures.getByText('0 min')).toBeInTheDocument();
-    expect(measures.getByRole('button', { name: 'Five minutes fewer' })).toBeDisabled();
+    // The slices and the assembly time sit in the cost card, beside what they change.
+    const cost = within(card('Cost and price'));
+    expect(measures.queryByRole('button', { name: 'One slice more' })).not.toBeInTheDocument();
+    await user.click(cost.getByRole('button', { name: 'One slice more' }));
+    expect(cost.getByText('9', { selector: 'output' })).toBeInTheDocument();
+    expect(cost.getByText('0 min')).toBeInTheDocument();
+    await user.click(cost.getByRole('button', { name: 'Five minutes more' }));
+    expect(cost.getByText('5 min')).toBeInTheDocument();
+    await user.click(cost.getByRole('button', { name: 'Five minutes fewer' }));
+    expect(cost.getByText('0 min')).toBeInTheDocument();
+    expect(cost.getByRole('button', { name: 'Five minutes fewer' })).toBeDisabled();
   });
 
   it('the diameter stops at 40 cm and at what the tiers need', async () => {

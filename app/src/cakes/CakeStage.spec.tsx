@@ -4,12 +4,11 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { cakeGeometry } from '@mise/shared/cake-model';
 import type { Cake, CakePart } from '@mise/shared/cake-model';
-import { CakeStage, forgetStageChoice, setCake3DLoader } from './CakeStage';
+import { CakeStage, setCake3DLoader } from './CakeStage';
 import type { CakeStageProps, StageLabels } from './CakeStage';
 
-// The stage's switch and its fallbacks. The 3D view itself needs WebGL, which jsdom has not: Cake3D is replaced by a stand-in that draws a
-// marker, or throws what the real one throws, so what is pinned here is the CHOICE (3D by default, remembered for the session, never in
-// storage) and what the stage does when the 3D cannot be drawn. The real drawing is driven in a browser (drive-mise2-cakes.mjs).
+// The stage and its fallbacks (there is no switch between the two drawings: the person never chooses). The 3D view itself needs WebGL, which jsdom has not: Cake3D is replaced by a stand-in that draws a
+// marker, or throws what the real one throws, so what is pinned here is what the stage shows (3D by default) and what it does when the 3D cannot be drawn. The real drawing is driven in a browser (drive-mise2-cakes.mjs).
 
 const behaviour = vi.hoisted(() => ({ mode: 'ok' as 'ok' | 'webgl' | 'bug' }));
 
@@ -61,7 +60,6 @@ const DRAWING = { name: 'Section drawing of the cake: 1 tier.' };
 
 let logged: ReturnType<typeof vi.spyOn>;
 beforeEach(() => {
-  forgetStageChoice();
   setCake3DLoader(null);
   behaviour.mode = 'ok';
   window.localStorage.clear();
@@ -70,14 +68,17 @@ beforeEach(() => {
 });
 afterEach(() => { Reflect.deleteProperty(window, 'matchMedia'); logged.mockRestore(); });
 
-describe('the stage’s 3D | Simple drawing switch', () => {
-  it('shows the 3D by default, with the switch above it', async () => {
+describe('the stage', () => {
+  it('shows the 3D, and offers no switch to the simple drawing: the person never chooses', async () => {
     render(stage());
     expect(await screen.findByTestId('three-d')).toBeInTheDocument();
-    expect(screen.getByRole('radio', { name: '3D' })).toHaveAttribute('aria-checked', 'true');
-    expect(screen.getByRole('radio', { name: 'Simple drawing' })).toHaveAttribute('aria-checked', 'false');
+    expect(screen.queryByRole('radio')).not.toBeInTheDocument();
+    expect(screen.queryByRole('img', DRAWING)).not.toBeInTheDocument();
     // The note's live region is on the page from the start, and empty.
     expect(screen.getByRole('status')).toBeEmptyDOMElement();
+    // Nothing is kept on the device.
+    expect(window.localStorage.length).toBe(0);
+    expect(window.sessionStorage.length).toBe(0);
   });
 
   it('hands the 3D view the very same props, and the second tap reaches onOpenPart', async () => {
@@ -90,69 +91,31 @@ describe('the stage’s 3D | Simple drawing switch', () => {
     await user.click(screen.getByRole('button', { name: 'open' }));
     expect(onOpenPart).toHaveBeenCalledWith({ tier: 0, part: 'base' });
   });
-
-  it('switches to the simple drawing (one named image) and back, remembering the choice for the session only', async () => {
-    const view = render(stage());
-    const user = userEvent.setup();
-    await screen.findByTestId('three-d');
-    await user.click(screen.getByRole('radio', { name: 'Simple drawing' }));
-    expect(screen.queryByTestId('three-d')).not.toBeInTheDocument();
-    expect(screen.getByRole('img', DRAWING)).toBeInTheDocument();
-    expect(screen.getByRole('radio', { name: 'Simple drawing' })).toHaveAttribute('aria-checked', 'true');
-    // Another editor opened in the same session starts on the drawing.
-    view.unmount();
-    render(stage());
-    expect(screen.getByRole('img', DRAWING)).toBeInTheDocument();
-    await user.click(screen.getByRole('radio', { name: '3D' }));
-    expect(await screen.findByTestId('three-d')).toBeInTheDocument();
-    // Nothing was written to the device.
-    expect(window.localStorage.length).toBe(0);
-    expect(window.sessionStorage.length).toBe(0);
-  });
-});
-
-describe('the switch from the keyboard', () => {
-  it('is one tab stop, and the arrows choose and focus the other drawing and back', async () => {
-    render(stage());
-    const user = userEvent.setup();
-    await screen.findByTestId('three-d');
-    const three = screen.getByRole('radio', { name: '3D' });
-    const flat = screen.getByRole('radio', { name: 'Simple drawing' });
-    expect(three).toHaveAttribute('tabindex', '0');
-    expect(flat).toHaveAttribute('tabindex', '-1');
-    three.focus();
-    await user.keyboard('{ArrowRight}');
-    expect(flat).toHaveAttribute('aria-checked', 'true');
-    expect(flat).toHaveFocus();
-    expect(screen.getByRole('img', DRAWING)).toBeInTheDocument();
-    await user.keyboard('{Home}');
-    expect(screen.getByRole('radio', { name: '3D' })).toHaveAttribute('aria-checked', 'true');
-  });
 });
 
 describe('when the 3D cannot be drawn', () => {
-  it('falls back to the simple drawing with a note when the device has no WebGL', async () => {
+  it('falls back to the simple drawing with a note when the device has no WebGL, with no way to ask for 3D', async () => {
     behaviour.mode = 'webgl';
     render(stage());
     expect(await screen.findByRole('img', DRAWING)).toBeInTheDocument();
     expect(await screen.findByText('This device cannot draw the 3D view, so the simple drawing is shown.')).toHaveAttribute('role', 'status');
-    expect(screen.getByRole('radio', { name: 'Simple drawing' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.queryByRole('radio')).not.toBeInTheDocument();
     // An expected fallback is no error: nothing reaches React's error logging (and so the owner's error log).
     expect(logged).not.toHaveBeenCalled();
   });
 
-  it('falls back with its own note when the file did not load (a REJECTED import), logs no error, and choosing 3D again really asks again', async () => {
+  it('falls back with its own note when the file did not load (a REJECTED import), logs no error, and the next editor really asks again', async () => {
     const loads = vi.fn(() => Promise.reject(new Error('Failed to fetch dynamically imported module')));
     setCake3DLoader(loads);
-    render(stage());
-    const user = userEvent.setup();
+    const first = render(stage());
     expect(await screen.findByRole('img', DRAWING)).toBeInTheDocument();
     expect(await screen.findByText('The 3D view could not be loaded (is there a connection?), so the simple drawing is shown.')).toBeInTheDocument();
     expect(logged).not.toHaveBeenCalled();
     expect(loads).toHaveBeenCalledTimes(1);
-    // Back online: a new import is made, not the failed one remembered.
+    // Back online: another editor makes a new import, not the failed one remembered.
+    first.unmount();
     setCake3DLoader(() => import('./Cake3D'));
-    await user.click(screen.getByRole('radio', { name: '3D' }));
+    render(stage());
     expect(await screen.findByTestId('three-d')).toBeInTheDocument();
     expect(loads).toHaveBeenCalledTimes(1);
     await waitFor(() => { expect(screen.getByRole('status')).toBeEmptyDOMElement(); });
@@ -167,14 +130,12 @@ describe('when the 3D cannot be drawn', () => {
     expect(logged).toHaveBeenCalled();
   });
 
-  it('starts on the simple drawing, with a note, when the device asks for less motion — and 3D is still a tap away', async () => {
+  it('shows the simple drawing, with a note, when the device asks for less motion: no 3D at all and no switch', async () => {
     motion(true);
     render(stage());
-    const user = userEvent.setup();
     expect(screen.getByRole('img', DRAWING)).toBeInTheDocument();
-    expect(await screen.findByText('This device asks for less motion, so the simple drawing is shown. Choose 3D to see the cake.')).toHaveAttribute('role', 'status');
-    await user.click(screen.getByRole('radio', { name: '3D' }));
-    expect(await screen.findByTestId('three-d')).toBeInTheDocument();
-    await waitFor(() => { expect(screen.getByRole('status')).toBeEmptyDOMElement(); });
+    expect(await screen.findByText('This device asks for less motion, so the simple drawing is shown.')).toHaveAttribute('role', 'status');
+    expect(screen.queryByTestId('three-d')).not.toBeInTheDocument();
+    expect(screen.queryByRole('radio')).not.toBeInTheDocument();
   });
 });

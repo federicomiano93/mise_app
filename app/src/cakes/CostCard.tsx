@@ -1,5 +1,6 @@
 import { useId, useMemo, useState } from 'react';
 import { BookOpen, ListChecks, TriangleAlert } from 'lucide-react';
+import { MAX_SLICES } from '@mise/shared/cake-model';
 import type { CakeTotals } from '@mise/shared/cake-model';
 import { costProduct, vatRatesFor } from '@mise/shared/foodcost-model';
 import { fcMoney, fcNumber } from '@mise/shared/fc-number';
@@ -15,7 +16,8 @@ import { useT } from '../i18n/useT';
 import { useSession } from '../session/SessionContext';
 import { useMoney } from '../session/useMoney';
 import { Button } from '../ui/Button';
-import { vatFromSelect } from './cakeEditorModel';
+import { ASSEMBLY_STEP_MIN, vatFromSelect } from './cakeEditorModel';
+import { Stepper } from './MeasuresCard';
 import styles from './CostCard.module.css';
 
 // What the cake's cost and price boxes are filled with (typed text: a half-typed «12.» must stay as typed).
@@ -37,7 +39,12 @@ type Props = {
   showLabour: boolean;
   // The box Save refused (highlighted).
   invalid: PriceField | null;
+  // How many slices the cake is cut into, and the change of it: it only moves the slice's figures, so it sits here (his call, 21 Nov 2026).
   slices: number;
+  onSlices: (slices: number) => void;
+  // The minutes to put the cake together (its own labour), and the change of them: cost-card matter too (his call, 21 Nov 2026).
+  assemblyMinutes: number | null;
+  onAssembly: (minutes: number) => void;
   onPrice: (text: string) => void;
   onTarget: (text: string) => void;
   onVatSelect: (value: string) => void;
@@ -65,7 +72,7 @@ const VAT_WORDS: Readonly<Record<string, MessageKey>> = {
 // «materials + labour» for somebody who can read the labour rate; the total is a line of its own, and the slice's total says so.
 // ⚠️ A CARD WITH NO PRICE MAKES THE COST «INCOMPLETE»: the figures wear «+?», the food cost reads «?», and the card is named — a cost too
 // low must never look like a good one.
-export function CostCard({ totals, sellingPrice, texts, showLabour, invalid, slices, onPrice, onTarget, onVatSelect, onVatOther, onVatGuide, registerBox, onOpenNeeds }: Props) {
+export function CostCard({ totals, sellingPrice, texts, showLabour, invalid, slices, onSlices, assemblyMinutes, onAssembly, onPrice, onTarget, onVatSelect, onVatOther, onVatGuide, registerBox, onOpenNeeds }: Props) {
   const { t } = useT();
   const money = useMoney();
   const ids = useId();
@@ -128,6 +135,28 @@ export function CostCard({ totals, sellingPrice, texts, showLabour, invalid, sli
         </>
       ) : null}
 
+      <Stepper
+        title={t('cakes.measure.assembly')}
+        sub={t('cakes.measure.assemblySub')}
+        value={t('cakes.measure.minutes', { n: assemblyMinutes ?? 0 })}
+        lessLabel={t('cakes.measure.assemblyLess')}
+        moreLabel={t('cakes.measure.assemblyMore')}
+        lessDisabled={(assemblyMinutes ?? 0) <= 0}
+        moreDisabled={false}
+        onLess={() => { onAssembly((assemblyMinutes ?? 0) - ASSEMBLY_STEP_MIN); }}
+        onMore={() => { onAssembly((assemblyMinutes ?? 0) + ASSEMBLY_STEP_MIN); }}
+      />
+      <Stepper
+        title={t('cakes.measure.slices')}
+        sub={t('cakes.measure.slicesSub')}
+        value={String(slices)}
+        lessLabel={t('cakes.measure.slicesLess')}
+        moreLabel={t('cakes.measure.slicesMore')}
+        lessDisabled={slices <= 1}
+        moreDisabled={slices >= MAX_SLICES}
+        onLess={() => { onSlices(slices - 1); }}
+        onMore={() => { onSlices(slices + 1); }}
+      />
       <div className={styles.slice}>
         <span>{t('cakes.cost.perSlice', { n: slices })}</span>
         <span className={styles.num}>

@@ -21,6 +21,8 @@ export const BOARD_THICKNESS_CM = 0.5;
 export const SOAK_SHARE = 0.22;
 export const FILLING_SHARE = 0.3;
 export const FILLING_MIN_CM = 0.5;
+// The empty gap between two discs while the filling has no card, as a share of a disc.
+export const DISC_GAP_SHARE = 0.25;
 // How high the decoration stands on top of a tier.
 export const DECORATION_CM = 1.6;
 // «Spaccato»: the wedge cut out, facing the camera, in radians (72 degrees).
@@ -66,7 +68,8 @@ function hasCards(tier: CakeGeometryTier, part: CakePart): boolean {
 }
 
 // The stack of one tier: discs from the bottom, the soak on top of each, a layer of filling between two discs (only when the filling
-// has a card, as the flat drawing does).
+// has a card, as the flat drawing does). Without one the discs stand apart by an empty gap, so a new cake shows how many discs it has
+// at a glance (his ask, 21 Nov 2026); the flat drawing does the same.
 export function tierLayout(tier: CakeGeometryTier, yBase: number): TierLayout {
   const hasSoak = hasCards(tier, 'soak');
   const hasFilling = hasCards(tier, 'filling') && tier.discs > 1;
@@ -87,6 +90,8 @@ export function tierLayout(tier: CakeGeometryTier, yBase: number): TierLayout {
     if (hasFilling && disc < tier.discs - 1) {
       layers.push({ kind: 'filling', y0: y, h: fillingCm });
       y += fillingCm;
+    } else if (disc < tier.discs - 1) {
+      y += discCm * DISC_GAP_SHARE;
     }
   }
   const coatingCm = hasCoating ? COATING_CM : 0;

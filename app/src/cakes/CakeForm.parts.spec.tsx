@@ -254,7 +254,7 @@ describe('the reference grams', () => {
     expect(screen.getByText('There are no reference grams yet, so every line needs its grams typed by hand.')).toBeInTheDocument();
     expect(screen.getAllByText('no reference grams yet: type the grams').length).toBeGreaterThan(0);
     const band = screen.getByText('There are no reference grams yet, so every line needs its grams typed by hand.').parentElement as HTMLElement;
-    await view.user.click(within(band).getByRole('button', { name: 'Reference grams' }));
+    await view.user.click(within(band).getByRole('button', { name: 'Settings' }));
     await waitFor(() => { expect(view.router.state.location.pathname).toBe('/cakes/reference'); });
   });
 

@@ -5,7 +5,6 @@ import { BOX, PACKAGING_PRICES } from '../testing/foodcostEditorFixtures';
 import { REFERENCE, SPONGE, cakeDoc, renderCakes, storedReference } from '../testing/renderCakes';
 import { FLOUR, FLOUR_PRICES, LOAD } from '../testing/renderFoodcost';
 import { fakeFoodcostSource } from '../testing/fakeFoodcostSource';
-import { forgetStageChoice } from './CakeStage';
 
 // The editor and the 3D view: a tap on a part chooses it in the parts list, and a second tap on the chosen part opens that part's
 // «Add a card» chooser. The 3D view needs WebGL, so Cake3D is a stand-in with one button per tap; the real one is driven in a browser.
@@ -33,7 +32,7 @@ vi.mock('./Cake3D', () => ({
 }));
 
 beforeAll(async () => { await import('./CakesSection'); }, 60_000);
-beforeEach(() => { window.localStorage.clear(); forgetStageChoice(); });
+beforeEach(() => { window.localStorage.clear(); });
 afterEach(() => { vi.unstubAllGlobals(); window.localStorage.clear(); });
 
 const CREAM = { ...SPONGE, id: 'CREAM', name: 'Cream' };

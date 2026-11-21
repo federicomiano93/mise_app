@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { cakeGeometry } from '@mise/shared/cake-model';
 import type { Cake } from '@mise/shared/cake-model';
 import {
-  CUT_ANGLE, TIER_BOARD_CM, cakeLayout, cakeShare, homeView, labelBoxFor, leaderPath, leadersCross, partAnchors, pickedPart, placeLabels,
+  CUT_ANGLE, DISC_GAP_SHARE, TIER_BOARD_CM, cakeLayout, cakeShare, homeView, labelBoxFor, leaderPath, leadersCross, partAnchors, pickedPart, placeLabels,
   sceneSignature, slotHeights, stageDecision, tapAction, webglAvailable,
 } from './cake3dModel';
 import type { Anchor, LabelBox, PlacedLabel } from './cake3dModel';
@@ -49,6 +49,13 @@ describe('the cake in space', () => {
     expect(top!.hasCoating).toBe(false);
     expect(top!.hasDecoration).toBe(true);
     expect(layout.height).toBeGreaterThan(top!.yTop);
+  });
+
+  it('without a filling the discs stand apart by an empty gap, so the person can count them', () => {
+    // 3 discs of 3 cm, two gaps of 0.75 cm: the second disc starts one disc and one gap up.
+    const discs = top!.layers.filter(l => l.kind === 'base');
+    expect(discs[1]!.y0 - (discs[0]!.y0 + discs[0]!.h)).toBeCloseTo(3 * DISC_GAP_SHARE, 6);
+    expect(top!.stackHeight).toBeCloseTo(9 + 2 * 3 * DISC_GAP_SHARE, 6);
   });
 
   it('knows what stands on a tier, so its decoration goes on the ring of the top that is left bare', () => {

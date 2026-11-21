@@ -28,8 +28,7 @@
   font-weight: 600;
 }
 
-.input,
-.select {
+.input {
   width: 100%;
   min-height: var(--hit);
   padding: 0 var(--s3);
@@ -40,8 +39,7 @@
   font: 450 var(--fs-md) var(--font);
 }
 
-.input:focus,
-.select:focus {
+.input:focus {
   border-color: var(--accent);
 }
 

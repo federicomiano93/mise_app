@@ -47,7 +47,8 @@ export function incompleteCake(id: string, name: string): StoredDoc {
 export const REFERENCE = { diameterCm: 22, discs: 3, discHeightCm: 3, baseG: 300, soakG: 90, fillingG: 280, coatingG: 450, decorationG: 200 };
 export const storedReference = (grams: Record<string, number> = REFERENCE) => ({ bakery: 'bakery', grams, updatedAt: '2026-11-20T10:00:00.000Z' });
 
-// Cakes' split starts at 1280px: jsdom applies no media query, so the query is answered by hand.
+// A wide screen (1280px, where the section used to split into list and detail): jsdom applies no media query, so the query is answered
+// by hand. A spec uses it to prove Cakes still opens one level at a time there.
 export function splitCakes(): void {
   vi.stubGlobal('matchMedia', (query: string) => ({
     matches: query === '(min-width: 1280px)',

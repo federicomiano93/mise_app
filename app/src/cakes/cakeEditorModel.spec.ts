@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { CAKE_MODEL, MAX_CARDS_PER_PART, MAX_PACKAGING, cakeProductId } from '@mise/shared/cake-model';
 import type { Cake, ReferenceGrams } from '@mise/shared/cake-model';
 import {
-  addCard, addPack, canAddCard, cardsIn, firstEmptyPack, isDirty, referenceChanged, removeCard, removePack, resetGrams, setCategory,
+  addCard, addPack, canAddCard, cardsIn, firstEmptyPack, isDirty, referenceChanged, removeCard, removePack, resetGrams,
   setGrams, setMeasure, setName, setPackQty, setPrice, setTarget, setVat, takeReference, vatFromSelect, workingFrom,
 } from './cakeEditorModel';
 
@@ -91,11 +91,9 @@ describe('setMeasure', () => {
   });
 });
 
-describe('the name, the category, the price, the target and the VAT', () => {
+describe('the name, the price, the target and the VAT', () => {
   it('sets each, and reads «» as none', () => {
     expect(setName(CAKE, 'x').name).toBe('x');
-    expect(setCategory(CAKE, '').categoryId).toBeNull();
-    expect(setCategory(CAKE, 'other').categoryId).toBe('other');
     expect(setPrice(CAKE, '12,5').sellingPrice).toBe(12.5);
     expect(setPrice(CAKE, '').sellingPrice).toBeNull();
     expect(setTarget(CAKE, '28').foodCostTarget).toBe(28);

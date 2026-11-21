@@ -10,7 +10,7 @@ import { useMoney } from '../session/useMoney';
 import { Button } from '../ui/Button';
 import { FormBar } from '../ui/FormBar';
 import { CategoriesDialog } from './CategoriesDialog';
-import { NO_CATEGORY_KEY, groupRows, grouped, isGroupOpen } from './categoriesModel';
+import { CAKES_GROUP_ID, NO_CATEGORY_KEY, groupRows, grouped, isGroupOpen } from './categoriesModel';
 import type { Group } from './categoriesModel';
 import { semiFigures } from './semiWords';
 import { wantsTitleFocus } from './foodcostNav';
@@ -68,7 +68,7 @@ export function FoodcostList({ openProductId, onOpenProduct, onOpenNew, onOpenSe
   // returns to the person's own taps. The taps live in this component's state only — nothing is stored.
   const [openGroups, setOpenGroups] = useState<ReadonlySet<string>>(() => new Set());
   const searching = query.trim() !== '';
-  const groups = useMemo(() => (grouped(categories) ? groupRows(found, categories) : null), [found, categories]);
+  const groups = useMemo(() => (grouped(categories, products) ? groupRows(found, categories) : null), [found, categories, products]);
   const toggleGroup = (id: string | null) => {
     const key = id ?? NO_CATEGORY_KEY;
     setOpenGroups(before => {
@@ -232,7 +232,7 @@ export function FoodcostList({ openProductId, onOpenProduct, onOpenNew, onOpenSe
                     onClick={() => { toggleGroup(group.id); }}
                   >
                     <ChevronRight aria-hidden="true" className={styles.chevron} data-open={open} />
-                    <span className={styles.groupName}>{group.name ?? t('fc.cat.none')}</span>
+                    <span className={styles.groupName}>{group.id === CAKES_GROUP_ID ? t('fc.cat.cakes') : group.name ?? t('fc.cat.none')}</span>
                     <span className={styles.groupCount}>{t('fc.cat.cards', { n: group.items.length })}</span>
                   </button>
                 </h2>

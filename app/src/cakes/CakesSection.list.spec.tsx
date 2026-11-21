@@ -4,8 +4,8 @@ import { fakeCakesSource } from '../testing/fakeCakesSource';
 import { cakeDoc, incompleteCake, renderCakes, splitCakes } from '../testing/renderCakes';
 import { LOAD } from '../testing/renderFoodcost';
 
-// The Cakes list: the rows and their costs (complete and incomplete), the search, the empty state, and how the section moves — a split
-// from 1280px, one level at a time below it. The maths is in shared/src/cake-model.spec.ts; fake data only.
+// The Cakes list: the rows and their costs (complete and incomplete), the search, the empty state, and how the section moves — one level
+// at a time at EVERY width (the split from 1280px is gone, his call of 21 Nov 2026). The maths is in shared/src/cake-model.spec.ts; fake data only.
 
 beforeAll(async () => { await import('./CakesSection'); }, 60_000);
 beforeEach(() => { window.localStorage.clear(); });
@@ -58,13 +58,13 @@ describe('the list', () => {
     expect(within(half).queryByText(/%/)).not.toBeInTheDocument();
   });
 
-  it('says it in Italian: «2 piani · Ø 20 · 2 dischi», «A listino · 3», «Grammi di riferimento»', async () => {
+  it('says it in Italian: «2 piani · Ø 20 · 2 dischi», «A listino · 3», «Impostazioni»', async () => {
     renderCakes('/cakes', { lang: 'it', cakes: fakeCakesSource({ cakes: [SACHER, WEDDING, HALF] }) });
     expect(await screen.findByRole('heading', { level: 2, name: 'A listino · 3' }, LOAD)).toBeInTheDocument();
     expect(screen.getByText('2 piani · Ø 20 · 2 dischi')).toBeInTheDocument();
     expect(screen.getByText('Ø 20 · 2 dischi · costo incompleto')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Nuova torta' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Grammi di riferimento' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Impostazioni' })).toBeInTheDocument();
     expect(screen.getByRole('searchbox', { name: 'Cerca una torta' })).toBeInTheDocument();
   });
 
@@ -95,43 +95,35 @@ describe('the search', () => {
 });
 
 describe('with no cakes', () => {
-  it('says so, offers «New cake», and draws neither a search box nor the «Choose a cake» prompt', async () => {
-    splitCakes();
+  it('says only «No cakes yet»: ONE «New cake» button, no sub-line, no search box, no «Choose a cake» prompt', async () => {
     await open([]);
     expect(await screen.findByText('No cakes yet', undefined, LOAD)).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: 'New cake' })).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: 'New cake' })).toHaveLength(1);
     expect(screen.queryByRole('searchbox')).not.toBeInTheDocument();
     expect(screen.queryByText('Choose a cake')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Reference grams' })).toBeInTheDocument();
+    expect(screen.queryByText(/Create the first one|Pick a cake/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Settings' })).toBeInTheDocument();
   });
 });
 
 describe('moving about', () => {
-  it('on the split, asks to choose a cake while nothing is open, and opens the picked one beside the list', async () => {
+  it('even on a wide screen a cake opens one level down over the whole page: the list is not beside it, and Back returns to the list', async () => {
     splitCakes();
     const { user, router } = await open();
-    expect(await screen.findByText('Choose a cake', undefined, LOAD)).toBeInTheDocument();
+    expect(screen.queryByText('Choose a cake')).not.toBeInTheDocument();
     await user.click(await screen.findByRole('button', { name: /^Sacher/ }, LOAD));
     expect(router.state.location.pathname).toBe('/cakes/c1');
+    expect(router.state.historyAction).toBe('PUSH');
     expect(await screen.findByRole('heading', { level: 2, name: 'Sacher' })).toBeInTheDocument();
     expect(await screen.findByRole('heading', { level: 3, name: /^Parts of the cake/ }, LOAD)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^Sacher/ })).toHaveAttribute('aria-current', 'true');
-    // The list is still there beside it.
-    expect(screen.getByRole('button', { name: /^Cassata/ })).toBeInTheDocument();
-  });
-
-  it('on the split, picking another cake REPLACES the one open: one Back returns to the list', async () => {
-    splitCakes();
-    const { user, router } = await open();
-    await user.click(await screen.findByRole('button', { name: /^Sacher/ }, LOAD));
-    await user.click(screen.getByRole('button', { name: /^Cassata/ }));
-    expect(router.state.location.pathname).toBe('/cakes/c3');
-    expect(router.state.historyAction).toBe('REPLACE');
+    // The list is only behind it (hidden by the stylesheet): the layout is on its detail view, at any width.
+    expect(document.querySelector('[data-view="detail"]')).not.toBeNull();
     await user.click(screen.getByRole('button', { name: 'Back' }));
     expect(router.state.location.pathname).toBe('/cakes');
+    expect(screen.getByRole('button', { name: /^Sacher/ })).toHaveFocus();
   });
 
-  it('below the split, a cake opens one level down (a PUSH), and Back steps up with the focus on the row that opened it', async () => {
+  it('a cake opens one level down (a PUSH), and Back steps up with the focus on the row that opened it', async () => {
     const { user, router } = await open();
     const row = await screen.findByRole('button', { name: /^Sacher/ }, LOAD);
     await user.click(row);
@@ -152,9 +144,9 @@ describe('moving about', () => {
     expect(screen.getByRole('button', { name: 'New cake' })).toHaveFocus();
   });
 
-  it('«Reference grams» at the foot of the list opens the reference screen', async () => {
+  it('«Settings» at the foot of the list opens the reference screen', async () => {
     const { user, router } = await open();
-    await user.click(screen.getByRole('button', { name: 'Reference grams' }));
+    await user.click(screen.getByRole('button', { name: 'Settings' }));
     expect(router.state.location.pathname).toBe('/cakes/reference');
   });
 
@@ -165,12 +157,12 @@ describe('moving about', () => {
 });
 
 describe('who sees it', () => {
-  it('an employee of a venue that shows them Food cost sees the cakes and the reference link', async () => {
+  it('an employee of a venue that shows them Food cost sees the cakes and the Settings button', async () => {
     renderCakes('/cakes', {
       cakes: fakeCakesSource({ cakes: [SACHER] }),
       session: { canManage: false, isOwner: false, role: 'staff', location: { staffShownCards: { foodcost: true } } },
     });
     expect(await screen.findByRole('button', { name: /^Sacher/ }, LOAD)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Reference grams' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Settings' })).toBeInTheDocument();
   });
 });

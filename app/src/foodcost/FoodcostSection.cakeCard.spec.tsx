@@ -71,8 +71,11 @@ describe('a cake\'s own card', () => {
 });
 
 describe('the list', () => {
-  it('tags a cake\'s row «Cake», and no other row', async () => {
-    renderFoodcost('/food-cost', { source: sourceWith([CAKE_CARD, product('Green')]) });
+  it('tags a cake\'s row «Cake», and no other row; the cake sits in the «Cakes» group, the other card apart', async () => {
+    const { user } = renderFoodcost('/food-cost', { source: sourceWith([CAKE_CARD, product('Green')]) });
+    // The groups start closed: «Cakes» holds the cake, «No category» the other card.
+    await user.click(await screen.findByRole('button', { name: /^Cakes/ }, LOAD));
+    await user.click(screen.getByRole('button', { name: /^No category/ }));
     const cakeRow = await screen.findByRole('button', { name: /Sacher/ }, LOAD);
     expect(within(cakeRow).getByText('Cake')).toBeInTheDocument();
     expect(within(screen.getByRole('button', { name: /Green/ })).queryByText('Cake')).not.toBeInTheDocument();

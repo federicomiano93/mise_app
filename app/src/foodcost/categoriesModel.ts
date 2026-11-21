@@ -6,6 +6,7 @@
 // screens draw it.
 
 import { normalizeSearchText } from '@mise/shared/catalogue-model';
+import { isCakeProductId } from '@mise/shared/cake-model';
 import type { Product } from '@mise/shared/foodcost-model';
 import type { StoredDoc } from './foodcostSource';
 
@@ -54,11 +55,12 @@ export function nextRank(categories: readonly Category[], nowMs: number): number
   return Math.max(Math.floor(nowMs), last + 1);
 }
 
-// How many cards sit in each category: only counted for a category that exists.
+// How many cards sit in each category: only counted for a category that exists, and never a cake's card (it sits in «Cakes»).
 export function cardCounts(products: readonly Product[], categories: readonly Category[]): Map<string, number> {
   const known = new Set(categories.map(category => category.id));
   const counts = new Map<string, number>();
   for (const product of products) {
+    if (isCakeProductId(product.id)) continue;
     if (product.categoryId !== null && known.has(product.categoryId)) counts.set(product.categoryId, (counts.get(product.categoryId) ?? 0) + 1);
   }
   return counts;
@@ -69,20 +71,24 @@ export function categoryIdOf(product: Pick<Product, 'categoryId'>, categories: r
   return product.categoryId !== null && categories.some(category => category.id === product.categoryId) ? product.categoryId : null;
 }
 
-// One drawn group of the list. `id` null is «No category».
+// The group every cake's card is drawn in, whatever category it may carry (his call, 21 Nov 2026: a cake has no category of its own,
+// all cakes sit together). Not a category document: nothing is saved for it, and it cannot be renamed or removed.
+export const CAKES_GROUP_ID = '__cakes__';
+
+// One drawn group of the list. `id` null is «No category», CAKES_GROUP_ID is «Cakes».
 export interface Group<T> {
   readonly id: string | null;
   readonly name: string | null;
   readonly items: readonly T[];
 }
 
-// The rows split into groups: the categories in order, then «No category» last. A group with no rows is not drawn. With no
-// category at all the list is one plain group (id null) and the screen draws no header for it — see `grouped`. `rows` keep their
-// own order inside each group (the list's worst-first order).
+// The rows split into groups: the categories in order, then «Cakes» (every cake's card), then «No category» last. A group with no
+// rows is not drawn. With no category and no cake the list is one plain group (id null) and the screen draws no header for it — see
+// `grouped`. `rows` keep their own order inside each group (the list's worst-first order).
 export function groupRows<T extends { product: Product }>(rows: readonly T[], categories: readonly Category[]): Group<T>[] {
   const byId = new Map<string | null, T[]>();
   for (const row of rows) {
-    const id = categoryIdOf(row.product, categories);
+    const id = isCakeProductId(row.product.id) ? CAKES_GROUP_ID : categoryIdOf(row.product, categories);
     const bucket = byId.get(id);
     if (bucket) bucket.push(row); else byId.set(id, [row]);
   }
@@ -91,14 +97,16 @@ export function groupRows<T extends { product: Product }>(rows: readonly T[], ca
     const items = byId.get(category.id);
     if (items) groups.push({ id: category.id, name: category.name, items });
   }
+  const cakes = byId.get(CAKES_GROUP_ID);
+  if (cakes) groups.push({ id: CAKES_GROUP_ID, name: null, items: cakes });
   const rest = byId.get(null);
   if (rest) groups.push({ id: null, name: null, items: rest });
   return groups;
 }
 
-// Whether the list is drawn in groups at all: only when the venue has at least one category.
-export function grouped(categories: readonly Category[]): boolean {
-  return categories.length > 0;
+// Whether the list is drawn in groups at all: only when the venue has at least one category, or at least one cake.
+export function grouped(categories: readonly Category[], products: readonly Pick<Product, 'id'>[] = []): boolean {
+  return categories.length > 0 || products.some(product => isCakeProductId(product.id));
 }
 
 // Which groups are open. All start CLOSED (the owner's ask); a search shows the matching cards with their groups open; the group of

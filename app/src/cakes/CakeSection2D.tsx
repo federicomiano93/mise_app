@@ -109,7 +109,9 @@ export function CakeSection2D({ geometry, selected, tier: shownTier, onSelect, l
     const hasLayers = cards('filling').length > 0 && tier.discs > 1;
     const discPx = tier.discHeightCm * heightScale * DISC_SHARE;
     const layerPx = hasLayers ? tier.discHeightCm * heightScale * (1 - DISC_SHARE) : 0;
-    const top = y - (tier.discs * discPx + (tier.discs - 1) * layerPx);
+    // Without a filling the discs stand apart by an empty gap, so their number reads at a glance (as in the 3D view).
+    const spacePx = hasLayers ? layerPx : discPx * 0.25;
+    const top = y - (tier.discs * discPx + (tier.discs - 1) * spacePx);
     const key = (part: string, n = 0) => `${tier.index}-${part}-${n}`;
     const chosen = (part: CakePart) => (sameSelection(selected, tier.index, part) ? styles.chosen : '');
 
@@ -154,6 +156,8 @@ export function CakeSection2D({ geometry, selected, tier: shownTier, onSelect, l
         }
         lastLayerY = cursor - layerPx / 2;
         cursor -= layerPx;
+      } else if (disc < tier.discs - 1) {
+        cursor -= spacePx;
       }
     }
 
