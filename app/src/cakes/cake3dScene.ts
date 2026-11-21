@@ -15,13 +15,20 @@ import {
   BOARD_THICKNESS_CM, COATING_CM, CUT_ANGLE, TIER_BOARD_CM, CAMERA_FOV_DEG, appearedParts, homeView, partAnchors, pickedPart,
 } from './cake3dModel';
 import type { Anchor, CakeLayout, StageView, TierLayout } from './cake3dModel';
+import { FOOD, PLAIN_LOOK } from './cakeLook';
+import type { TierLook } from './cakeLook';
+import { curlGeometry, raspberryOffsets, rosetteGeometry } from './cakeDecor';
+import { createTextures, rng } from './cakeTextures';
+import type { SurfaceTextures } from './cakeTextures';
 
 export type Three = typeof import('./threeParts');
 
 // The colours of the scene, as CSS values read from the tokens (Cake3D reads them with getComputedStyle, never typed here).
 export interface SceneColours {
   base: string; soak: string; filling: string; coating: string; decoration: string; board: string;
-  accent: string; backdrop: string; ground: string;
+  accent: string; ground: string;
+  // The stage's radial backdrop, lighter in the middle (his choice, 21 Nov 2026: the tokens --cake-stage-center and --cake-stage-edge).
+  stageCenter: string; stageEdge: string;
   // The hover glow (a light surface colour).
   glow: string;
 }
@@ -38,7 +45,8 @@ export interface SceneHooks {
 }
 
 export interface CakeScene {
-  build: (layout: CakeLayout, view: StageView) => void;
+  // `looks`: what the names of the cards make each tier look like (cakeLook.ts), one per tier.
+  build: (layout: CakeLayout, view: StageView, looks: readonly TierLook[]) => void;
   setSelection: (selected: Selected | null) => void;
   resize: (width: number, height: number, share: number, centre: number) => void;
   goHome: () => void;
@@ -114,26 +122,54 @@ export function createCakeScene(lib: Three, canvas: HTMLCanvasElement, css: Scen
 function assemble(lib: Three, renderer: T.WebGLRenderer, canvas: HTMLCanvasElement, css: SceneColours, hooks: SceneHooks): CakeScene {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = lib.PCFSoftShadowMap;
+  renderer.shadowMap.type = lib.PCFShadowMap;
   renderer.toneMapping = lib.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.05;
+  renderer.toneMappingExposure = 0.92;
   renderer.outputColorSpace = lib.SRGBColorSpace;
 
+  // Asking a canvas what a CSS value means is not free: each colour is asked once.
+  const known = new Map<string, T.Color>();
   const colourOf = (value: string): T.Color => {
+    const found = known.get(value);
+    if (found) return found;
     const rgb = resolveCss(value);
     const colour = new lib.Color();
     if (rgb) colour.setRGB(rgb[0] / 255, rgb[1] / 255, rgb[2] / 255, lib.SRGBColorSpace);
     else colour.setRGB(0.8, 0.8, 0.8);
+    known.set(value, colour);
     return colour;
   };
   const palette = {
     base: colourOf(css.base), soak: colourOf(css.soak), filling: colourOf(css.filling), coating: colourOf(css.coating),
     decoration: colourOf(css.decoration), board: colourOf(css.board), accent: colourOf(css.accent),
-    backdrop: colourOf(css.backdrop), ground: colourOf(css.ground), glow: colourOf(css.glow),
+    ground: colourOf(css.ground), glow: colourOf(css.glow),
   };
 
   const scene = new lib.Scene();
-  scene.background = palette.backdrop;
+  // The backdrop: a soft radial gradient (lighter behind the cake, darker at the edges) painted on a small canvas from the two tokens.
+  const rgbOf = (value: string) => { const rgb = resolveCss(value); return rgb ? `rgb(${String(rgb[0])},${String(rgb[1])},${String(rgb[2])})` : 'rgb(200,200,200)'; };
+  const backdropCanvas = document.createElement('canvas');
+  backdropCanvas.width = 256;
+  backdropCanvas.height = 256;
+  const backdropContext = backdropCanvas.getContext('2d');
+  if (backdropContext) {
+    const gradient = backdropContext.createRadialGradient(128, 115, 15, 128, 128, 190);
+    gradient.addColorStop(0, rgbOf(css.stageCenter));
+    gradient.addColorStop(1, rgbOf(css.stageEdge));
+    backdropContext.fillStyle = gradient;
+    backdropContext.fillRect(0, 0, 256, 256);
+  }
+  const backdrop = new lib.CanvasTexture(backdropCanvas);
+  backdrop.colorSpace = lib.SRGBColorSpace;
+  scene.background = backdrop;
+  // The studio the glaze, the plate and the fruit reflect: made once into a small environment map, the room itself freed at once.
+  const pmrem = new lib.PMREMGenerator(renderer);
+  const room = new lib.RoomEnvironment();
+  const environment = pmrem.fromScene(room, 0.04);
+  room.dispose();
+  pmrem.dispose();
+  scene.environment = environment.texture;
+  scene.environmentIntensity = 0.5;
   const camera = new lib.PerspectiveCamera(CAMERA_FOV_DEG, 1, 1, 600);
   const controls = new lib.OrbitControls(camera, canvas);
   // ⚠️ ON A TOUCH SCREEN ONE FINGER SCROLLS THE PAGE (the editor is long), two fingers turn and zoom the cake: with ONE left unset the
@@ -146,9 +182,9 @@ function assemble(lib: Three, renderer: T.WebGLRenderer, canvas: HTMLCanvasEleme
   controls.minPolarAngle = 0.25;
   controls.maxPolarAngle = 1.4;
 
-  // The lights are white on purpose: they are light, not a colour of the design.
-  scene.add(new lib.HemisphereLight(0xffffff, palette.ground, 1.5));
-  const sun = new lib.DirectionalLight(0xffffff, 2.1);
+  // The lights are warm white on purpose: they are light, not a colour of the design. One small shadow map (1024).
+  scene.add(new lib.HemisphereLight(0xffffff, palette.ground, 0.45));
+  const sun = new lib.DirectionalLight(0xfff6ea, 1.9);
   sun.position.set(-26, 52, 34);
   sun.castShadow = true;
   sun.shadow.mapSize.set(1024, 1024);
@@ -157,11 +193,13 @@ function assemble(lib: Three, renderer: T.WebGLRenderer, canvas: HTMLCanvasEleme
   sun.shadow.normalBias = 0.03;
   Object.assign(sun.shadow.camera, { left: -34, right: 34, top: 34, bottom: -34, near: 1, far: 160 });
   scene.add(sun);
-  const ground = new lib.Mesh(new lib.CircleGeometry(220, 64), new lib.MeshStandardMaterial({ color: palette.ground, roughness: 1 }));
+  // The ground shows only the cake's soft shadow, so the backdrop stays what it is.
+  const ground = new lib.Mesh(new lib.CircleGeometry(220, 64), new lib.ShadowMaterial({ opacity: 0.32 }));
   ground.rotation.x = -Math.PI / 2;
   ground.position.y = -BOARD_THICKNESS_CM - 0.01;
   ground.receiveShadow = true;
   scene.add(ground);
+  const textures = createTextures(lib);
 
   // ── The cake ──────────────────────────────────────────────────────────────
   let cake: T.Group | null = null;
@@ -178,6 +216,17 @@ function assemble(lib: Three, renderer: T.WebGLRenderer, canvas: HTMLCanvasEleme
 
   const material = (colour: T.Color, extra: T.MeshStandardMaterialParameters = {}) =>
     new lib.MeshStandardMaterial({ color: colour, roughness: 0.8, side: lib.DoubleSide, ...extra });
+  // The two faces of a slab of cake: its side, and its top, bottom and cut faces.
+  interface Surface { side: T.MeshStandardMaterial; face: T.MeshStandardMaterial }
+  const flat = (mat: T.MeshStandardMaterial): Surface => ({ side: mat, face: mat });
+  // ⚠️ Every texture is `map` (colour) and `bumpMap` (relief) of the same painting; the sponge's pores and the cream's strokes are read as relief.
+  const textured = (face: SurfaceTextures, side: SurfaceTextures, bumpScale: number, roughness: number, glossy = false): Surface => {
+    const make = (set: SurfaceTextures): T.MeshStandardMaterial => (glossy
+      ? new lib.MeshPhysicalMaterial({ map: set.map, bumpMap: set.bump, bumpScale, roughness, clearcoat: 0.4, side: lib.DoubleSide })
+      : new lib.MeshStandardMaterial({ map: set.map, bumpMap: set.bump, bumpScale, roughness, side: lib.DoubleSide }));
+    return { face: make(face), side: make(side) };
+  };
+  const clamp = (n: number, low: number, high: number) => Math.min(high, Math.max(low, n));
 
   function disposeCake() {
     if (!cake) return;
@@ -186,6 +235,8 @@ function assemble(lib: Three, renderer: T.WebGLRenderer, canvas: HTMLCanvasEleme
     cake.traverse(object => {
       const mesh = object as T.Mesh;
       if (!mesh.isMesh) return;
+      // An instanced mesh also holds its own buffers (every instance's matrix and colour).
+      if ((mesh as unknown as T.InstancedMesh).isInstancedMesh) (mesh as unknown as T.InstancedMesh).dispose();
       if (!done.has(mesh.geometry)) { done.add(mesh.geometry); mesh.geometry.dispose(); }
       for (const m of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
         if (!done.has(m)) { done.add(m); m.dispose(); }
@@ -198,7 +249,7 @@ function assemble(lib: Three, renderer: T.WebGLRenderer, canvas: HTMLCanvasEleme
     tweens = [];
   }
 
-  function build(layout: CakeLayout, view: StageView) {
+  function build(layout: CakeLayout, view: StageView, looks: readonly TierLook[]) {
     disposeCake();
     layoutNow = layout;
     viewNow = view;
@@ -210,28 +261,42 @@ function assemble(lib: Three, renderer: T.WebGLRenderer, canvas: HTMLCanvasEleme
     const start = half;
     const length = Math.PI * 2 - 2 * half;
     const dirAt = (angle: number) => new lib.Vector3(Math.sin(angle), 0, Math.cos(angle));
+    // A point of the floor plan that the cut-away took out (a little margin for what has a width).
+    const inWedge = (x: number, z: number, margin = 0.12) => !whole && Math.abs(Math.atan2(x, z)) < half + margin;
 
     const track = (mat: T.MeshStandardMaterial, tag: Tag) => {
       const list = materialsOf.get(tagKey(tag)) ?? [];
-      list.push(mat);
+      if (!list.includes(mat)) list.push(mat);
       materialsOf.set(tagKey(tag), list);
+    };
+    const trackSurface = (surface: Surface, tag: Tag | null) => {
+      if (!tag) return;
+      track(surface.side, tag);
+      track(surface.face, tag);
     };
     // Every mesh made while a tier is being drawn is remembered for that tier, and for the piece being drawn (see `record`).
     let currentTier = -1;
     let collecting: T.Object3D[] | null = null;
     const tierMeshes = new Map<number, T.Object3D[]>();
-    const mesh = (geometry: T.BufferGeometry, mat: T.Material | T.Material[], tag: Tag | null): T.Mesh => {
-      const m = new lib.Mesh(geometry, mat);
-      m.castShadow = true;
-      m.receiveShadow = true;
-      if (tag) m.userData = { tier: tag.tier, part: tag.part };
+    // ⚠️ NOTHING THAT AN INTRO MOVES HAS A SCALE OF ITS OWN (settleAll puts every scale back to 1): a flattened drip, a leaf, a scaled
+    // rosette have their scale baked into their geometry.
+    const register = <O extends T.Object3D>(object: O, tag: Tag | null): O => {
+      object.castShadow = true;
+      object.receiveShadow = true;
+      if (tag) object.userData = { tier: tag.tier, part: tag.part };
       if (currentTier >= 0) {
         const list = tierMeshes.get(currentTier) ?? [];
-        list.push(m);
+        list.push(object);
         tierMeshes.set(currentTier, list);
       }
-      collecting?.push(m);
-      return m;
+      collecting?.push(object);
+      return object;
+    };
+    const mesh = (geometry: T.BufferGeometry, mat: T.Material | T.Material[], tag: Tag | null): T.Mesh => register(new lib.Mesh(geometry, mat), tag);
+    const place = <O extends T.Object3D>(object: O, x: number, y: number, z: number): O => {
+      object.position.set(x, y, z);
+      group.add(object);
+      return object;
     };
     // One piece of a part: whatever `make` adds to the cake, kept together with where it stands (positions are final when it returns).
     const record = (tag: Tag, role: Role, bottom: number, make: () => void): Unit => {
@@ -256,103 +321,334 @@ function assemble(lib: Three, renderer: T.WebGLRenderer, canvas: HTMLCanvasEleme
         group.add(face);
       }
     };
-    const slab = (radius: number, height: number, y: number, mat: T.MeshStandardMaterial, tag: Tag | null) => {
-      if (tag) track(mat, tag);
-      const cylinder = mesh(new lib.CylinderGeometry(radius, radius, height, SEGMENTS, 1, false, start, length), mat, tag);
+    const slab = (radius: number, height: number, y: number, surface: Surface, tag: Tag | null) => {
+      trackSurface(surface, tag);
+      const cylinder = mesh(new lib.CylinderGeometry(radius, radius, height, SEGMENTS, 1, false, start, length), [surface.side, surface.face, surface.face], tag);
       cylinder.position.y = y;
       group.add(cylinder);
-      cutFaces(0, radius, height, y, mat, tag);
+      cutFaces(0, radius, height, y, surface.face, tag);
     };
 
-    // The board under everything, and the boards that carry the tiers above the bottom one.
+    // The plate under everything: a lathe with a raised rim, its top at y = 0 (the mockup's profile, fitted to the board's radius). It carries
+    // no part: tapping it picks nothing. The boards that carry the tiers above the bottom one stay plain.
     const boardMat = material(palette.board, { roughness: 0.4 });
-    const underBoard = mesh(new lib.CylinderGeometry(layout.boardRadius, layout.boardRadius, BOARD_THICKNESS_CM, SEGMENTS), boardMat, null);
-    underBoard.position.y = -BOARD_THICKNESS_CM / 2;
-    group.add(underBoard);
+    const plate = new lib.MeshPhysicalMaterial({ color: palette.board, roughness: 0.25, clearcoat: 0.6, side: lib.DoubleSide });
+    const fit = layout.boardRadius / 15.75;
+    const lift = BOARD_THICKNESS_CM / 0.45;
+    const profile = ([[0.01, 0], [13.2, 0], [14.6, 0.18], [15.6, 0.55], [15.75, 0.62], [15.55, 0.66], [14.4, 0.42], [13, 0.45], [0.01, 0.45]] as const)
+      .map(([x, y]) => new lib.Vector2(x * fit, (y - 0.45) * lift));
+    group.add(mesh(new lib.LatheGeometry(profile, SEGMENTS), plate, null));
 
     const decorationGeometry = new lib.SphereGeometry(0.6, 24, 16);
     decorationGeometry.scale(1, 0.85, 1);
     for (const tier of layout.tiers) {
       currentTier = tier.index;
+      const look = looks[tier.index] ?? PLAIN_LOOK;
       const first = tier.index === 0;
       if (!first) {
         // Cut like the tiers are, or it would hide what the cut shows of the tier below.
-        slab(tier.radius + tier.coatingCm + 0.25, TIER_BOARD_CM, tier.yBase - TIER_BOARD_CM / 2, boardMat, null);
+        slab(tier.radius + tier.coatingCm + 0.25, TIER_BOARD_CM, tier.yBase - TIER_BOARD_CM / 2, flat(boardMat), null);
       }
-      const kinds = {
-        base: material(palette.base, tier.hasBase ? { roughness: 0.95 } : { roughness: 0.95, transparent: true, opacity: GHOST_OPACITY, depthWrite: false }),
-        soak: material(palette.soak, { roughness: 0.9 }),
-        filling: material(palette.filling, { roughness: 0.6 }),
+      // The surfaces of the parts, made when the first layer of that kind asks (a texture is painted only for what is on the cake).
+      const surfaces: Partial<Record<'base' | 'soak' | 'filling', Surface>> = {};
+      const surfaceOf = (kind: 'base' | 'soak' | 'filling'): Surface => {
+        const found = surfaces[kind];
+        if (found) return found;
+        let made: Surface;
+        if (kind === 'base') {
+          // A base with no card is faint, flat and untextured.
+          const colour = look.base.colour ?? css.base;
+          made = tier.hasBase
+            ? textured(textures.sponge(colour), textures.sponge(colour, 6, 1), 1.6, 0.95)
+            : flat(material(palette.base, { roughness: 0.95, transparent: true, opacity: GHOST_OPACITY, depthWrite: false }));
+        } else if (kind === 'soak') {
+          const colour = look.soak.colour ?? css.soak;
+          made = textured(textures.sponge(colour), textures.sponge(colour, 6, 1), 1, 0.9);
+        } else {
+          const colour = look.filling.colour ?? css.filling;
+          const { glossy, specks } = look.filling;
+          made = textured(textures.cream(colour, specks), textures.cream(colour, specks, 3, 1), 0.4, glossy ? 0.3 : 0.6, glossy);
+        }
+        surfaces[kind] = made;
+        return made;
       };
-      for (const kind of ['base', 'soak', 'filling'] as const) track(kinds[kind], { tier: tier.index, part: kind });
       for (const layer of tier.layers) {
         const radius = layer.kind === 'filling' ? tier.radius + 0.04 : tier.radius;
         const tag = { tier: tier.index, part: layer.kind };
-        const piece = record(tag, 'layer', tier.yBase + layer.y0, () => { slab(radius, layer.h, tier.yBase + layer.y0 + layer.h / 2, kinds[layer.kind], tag); });
+        const piece = record(tag, 'layer', tier.yBase + layer.y0, () => { slab(radius, layer.h, tier.yBase + layer.y0 + layer.h / 2, surfaceOf(layer.kind), tag); });
         // A faint disc throws no shadow: the shadow would say it is there.
         if (layer.kind === 'base' && !tier.hasBase) for (const object of piece.objects) object.castShadow = false;
       }
-      if (tier.hasCoating) {
-        const tag = { tier: tier.index, part: 'coating' as const };
-        const mat = material(palette.coating, { roughness: 0.75 });
-        track(mat, tag);
-        const outer = tier.radius + tier.coatingCm;
-        const yMid = tier.yBase + tier.stackHeight / 2;
-        record(tag, 'skin', tier.yBase, () => {
-          const skin = mesh(new lib.CylinderGeometry(outer, outer, tier.stackHeight, SEGMENTS, 1, true, start, length), mat, tag);
-          skin.position.y = yMid;
-          group.add(skin);
-          cutFaces(tier.radius, outer, tier.stackHeight, yMid, mat, tag);
-        });
-        record(tag, 'top', tier.yBase + tier.stackHeight, () => {
-          slab(outer, COATING_CM, tier.yBase + tier.stackHeight + COATING_CM / 2, mat, tag);
-        });
-      }
-      if (tier.hasDecoration) addDecoration(tier);
+      if (tier.hasCoating) addCoating(tier, look);
+      if (tier.hasDecoration) addDecoration(tier, look);
     }
 
-    function addDecoration(tier: TierLayout) {
-      const tag = { tier: tier.index, part: 'decoration' as const };
-      const mat = material(palette.decoration, { roughness: 0.35 });
+    // The coating: a skin round the tiers, and the top with its rounded edge (a matte cream with spatula strokes, or a glossy glaze with drips).
+    function addCoating(tier: TierLayout, look: TierLook) {
+      const tag = { tier: tier.index, part: 'coating' as const };
+      const colour = look.coating.colour ?? css.coating;
+      const mat: T.MeshStandardMaterial = look.coating.glaze
+        ? new lib.MeshPhysicalMaterial({ color: colourOf(colour), roughness: 0.1, clearcoat: 1, clearcoatRoughness: 0.04, side: lib.DoubleSide })
+        : (() => {
+          const set = textures.coat(colour);
+          return new lib.MeshStandardMaterial({ map: set.map, bumpMap: set.bump, bumpScale: 2.2, roughness: 0.78, side: lib.DoubleSide });
+        })();
       track(mat, tag);
       const outer = tier.radius + tier.coatingCm;
-      // Under another tier the berries sit on the part of the top that tier leaves bare.
-      const ring = tier.upperEdge === null ? outer * 0.78 : (tier.upperEdge + outer) / 2;
-      const count = Math.max(5, Math.round((Math.PI * 2 * ring) / 1.6));
-      const skipped = (angle: number) => {
-        if (whole) return false;
-        const a = ((angle % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
-        return a < half + 0.12 || a > Math.PI * 2 - half - 0.12;
-      };
-      const berry = (x: number, z: number) => {
-        record(tag, 'berry', tier.yTop, () => {
-          const m = mesh(decorationGeometry, mat, tag);
-          m.position.set(x, tier.yTop + 0.42, z);
-          group.add(m);
+      const yMid = tier.yBase + tier.stackHeight / 2;
+      const yTop = tier.yTop;
+      const edge = Math.min(0.4, tier.coatingCm * 0.8);
+      record(tag, 'skin', tier.yBase, () => {
+        const wall = [new lib.Vector2(outer, tier.yBase), new lib.Vector2(outer, yTop - edge)];
+        place(mesh(new lib.LatheGeometry(wall, SEGMENTS, start, length), mat, tag), 0, 0, 0);
+        cutFaces(tier.radius, outer, tier.stackHeight, yMid, mat, tag);
+      });
+      record(tag, 'top', tier.yBase + tier.stackHeight, () => {
+        const lid = [new lib.Vector2(0.001, yTop), new lib.Vector2(outer - edge, yTop)];
+        for (let i = 1; i <= 8; i += 1) {
+          const angle = (i / 8) * (Math.PI / 2);
+          lid.push(new lib.Vector2(outer - edge + Math.sin(angle) * edge, yTop - edge + Math.cos(angle) * edge));
+        }
+        place(mesh(new lib.LatheGeometry(lid, SEGMENTS, start, length), mat, tag), 0, 0, 0);
+        cutFaces(0, outer, tier.coatingCm, tier.yBase + tier.stackHeight + tier.coatingCm / 2, mat, tag);
+        if (!look.coating.glaze) return;
+        // Glaze drips down the side: a few lengths shared by all of them, flattened against the wall (the flattening is in the geometry).
+        const random = rng(11 + tier.index);
+        const lengths = [0.6, 1.2, 1.9, 2.6, 3.2].map(drop => {
+          const geometry = new lib.CapsuleGeometry(0.3, drop, 4, 10);
+          geometry.scale(1.25, 1, 0.5);
+          return { geometry, drop };
         });
+        const count = clamp(Math.round((Math.PI * 2 * outer) / 2.4), 8, 40);
+        for (let k = 0; k < count; k += 1) {
+          const angle = (k / count) * Math.PI * 2 + (random() - 0.5) * 0.12;
+          const x = Math.sin(angle) * (outer - 0.03);
+          const z = Math.cos(angle) * (outer - 0.03);
+          if (inWedge(x, z, 0.08)) continue;
+          const pick = lengths[Math.floor(random() * lengths.length)];
+          if (!pick) continue;
+          const drip = mesh(pick.geometry, mat, tag);
+          drip.rotation.y = angle;
+          place(drip, x, yTop - 0.45 - pick.drop / 2, z);
+        }
+      });
+    }
+
+    // What stands on top of a tier, by what the names say: piped rosettes (with raspberries on them), blueberries, mint, chocolate curls,
+    // grains, or — nothing recognised — the round pieces of before.
+    function addDecoration(tier: TierLayout, look: TierLook) {
+      const tag = { tier: tier.index, part: 'decoration' as const };
+      const kind = look.decoration.kind;
+      const outer = tier.radius + tier.coatingCm;
+      const top = tier.yTop;
+      const bare = tier.upperEdge === null;
+      const random = rng(42 + tier.index * 101);
+      // Where things may stand: the whole top (not its rim), or only the ring the tier above leaves bare.
+      const innerZone = tier.upperEdge === null ? 0 : tier.upperEdge + 0.4;
+      const outerZone = Math.max(innerZone + 0.5, outer - (bare ? 1.2 : 0.8));
+      const area = Math.PI * (outerZone ** 2 - innerZone ** 2);
+      const spot = (): [number, number] => {
+        const angle = random() * Math.PI * 2;
+        const d = Math.sqrt(innerZone ** 2 + random() * (outerZone ** 2 - innerZone ** 2));
+        return [Math.sin(angle) * d, Math.cos(angle) * d];
       };
-      for (let i = 0; i < count; i += 1) {
-        const angle = (i / count) * Math.PI * 2;
-        if (skipped(angle)) continue;
-        const p = dirAt(angle).multiplyScalar(ring);
-        berry(p.x, p.z);
+      const own = (mat: T.MeshStandardMaterial) => { track(mat, tag); return mat; };
+
+      if (kind === 'plain') {
+        const mat = own(material(colourOf(look.decoration.colour ?? css.decoration), { roughness: 0.35 }));
+        // Under another tier the pieces sit on the part of the top that tier leaves bare.
+        const ring = tier.upperEdge === null ? outer * 0.78 : (tier.upperEdge + outer) / 2;
+        const count = Math.max(5, Math.round((Math.PI * 2 * ring) / 1.6));
+        const piece = (x: number, z: number) => {
+          record(tag, 'berry', tier.yTop, () => { place(mesh(decorationGeometry, mat, tag), x, tier.yTop + 0.42, z); });
+        };
+        for (let i = 0; i < count; i += 1) {
+          const p = dirAt((i / count) * Math.PI * 2).multiplyScalar(ring);
+          if (inWedge(p.x, p.z)) continue;
+          piece(p.x, p.z);
+        }
+        // A second, smaller ring on a broad tier, and one in the middle.
+        if (tier.upperEdge === null && tier.radius > 8) {
+          const inner = ring * 0.5;
+          const n = Math.max(4, Math.round((Math.PI * 2 * inner) / 1.8));
+          for (let i = 0; i < n; i += 1) {
+            const p = dirAt(((i + 0.5) / n) * Math.PI * 2).multiplyScalar(inner);
+            if (inWedge(p.x, p.z)) continue;
+            piece(p.x, p.z);
+          }
+        }
+        if (tier.upperEdge === null) piece(0, 0);
+        return;
       }
-      // A second, smaller ring on a broad tier, and one in the middle.
-      if (tier.upperEdge === null && tier.radius > 8) {
-        const inner = ring * 0.5;
-        const n = Math.max(4, Math.round((Math.PI * 2 * inner) / 1.8));
-        for (let i = 0; i < n; i += 1) {
-          const angle = ((i + 0.5) / n) * Math.PI * 2;
-          if (skipped(angle)) continue;
-          const p = dirAt(angle).multiplyScalar(inner);
-          berry(p.x, p.z);
+
+      const fruit = kind === 'berries' || kind === 'blueberries';
+      const red = fruit && kind === 'berries'
+        ? own(new lib.MeshPhysicalMaterial({ color: FOOD.raspberry, roughness: 0.38, clearcoat: 0.5, sheen: 0.4, sheenColor: new lib.Color(FOOD.raspberrySheen) }))
+        : null;
+      const blue = fruit
+        ? own(new lib.MeshPhysicalMaterial({ color: FOOD.blueberry, roughness: 0.55, sheen: 0.8, sheenColor: new lib.Color(FOOD.blueberrySheen) }))
+        : null;
+
+      // Piped rosettes round the edge (cream, meringue), and a raspberry on each when the fruit is raspberries.
+      if (kind === 'rosettes' || kind === 'berries') {
+        const ringRadius = tier.upperEdge === null ? Math.max(outer * 0.5, outer - 1.3) : (tier.upperEdge + outer) / 2;
+        const scale = tier.upperEdge === null ? 0.95 : Math.min(0.95, (outer - tier.upperEdge - 0.5) / 2.6);
+        if (scale >= 0.4) {
+          const geometry = rosetteGeometry(lib);
+          geometry.scale(scale, scale, scale);
+          const pipe = colourOf(kind === 'rosettes' ? (look.decoration.colour ?? FOOD.piping) : (look.coating.colour ?? FOOD.piping));
+          const mat = own(material(pipe, { roughness: 0.62 }));
+          const count = clamp(Math.round((Math.PI * 2 * ringRadius) / ((5.8 * scale) / 0.95)), 4, 18);
+          const offsets = red ? raspberryOffsets(lib, random) : [];
+          const drupelet = new lib.SphereGeometry(0.15, 8, 6);
+          const turn = new lib.Quaternion();
+          const euler = new lib.Euler();
+          const matrix = new lib.Matrix4();
+          const at = new lib.Vector3();
+          for (let k = 0; k < count; k += 1) {
+            const angle = (k / count) * Math.PI * 2 + 0.2;
+            const x = Math.sin(angle) * ringRadius;
+            const z = Math.cos(angle) * ringRadius;
+            if (inWedge(x, z, 0.25)) continue;
+            record(tag, 'berry', top, () => {
+              const rosette = mesh(geometry, mat, tag);
+              rosette.rotation.y = random() * 3;
+              place(rosette, x, top - 0.05, z);
+              if (!red) return;
+              turn.setFromEuler(euler.set(Math.PI + (random() - 0.5) * 0.6, random() * 6, (random() - 0.5) * 0.6));
+              const berry = register(new lib.InstancedMesh(drupelet, red, offsets.length), tag);
+              offsets.forEach((offset, i) => {
+                at.copy(offset).applyQuaternion(turn).multiplyScalar(scale / 0.95);
+                at.set(at.x + x, at.y + top + 2.05 * scale, at.z + z);
+                berry.setMatrixAt(i, matrix.makeTranslation(at.x, at.y, at.z));
+              });
+              berry.instanceMatrix.needsUpdate = true;
+              group.add(berry);
+            });
+          }
         }
       }
-      if (tier.upperEdge === null) berry(0, 0);
+
+      // Loose raspberries among them.
+      if (red) {
+        const offsets = raspberryOffsets(lib, random);
+        const drupelet = new lib.SphereGeometry(0.15, 8, 6);
+        const turn = new lib.Quaternion();
+        const euler = new lib.Euler();
+        const matrix = new lib.Matrix4();
+        const at = new lib.Vector3();
+        const n = clamp(Math.round(area * 0.03), 2, 9);
+        for (let i = 0; i < n; i += 1) {
+          const [x, z] = spot();
+          if (inWedge(x, z, 0.2)) continue;
+          const y = top + 0.5 + random() * 0.3;
+          record(tag, 'berry', top, () => {
+            turn.setFromEuler(euler.set(Math.PI + (random() - 0.5) * 0.6, random() * 6, (random() - 0.5) * 0.6));
+            const berry = register(new lib.InstancedMesh(drupelet, red, offsets.length), tag);
+            offsets.forEach((offset, k) => {
+              at.copy(offset).applyQuaternion(turn);
+              at.set(at.x + x, at.y + y, at.z + z);
+              berry.setMatrixAt(k, matrix.makeTranslation(at.x, at.y, at.z));
+            });
+            berry.instanceMatrix.needsUpdate = true;
+            group.add(berry);
+          });
+        }
+      }
+
+      // Blueberries, and mint leaves with the raspberries.
+      if (blue) {
+        const geometry = new lib.SphereGeometry(0.36, 16, 12);
+        geometry.scale(1, 0.86, 1);
+        const n = clamp(Math.round(area * (kind === 'blueberries' ? 0.35 : 0.2)), kind === 'blueberries' ? 8 : 4, kind === 'blueberries' ? 30 : 18);
+        for (let i = 0; i < n; i += 1) {
+          const [x, z] = spot();
+          if (inWedge(x, z, 0.1)) continue;
+          record(tag, 'berry', top, () => { place(mesh(geometry, blue, tag), x, top + 0.32 + random() * 0.3, z); });
+        }
+      }
+      if (red) {
+        const leaf = own(material(new lib.Color(FOOD.mint), { roughness: 0.5 }));
+        const geometry = new lib.SphereGeometry(0.55, 14, 8);
+        geometry.scale(1, 0.07, 0.45);
+        const reach = tier.upperEdge === null ? 1.2 : (innerZone + outerZone) / 2;
+        for (let i = 0; i < 3; i += 1) {
+          const angle = i * 2.1 + 0.4;
+          const x = Math.sin(angle) * reach;
+          const z = Math.cos(angle) * reach;
+          if (inWedge(x, z, 0.1)) continue;
+          record(tag, 'berry', top, () => {
+            const piece = mesh(geometry, leaf, tag);
+            piece.rotation.set(0.2, angle, 0.25);
+            place(piece, x, top + 0.75, z);
+          });
+        }
+      }
+
+      // Chocolate curls.
+      if (kind === 'curls') {
+        const base = colourOf(look.decoration.colour ?? css.decoration);
+        const dark = own(new lib.MeshPhysicalMaterial({ color: base, roughness: 0.45, clearcoat: 0.3 }));
+        const light = own(new lib.MeshPhysicalMaterial({ color: base.clone().lerp(new lib.Color(1, 1, 1), 0.3), roughness: 0.5 }));
+        const shapes = ([[1.7, 2.2], [2.2, 2.8], [2.7, 3.2], [3, 3.6]] as const).map(([long, turns]) => curlGeometry(lib, long, turns));
+        const n = clamp(Math.round(area * 0.12), 6, 36);
+        for (let i = 0; i < n; i += 1) {
+          const [x, z] = spot();
+          if (inWedge(x, z, 0.1)) continue;
+          const shape = shapes[Math.floor(random() * shapes.length)];
+          if (!shape) continue;
+          record(tag, 'berry', top, () => {
+            const curl = mesh(shape, i % 4 === 0 ? light : dark, tag);
+            curl.rotation.set((random() - 0.5) * 0.5, random() * Math.PI * 2, (random() - 0.5) * 0.4);
+            place(curl, x, top + 0.38 + random() * 0.35, z);
+          });
+        }
+      }
+
+      // Grains (pistachio, hazelnut): one instanced mesh, on top and down the lower side of the coating.
+      if (kind === 'grains') {
+        const base = colourOf(look.decoration.colour ?? css.decoration).clone().multiplyScalar(0.6);
+        const mat = own(material(new lib.Color(1, 1, 1), { roughness: 0.7 }));
+        const spots: Array<[number, number, number]> = [];
+        const onTop = clamp(Math.round(area * 0.9), 120, 900);
+        for (let i = 0; i < onTop; i += 1) { const [x, z] = spot(); spots.push([x, top + 0.06, z]); }
+        if (tier.hasCoating) {
+          const reach = Math.min(tier.stackHeight * 0.35, 4);
+          const onSide = clamp(Math.round(Math.PI * 2 * outer * reach * 4.5), 150, 1400);
+          for (let i = 0; i < onSide; i += 1) {
+            const angle = random() * Math.PI * 2;
+            spots.push([Math.sin(angle) * (outer + 0.05), tier.yBase + 0.15 + random() * reach, Math.cos(angle) * (outer + 0.05)]);
+          }
+        }
+        record(tag, 'berry', top, () => {
+          const grains = register(new lib.InstancedMesh(new lib.IcosahedronGeometry(0.1, 0), mat, spots.length), tag);
+          const matrix = new lib.Matrix4();
+          const turn = new lib.Quaternion();
+          const euler = new lib.Euler();
+          const size = new lib.Vector3();
+          const at = new lib.Vector3();
+          const colour = new lib.Color();
+          let n = 0;
+          for (const [x, y, z] of spots) {
+            if (inWedge(x, z, 0.08)) continue;
+            turn.setFromEuler(euler.set(random() * 6, random() * 6, random() * 6));
+            size.set(0.8 + random() * 1.4, 0.6 + random(), 0.8 + random() * 1.2);
+            grains.setMatrixAt(n, matrix.compose(at.set(x, y, z), turn, size));
+            colour.copy(base).offsetHSL((random() - 0.5) * 0.04, (random() - 0.5) * 0.2, (random() - 0.5) * 0.14);
+            grains.setColorAt(n, random() < 0.15 ? colour.multiplyScalar(0.7) : colour);
+            n += 1;
+          }
+          grains.count = n;
+          grains.instanceMatrix.needsUpdate = true;
+          if (grains.instanceColor) grains.instanceColor.needsUpdate = true;
+          group.add(grains);
+        });
+      }
     }
 
     for (const [index, list] of tierMeshes) tierUnits.set(index, { objects: list, ys: list.map(object => object.position.y), bottom: 0 });
     group.updateMatrixWorld(true);
+    textures.sweep();
     applyHighlights();
     requestRender();
   }
@@ -680,7 +976,11 @@ function assemble(lib: Three, renderer: T.WebGLRenderer, canvas: HTMLCanvasEleme
       const away = tmp.distanceTo(eye);
       // Hidden behind the cake from here: no label (the parts list still names it).
       raycaster.set(eye, tmp.clone().sub(eye).normalize());
-      const first = raycaster.intersectObject(cake, true).find(hit => (hit.object as T.Mesh).visible);
+      // A part never hides its own anchor (a drip, a berry or a grain in front of it must not make the label vanish).
+      const first = raycaster.intersectObject(cake, true).find(hit => {
+        const own = hit.object.userData as { tier?: number; part?: string };
+        return (hit.object as T.Mesh).visible && !(own.tier === tierIndex && own.part === part);
+      });
       if (first && first.distance < away - 0.45) continue;
       tmp.project(camera);
       if (tmp.z > 1) continue;
@@ -702,11 +1002,11 @@ function assemble(lib: Three, renderer: T.WebGLRenderer, canvas: HTMLCanvasEleme
 
   let builtTiers = 0;
   return {
-    build(layout, view) {
+    build(layout, view, looks) {
       const tiersChanged = builtTiers !== 0 && builtTiers !== layout.tiers.length;
       // Nothing plays for the scene's first build (opening a cake, a saved one).
       const before = layoutNow;
-      build(layout, view);
+      build(layout, view, looks);
       if (before !== null) startIntro(before, layout);
       builtTiers = layout.tiers.length;
       if (atHome) snapHome();
@@ -737,6 +1037,9 @@ function assemble(lib: Three, renderer: T.WebGLRenderer, canvas: HTMLCanvasEleme
       disposeCake();
       ground.geometry.dispose();
       (ground.material as T.Material).dispose();
+      textures.dispose();
+      backdrop.dispose();
+      environment.dispose();
       renderer.dispose();
       renderer.forceContextLoss();
     },

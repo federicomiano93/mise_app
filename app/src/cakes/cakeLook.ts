@@ -43,13 +43,14 @@ export const PLAIN_LOOK: TierLook = {
 interface Flavour { words: RegExp; colour: string; glossy: boolean; specks: boolean; decoration: DecorationKind }
 
 // ⚠️ THE ORDER IS THE PRIORITY: «cioccolato bianco» must meet the white entry before the chocolate one, «crema al pistacchio» the
-// pistachio before the cream. Words are matched on text already stripped of accents and lower-cased.
+// pistachio before the cream, «blueberry» the blueberries before the general «berries». No look-behind in a pattern: Safari 16.0 to 16.3
+// refuses to even parse one. Words are matched on text already stripped of accents and lower-cased.
 const FLAVOURS: readonly Flavour[] = [
   { words: /white\s+choc|cioccolat\w*\s+bianc|bianc\w*\s+cioccolat/, colour: '#f1e8d2', glossy: true, specks: false, decoration: 'curls' },
   { words: /cioccolat|cacao|ganache|fondent|chocolate|cocoa/, colour: '#3a1d12', glossy: true, specks: false, decoration: 'curls' },
   { words: /pistacchi|pistachio/, colour: '#b6c277', glossy: false, specks: false, decoration: 'grains' },
-  { words: /fragol|lampon|frutti di bosco|frutti rossi|bosco|strawberr|raspberr|(?<!blue)berr(?:y|ies)/, colour: '#d9566e', glossy: false, specks: false, decoration: 'berries' },
   { words: /mirtill|blueberr/, colour: '#4a5a96', glossy: false, specks: false, decoration: 'blueberries' },
+  { words: /fragol|lampon|frutti di bosco|frutti rossi|bosco|strawberr|raspberr|berr(?:y|ies)/, colour: '#d9566e', glossy: false, specks: false, decoration: 'berries' },
   { words: /limon|lemon/, colour: '#f4e58a', glossy: false, specks: false, decoration: 'plain' },
   { words: /caff|coffee|espresso|tiramis|\bmoka\b/, colour: '#9b6b45', glossy: false, specks: false, decoration: 'plain' },
   { words: /nocciol|hazelnut|gianduia/, colour: '#b98456', glossy: false, specks: false, decoration: 'grains' },
@@ -138,3 +139,14 @@ export function cakeLooks(geometry: CakeGeometry, cardName: (productId: string) 
 export function looksKey(looks: readonly TierLook[]): string {
   return JSON.stringify(looks);
 }
+
+// The colours of the food the scene draws with its own materials (a raspberry is red whatever the recipe is called), kept with the other
+// colours of food in this file. Piped cream stands for «no coating colour known».
+export const FOOD = {
+  piping: '#f6eedd',
+  raspberry: 0xa8102f,
+  raspberrySheen: 0xff8899,
+  blueberry: 0x29355f,
+  blueberrySheen: 0x9fb2d9,
+  mint: 0x3f8a3a,
+} as const;

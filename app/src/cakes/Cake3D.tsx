@@ -8,6 +8,7 @@ import {
   cakeLayout, cakeShare, labelBoxFor, leaderPath, placeLabels, sceneSignature, tapAction, webglAvailable,
 } from './cake3dModel';
 import type { PlacedLabel, StageFailure, StageView } from './cake3dModel';
+import { cakeLooks, looksKey } from './cakeLook';
 import { createCakeScene } from './cake3dScene';
 import type { CakeScene, SceneColours, Three } from './cake3dScene';
 import { RovingRadios } from './RovingRadios';
@@ -27,7 +28,8 @@ function readColours(host: HTMLElement): SceneColours {
   return {
     base: read('--cake-base'), soak: read('--cake-soak'), filling: read('--cake-filling'), coating: read('--cake-coating'),
     decoration: read('--cake-decoration'), board: read('--cake-board'),
-    accent: read('--accent'), backdrop: read('--sunken'), ground: read('--line'), glow: read('--surface'),
+    accent: read('--accent'), ground: read('--line'), glow: read('--surface'),
+    stageCenter: read('--cake-stage-center'), stageEdge: read('--cake-stage-edge'),
   };
 }
 
@@ -55,11 +57,13 @@ export default function Cake3D({ geometry, selected, tier, onSelect, labels, onO
   const layout = useMemo(() => cakeLayout(geometry), [geometry]);
   // ⚠️ THE SCENE IS REBUILT ONLY WHEN ITS SHAPE CHANGES (diameters, discs, which parts have cards, cut-away or whole): grams and names
   // change the labels' words, which React redraws by itself, and never the meshes.
-  const signature = sceneSignature(layout, view);
+  // ⚠️ THE LOOK FOLLOWS THE RECIPES' NAMES: a card renamed to something that looks different repaints the cake; the grams never do.
+  const looks = cakeLooks(geometry, labels.cardName);
+  const signature = sceneSignature(layout, view, looksKey(looks));
 
   // What the scene's callbacks (made once) must see now.
-  const latest = useRef({ selected, tier, onSelect, onOpenPart, onUnavailable, layout, size });
-  useLayoutEffect(() => { latest.current = { selected, tier, onSelect, onOpenPart, onUnavailable, layout, size }; });
+  const latest = useRef({ selected, tier, onSelect, onOpenPart, onUnavailable, layout, looks, size });
+  useLayoutEffect(() => { latest.current = { selected, tier, onSelect, onOpenPart, onUnavailable, layout, looks, size }; });
 
   const act = useCallback((picked: Selected | null) => {
     const { selected: current, onSelect: select, onOpenPart: open } = latest.current;
@@ -147,7 +151,7 @@ export default function Cake3D({ geometry, selected, tier, onSelect, labels, onO
 
   useEffect(() => {
     if (!ready) return;
-    sceneRef.current?.build(latest.current.layout, view);
+    sceneRef.current?.build(latest.current.layout, view, latest.current.looks);
     refreshLabels();
     // Keyed on the signature (the shape), not on the layout object, which is new at every keystroke.
   }, [ready, signature, view, refreshLabels]);

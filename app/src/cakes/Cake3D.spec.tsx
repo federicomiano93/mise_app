@@ -110,6 +110,22 @@ describe('what rebuilds the scene', () => {
   });
 });
 
+describe('what repaints the scene', () => {
+  it('hands the scene the looks the names give, and rebuilds when a recipe looks different, not when it only reads differently', async () => {
+    const view = render(<Cake3D {...props()} />);
+    await settled();
+    await waitFor(() => { expect(lastScene().build).toHaveBeenCalledTimes(1); });
+    expect(lastScene().build).toHaveBeenLastCalledWith(expect.anything(), 'cut', [expect.objectContaining({ base: { colour: '#ecca8a' } })]);
+    // «Genoise» is the same golden sponge: nothing to repaint.
+    view.rerender(<Cake3D {...props({ labels: { ...LABELS, cardName: () => 'Genoise' } })} />);
+    expect(lastScene().build).toHaveBeenCalledTimes(1);
+    // A cocoa sponge is another colour.
+    view.rerender(<Cake3D {...props({ labels: { ...LABELS, cardName: () => 'Pan di Spagna al cacao' } })} />);
+    await waitFor(() => { expect(lastScene().build).toHaveBeenCalledTimes(2); });
+    expect(lastScene().build).toHaveBeenLastCalledWith(expect.anything(), 'cut', [expect.objectContaining({ base: { colour: '#7a4c30' } })]);
+  });
+});
+
 describe('the R key', () => {
   const withOutside = () => render(<div><input aria-label="outside" /><Cake3D {...props()} /></div>);
 
@@ -152,7 +168,7 @@ describe('the cut-away | whole switch from the keyboard', () => {
     await user.keyboard('{ArrowRight}');
     expect(screen.getByRole('radio', { name: 'Whole' })).toHaveAttribute('aria-checked', 'true');
     expect(screen.getByRole('radio', { name: 'Whole' })).toHaveFocus();
-    await waitFor(() => { expect(lastScene().build).toHaveBeenLastCalledWith(expect.anything(), 'whole'); });
+    await waitFor(() => { expect(lastScene().build).toHaveBeenLastCalledWith(expect.anything(), 'whole', expect.anything()); });
   });
 });
 

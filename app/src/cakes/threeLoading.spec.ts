@@ -44,6 +44,7 @@ describe('three.js stays out of the app’s own code', () => {
     const parts = readFileSync(PARTS_FILE, 'utf8');
     expect(parts).toMatch(/from 'three'/);
     expect(parts).toMatch(/from 'three\/addons\/controls\/OrbitControls\.js'/);
+    expect(parts).toMatch(/from 'three\/addons\/environments\/RoomEnvironment\.js'/);
     // Never the whole library by a star.
     expect(parts).not.toMatch(/export\s*\*/);
     const staticImport = /(?:^|\n)\s*(?:import(?!\s+type\b)|export(?!\s+type\b))\b[^;]*?\bfrom\s*['"][^'"]*threeParts['"]/;
