@@ -311,7 +311,7 @@ function RecipesLayout({ view }: { view: ShownView }) {
       // ⚠️ THE GEAR EXISTS ONLY FOR WHOEVER RUNS THE PLACE (owner or manager): a screen of switches that an employee could not save would be
       // worse than no screen. The address is checked again by the section, and the rules are the real guard. `null` keeps the title row
       // one white band either way.
-      band={canManage ? <SettingsGear ref={gearNode} aria-current={view.kind === 'settings' ? 'true' : undefined} onPress={openSettings} /> : null}
+      band={canManage && (split || view.kind === 'list') ? <SettingsGear ref={gearNode} aria-current={view.kind === 'settings' ? 'true' : undefined} onPress={openSettings} /> : null}
       >
         {/* A mix left unfinished is offered back once per opening, when the list is what is on screen. */}
         {view.kind === 'list' ? <ResumeOffer /> : null}

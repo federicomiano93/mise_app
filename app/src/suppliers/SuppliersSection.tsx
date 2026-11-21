@@ -203,8 +203,8 @@ function SuppliersLayout({ view }: { view: ShownView }) {
   const openSettings = () => {
     if (view.kind === 'settings') return;
     handBack.expect(SETTINGS_OPENER);
-    // The list is hidden behind Settings at every width, so its place is written down whatever the width.
-    listTop.current = scrollArea()?.scrollTop ?? null;
+    // Written down only from the list: from a detail the list's place was noted when that detail opened.
+    if (view.kind === 'list') listTop.current = scrollArea()?.scrollTop ?? null;
     if (split && view.kind !== 'list') {
       void navigate(SUPPLIERS_SETTINGS_PATH, { replace: true, state: cameFromList(state) ? FROM_LIST : KEEP_FOCUS });
     } else {
@@ -269,7 +269,7 @@ function SuppliersLayout({ view }: { view: ShownView }) {
       // ⚠️ THE GEAR EXISTS ONLY FOR WHOEVER RUNS THE PLACE (owner or manager): a screen of switches that an employee could not save would be
       // worse than no screen. The address is checked again by the section, and the rules are the real guard. `null` keeps the title row
       // one white band either way.
-      band={canManage ? <SettingsGear ref={gearNode} aria-current={view.kind === 'settings' ? 'true' : undefined} onPress={openSettings} /> : null}
+      band={canManage && (split || view.kind === 'list') ? <SettingsGear ref={gearNode} aria-current={view.kind === 'settings' ? 'true' : undefined} onPress={openSettings} /> : null}
       >
         <div className={styles.layout} data-view={view.kind === 'list' ? 'list' : isWide(view.kind) ? 'wide' : 'detail'}>
           <div className={styles.list}>

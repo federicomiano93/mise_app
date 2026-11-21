@@ -36,3 +36,16 @@ describe('who sees the gear', () => {
     expect(screen.queryByRole('button', { name: 'Settings' })).not.toBeInTheDocument();
   });
 });
+
+// On a phone a detail fills the page and has its own Back: the gear is the LIST's. On the split it stays on every view.
+describe('the gear on a phone (below the split)', () => {
+  it.each([
+    ['/recipes/settings', 'Recipes'],
+    ['/suppliers/settings', 'Ingredients & suppliers'],
+  ])('is not drawn on the Settings view %s', async (path, title) => {
+    renderApp(path);
+    await screen.findByRole('heading', { level: 1, name: title }, LOAD);
+    await screen.findByRole('button', { name: 'Back' }, LOAD);
+    expect(screen.queryByRole('button', { name: 'Settings' })).not.toBeInTheDocument();
+  });
+});
