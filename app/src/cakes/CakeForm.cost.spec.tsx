@@ -3,7 +3,7 @@ import { screen, waitFor, within } from '@testing-library/react';
 import { fakeCakesSource } from '../testing/fakeCakesSource';
 import { fakeFoodcostSource } from '../testing/fakeFoodcostSource';
 import { REFERENCE, SPONGE, cakeDoc, incompleteCake, renderCakes, storedReference } from '../testing/renderCakes';
-import { EMPLOYEE, FLOUR, FLOUR_PRICES, LOAD } from '../testing/renderFoodcost';
+import { EMPLOYEE, FLOUR, FLOUR_PRICES, LOAD, product } from '../testing/renderFoodcost';
 
 // A cake's measures, and what it costs and sells for: the steppers and their limits, the materials, the labour (only for somebody who
 // can read the labour rate), the slice, the price with its VAT and target, the food cost with its light, and the suggested price.
@@ -75,11 +75,44 @@ describe('the cost', () => {
   });
 
   it('a card with no price makes the cost «incomplete»: «?», «+?», and the card named', async () => {
-    await open(incompleteCake('c1', 'Cassata'));
+    const unpriced = product('MARZIPAN', {
+      name: 'Marzipan', kind: 'semi', model: 4, sellingMode: null, sellingPrice: null, vatRate: null, piecesPerBatch: null,
+      components: [{ kind: 'ingredient', ingredientId: 'nothing', qty: 1000, unit: 'g' }],
+    });
+    const cake = cakeDoc('c1', 'Cassata', { lines: [{ tier: 0, part: 'base', productId: 'MARZIPAN', grams: 500 }] });
+    await open(cake, { foodcost: fakeFoodcostSource({ products: [SPONGE, unpriced], ingredients: [FLOUR], prices: FLOUR_PRICES }) });
     const cost = within(card('Cost and price'));
     expect(cost.getByText('?')).toBeInTheDocument();
-    expect(cost.getByText(/^Cost incomplete: .* has no price yet on its Food cost card\. The real cost is higher\.$/)).toBeInTheDocument();
+    expect(cost.getByText('Cost incomplete: Marzipan has no price yet on its Food cost card. The real cost is higher.')).toBeInTheDocument();
+    expect(cost.queryByText(/no longer exist/)).not.toBeInTheDocument();
     expect(cost.queryByText(/^d+(.d+)?%$/)).not.toBeInTheDocument();
+  });
+
+  it('a card that no longer exists in Food cost is NOT «without a price»: it has its own line, and the row says so', async () => {
+    await open(incompleteCake('c1', 'Cassata'));
+    const cost = within(card('Cost and price'));
+    expect(cost.getByText('1 card of this cake no longer exists in Food cost: remove it from the part.')).toBeInTheDocument();
+    expect(cost.queryByText(/Cost incomplete/)).not.toBeInTheDocument();
+    expect(cost.queryByText(/This card no longer exists/)).not.toBeInTheDocument();
+    expect(within(card(/^Parts of the cake/)).getByText('This card no longer exists')).toBeInTheDocument();
+  });
+
+  it('says «cards … exist» in the plural, and both lines when a card has no price and another is gone', async () => {
+    const unpriced = product('MARZIPAN', {
+      name: 'Marzipan', kind: 'semi', model: 4, sellingMode: null, sellingPrice: null, vatRate: null, piecesPerBatch: null,
+      components: [{ kind: 'ingredient', ingredientId: 'nothing', qty: 1000, unit: 'g' }],
+    });
+    const cake = cakeDoc('c1', 'Cassata', {
+      lines: [
+        { tier: 0, part: 'base', productId: 'MARZIPAN', grams: 500 },
+        { tier: 0, part: 'filling', productId: 'GHOST', grams: 500 },
+        { tier: 0, part: 'soak', productId: 'GHOST2', grams: 500 },
+      ],
+    });
+    await open(cake, { foodcost: fakeFoodcostSource({ products: [SPONGE, unpriced], ingredients: [FLOUR], prices: FLOUR_PRICES }) });
+    const cost = within(card('Cost and price'));
+    expect(cost.getByText('Cost incomplete: Marzipan has no price yet on its Food cost card. The real cost is higher.')).toBeInTheDocument();
+    expect(cost.getByText('2 cards of this cake no longer exist in Food cost: remove them from the part.')).toBeInTheDocument();
   });
 
   it('with no VAT chosen the food cost is «—» and says what to do', async () => {

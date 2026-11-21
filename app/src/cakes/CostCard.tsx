@@ -78,10 +78,11 @@ export function CostCard({ totals, sellingPrice, texts, showLabour, invalid, sli
   const labourShown = showLabour && totals.labour !== null;
 
   const loaded = { recipes: recipesLoaded, ingredients: ingredientsLoaded, products: productsLoaded };
-  const unpricedNames = totals.unpricedIds
-    .map(id => lineName(t, { key: '', kind: 'semi', productId: id, qty: '' }, tables, loaded).text)
-    .filter(name => name !== '')
-    .join(', ');
+  // ⚠️ A CARD THAT NO LONGER EXISTS IS NOT «WITHOUT A PRICE»: it has no name to put in that sentence, so it gets its own line.
+  const named = [...new Set(totals.unpricedIds)].map(id => lineName(t, { key: '', kind: 'semi', productId: id, qty: '' }, tables, loaded));
+  const goneCount = named.filter(name => name.missing).length;
+  const unpriced = named.filter(name => !name.missing && name.text !== '');
+  const unpricedNames = unpriced.map(name => name.text).join(', ');
 
   const target = totals.product.foodCostTarget;
   const foodCost = partial ? '?' : result.foodCostPct === null ? '—' : percentText(result.foodCostPct, money);
@@ -212,7 +213,13 @@ export function CostCard({ totals, sellingPrice, texts, showLabour, invalid, sli
       {unpricedNames === '' ? null : (
         <p className={styles.warn} role="note">
           <TriangleAlert aria-hidden="true" />
-          <span>{t('cakes.cost.incomplete', { n: totals.unpricedIds.length, names: unpricedNames })}</span>
+          <span>{t('cakes.cost.incomplete', { n: unpriced.length, names: unpricedNames })}</span>
+        </p>
+      )}
+      {goneCount === 0 ? null : (
+        <p className={styles.warn} role="note">
+          <TriangleAlert aria-hidden="true" />
+          <span>{t('cakes.cost.cardsGone', { n: goneCount })}</span>
         </p>
       )}
 
