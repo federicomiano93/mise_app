@@ -1,7 +1,7 @@
 import { useRef } from 'react';
 import type { KeyboardEvent } from 'react';
 
-// A row of radio buttons that choose ONE thing (the cake stage's «3D | Simple drawing» and «Cut-away | Whole»), drawn with the caller's
+// A row of radio buttons that choose ONE thing (the cake stage's «Cut-away | Whole»), drawn with the caller's
 // classes so each keeps its own look. The roving pattern of the Orders filter (orders/OrdersFilter.tsx): the chosen one is the only tab
 // stop, and the arrows (all four, wrapping), Home and End move the choice and the focus with it.
 export function RovingRadios<V extends string>({ label, className, optionClassName, options, value, onChoose }: {
