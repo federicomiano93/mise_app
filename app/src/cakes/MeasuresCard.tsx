@@ -6,6 +6,7 @@ import { useFoodcost } from '../foodcost/FoodcostContext';
 import { useT } from '../i18n/useT';
 import { Button } from '../ui/Button';
 import { ASSEMBLY_STEP_MIN, DIAMETER_STEP_CM, EDITOR_MAX_DIAMETER_CM, setCategory, setMeasure, setName } from './cakeEditorModel';
+import { useStepFocus } from './useStepFocus';
 import styles from './MeasuresCard.module.css';
 
 type Props = {
@@ -33,6 +34,7 @@ type StepperProps = {
 // A measure the cake has: its name and what it means, then «−», the value and «+». Both buttons are 56px (the steppers' size).
 function Stepper({ title, sub, value, lessLabel, moreLabel, onLess, onMore, lessDisabled, moreDisabled, note }: StepperProps) {
   const noteId = useId();
+  const focus = useStepFocus(lessDisabled, moreDisabled);
   return (
     <div className={styles.row}>
       <div className={styles.what}>
@@ -40,9 +42,10 @@ function Stepper({ title, sub, value, lessLabel, moreLabel, onLess, onMore, less
         <span>{sub}</span>
       </div>
       <div className={styles.step}>
-        <Button variant="bare" className={styles.stepButton} aria-label={lessLabel} isDisabled={lessDisabled} onPress={onLess}>−</Button>
+        <Button ref={focus.less} variant="bare" className={styles.stepButton} aria-label={lessLabel} isDisabled={lessDisabled} onPress={onLess}>−</Button>
         <output className={styles.value}>{value}</output>
         <Button
+          ref={focus.more}
           variant="bare"
           className={styles.stepButton}
           aria-label={moreLabel}

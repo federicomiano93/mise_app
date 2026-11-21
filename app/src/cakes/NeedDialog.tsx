@@ -15,6 +15,7 @@ import type { NeedTab } from './needModel';
 import { NeedPrintSheet } from './NeedPrintSheet';
 import type { NeedSheetWords } from './NeedPrintSheet';
 import { printNeeds } from './needPrintHost';
+import { useStepFocus } from './useStepFocus';
 import styles from './NeedDialog.module.css';
 
 type Props = {
@@ -33,6 +34,7 @@ export function NeedDialog({ cake, onClose }: Props) {
   const [openExport, exportSheet] = useExportSheet();
   const [tab, setTab] = useState<NeedTab>('semi');
   const [count, setCount] = useState(MIN_CAKES);
+  const countFocus = useStepFocus(count <= MIN_CAKES, count >= MAX_CAKES);
 
   const needs = useMemo(() => cakeNeeds(cakeProduct(cake), tables, count), [cake, tables, count]);
   const semi = useMemo(() => semiTable(needs, money), [needs, money]);
@@ -158,6 +160,7 @@ export function NeedDialog({ cake, onClose }: Props) {
             <div className={styles.step} role="group" aria-label={t('cakes.need.count')}>
               <span className={styles.stepLabel} aria-hidden="true">{t('cakes.need.count')}</span>
               <Button
+                ref={countFocus.less}
                 variant="bare"
                 className={styles.stepButton}
                 aria-label={t('cakes.need.countLess')}
@@ -168,6 +171,7 @@ export function NeedDialog({ cake, onClose }: Props) {
               </Button>
               <output className={styles.value}>{count}</output>
               <Button
+                ref={countFocus.more}
                 variant="bare"
                 className={styles.stepButton}
                 aria-label={t('cakes.need.countMore')}

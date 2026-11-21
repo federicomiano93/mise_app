@@ -102,6 +102,15 @@ describe('the two tabs and the count', () => {
     expect(within(dialog).getByRole('row', { name: /^Flour/ })).toHaveTextContent('2.00 kg');
   });
 
+  it('the count stepper hands the focus to its other button when the pressed one reaches its limit', async () => {
+    const view = await open();
+    const dialog = await openNeeds(view);
+    await view.user.click(within(dialog).getByRole('button', { name: 'One cake more' }));
+    await view.user.click(within(dialog).getByRole('button', { name: 'One cake fewer' }));
+    expect(within(dialog).getByRole('button', { name: 'One cake fewer' })).toBeDisabled();
+    expect(within(dialog).getByRole('button', { name: 'One cake more' })).toHaveFocus();
+  });
+
   it('a card with no price is named as «not opened» on the ingredient tab, never silently left out', async () => {
     const cake = cakeDoc('c1', 'Cassata', {
       lines: [{ tier: 0, part: 'base', productId: 'SPONGE', grams: 500 }, { tier: 0, part: 'filling', productId: 'MARZIPAN', grams: 500 }],

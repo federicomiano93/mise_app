@@ -41,6 +41,10 @@ const NONE_TEXT = {
   base: 'cakes.none.other',
 } as const;
 
+// Keys of the focus hand-over that are not a card line.
+const PACK_ADD = 'pack-add';
+const packKey = (ingredientId: string): string => `pack|${ingredientId}`;
+
 const lineKey = (line: { tier: number; part: CakePart; productId: string }): string => `${line.tier}|${line.part}|${line.productId}`;
 
 // The parts of one tier, and the packaging of the whole cake.
@@ -67,14 +71,34 @@ export function TierParts({ cake, edit, tier, onTier, selected, onSelect, showLa
   // A card just added: its grams box takes the focus, the next thing to fill in.
   const boxes = useRef(new Map<string, HTMLInputElement>());
   const focusNext = useRef<string | null>(null);
+  // ⚠️ A CONTROL THAT IS PRESSED AND THEN GOES AWAY (✕, ↺) HANDS THE FOCUS ON, or the keyboard and the screen reader land on the page:
+  // `focusNext` is the grams (or pieces) box that takes it, `focusAdd` the «Add» button of a part (or the packaging) that has no row left.
+  const addButtons = useRef(new Map<string, HTMLButtonElement>());
+  const focusAdd = useRef<string | null>(null);
   useLayoutEffect(() => {
     const key = focusNext.current;
-    if (key === null) return;
-    const node = boxes.current.get(key);
-    if (!node) return;
-    focusNext.current = null;
-    node.focus();
+    if (key !== null) {
+      const node = boxes.current.get(key);
+      if (!node) return;
+      focusNext.current = null;
+      node.focus();
+      return;
+    }
+    const add = focusAdd.current;
+    if (add === null) return;
+    const button = addButtons.current.get(add);
+    if (!button) return;
+    focusAdd.current = null;
+    button.focus();
   });
+  const registerAdd = (key: string) => (node: HTMLButtonElement | null) => {
+    if (node) addButtons.current.set(key, node); else addButtons.current.delete(key);
+  };
+  // The row that takes the focus when `lines[index]` goes: the next one, else the one before, else the part's «Add» button.
+  const handFocusOn = (lines: { tier: number; part: CakePart; productId: string }[], index: number, addKey: string) => {
+    const neighbour = lines[index + 1] ?? lines[index - 1];
+    if (neighbour) focusNext.current = lineKey(neighbour); else focusAdd.current = addKey;
+  };
   const registerBox = useCallback((key: string, node: HTMLInputElement | null) => {
     if (node) boxes.current.set(key, node); else boxes.current.delete(key);
   }, []);
@@ -172,8 +196,14 @@ export function TierParts({ cake, edit, tier, onTier, selected, onSelect, showLa
                 showLabour={showLabour}
                 registerBox={registerBox}
                 onGrams={text => { edit(current => setGrams(current, shown, part, cost.line.productId, text)); }}
-                onReset={() => { edit(current => resetGrams(current, shown, part, cost.line.productId)); }}
-                onRemove={() => { edit(current => removeCard(current, shown, part, cost.line.productId)); }}
+                onReset={() => {
+                  focusNext.current = lineKey(cost.line);
+                  edit(current => resetGrams(current, shown, part, cost.line.productId));
+                }}
+                onRemove={() => {
+                  handFocusOn(lines, lines.findIndex(line => line.productId === cost.line.productId), part);
+                  edit(current => removeCard(current, shown, part, cost.line.productId));
+                }}
               />
             ))}
 
@@ -181,6 +211,7 @@ export function TierParts({ cake, edit, tier, onTier, selected, onSelect, showLa
               <p className={styles.full}>{t('cakes.add.full', { n: MAX_CARDS_PER_PART })}</p>
             ) : (
               <Button
+                ref={registerAdd(part)}
                 className={styles.add}
                 variant="bare"
                 aria-label={t(lines.length === 0 ? 'cakes.add.aria' : 'cakes.add.moreAria', { part: t(`cakes.part.${part}`) })}
@@ -199,7 +230,7 @@ export function TierParts({ cake, edit, tier, onTier, selected, onSelect, showLa
           <h4 id={`${ids}-pack`} className={styles.partName}>{t('cakes.pack.title')}</h4>
           <span className={styles.rule}>{t('cakes.pack.rule')}</span>
         </div>
-        {cake.packaging.map(pack => {
+        {cake.packaging.map((pack, index) => {
           const line = { key: pack.ingredientId, ingredientId: pack.ingredientId, qty: String(pack.qtyPcs) };
           const name = lineName(t, line, tables, packLoaded);
           const price = lineMoney(t, money, line, tables);
@@ -216,7 +247,7 @@ export function TierParts({ cake, edit, tier, onTier, selected, onSelect, showLa
                   value={pack.qtyPcs > 0 ? String(pack.qtyPcs) : ''}
                   placeholder="1"
                   invalid={false}
-                  inputRef={node => { registerPack(pack.ingredientId, node); }}
+                  inputRef={node => { registerPack(pack.ingredientId, node); registerBox(packKey(pack.ingredientId), node); }}
                   onChange={text => { edit(current => setPackQty(current, pack.ingredientId, text)); }}
                 />
                 <span className={styles.unit}>{t('cakes.pack.pcs')}</span>
@@ -226,14 +257,18 @@ export function TierParts({ cake, edit, tier, onTier, selected, onSelect, showLa
               </div>
               {showLabour ? <div className={styles.money} /> : null}
               <div className={styles.actions}>
-                <Button variant="bare" className={styles.icon} aria-label={t('cakes.row.removeAria', { name: name.text })} onPress={() => { edit(current => removePack(current, pack.ingredientId)); }}>
+                <Button variant="bare" className={styles.icon} aria-label={t('cakes.row.removeAria', { name: name.text })} onPress={() => {
+                  const next = cake.packaging[index + 1] ?? cake.packaging[index - 1];
+                  if (next) focusNext.current = packKey(next.ingredientId); else focusAdd.current = PACK_ADD;
+                  edit(current => removePack(current, pack.ingredientId));
+                }}>
                   <X aria-hidden="true" />
                 </Button>
               </div>
             </div>
           );
         })}
-        <Button className={styles.add} variant="bare" onPress={() => { setPicking({ kind: 'pack' }); }}>
+        <Button ref={registerAdd(PACK_ADD)} className={styles.add} variant="bare" onPress={() => { setPicking({ kind: 'pack' }); }}>
           <Plus aria-hidden="true" />
           {t('cakes.pack.add')}
         </Button>

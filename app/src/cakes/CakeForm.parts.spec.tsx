@@ -157,6 +157,52 @@ describe('the tiers', () => {
   });
 });
 
+describe('the focus is never dropped on the page', () => {
+  const TWO = cakeDoc('c1', 'Plain', {
+    diameterCm: 22, discs: 3, ref: REFERENCE,
+    lines: [
+      { tier: 0, part: 'base', productId: 'SPONGE', grams: 100 },
+      { tier: 0, part: 'base', productId: 'CREAM', grams: 200 },
+    ],
+    packaging: [{ ingredientId: 'box', qtyPcs: 1 }],
+  });
+
+  it('removing a card hands the focus to the next row, or the one before, or the part’s «Add» button', async () => {
+    const { user } = await open('/cakes/c1', TWO);
+    await user.click(screen.getByRole('button', { name: 'Remove Sponge' }));
+    expect(screen.getByRole('textbox', { name: 'Cream: grams' })).toHaveFocus();
+    await user.click(screen.getByRole('button', { name: 'Remove Cream' }));
+    expect(screen.getByRole('button', { name: 'Base: add a card' })).toHaveFocus();
+  });
+
+  it('removing the last row of a part with others hands the focus to the row before', async () => {
+    const { user } = await open('/cakes/c1', TWO);
+    await user.click(screen.getByRole('button', { name: 'Remove Cream' }));
+    expect(screen.getByRole('textbox', { name: 'Sponge: grams' })).toHaveFocus();
+  });
+
+  it('going back to the rule keeps the focus in the grams box of the same row', async () => {
+    const { user } = await open('/cakes/c1', TWO);
+    await user.click(screen.getByRole('button', { name: 'Back to the rule: Cream' }));
+    expect(screen.getByRole('textbox', { name: 'Cream: grams' })).toHaveFocus();
+  });
+
+  it('removing the last piece of packaging hands the focus to «Add packaging»', async () => {
+    const { user } = await open('/cakes/c1', TWO);
+    await user.click(screen.getByRole('button', { name: 'Remove Box' }));
+    expect(screen.getByRole('button', { name: 'Add packaging' })).toHaveFocus();
+  });
+
+  it('a stepper pressed up to its limit hands the focus to its other button', async () => {
+    const { user } = await open('/cakes/c1', TWO);
+    const more = screen.getByRole('button', { name: 'One disc more' });
+    await user.click(more);
+    await user.click(screen.getByRole('button', { name: 'One disc more' }));
+    expect(screen.getByRole('button', { name: 'One disc more' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'One disc fewer' })).toHaveFocus();
+  });
+});
+
 describe('the packaging', () => {
   it('adds a piece of packaging, counts it in pieces, and removes it', async () => {
     const { user } = await open();
