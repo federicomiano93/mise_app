@@ -355,16 +355,18 @@ function assemble(lib: Three, renderer: T.WebGLRenderer, canvas: HTMLCanvasEleme
   controls.addEventListener('change', requestRender);
   // ⚠️ THE CONTROLS' 'start' FIRES ON EVERY TOUCH OF THE CANVAS, a plain tap included: a tap must not stop a return flight nor stop a
   // resize re-framing the cake, so a gesture counts only when it has MOVED (see commitGesture).
-  function commitGesture() {
-    if (interacting) return;
-    interacting = true;
+  // `held`: a drag or a pinch lasts until the controls say 'end'; a wheel turn has no end of its own (the controls fire start and end around
+  // it, before this runs), so it must not leave the gesture held — the labels would never come back.
+  function commitGesture(held: boolean) {
+    if (held && interacting) return;
+    if (held) interacting = true;
     atHome = false;
     flight = null;
     setMoving(true);
     requestRender();
   }
   controls.addEventListener('end', () => { interacting = false; requestRender(); });
-  const onWheel = () => { commitGesture(); };
+  const onWheel = () => { commitGesture(false); };
   canvas.addEventListener('wheel', onWheel, { passive: true });
 
   const onVisibility = () => { if (!document.hidden) requestRender(); };
@@ -426,7 +428,7 @@ function assemble(lib: Three, renderer: T.WebGLRenderer, canvas: HTMLCanvasEleme
     touches += 1;
     down = touches === 1 ? { x: event.clientX, y: event.clientY, id: event.pointerId } : null;
     // A second finger is a turn or a pinch: a real gesture at once.
-    if (touches > 1) commitGesture();
+    if (touches > 1) commitGesture(true);
     setHover(null);
   };
   const onUp = (event: PointerEvent) => {
@@ -441,7 +443,7 @@ function assemble(lib: Three, renderer: T.WebGLRenderer, canvas: HTMLCanvasEleme
   // Hover is for a mouse only (a finger has none), one pick per frame.
   let hoverAt: { x: number; y: number } | null = null;
   const onMove = (event: PointerEvent) => {
-    if (down && !interacting && Math.hypot(event.clientX - down.x, event.clientY - down.y) > TAP_SLOP_PX) commitGesture();
+    if (down && !interacting && Math.hypot(event.clientX - down.x, event.clientY - down.y) > TAP_SLOP_PX) commitGesture(true);
     if (event.pointerType !== 'mouse' || event.buttons !== 0) return;
     const queued = hoverAt !== null;
     hoverAt = { x: event.clientX, y: event.clientY };
