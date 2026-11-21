@@ -437,6 +437,15 @@ export const en = {
   'fc.perKg.lossNote': 'The ingredients weigh more than 1 kg: it is the weight lost in the oven.',
   'fc.search': 'Search products',
   'fc.searchNone': 'No product name contains “{q}”.',
+  // The two lists of the page (21 Nov 2026): finished products and semi-finished cards.
+  'fc.kindTabs': 'Kind of card',
+  'fc.tab.finished': 'Finished products',
+  'fc.tab.semi': 'Semi-finished',
+  'fc.empty.finished': 'No finished product yet',
+  'fc.empty.semi': 'No semi-finished card yet',
+  // A search that finds nothing in this list but something in the other one says where ({n} cards there).
+  'fc.searchNoneOther.finished': 'No finished product with “{q}” · {n} among the semi-finished',
+  'fc.searchNoneOther.semi': 'No semi-finished card with “{q}” · {n} among the finished products',
   'fc.preview.caption': 'Summary {unit}',
   'fc.preview.captionNoUnit': 'Summary',
   'fc.preview.price': 'Selling price',
@@ -574,7 +583,6 @@ export const en = {
   'cakes.row.discs': { one: '{n} disc', other: '{n} discs' },
   'cakes.row.incomplete': 'cost incomplete',
   'cakes.row.unknownCost': 'Food cost not known yet',
-  'cakes.referenceLink': 'Settings',
   'cakes.loading': 'Loading the cakes…',
   'cakes.empty.title': 'No cakes yet',
   'cakes.part.decoration': 'Decoration',
@@ -1015,7 +1023,7 @@ export const en = {
 
   'status.online': 'Online',
   'status.offline': 'No connection',
-  // Under the title of every screen but the tablet's Home, whose top bar says it with a dot (16 Nov 2026: short, the lab has no time to read).
+  // Under the title of every screen on a phone; from 700px the top bar says it with a dot (short: the lab has no time to read).
   'offline.banner': 'Offline: saved here, sent when the signal is back',
 
   'part.failed.title': 'This part didn’t load.',
@@ -3750,7 +3758,6 @@ export const en = {
   'bookings.picker.noChanges': 'No changes',
   'bookings.picker.add': 'Add',
   'bookings.picker.added': 'Added: {name}.',
-  'bookings.settings.door': 'Settings',
   'bookings.settings.title': 'Booking settings',
   'bookings.settings.waiting': 'Waiting for the settings from the server — this needs a connection.',
   'bookings.settings.readFailed': 'The settings can’t be read now. Try again when there is a connection: saving without them could replace them.',

@@ -1,9 +1,12 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import type { ProductKind } from '@mise/shared/foodcost-model';
 import { Navigate, useLocation, useNavigate, useNavigationType } from 'react-router';
 import { PartBoundary } from '../errors/PartBoundary';
 import { useT } from '../i18n/useT';
 import { KEEP_FOCUS, Page } from '../shell/Page';
 import { useOwnScrollArea } from '../shell/scrollArea';
+import { SettingsGear } from '../shell/SettingsGear';
+import { useSession } from '../session/SessionContext';
 import { SPLIT_QUERY } from '../ui/split';
 import { StatusMessageProvider, useStatusMessage } from '../ui/StatusMessage';
 import { useMediaQuery } from '../ui/useMediaQuery';
@@ -72,6 +75,8 @@ function FoodcostLayout({ view, origin }: { view: ShownView; origin: Origin }) {
   const place = pathname + search;
   const split = useMediaQuery(SPLIT_QUERY);
   const handBack = useHandBackState();
+  const { canManage } = useSession();
+  const gearNode = useCallback((node: HTMLButtonElement | null) => { handBack.register(SETTINGS_OPENER, node); }, [handBack]);
 
   // The narrowed list stays narrowed while a product opened from it is beside it (or its history); a
   // product the RECIPE opened sits beside the whole list, and so does everything else.
@@ -89,14 +94,14 @@ function FoodcostLayout({ view, origin }: { view: ShownView; origin: Origin }) {
   // A product, a new product or Settings opens one level down, so Back steps up to the list. On the
   // split, with something already open beside the list, picking another is lateral and replaces it
   // — and keeps whatever the entry it replaces knew about where Back goes.
-  const openScreen = (to: string) => {
+  const openScreen = (to: string, extra: object = {}) => {
     if (split && view.kind !== 'list') {
-      void navigate(to, { replace: true, state: { ...(cameFromList(state) ? FROM_LIST : KEEP_FOCUS), ...keepDepth(state) } });
+      void navigate(to, { replace: true, state: { ...(cameFromList(state) ? FROM_LIST : KEEP_FOCUS), ...keepDepth(state), ...extra } });
     } else {
       // On a phone the list is hidden behind what opens, and the page shrinks to it: the place in
       // the list is written down now, while the list is what is on screen.
       if (!split && view.kind === 'list') listTop.current = scrollArea()?.scrollTop ?? null;
-      void navigate(to, { state: { ...FROM_LIST, ...pushDepth(state) } });
+      void navigate(to, { state: { ...FROM_LIST, ...pushDepth(state), ...extra } });
     }
   };
   const goToProduct = (id: string) => {
@@ -130,9 +135,10 @@ function FoodcostLayout({ view, origin }: { view: ShownView; origin: Origin }) {
       handBack.deliver();
     }
   }, [previewing, handBack]);
-  const openNew = () => {
+  // The kind the list's tab was on travels in the state: the new card is born as a semi-finished one from «Semi-finished».
+  const openNew = (kind: ProductKind) => {
     handBack.expect(NEW_OPENER);
-    openScreen(newPath);
+    openScreen(newPath, { newKind: kind });
   };
   const openSettings = () => {
     handBack.expect(SETTINGS_OPENER);
@@ -201,7 +207,12 @@ function FoodcostLayout({ view, origin }: { view: ShownView; origin: Origin }) {
   return (
     <HandBackProvider value={handBack}>
       <ScrollTopContext value={scrollToTop}>
-      <Page title={t('section.foodcost')}>
+      <Page
+        title={t('section.foodcost')}
+        // ⚠️ THE GEAR IS DRAWN ONLY FOR WHOEVER RUNS THE PLACE (`canManage`): Settings holds a wage figure. The session is known before
+        // this screen exists (SectionRoute), so it is never drawn and then taken away. `null` keeps the title row one white band either way.
+        band={canManage ? <SettingsGear ref={gearNode} onPress={openSettings} /> : null}
+      >
         <div className={styles.layout} data-view={view.kind === 'list' ? 'list' : 'detail'}>
           <div className={styles.list}>
             <PartBoundary>
@@ -209,7 +220,6 @@ function FoodcostLayout({ view, origin }: { view: ShownView; origin: Origin }) {
                 openProductId={view.kind === 'product' || view.kind === 'history' ? view.id : null}
                 onOpenProduct={openProduct}
                 onOpenNew={openNew}
-                onOpenSettings={openSettings}
                 using={listUsing}
                 onShowAll={showAll}
                 onBackToRecipe={backToRecipe}

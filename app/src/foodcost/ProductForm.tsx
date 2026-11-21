@@ -30,7 +30,7 @@ import { useMediaQuery } from '../ui/useMediaQuery';
 import { useFoodcost, useFoodcostStore } from './FoodcostContext';
 import { entryPath, historyPath, productPath } from './foodcostPath';
 import type { Origin } from './foodcostPath';
-import { FROM_PRODUCT, entryState, pushDepth } from './foodcostNav';
+import { FROM_PRODUCT, entryState, newKindOf, pushDepth } from './foodcostNav';
 import { useHandBack } from './handBack';
 import { LineRow } from './LineRow';
 import type { LineKind } from './LineRow';
@@ -154,7 +154,7 @@ export function ProductForm({ id, product, draft, origin, titleRef, onSaved, onB
   const [initial] = useState(() => (product === null ? null : currentProduct(product, snap.tables)));
   const [working, setWorking] = useState<Working>(() => {
     if (initial) return workingFrom(initial, country);
-    return draft ? workingFromDraft(draft) : emptyWorking();
+    return draft ? workingFromDraft(draft) : { ...emptyWorking(), kind: newKindOf(state) };
   });
   const productId = id ?? '';
 
