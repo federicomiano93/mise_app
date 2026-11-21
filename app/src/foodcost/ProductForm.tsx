@@ -157,6 +157,13 @@ export function ProductForm({ id, product, draft, origin, titleRef, onSaved, onB
     return draft ? workingFromDraft(draft) : { ...emptyWorking(), kind: newKindOf(state) };
   });
   const productId = id ?? '';
+  // ⚠️ «NEW PRODUCT» PRESSED AGAIN FROM THE OTHER TAB (the split keeps this form mounted, the address being the same) gives an UNTOUCHED
+  // new card the new kind. Typed edits are never thrown away: a touched card keeps the kind it has.
+  const wantedKind = newKindOf(state);
+  useEffect(() => {
+    if (product !== null || draft !== null || touched.current) return;
+    setWorking(current => (current.kind === wantedKind ? current : { ...current, kind: wantedKind }));
+  }, [wantedKind]);
 
   // ⚠️ DIRTY IS «SOMETHING WAS TYPED SINCE THE LAST SAVE», also kept in a ref: the router's blocker
   // reads it at the moment of a navigation, and a state value read there could be one render behind.

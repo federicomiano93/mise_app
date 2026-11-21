@@ -7,11 +7,14 @@
 
 import { normalizeSearchText } from '@mise/shared/catalogue-model';
 import { isCakeProductId } from '@mise/shared/cake-model';
-import type { Product } from '@mise/shared/foodcost-model';
+import type { Product, ProductKind } from '@mise/shared/foodcost-model';
 import type { StoredDoc } from './foodcostSource';
 
 // The rules' bound on a category name (firestore.rules, foodcost-categories).
 export const MAX_CATEGORY_NAME = 60;
+
+// ⚠️ A CAKE'S CARD IS A FINISHED PRODUCT whatever its `kind` says: Cakes make them, and they sit in Food cost's own «Cakes» group.
+export const kindOf = (product: Product): ProductKind => (isCakeProductId(product.id) ? 'finished' : product.kind);
 
 export interface Category {
   readonly id: string;

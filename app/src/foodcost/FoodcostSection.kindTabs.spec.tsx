@@ -1,6 +1,6 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, screen, within } from '@testing-library/react';
-import { editorSource } from '../testing/foodcostEditorFixtures';
+import { act, cleanup, screen, waitFor, within } from '@testing-library/react';
+import { editorSource, recipe } from '../testing/foodcostEditorFixtures';
 import { LOAD, product, renderFoodcost, split } from '../testing/renderFoodcost';
 
 // «Finished products | Semi-finished» (21 Nov 2026): two tabs under «New product» and «Categories», the list below showing the chosen kind
@@ -210,5 +210,106 @@ describe('the tabs on a venue with nothing yet', () => {
     renderFoodcost('/food-cost', { source: editorSource([], { categories: [], settings: {} }) });
     expect(await screen.findByText('No products yet', undefined, LOAD)).toBeInTheDocument();
     expect(screen.queryByRole('tablist')).not.toBeInTheDocument();
+  });
+});
+
+// ⚠️ THE OPEN CARD'S KIND WINS over the narrowing's «start on Finished» (review, 22 Nov 2026), in either order the data arrives.
+describe('a card opened inside the narrowed list', () => {
+  const made = (name: string, kind: 'finished' | 'semi') => product(name, {
+    name, kind, model: 4, components: [{ kind: 'recipe', recipeId: 'dough', qtyKg: 1 }],
+    ...(kind === 'semi' ? { sellingMode: null, sellingPrice: null, vatRate: null, piecesPerBatch: null } : {}),
+  });
+  const path = '/food-cost/product/Starter?using=dough';
+
+  it('keeps the tab of a semi-finished card opened beside the list, though the list has a finished product', async () => {
+    split();
+    renderFoodcost(path, { source: editorSource([made('Loaf', 'finished'), made('Starter', 'semi')], { categories: [], settings: {} }) });
+    await screen.findAllByRole('tab', undefined, LOAD);
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 200)); });
+    expect(tab('Semi-finished')).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('keeps it when the products arrive BEFORE the recipes and prices (ready flips later)', async () => {
+    split();
+    const fake = editorSource([made('Loaf', 'finished'), made('Starter', 'semi')], { categories: [], settings: {} });
+    fake.holdIngredients();
+    renderFoodcost(path, { source: fake });
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 300)); });
+    act(() => { fake.releaseIngredients(); });
+    await screen.findAllByRole('tab', undefined, LOAD);
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 200)); });
+    expect(tab('Semi-finished')).toHaveAttribute('aria-selected', 'true');
+    expect(rowOf(/^Starter/)).toBeInTheDocument();
+  });
+});
+
+describe('«Open in Food cost» from a recipe with several products, on the split', () => {
+  it('opens the first FINISHED product of the narrowed list, even when a semi-finished card ranks before it', async () => {
+    split();
+    const noPrice = { sellingMode: null, sellingPrice: null, vatRate: null, piecesPerBatch: null };
+    const dough = [{ kind: 'recipe', recipeId: 'dough', qtyKg: 1 }];
+    // Neither can be costed as a margin, so they rank by name: «Aaa starter» first.
+    const fake = editorSource([
+      product('Loaf', { name: 'Loaf', kind: 'finished', model: 4, components: dough, ...noPrice }),
+      product('Aaa', { name: 'Aaa starter', kind: 'semi', model: 4, components: dough, ...noPrice }),
+    ], { recipes: [recipe('dough', { name: 'Dough' })], categories: [], settings: {} });
+    const { router } = renderFoodcost('/food-cost?recipe=dough', { source: fake });
+    expect(await screen.findByRole('heading', { level: 2, name: 'Loaf' }, LOAD)).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe('/food-cost/product/Loaf');
+  });
+});
+
+describe('«New product» pressed from the other tab, with a new card already open on the split', () => {
+  it('gives an untouched new card the new kind', async () => {
+    split();
+    const { user } = await listed([GANACHE, BUN]);
+    await user.click(screen.getByRole('button', { name: 'New product' }));
+    const region = await screen.findByRole('region', { name: 'Product' }, LOAD);
+    expect(within(region).getByRole('radio', { name: 'Finished product' })).toBeChecked();
+    await user.click(tab('Semi-finished'));
+    await user.click(screen.getByRole('button', { name: 'New product' }));
+    await waitFor(() => { expect(within(screen.getByRole('region', { name: 'Product' })).getByRole('radio', { name: 'Semi-finished' })).toBeChecked(); });
+  });
+
+  it('never throws away what was typed: a touched new card keeps its kind and its text', async () => {
+    split();
+    const { user } = await listed([GANACHE, BUN]);
+    await user.click(screen.getByRole('button', { name: 'New product' }));
+    const region = await screen.findByRole('region', { name: 'Product' }, LOAD);
+    await user.type(within(region).getByRole('combobox', { name: 'Name' }), 'Crostata');
+    await user.click(tab('Semi-finished'));
+    await user.click(screen.getByRole('button', { name: 'New product' }));
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 100)); });
+    const now = screen.getByRole('region', { name: 'Product' });
+    expect(within(now).getByRole('combobox', { name: 'Name' })).toHaveValue('Crostata');
+    expect(within(now).getByRole('radio', { name: 'Finished product' })).toBeChecked();
+  });
+});
+
+describe('the Settings gear', () => {
+  const gear = () => screen.queryByRole('button', { name: 'Settings' });
+
+  it('marks itself current on its own Settings view, and pressing it there changes nothing', async () => {
+    split();
+    const { router, user } = renderFoodcost('/food-cost/settings', { source: editorSource([BUN], { categories: [], settings: { labourCostPerHour: 12 } }) });
+    await screen.findByRole('textbox', { name: /Labour cost per hour/ }, LOAD);
+    expect(gear()).toHaveAttribute('aria-current', 'true');
+    const before = router.state.location.key;
+    await user.click(gear() as HTMLElement);
+    expect(router.state.location.key).toBe(before);
+  });
+
+  it('on a phone is on the list only: a product or Settings that fills the page has none', async () => {
+    const { user } = await listed([BUN]);
+    expect(gear()).toBeInTheDocument();
+    await user.click(gear() as HTMLElement);
+    await screen.findByRole('textbox', { name: /Labour cost per hour/ }, LOAD);
+    expect(gear()).not.toBeInTheDocument();
+  });
+
+  it('on the split stays on every view', async () => {
+    split();
+    renderFoodcost('/food-cost/product/Bun', { source: editorSource([BUN], { categories: [], settings: {} }) });
+    expect(await screen.findByRole('button', { name: 'Settings' }, LOAD)).toBeInTheDocument();
   });
 });

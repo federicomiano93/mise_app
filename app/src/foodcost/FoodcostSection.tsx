@@ -141,6 +141,8 @@ function FoodcostLayout({ view, origin }: { view: ShownView; origin: Origin }) {
     openScreen(newPath, { newKind: kind });
   };
   const openSettings = () => {
+    // The gear of the Settings view itself (on the split): already here, nothing to open.
+    if (view.kind === 'settings') return;
     handBack.expect(SETTINGS_OPENER);
     openScreen(settingsPath);
   };
@@ -211,7 +213,8 @@ function FoodcostLayout({ view, origin }: { view: ShownView; origin: Origin }) {
         title={t('section.foodcost')}
         // ⚠️ THE GEAR IS DRAWN ONLY FOR WHOEVER RUNS THE PLACE (`canManage`): Settings holds a wage figure. The session is known before
         // this screen exists (SectionRoute), so it is never drawn and then taken away. `null` keeps the title row one white band either way.
-        band={canManage ? <SettingsGear ref={gearNode} onPress={openSettings} /> : null}
+        // On a phone the gear is the LIST's: a detail fills the page and has its own Back (on the split it stays on every view).
+        band={canManage && (split || view.kind === 'list') ? <SettingsGear ref={gearNode} aria-current={view.kind === 'settings' ? 'true' : undefined} onPress={openSettings} /> : null}
       >
         <div className={styles.layout} data-view={view.kind === 'list' ? 'list' : 'detail'}>
           <div className={styles.list}>

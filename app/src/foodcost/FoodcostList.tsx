@@ -12,7 +12,7 @@ import { useMoney } from '../session/useMoney';
 import { Button } from '../ui/Button';
 import { FormBar } from '../ui/FormBar';
 import { CategoriesDialog } from './CategoriesDialog';
-import { CAKES_GROUP_ID, NO_CATEGORY_KEY, groupRows, grouped, isGroupOpen } from './categoriesModel';
+import { CAKES_GROUP_ID, NO_CATEGORY_KEY, groupRows, grouped, isGroupOpen, kindOf } from './categoriesModel';
 import type { Group } from './categoriesModel';
 import { semiFigures } from './semiWords';
 import { wantsTitleFocus } from './foodcostNav';
@@ -28,9 +28,6 @@ const KIND_TABS: readonly ProductKind[] = ['finished', 'semi'];
 const KIND_TAB_KEY = { finished: 'fc.tab.finished', semi: 'fc.tab.semi' } as const;
 const tabId = (kind: ProductKind): string => `fc-kind-tab-${kind}`;
 const PANEL_ID = 'fc-kind-panel';
-
-// ⚠️ A CAKE'S CARD IS A FINISHED PRODUCT whatever its `kind` says: Cakes make them, and they sit in Food cost's own «Cakes» group.
-const kindOf = (product: Product): ProductKind => (isCakeProductId(product.id) ? 'finished' : product.kind);
 
 // Where an arrow, Home or End key sends the selection (the tabs of Suppliers and of the Calculator do the same).
 function targetOf(key: string, index: number, last: number): number | null {
@@ -137,10 +134,17 @@ export function FoodcostList({ openProductId, onOpenProduct, onOpenNew, using, o
     }
     if (!ready || narrowedHandled.current === using) return;
     narrowedHandled.current = using;
+    // ⚠️ AN OPEN CARD OF THE NARROWED LIST DECIDES THE TAB: the effect above chose its kind from the same render's stale tab, and
+    // two choices in one pass would let the later one win. The card's kind is set here again, and the narrowing counts as handled.
+    const open = openProductId === null ? undefined : ranked.find(({ product }) => product.id === openProductId)?.product;
+    if (open) {
+      pickKind(kindOf(open));
+      return;
+    }
     const hasFinished = ranked.some(({ product }) => kindOf(product) === 'finished');
     if (!hasFinished && ranked.length > 0) pickKind('semi');
     else if (hasFinished) pickKind('finished');
-  }, [using, ready, ranked]);
+  }, [using, ready, ranked, openProductId]);
 
   // ── Categories (model 4, 20 Nov 2026) ──
   // The list is drawn in groups once the venue has at least one category: the categories in their order, then «Cakes» (every cake's
