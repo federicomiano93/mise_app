@@ -76,7 +76,7 @@ export function NeedDialog({ cake, onClose }: Props) {
   const table = (kind: NeedTab) => (
     <>
       {empty ? <p className={styles.empty}>{t('cakes.need.empty')}</p> : kind === 'semi' ? (
-        <div className={styles.scroll}>
+        <div className={styles.scroll} role="region" tabIndex={0} aria-label={t('cakes.need.tabSemi')}>
         <table className={styles.table}>
           <thead>
             <tr>
@@ -105,7 +105,7 @@ export function NeedDialog({ cake, onClose }: Props) {
         </table>
         </div>
       ) : (
-        <div className={styles.scroll}>
+        <div className={styles.scroll} role="region" tabIndex={0} aria-label={t('cakes.need.tabIngredients')}>
         <table className={styles.table}>
           <thead>
             <tr>

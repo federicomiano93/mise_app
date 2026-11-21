@@ -60,6 +60,7 @@
 }
 
 .stepButton {
+  flex: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -105,6 +106,11 @@
 .scroll {
   max-width: 100%;
   overflow-x: auto;
+}
+
+.scroll:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .table {
