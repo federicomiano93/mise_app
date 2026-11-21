@@ -23,7 +23,7 @@
 .input {
   width: 100%;
   min-height: var(--hit);
-  padding: 0 calc(var(--hit) - var(--s2)) 0 calc(var(--s3) + 18px + var(--s2));
+  padding: 0 var(--hit) 0 calc(var(--s3) + 18px + var(--s2));
   border: 1.5px solid var(--line-2);
   border-radius: var(--r-md);
   background: var(--surface);
@@ -48,8 +48,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: calc(var(--hit) - var(--s2));
-  height: calc(var(--hit) - var(--s2));
+  width: calc(var(--hit) - var(--s1));
+  height: calc(var(--hit) - var(--s1));
   border: 0;
   border-radius: var(--r-sm);
   background: transparent;
