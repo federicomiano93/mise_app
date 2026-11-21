@@ -120,7 +120,10 @@ describe('Save', () => {
     expect(data).toMatchObject({ name: 'Torta di prova', tiers: 1, discs: 3, lines: [], ref: REFERENCE });
     await waitFor(() => { expect(router.state.location.pathname).toBe(`/cakes/${cakeId}`); });
     expect(router.state.historyAction).toBe('REPLACE');
-    expect(await heading('New cake')).toBeInTheDocument();
+    // Its own address names it: the header says the name, no longer «New cake» (the form is kept, it is not remounted).
+    // Reading «New cake» here passed only while the router's move had not been drawn yet, and failed on a slow machine.
+    expect(await heading('Torta di prova')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { level: 2, name: 'New cake' })).not.toBeInTheDocument();
   });
 });
 

@@ -63,7 +63,8 @@ describe('the 3D view’s taps', () => {
     const dialog = await screen.findByRole('dialog', undefined, LOAD);
     await user.click(within(dialog).getByRole('button', { name: 'Back' }));
     await waitFor(() => { expect(screen.queryByRole('dialog')).not.toBeInTheDocument(); });
-    expect(screen.getByTestId('stage')).toHaveFocus();
+    // React Aria hands the focus back a frame after the dialog is gone, so it is waited for, not read at once.
+    await waitFor(() => { expect(screen.getByTestId('stage')).toHaveFocus(); }, LOAD);
     // The request was dropped once acted on: the same tap opens the chooser again.
     await user.click(screen.getByRole('button', { name: 'canvas second tap on filling' }));
     expect(await screen.findByRole('dialog', undefined, LOAD)).toBeInTheDocument();
