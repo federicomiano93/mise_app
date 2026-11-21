@@ -426,6 +426,7 @@ export function CakeForm({ id, cake, titleRef, onSaved }: Props) {
                   showLabour={showLabour}
                   registerPack={registerPack}
                   openRequest={openRequest}
+                  onOpenHandled={() => { setOpenRequest(null); }}
                 />
               </PartBoundary>
             </section>

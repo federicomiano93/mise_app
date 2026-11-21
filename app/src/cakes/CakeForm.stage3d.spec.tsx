@@ -1,5 +1,5 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { screen, within } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import { fakeCakesSource } from '../testing/fakeCakesSource';
 import { BOX, PACKAGING_PRICES } from '../testing/foodcostEditorFixtures';
 import { REFERENCE, SPONGE, cakeDoc, renderCakes, storedReference } from '../testing/renderCakes';
@@ -14,6 +14,17 @@ type Pick = { tier: number; part: string };
 vi.mock('./Cake3D', () => ({
   default: (props: { onSelect: (s: Pick) => void; onOpenPart?: (s: Pick) => void }) => (
     <div data-testid="three-d">
+      <div data-testid="stage" tabIndex={0} />
+      <button
+        type="button"
+        onClick={(event) => {
+          // What the real view does for a canvas tap: the stage takes the focus, then the chooser opens.
+          event.currentTarget.parentElement?.querySelector<HTMLElement>('[data-testid="stage"]')?.focus();
+          props.onOpenPart?.({ tier: 0, part: 'filling' });
+        }}
+      >
+        canvas second tap on filling
+      </button>
       <button type="button" onClick={() => { props.onSelect({ tier: 0, part: 'filling' }); }}>tap filling</button>
       <button type="button" onClick={() => { props.onOpenPart?.({ tier: 0, part: 'filling' }); }}>second tap on filling</button>
       <button type="button" onClick={() => { props.onOpenPart?.({ tier: 0, part: 'base' }); }}>second tap on base</button>
@@ -44,6 +55,18 @@ describe('the 3D view’s taps', () => {
     const dialog = await screen.findByRole('dialog', undefined, LOAD);
     await user.click(within(dialog).getByRole('button', { name: /Cream/ }));
     expect(await screen.findByRole('textbox', { name: 'Cream: grams' }, LOAD)).toBeInTheDocument();
+  });
+
+  it('closing a chooser opened from a canvas tap gives the focus back to the stage, never to the page', async () => {
+    const { user } = await open(3);
+    await user.click(await screen.findByRole('button', { name: 'canvas second tap on filling' }));
+    const dialog = await screen.findByRole('dialog', undefined, LOAD);
+    await user.click(within(dialog).getByRole('button', { name: 'Back' }));
+    await waitFor(() => { expect(screen.queryByRole('dialog')).not.toBeInTheDocument(); });
+    expect(screen.getByTestId('stage')).toHaveFocus();
+    // The request was dropped once acted on: the same tap opens the chooser again.
+    await user.click(screen.getByRole('button', { name: 'canvas second tap on filling' }));
+    expect(await screen.findByRole('dialog', undefined, LOAD)).toBeInTheDocument();
   });
 
   it('opens the same chooser the part’s «add another card» button opens, for a part that already has cards', async () => {

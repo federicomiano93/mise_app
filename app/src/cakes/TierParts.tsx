@@ -31,6 +31,8 @@ type Props = {
   registerPack: (ingredientId: string, node: HTMLInputElement | null) => void;
   // A second tap on the chosen part in the 3D view: opens that part's «Add a card» (a new object each time, so the same part twice opens twice).
   openRequest?: OpenRequest | null;
+  // Called once the request has been acted on (or turned down), so the form drops it: a remount never reopens an old chooser.
+  onOpenHandled?: () => void;
 };
 
 export interface OpenRequest { part: CakePart }
@@ -57,7 +59,7 @@ const lineKey = (line: { tier: number; part: CakePart; productId: string }): str
 // top to bottom, because the cake does).
 // ⚠️ A GRAMS BOX IS EMPTY WHILE THE RULE DECIDES: its placeholder is the rule's figure, and typing a number is «corrected by hand»
 // (the line says so, with the rule's figure beside it, and a ↺ puts the rule back).
-export function TierParts({ cake, edit, tier, onTier, selected, onSelect, showLabour, registerPack, openRequest = null }: Props) {
+export function TierParts({ cake, edit, tier, onTier, selected, onSelect, showLabour, registerPack, openRequest = null, onOpenHandled }: Props) {
   const { t } = useT();
   const money = useMoney();
   const ids = useId();
@@ -71,6 +73,7 @@ export function TierParts({ cake, edit, tier, onTier, selected, onSelect, showLa
   useEffect(() => {
     if (openRequest === null) return;
     const { part } = openRequest;
+    onOpenHandled?.();
     if (part === 'filling' && cake.discs < 2) return;
     if (cardsIn(cake, shown, part).length >= MAX_CARDS_PER_PART) return;
     setPicking({ kind: 'card', part });
