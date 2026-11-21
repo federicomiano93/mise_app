@@ -35,6 +35,7 @@ import { CAKES_PATH, referencePath } from './cakesPath';
 import { CostCard } from './CostCard';
 import type { PriceField, PriceTexts } from './CostCard';
 import { MeasuresCard } from './MeasuresCard';
+import { NeedDialog } from './NeedDialog';
 import { TierParts } from './TierParts';
 import styles from './CakeForm.module.css';
 
@@ -98,6 +99,7 @@ export function CakeForm({ id, cake, titleRef, onSaved }: Props) {
   const [selected, setSelected] = useState<Selected | null>(null);
   const [showNameError, setShowNameError] = useState(false);
   const [badNumber, setBadNumber] = useState<PriceField | null>(null);
+  const [needsOpen, setNeedsOpen] = useState(false);
 
   // ⚠️ DIRTY IS «DIFFERENT FROM WHAT WAS LAST SAVED» (what Save would write), also kept in a ref: the router's blocker reads it at the
   // moment of a navigation, and a state value read there could be one render behind. `touched` NEVER goes back to false: a cake deleted
@@ -437,6 +439,7 @@ export function CakeForm({ id, cake, titleRef, onSaved }: Props) {
                   onVatOther={setVatOther}
                   onVatGuide={applyVatRate}
                   registerBox={registerPrice}
+                  onOpenNeeds={() => { setNeedsOpen(true); }}
                 />
               </PartBoundary>
             </div>
@@ -444,6 +447,11 @@ export function CakeForm({ id, cake, titleRef, onSaved }: Props) {
         </div>
       </div>
       {confirmDialog}
+      {needsOpen ? (
+        <PartBoundary>
+          <NeedDialog cake={working} onClose={() => { setNeedsOpen(false); }} />
+        </PartBoundary>
+      ) : null}
     </section>
   );
 }

@@ -1,0 +1,175 @@
+/* «What you need»: the view tabs and the cake counter above one table. Nothing here clips (no `overflow` but the wide table's own). */
+
+.tabs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  min-width: 0;
+}
+
+.bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+}
+
+.seg {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--s1);
+  padding: var(--s1);
+  border-radius: var(--r-md);
+  background: var(--sunken);
+}
+
+.segb {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--hit);
+  padding: 0 var(--s3);
+  border-radius: var(--r-sm);
+  color: var(--ink-2);
+  font-weight: 600;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.segb[data-selected] {
+  background: var(--surface);
+  color: var(--accent-ink);
+  box-shadow: var(--shadow-1);
+}
+
+.segb[data-focus-visible] {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.step {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.stepLabel {
+  margin-right: var(--s1);
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.stepButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--hit);
+  height: var(--hit);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font: 500 var(--fs-xl) var(--font);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.stepButton[data-disabled] {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.stepButton[data-focus-visible] {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.value {
+  min-width: 40px;
+  font-size: var(--fs-md);
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+  text-align: center;
+}
+
+.panel {
+  min-width: 0;
+}
+
+.panel[data-focus-visible] {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* The table may be wider than a phone: it scrolls on its own, the dialog does not. */
+.scroll {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-md);
+}
+
+.table th,
+.table td {
+  padding: var(--s3) var(--s2);
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.table thead th {
+  color: var(--ink-3);
+  font-size: var(--fs-xs);
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.table tbody th {
+  font-weight: 650;
+}
+
+.table small {
+  display: block;
+  color: var(--ink-3);
+  font-size: var(--fs-sm);
+  font-weight: 400;
+}
+
+.table .r {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.total th,
+.total td {
+  border-bottom: 0;
+  font-weight: 700;
+}
+
+.caption {
+  margin: var(--s2) 0 0;
+  color: var(--ink-3);
+  font-size: var(--fs-sm);
+}
+
+.warn {
+  margin: var(--s3) 0 0;
+  padding: var(--s2) var(--s3);
+  border-radius: var(--r-sm);
+  background: var(--warn-tint);
+  color: var(--warn-ink);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.empty {
+  margin: 0;
+  padding: var(--s4) 0;
+  color: var(--ink-2);
+}

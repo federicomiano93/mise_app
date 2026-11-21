@@ -204,3 +204,14 @@
   width: 20px;
   height: 20px;
 }
+
+/* «What you need»: what it is for, and the button that opens it. */
+.needs {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--s2);
+  margin-top: var(--s2);
+  padding-top: var(--s3);
+  border-top: 1px solid var(--line);
+}

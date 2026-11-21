@@ -1,5 +1,5 @@
 import { useId, useMemo, useState } from 'react';
-import { BookOpen, TriangleAlert } from 'lucide-react';
+import { BookOpen, ListChecks, TriangleAlert } from 'lucide-react';
 import type { CakeTotals } from '@mise/shared/cake-model';
 import { costProduct, vatRatesFor } from '@mise/shared/foodcost-model';
 import { fcMoney, fcNumber } from '@mise/shared/fc-number';
@@ -45,6 +45,8 @@ type Props = {
   // A rate chosen in the VAT guide.
   onVatGuide: (rate: number) => void;
   registerBox: (field: PriceField, node: HTMLInputElement | null) => void;
+  // «Open “What you need”»: the dialog is the form's, so the working copy it reads is the form's.
+  onOpenNeeds: () => void;
 };
 
 // Keys, resolved when the menu is drawn.
@@ -62,7 +64,7 @@ const VAT_WORDS: Readonly<Record<string, MessageKey>> = {
 // «materials + labour» for somebody who can read the labour rate; the total is a line of its own, and the slice's total says so.
 // ⚠️ A CARD WITH NO PRICE MAKES THE COST «INCOMPLETE»: the figures wear «+?», the food cost reads «?», and the card is named — a cost too
 // low must never look like a good one.
-export function CostCard({ totals, sellingPrice, texts, showLabour, invalid, slices, onPrice, onTarget, onVatSelect, onVatOther, onVatGuide, registerBox }: Props) {
+export function CostCard({ totals, sellingPrice, texts, showLabour, invalid, slices, onPrice, onTarget, onVatSelect, onVatOther, onVatGuide, registerBox, onOpenNeeds }: Props) {
   const { t } = useT();
   const money = useMoney();
   const ids = useId();
@@ -222,6 +224,14 @@ export function CostCard({ totals, sellingPrice, texts, showLabour, invalid, sli
           <span>{t('cakes.cost.cardsGone', { n: goneCount })}</span>
         </p>
       )}
+
+      <div className={styles.needs}>
+        <p className={styles.note}>{t('cakes.need.openNote')}</p>
+        <Button onPress={onOpenNeeds}>
+          <ListChecks aria-hidden="true" />
+          {t('cakes.need.open')}
+        </Button>
+      </div>
 
       {guideOpen ? (
         <VatGuideDialog

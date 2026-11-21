@@ -1,0 +1,83 @@
+/*
+  need-print.css — «What you need» as a sheet of paper (Cakes, 21 Nov 2026).
+
+  ⚠️⚠️ A PLAIN GLOBAL STYLESHEET, NOT A CSS MODULE, like the booking slip's and the label's: the host (`#cakeNeedPrint`,
+  needPrintHost.tsx) lives outside the app's tree, a direct child of <body>, and the print rule below finds it by id; a module would
+  hash the names it matches.
+
+  ⚠️ BLACK ON WHITE AND NO TOKEN, ON PURPOSE: a printer burns a dot or it does not, so the design system's colours mean nothing on
+  this paper.
+*/
+
+/* On screen the host is never seen. */
+#cakeNeedPrint {
+  display: none;
+}
+
+.need-sheet {
+  box-sizing: border-box;
+  background: #fff;
+  color: #000;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 11pt;
+  line-height: 1.35;
+}
+
+.need-sheet h1 {
+  margin: 0 0 4mm;
+  font-size: 16pt;
+}
+
+.need-sheet table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.need-sheet th,
+.need-sheet td {
+  padding: 2mm 1.5mm;
+  border-bottom: 0.3mm solid #000;
+  text-align: left;
+  vertical-align: top;
+}
+
+.need-sheet th {
+  font-size: 9pt;
+  text-transform: uppercase;
+}
+
+.need-sheet .need-r {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.need-sheet small {
+  display: block;
+  font-size: 9pt;
+}
+
+.need-sheet tr {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.need-sheet .need-total td {
+  font-weight: 700;
+}
+
+.need-sheet p {
+  margin: 3mm 0 0;
+  font-size: 10pt;
+}
+
+@media print {
+  /* ⚠️ SCOPED TO THIS PRINT: this file stays loaded once a cake has been opened, and an unscoped rule would blank every other print
+     the app makes. The scope is the `need-printing` class needPrintHost.tsx puts on <html> for exactly as long as a host exists.
+     ⚠️⚠️ A CLASS, NOT `body:has(> #cakeNeedPrint)`: `:has` arrived in Chrome 105 and the lab tablet runs Chrome 101, where such a
+     rule is silently dropped and the print shows the app's screen. */
+  .need-printing body > *:not(#cakeNeedPrint) { display: none !important; }
+
+  .need-printing body { margin: 0; background: #fff; }
+
+  .need-printing #cakeNeedPrint { display: block; }
+}

@@ -56,6 +56,11 @@
   gap: var(--s3);
 }
 
+/* A table in a card (Cakes' «What you need»). */
+.wide {
+  max-width: 720px;
+}
+
 /* A small question (Orders' «Order sent?»): narrower, its words centred, its buttons sharing the width. */
 .small {
   max-width: 360px;
