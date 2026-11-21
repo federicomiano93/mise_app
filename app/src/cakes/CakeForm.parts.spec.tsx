@@ -5,6 +5,7 @@ import { BOX, PACKAGING_PRICES } from '../testing/foodcostEditorFixtures';
 import { REFERENCE, SPONGE, cakeDoc, renderCakes, storedReference } from '../testing/renderCakes';
 import { FLOUR, FLOUR_PRICES, LOAD, product } from '../testing/renderFoodcost';
 import { fakeFoodcostSource } from '../testing/fakeFoodcostSource';
+import type { StoredDoc } from '../foodcost/foodcostSource';
 
 // The parts of a cake: the tiers, the cards in each part, the grams (the rule, or typed by hand), the packaging, and the bands about the
 // reference grams. The measures and the cost are in CakeForm.cost.spec.tsx.
@@ -20,7 +21,7 @@ const semi = (id: string, name: string, fields: Record<string, unknown> = {}) =>
 const CREAM = semi('CREAM', 'Cream');
 const GANACHE = semi('GANACHE', 'Ganache');
 
-const foodcost = (extra: ReturnType<typeof semi>[] = []) => fakeFoodcostSource({
+const foodcost = (extra: StoredDoc[] = []) => fakeFoodcostSource({
   products: [SPONGE, CREAM, GANACHE, ...extra],
   ingredients: [FLOUR, BOX],
   prices: { ...FLOUR_PRICES, ...PACKAGING_PRICES },
@@ -31,7 +32,7 @@ const PLAIN = cakeDoc('c1', 'Plain', { diameterCm: 22, discs: 3, ref: REFERENCE,
 
 const open = async (path = '/cakes/c1', cake = PLAIN, options: Parameters<typeof renderCakes>[1] = {}) => {
   const view = renderCakes(path, { cakes: fakeCakesSource({ cakes: [cake], reference: storedReference() }), foodcost: foodcost(), ...options });
-  await screen.findByRole('heading', { level: 2, name: cake.name === '' ? 'Untitled cake' : cake.name }, LOAD);
+  await screen.findByRole('heading', { level: 2, name: String(cake.name) === '' ? 'Untitled cake' : String(cake.name) }, LOAD);
   return view;
 };
 

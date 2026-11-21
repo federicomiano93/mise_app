@@ -28,7 +28,7 @@ const foodcost = (settings: Record<string, unknown> | null = null) => fakeFoodco
 
 const open = async (cake = SACHER, options: Parameters<typeof renderCakes>[1] = {}, path = `/cakes/${cake.id}`) => {
   const view = renderCakes(path, { cakes: fakeCakesSource({ cakes: [cake], reference: storedReference() }), foodcost: foodcost(), ...options });
-  await screen.findByRole('heading', { level: 2, name: cake.name || 'Untitled cake' }, LOAD);
+  await screen.findByRole('heading', { level: 2, name: String(cake.name) || 'Untitled cake' }, LOAD);
   return view;
 };
 
