@@ -35,7 +35,7 @@
 }
 
 .tab small {
-  color: var(--ink-3);
+  color: var(--ink-2);
   font-size: var(--fs-sm);
   font-weight: 500;
 }
@@ -108,9 +108,11 @@
 .choose {
   display: inline-flex;
   align-items: center;
+  min-width: var(--hit);
   min-height: var(--hit);
   margin: calc(-1 * var(--s2)) 0;
   padding: 0;
+  text-align: left;
   border: 0;
   background: transparent;
   color: var(--ink);
@@ -120,7 +122,7 @@
 }
 
 .rule {
-  color: var(--ink-3);
+  color: var(--ink-2);
   font-size: var(--fs-sm);
 }
 
@@ -159,7 +161,7 @@
 }
 
 .what small {
-  color: var(--ink-3);
+  color: var(--ink-2);
   font-size: var(--fs-sm);
   font-weight: 400;
 }
@@ -197,7 +199,7 @@
 
 .money small {
   display: block;
-  color: var(--ink-3);
+  color: var(--ink-2);
   font-size: var(--fs-xs);
 }
 
