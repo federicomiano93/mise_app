@@ -1,9 +1,8 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Check, Plus, Printer, Search, Settings, Undo2 } from 'lucide-react';
+import { Check, Plus, Printer, Search, Undo2 } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router';
 import { useT } from '../i18n/useT';
-import { useSession } from '../session/SessionContext';
 import type { MessageKey } from '../i18n/en';
 import { Button } from '../ui/Button';
 import { useStatusMessage } from '../ui/StatusMessage';
@@ -17,7 +16,7 @@ import { spellDate } from './bookingWords';
 import type { UnitWords } from './bookingWords';
 import { useBookings, useBookingsStore } from './BookingsContext';
 import { FROM_LIST, RESTORE_REFUSED, newFromList, openedFromList, savedIdOf } from './bookingsNav';
-import { bookingPath, editBookingPath, newBookingPath, printerPath, settingsPath } from './bookingsPath';
+import { bookingPath, editBookingPath, newBookingPath, printerPath } from './bookingsPath';
 import styles from './BookingsList.module.css';
 
 // What a person reads for a status (bookings rebuild step 3, the owner's choice): a booking is open, Collected or Cancelled. ⚠️ The
@@ -42,7 +41,7 @@ type Props = {
   // The booking OPEN IN THE LIST (the tablet, 19 Nov 2026): its card, drawn in place of its row (or above the rows when its row is
   // not shown: another day's, filtered out by the search, not loaded yet). null on a phone and while none is open.
   readonly open?: ReactNode;
-  // The tablet's two columns (1000px and wider): the doors to the printer and the settings sit in the left column, else after the day.
+  // The tablet's two columns (1000px and wider): the door to the printer sits in the left column, else after the day.
   readonly split?: boolean;
 };
 
@@ -55,7 +54,6 @@ export function BookingsList({ day, onDay, today, selectedId, shown, open = null
   const store = useBookingsStore();
   const say = useStatusMessage();
   const { status, month, through, items, refused } = useBookings();
-  const { canManage } = useSession();
   const ids = useId();
   const words: UnitWords = {
     unit: unit => t(unit === 'kg' ? 'bookings.unit.kg' : 'bookings.unit.pcs'),
@@ -134,7 +132,7 @@ export function BookingsList({ day, onDay, today, selectedId, shown, open = null
       : t('bookings.row.reopenedSaid', { name: booking.customerName }));
   };
 
-  // ⚠️ THE DOORS ARE DRAWN ONCE, where the layout wants them (never twice, one hidden): in the tablet's left column, or after the
+  // ⚠️ THE DOOR IS DRAWN ONCE, where the layout wants them (never twice, one hidden): in the tablet's left column, or after the
   // day on a phone, so the reading and Tab order is the visual one on both.
   const doors = (
     <>
@@ -143,13 +141,6 @@ export function BookingsList({ day, onDay, today, selectedId, shown, open = null
         <Printer aria-hidden="true" />
         <span>{t('bookings.printer.door')}</span>
       </Button>
-      {/* The venue's bookings settings (bookings settings, 18 Nov 2026): only for whoever manages bookings (the rules' managesBookings). */}
-      {canManage ? (
-        <Button variant="secondary" className={styles.printer} onPress={() => { void navigate(settingsPath(), { state: FROM_LIST }); }}>
-          <Settings aria-hidden="true" />
-          <span>{t('bookings.settings.door')}</span>
-        </Button>
-      ) : null}
     </>
   );
 

@@ -105,7 +105,7 @@ const openLabel = (labelConfig: Record<string, unknown> | null = null, recipe: S
 const setDate = (box: HTMLElement, value: string) => { fireEvent.change(box, { target: { value } }); };
 
 describe('the door', () => {
-  it('is at the foot of the recipe list for an employee too, after the Allergen sheet and before Settings', async () => {
+  it('is at the foot of the recipe list for an employee too, after the Allergen sheet', async () => {
     open({ path: '/recipes', session: EMPLOYEE });
     const door = await main().findByRole('button', { name: 'HACCP labels' }, LOAD);
     expect(door).toBeInTheDocument();
@@ -116,11 +116,12 @@ describe('the door', () => {
     expect(main().queryByRole('button', { name: 'Settings' })).not.toBeInTheDocument();
   });
 
-  it('comes before Settings for whoever runs the place', async () => {
+  it('is in the foot for whoever runs the place, whose Settings gear is on the title row instead', async () => {
     open({ path: '/recipes' });
     await main().findByRole('button', { name: 'HACCP labels' }, LOAD);
     const foot = main().getAllByRole('button').map(button => button.textContent);
-    expect(foot.indexOf('HACCP labels')).toBeLessThan(foot.indexOf('Settings'));
+    expect(foot.indexOf('HACCP labels')).toBeGreaterThan(foot.indexOf('Settings'));
+    expect(main().getByRole('button', { name: 'Settings' }).closest('header')).toContainElement(screen.getByRole('heading', { level: 1 }));
   });
 
   it('opens the HACCP list, and Back returns the focus to the door', async () => {

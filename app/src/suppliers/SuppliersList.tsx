@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
-import { ChevronRight, FileUp, Plus, Search, Settings, TrendingUp } from 'lucide-react';
+import { ChevronRight, FileUp, Plus, Search, TrendingUp } from 'lucide-react';
 import { dueFirst } from '@mise/shared/due-first';
 import { favouriteGroups } from '@mise/shared/favourite-suppliers';
 import { ingredientDisplayName, ingredientNameMatches } from '@mise/shared/ingredient-name';
@@ -18,7 +18,7 @@ import { NoAnswerYet } from './NoAnswerYet';
 import { FoldedGroup, useFoldedOpen } from '../ui/FoldedGroup';
 import { suppliersFromInvoices } from './invoiceTag';
 import { useMayImport } from './invoiceImport/useMayImport';
-import { IMPORT_OPENER, NEW_OPENER, PRICE_CHANGES_OPENER, SEARCH_OPENER, SETTINGS_OPENER, itemOpener, supplierOpener, useHandBack } from './handBack';
+import { IMPORT_OPENER, NEW_OPENER, PRICE_CHANGES_OPENER, SEARCH_OPENER, itemOpener, supplierOpener, useHandBack } from './handBack';
 import { TAB_OF_KIND } from './suppliersPath';
 import type { SuppliersTab } from './suppliersPath';
 import { useSuppliers } from './SuppliersContext';
@@ -98,9 +98,6 @@ type Props = {
   // «New supplier» / «New ingredient» / «New packaging» (by the tab) is the screen shown, and the button that opens it.
   newOpen: boolean;
   onNew: () => void;
-  // Settings are the screen shown, and the door to them at the foot of the list.
-  settingsOpen: boolean;
-  onOpenSettings: () => void;
   // «Import from invoices» is the screen shown, and the door to it beside Settings (drawn only where the import is allowed).
   importOpen: boolean;
   onOpenImport: () => void;
@@ -134,15 +131,13 @@ function targetOf(key: string, index: number, last: number): number | null {
 // the person left them. The three tabs share it, so it is not even remounted by a tab (parity S48).
 //
 // ⚠️ A TAB CLEARS THE SEARCH (parity S49), however the tab came to change — one list's query must never filter the other.
-export function SuppliersList({ tab, openSupplierId, onTab, onOpenSupplier, openItemId, onOpenItem, newOpen, onNew, settingsOpen, onOpenSettings, importOpen, onOpenImport, priceChangesOpen, onOpenPriceChanges }: Props) {
+export function SuppliersList({ tab, openSupplierId, onTab, onOpenSupplier, openItemId, onOpenItem, newOpen, onNew, importOpen, onOpenImport, priceChangesOpen, onOpenPriceChanges }: Props) {
   const { t } = useT();
-  const { canManage } = useSession();
   const handBack = useHandBack();
   const newDoor = useCallback((node: HTMLButtonElement | null) => { handBack.register(NEW_OPENER, node); }, [handBack]);
   const mayImport = useMayImport();
   const importDoor = useCallback((node: HTMLButtonElement | null) => { handBack.register(IMPORT_OPENER, node); }, [handBack]);
   const priceChangesDoor = useCallback((node: HTMLButtonElement | null) => { handBack.register(PRICE_CHANGES_OPENER, node); }, [handBack]);
-  const settingsDoor = useCallback((node: HTMLButtonElement | null) => { handBack.register(SETTINGS_OPENER, node); }, [handBack]);
   const snapshot = useSuppliers();
   const searchOpener = useCallback((node: HTMLInputElement | null) => { handBack.register(SEARCH_OPENER, node); }, [handBack]);
   const tabs = useRef(new Map<SuppliersTab, HTMLButtonElement>());
@@ -293,21 +288,6 @@ export function SuppliersList({ tab, openSupplierId, onTab, onOpenSupplier, open
         >
           <TrendingUp aria-hidden="true" />
           <span>{t('sup.pc.open')}</span>
-        </Button>
-      ) : null}
-      {/* ⚠️ THE DOOR TO SETTINGS EXISTS ONLY FOR WHOEVER RUNS THE PLACE (owner or manager): a screen of switches that an
-          employee could not save would be worse than no screen. The address is checked again by the section, and the rules
-          are the real guard (parity S9). */}
-      {canManage ? (
-        <Button
-          ref={settingsDoor}
-          variant="secondary"
-          className={styles.door}
-          aria-current={settingsOpen ? 'true' : undefined}
-          onPress={onOpenSettings}
-        >
-          <Settings aria-hidden="true" />
-          <span>{t('ui.settings')}</span>
         </Button>
       ) : null}
     </div>

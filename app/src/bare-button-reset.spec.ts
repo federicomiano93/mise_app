@@ -11,8 +11,12 @@ const modules = import.meta.glob<string>('./**/*.module.css', { query: '?raw', i
 const BARE = /<Button\b[^>]*?variant="bare"[^>]*>/gs;
 
 function resolve(from: string, relative: string): string {
-  const dir = from.slice(0, from.lastIndexOf('/'));
-  return `${dir}/${relative.replace(/^\.\//, '')}`;
+  const parts = from.split('/').slice(0, -1);
+  for (const part of relative.split('/')) {
+    if (part === '..') parts.pop();
+    else if (part !== '.') parts.push(part);
+  }
+  return parts.join('/');
 }
 
 /** Every declaration block of `.name` (alone or in a compound selector), comments stripped. */

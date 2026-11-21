@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { FoodcostProvider, useFoodcostStore } from '../foodcost/FoodcostContext';
 import { messageText } from '../foodcost/foodcostMessages';
@@ -7,6 +7,7 @@ import { HandBackProvider, NEW_OPENER, SETTINGS_OPENER, productOpener, useHandBa
 import { PartBoundary } from '../errors/PartBoundary';
 import { useT } from '../i18n/useT';
 import { Page } from '../shell/Page';
+import { SettingsGear } from '../shell/SettingsGear';
 import { useOwnScrollArea } from '../shell/scrollArea';
 import { StatusMessageProvider, useStatusMessage } from '../ui/StatusMessage';
 import { CakesProvider, useCakesStore } from './CakesContext';
@@ -111,13 +112,19 @@ function CakesLayout({ view }: { view: CakesView }) {
     if (view.kind === 'list') handBack.deliver();
   }, [view.kind, handBack]);
 
+  // The reference grams' settings: the gear beside the title (21 Nov 2026), on the list only; Back from them hands the focus back to it.
+  const gearNode = useCallback((node: HTMLButtonElement | null) => { handBack.register(SETTINGS_OPENER, node); }, [handBack]);
+
   return (
     <HandBackProvider value={handBack}>
-      <Page title={t('section.cakes')}>
+      <Page
+        title={t('section.cakes')}
+        band={view.kind === 'list' ? <SettingsGear ref={gearNode} onPress={openReference} /> : null}
+      >
         <div className={styles.layout} data-view={view.kind === 'list' ? 'list' : 'detail'}>
           <div className={styles.list}>
             <PartBoundary>
-              <CakesList onOpenCake={openCake} onOpenNew={openNew} onOpenReference={openReference} />
+              <CakesList onOpenCake={openCake} onOpenNew={openNew} />
             </PartBoundary>
           </div>
           <div className={styles.detail}>

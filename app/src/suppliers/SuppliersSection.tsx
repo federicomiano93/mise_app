@@ -1,10 +1,11 @@
-import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { Navigate, useLocation, useNavigate, useNavigationType } from 'react-router';
 import { kindOf } from '@mise/shared/ingredient-kind';
 import { PartBoundary } from '../errors/PartBoundary';
 import { useT } from '../i18n/useT';
 import { useSession } from '../session/SessionContext';
 import { KEEP_FOCUS, Page } from '../shell/Page';
+import { SettingsGear } from '../shell/SettingsGear';
 import { useOwnScrollArea } from '../shell/scrollArea';
 import { SPLIT_QUERY } from '../ui/split';
 import { StatusMessageProvider, useStatusMessage } from '../ui/StatusMessage';
@@ -98,12 +99,14 @@ const isWide = (kind: ShownView['kind']): boolean => kind === 'settings' || kind
 
 function SuppliersLayout({ view }: { view: ShownView }) {
   const { t } = useT();
+  const { canManage } = useSession();
   const navigate = useNavigate();
   const { pathname, state } = useLocation();
   const split = useMediaQuery(SPLIT_QUERY);
   // The suppliers this phone's own screens are deleting (supplierDeletions.ts); a mark goes when its supplier is back.
   const deletions = useMemo(createSupplierDeletions, []);
   const handBack = useHandBackState(deletions);
+  const gearNode = useCallback((node: HTMLButtonElement | null) => { handBack.register(SETTINGS_OPENER, node); }, [handBack]);
   const { suppliers, ingredients } = useSuppliers();
   useEffect(() => { deletions.prune(suppliers.map(supplier => supplier.id)); }, [deletions, suppliers]);
   // The same for the ingredients this phone is deleting (ingredientDeletions.ts).
@@ -261,7 +264,13 @@ function SuppliersLayout({ view }: { view: ShownView }) {
     <HandBackProvider value={handBack}>
       <SupplierDeletionsProvider value={deletions}>
       <IngredientDeletionsProvider value={ingredientDeletions}>
-      <Page title={t('sup.title')}>
+      <Page
+        title={t('sup.title')}
+      // ⚠️ THE GEAR EXISTS ONLY FOR WHOEVER RUNS THE PLACE (owner or manager): a screen of switches that an employee could not save would be
+      // worse than no screen. The address is checked again by the section, and the rules are the real guard. `null` keeps the title row
+      // one white band either way.
+      band={canManage ? <SettingsGear ref={gearNode} aria-current={view.kind === 'settings' ? 'true' : undefined} onPress={openSettings} /> : null}
+      >
         <div className={styles.layout} data-view={view.kind === 'list' ? 'list' : isWide(view.kind) ? 'wide' : 'detail'}>
           <div className={styles.list}>
             <PartBoundary>
@@ -274,8 +283,6 @@ function SuppliersLayout({ view }: { view: ShownView }) {
                 onOpenItem={openItem}
                 newOpen={newOpen}
                 onNew={openNew}
-                settingsOpen={view.kind === 'settings'}
-                onOpenSettings={openSettings}
                 importOpen={view.kind === 'import'}
                 onOpenImport={openImport}
                 priceChangesOpen={view.kind === 'price-changes'}

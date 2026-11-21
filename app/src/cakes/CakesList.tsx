@@ -1,7 +1,7 @@
 import { useCallback, useId, useMemo, useState } from 'react';
-import { PencilLine, Plus, Scale, Search, Settings } from 'lucide-react';
+import { PencilLine, Plus, Scale, Search } from 'lucide-react';
 import { useFoodcost } from '../foodcost/FoodcostContext';
-import { NEW_OPENER, SETTINGS_OPENER, productOpener, useHandBack } from '../foodcost/handBack';
+import { NEW_OPENER, productOpener, useHandBack } from '../foodcost/handBack';
 import { percentText, statusWord } from '../foodcost/productRowModel';
 import { useT } from '../i18n/useT';
 import { useMoney } from '../session/useMoney';
@@ -17,15 +17,14 @@ type Props = {
   onOpenCake: (id: string) => void;
   // The question «How do you want to start?» is answered here, so the editor opens already knowing.
   onOpenNew: (start: CakeStart) => void;
-  onOpenReference: () => void;
 };
 
-// The list page: «New cake» over the cakes by name, and Settings (the reference grams) at the foot. A cake, a new cake or Settings
+// The list page: «New cake» over the cakes by name (the reference grams' Settings are the gear beside the title, CakesSection). A cake, a new cake or Settings
 // opens as a full page one level down.
 //
 // ⚠️ A ROW IS COSTED FROM FOOD COST'S TABLES (products, recipes, prices), so the list waits for all of them: a cake would read
 // «incomplete» only because its numbers were still on their way.
-export function CakesList({ onOpenCake, onOpenNew, onOpenReference }: Props) {
+export function CakesList({ onOpenCake, onOpenNew }: Props) {
   const { t } = useT();
   const money = useMoney();
   const handBack = useHandBack();
@@ -44,7 +43,6 @@ export function CakesList({ onOpenCake, onOpenNew, onOpenReference }: Props) {
   const found = useMemo(() => matchingCakes(costed, query), [costed, query]);
 
   const newRef = useCallback((node: HTMLButtonElement | null) => { handBack.register(NEW_OPENER, node); }, [handBack]);
-  const referenceRef = useCallback((node: HTMLButtonElement | null) => { handBack.register(SETTINGS_OPENER, node); }, [handBack]);
 
   return (
     <div className={styles.column}>
@@ -93,11 +91,6 @@ export function CakesList({ onOpenCake, onOpenNew, onOpenReference }: Props) {
           ? <p className={styles.nothing}>{t('cakes.searchNone', { q: query.trim() })}</p>
           : null}
       </div>
-
-      <Button ref={referenceRef} variant="secondary" className={styles.foot} onPress={onOpenReference}>
-        <Settings aria-hidden="true" />
-        {t('cakes.referenceLink')}
-      </Button>
 
       {/* ⚠️ ONLY A NEW CAKE ASKS: a saved cake opens straight on its steps. Cancelling (or Escape) stays on the list. */}
       <Dialog

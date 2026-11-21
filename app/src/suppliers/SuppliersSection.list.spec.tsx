@@ -525,10 +525,10 @@ describe('loading, a dead stream and the empty states', () => {
     renderSuppliers(path, { source: fakeSuppliersSource() });
     expect(await screen.findByText(title, undefined, LOAD)).toBeInTheDocument();
     expect(screen.getByText(sub)).toBeInTheDocument();
-    // The only buttons are the way to make the first one (by the tab) and the owner's Settings.
+    // The only buttons are the way to make the first one (by the tab) and the owner's Settings gear on the title row.
     const buttons = main().queryAllByRole('button').map(button => button.textContent);
     const first = path === '/suppliers/suppliers' ? 'New supplier' : path === '/suppliers/packaging' ? 'New packaging' : 'New ingredient';
-    expect(buttons).toEqual([first, 'Settings']);
+    expect(buttons).toEqual(['', first]); // the gear is icon-only
   });
 
   it('says there is no packaging when there are ingredients but no packaging', async () => {

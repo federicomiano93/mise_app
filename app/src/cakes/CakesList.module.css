@@ -1,4 +1,4 @@
-/* The Cakes list page: «New cake», the search, the cakes as one card of rows, and the reference grams (Settings) at the foot. The card
+/* The Cakes list page: «New cake», the search, the cakes as one card of rows, and the cakes' card. The card
    does not clip (no `overflow`), so nothing that sticks inside the section is ever cut. */
 
 .column {
@@ -13,13 +13,9 @@
   gap: var(--s2);
 }
 
-/* «New cake» and «Settings» are as wide as their words, on the left: never stretched across the page (his ask, 21 Nov 2026). */
+/* «New cake» is as wide as its words, on the left: never stretched across the page (his ask, 21 Nov 2026). */
 .add {
   flex: none;
-}
-
-.foot {
-  align-self: flex-start;
 }
 
 .loading {
