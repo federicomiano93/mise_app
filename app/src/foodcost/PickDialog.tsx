@@ -3,7 +3,6 @@ import { normalizeSearchText } from '@mise/shared/catalogue-model';
 import { isFood, isPackaging } from '@mise/shared/ingredient-kind';
 import { ingredientDisplayName } from '@mise/shared/ingredient-name';
 import { fcMoney } from '@mise/shared/fc-number';
-import { semiCardCost, wouldBeTooDeep, wouldLoop } from '@mise/shared/foodcost-model';
 import { pricePerKg } from '@mise/shared/price-model';
 import { withoutArchived } from '@mise/shared/recipe-shelf';
 import type { MessageKey } from '../i18n/en';
@@ -11,10 +10,9 @@ import { useT } from '../i18n/useT';
 import { useMoney } from '../session/useMoney';
 import { Button } from '../ui/Button';
 import { Dialog } from '../ui/Dialog';
-import { categoryIdOf } from './categoriesModel';
 import { useFoodcost } from './FoodcostContext';
-import { semiFigures } from './semiWords';
 import { supplierOf } from './supplierOf';
+import { useSemiRows } from './useSemiRows';
 import styles from './PickDialog.module.css';
 
 // What the chooser offers: recipes, ingredients, both (a line of «Made of», with the semi-finished cards beside them), packaging, or
@@ -72,28 +70,14 @@ const byName = (a: { name: string }, b: { name: string }): number => a.name.loca
 export function PickDialog({ mode, initialQuery = '', cardId = '', usedSemiIds = [], usedLabel, onChoose, onClose }: Props) {
   const { t } = useT();
   const money = useMoney();
-  const { recipes, ingredients, suppliers, products, categories, tables } = useFoodcost();
+  const { recipes, ingredients, suppliers, categories } = useFoodcost();
   const [query, setQuery] = useState(initialQuery);
   const [kindFilter, setKindFilter] = useState<KindFilter>(null);
   // undefined: every category.
   const [categoryFilter, setCategoryFilter] = useState<string | undefined>(undefined);
 
-  // ⚠️ MODEL 4: ONLY SEMI-FINISHED CARDS ARE OFFERED, grouped by category, each with its cost per kilo (semiCardCost: the figure a line
-  // holding it is costed by). The card itself, one already on this card and one that would hold this card again are shown, said,
-  // and cannot be chosen.
-  const semi = useMemo(() => products
-    .filter(card => card.kind === 'semi' && card.name.trim() !== '')
-    .map(card => {
-      const reason = card.id === cardId ? 'fc.pick.itself' as const
-        : usedSemiIds.includes(card.id) ? 'fc.pick.alreadyHere' as const
-          : wouldLoop(tables.products, cardId, card.id) ? 'fc.pick.loops' as const
-            // ⚠️ Not a loop but too many cards inside each other (MAX_SEMI_DEPTH), for this card or for the cards that already hold it.
-            : wouldBeTooDeep(tables.products, cardId, card.id) ? 'fc.pick.tooDeep' as const
-              : null;
-      const figures = semiFigures(t, money, semiCardCost(card, tables));
-      return { card, categoryId: categoryIdOf(card, categories), reason, figures };
-    })
-    .sort((a, b) => a.card.name.localeCompare(b.card.name)), [products, categories, tables, cardId, usedSemiIds, t, money]);
+  // ⚠️ MODEL 4: ONLY SEMI-FINISHED CARDS ARE OFFERED, grouped by category (useSemiRows: the one source of the list).
+  const semi = useSemiRows(cardId, usedSemiIds);
 
   const options = useMemo(() => {
     const named = (item: (typeof ingredients)[string]): boolean => String(item.name ?? '').trim() !== '';
