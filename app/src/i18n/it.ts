@@ -686,6 +686,10 @@ export const it: Messages = {
     one: 'Costo incompleto: {names} non ha ancora un prezzo nella sua scheda Food cost. Il costo vero è più alto.',
     other: 'Costo incompleto: {names} non hanno ancora un prezzo nelle loro schede Food cost. Il costo vero è più alto.',
   },
+  'cakes.cost.noGrams': {
+    one: '{n} riga senza grammi: scrivi i grammi o compila i Grammi di riferimento.',
+    other: '{n} righe senza grammi: scrivi i grammi o compila i Grammi di riferimento.',
+  },
   'cakes.cost.cardsGone': {
     one: '{n} scheda di questa torta non esiste più nel Food cost: toglila dalla parte.',
     other: '{n} schede di questa torta non esistono più nel Food cost: togliele dalla parte.',

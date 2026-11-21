@@ -394,6 +394,8 @@ export interface CakeTotals {
   // cost = materials per slice; total = materials + labour per slice (null without a labour rate).
   perSlice: { cost: number | null; total: number | null; price: number | null };
   unpricedIds: string[];
+  // Lines with no grams at all (no reference grams, nothing typed): counted as 0 g, so the cost is partial.
+  missingLines: number;
 }
 
 export function cakeTotals(cake: Cake, tables: CostTables): CakeTotals {
@@ -411,6 +413,7 @@ export function cakeTotals(cake: Cake, tables: CostTables): CakeTotals {
   }
   // ⚠️ A figure shown alone is ALWAYS the materials (the step-1 rule, PR #589): the slice's `cost` must not mean
   // «materials + labour» for a manager and «materials» for an employee who cannot read the rate. The total is apart.
+  const missingLines = resolveLines(cake).filter(line => line.missing).length;
   const perSliceOf = (value: number | null) => (value === null ? null : roundTo(value / cake.slices, 4));
   return {
     product,
@@ -421,7 +424,8 @@ export function cakeTotals(cake: Cake, tables: CostTables): CakeTotals {
     total: pc.totalUnitCost,
     foodCostPct: cost.foodCostPct,
     status: cost.status,
-    partial: pc.partial,
+    // ⚠️ A line with no grams counts as 0 g and is left out of the product: the cost is then incomplete, never «cheap».
+    partial: pc.partial || missingLines > 0,
     suggestedGross: suggestedGrossPrice({ unitCost: pc.unitCost, vatRate: product.vatRate, targetPct: product.foodCostTarget }),
     perSlice: {
       cost: perSliceOf(pc.unitCost),
@@ -429,6 +433,7 @@ export function cakeTotals(cake: Cake, tables: CostTables): CakeTotals {
       price: cake.sellingPrice === null ? null : roundTo(cake.sellingPrice / cake.slices, 4),
     },
     unpricedIds,
+    missingLines,
   };
 }
 

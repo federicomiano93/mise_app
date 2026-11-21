@@ -105,7 +105,7 @@ export function CakesList({ openCakeId, onOpenCake, onOpenNew, onOpenReference }
 // One cake: its name, ONE line under it, and the food cost with the traffic light — the same light as Food cost's rows, with «?» while
 // a card in the cake has no price yet (the figure would be too low).
 //
-// ⚠️ THE LIGHT IS A DOT AND A WORD, NEVER COLOUR ALONE (P18): the word is read by a screen reader only; the dot is hidden from it.
+// ⚠️ THE LIGHT IS A DOT AND A WORD, NEVER COLOUR ALONE (P18): the word is on screen under the figure (Food cost's own row says it too); the dot is hidden from a screen reader.
 function CakeRow({ row, isOpen, onOpen, money }: { row: CakeRowData; isOpen: boolean; onOpen: () => void; money: ReturnType<typeof useMoney> }) {
   const { t } = useT();
   const handBack = useHandBack();
@@ -132,8 +132,10 @@ function CakeRow({ row, isOpen, onOpen, money }: { row: CakeRowData; isOpen: boo
         </span>
         <span className={styles.figure}>
           <span className={styles.dot} data-status={known ? (status ?? 'none') : 'none'} aria-hidden="true" />
-          <span className={styles.pct} data-costed={known}>{figure}</span>
-          <span className={styles.srOnly}>{known ? statusWord(t, status) : t('cakes.row.unknownCost')}</span>
+          <span className={styles.text}>
+            <span className={styles.pct} data-costed={known}>{figure}</span>
+            {known ? <span className={styles.word}>{statusWord(t, status)}</span> : <span className={styles.srOnly}>{t('cakes.row.unknownCost')}</span>}
+          </span>
         </span>
       </button>
     </li>

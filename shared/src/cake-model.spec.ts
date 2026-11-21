@@ -235,6 +235,13 @@ describe('costs come from the Food cost engine', () => {
     expect(totals.unpricedIds).toEqual(['CREAM']);
     expect(cakeLineCosts(cakeOf({ lines: [line(0, 'decoration', 'CREAM')] }), TABLES)[0]).toMatchObject({ materials: null, reason: 'card-no-price' });
   });
+  test('a line with no grams (no reference, nothing typed) makes the cost partial and is counted', () => {
+    const noRef = cakeOf({ ref: null, lines: [line(0, 'base', 'SPONGE'), line(0, 'filling', 'GANACHE', 200)] });
+    const totals = cakeTotals(noRef, TABLES);
+    expect(totals.partial).toBe(true);
+    expect(totals.missingLines).toBe(1);
+    expect(cakeTotals(cakeOf(), TABLES)).toMatchObject({ partial: false, missingLines: 0 });
+  });
   test('no VAT or no price leaves the food cost % empty', () => {
     expect(cakeTotals(cakeOf({ vatRate: null }), TABLES).foodCostPct).toBeNull();
     expect(cakeTotals(cakeOf({ sellingPrice: null }), TABLES).foodCostPct).toBeNull();

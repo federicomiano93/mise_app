@@ -171,6 +171,17 @@
   color: var(--ink-3);
 }
 
+.text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.word {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
 .srOnly {
   position: absolute;
   width: 1px;

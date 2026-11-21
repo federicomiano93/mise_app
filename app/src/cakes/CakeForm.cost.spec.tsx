@@ -88,6 +88,19 @@ describe('the cost', () => {
     expect(cost.queryByText(/^d+(.d+)?%$/)).not.toBeInTheDocument();
   });
 
+  it('a line with no grams (no reference grams, nothing typed) makes the cost incomplete and says so', async () => {
+    const cake = cakeDoc('c1', 'Plain', { ref: null, lines: [{ tier: 0, part: 'base', productId: 'SPONGE', grams: null }] });
+    await open(cake, { cakes: fakeCakesSource({ cakes: [cake], reference: null }) });
+    const cost = within(card('Cost and price'));
+    expect(cost.getByText('1 line without grams: type the grams or fill in the Reference grams.')).toBeInTheDocument();
+    expect(cost.getByText('?')).toBeInTheDocument();
+  });
+
+  it('the food cost word is on screen, not for a screen reader only', async () => {
+    await open();
+    expect(within(card('Cost and price')).getByText('On target').className).not.toMatch(/srOnly/);
+  });
+
   it('a card that no longer exists in Food cost is NOT «without a price»: it has its own line, and the row says so', async () => {
     await open(incompleteCake('c1', 'Cassata'));
     const cost = within(card('Cost and price'));

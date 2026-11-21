@@ -74,7 +74,7 @@ export function CostCard({ totals, sellingPrice, texts, showLabour, invalid, sli
   const country = countryOf(location);
 
   const result = useMemo(() => costProduct(totals.product, tables), [totals.product, tables]);
-  const partial = totals.partial || totals.unpricedIds.length > 0;
+  const partial = totals.partial || totals.unpricedIds.length > 0 || totals.missingLines > 0;
   const more = partial ? ' +?' : '';
   const amount = (value: number | null): string => (value === null ? '—' : `${fcMoney(value, money)}${more}`);
   const labourShown = showLabour && totals.labour !== null;
@@ -203,8 +203,10 @@ export function CostCard({ totals, sellingPrice, texts, showLabour, invalid, sli
           </span>
           <span className={styles.figure}>
             <span className={styles.dot} data-status={light} aria-hidden="true" />
-            <span className={styles.big} data-costed={light !== 'none'}>{foodCost}</span>
-            <span className={styles.srOnly}>{light === 'none' ? '' : statusWord(t, result.status)}</span>
+            <span className={styles.text}>
+              <span className={styles.big} data-costed={light !== 'none'}>{foodCost}</span>
+              {light === 'none' ? null : <span className={styles.word}>{statusWord(t, result.status)}</span>}
+            </span>
           </span>
         </div>
         {blocked === null ? null : <p className={styles.note}>{blocked}</p>}
@@ -216,6 +218,12 @@ export function CostCard({ totals, sellingPrice, texts, showLabour, invalid, sli
         <p className={styles.warn} role="note">
           <TriangleAlert aria-hidden="true" />
           <span>{t('cakes.cost.incomplete', { n: unpriced.length, names: unpricedNames })}</span>
+        </p>
+      )}
+      {totals.missingLines === 0 ? null : (
+        <p className={styles.warn} role="note">
+          <TriangleAlert aria-hidden="true" />
+          <span>{t('cakes.cost.noGrams', { n: totals.missingLines })}</span>
         </p>
       )}
       {goneCount === 0 ? null : (

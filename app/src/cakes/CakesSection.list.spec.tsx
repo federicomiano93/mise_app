@@ -46,6 +46,7 @@ describe('the list', () => {
     const sacher = await screen.findByRole('button', { name: /^Sacher/ }, LOAD);
     expect(within(sacher).getByText('20.00%')).toBeInTheDocument();
     expect(within(sacher).getByText('On target')).toBeInTheDocument();
+    expect(within(sacher).getByText('On target').className).not.toMatch(/srOnly/);
   });
 
   it('shows «?» and «cost incomplete» for a cake with a card that has no price, never a percentage', async () => {

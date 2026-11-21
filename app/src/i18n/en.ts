@@ -729,6 +729,10 @@ export const en = {
     one: 'Cost incomplete: {names} has no price yet on its Food cost card. The real cost is higher.',
     other: 'Cost incomplete: {names} have no price yet on their Food cost cards. The real cost is higher.',
   },
+  'cakes.cost.noGrams': {
+    one: '{n} line without grams: type the grams or fill in the Reference grams.',
+    other: '{n} lines without grams: type the grams or fill in the Reference grams.',
+  },
   'cakes.cost.cardsGone': {
     one: '{n} card of this cake no longer exists in Food cost: remove it from the part.',
     other: '{n} cards of this cake no longer exist in Food cost: remove them from the part.',
