@@ -89,6 +89,48 @@ describe('the look of a decoration', () => {
   });
 });
 
+describe('the shape follows the form word, the colour follows the flavour', () => {
+  it('a decoration: «panna al cioccolato» is piped cream in chocolate, «granella di cioccolato» grains in chocolate', () => {
+    expect(decorationLook(['Panna al cioccolato'])).toEqual({ kind: 'rosettes', colour: DARK });
+    expect(decorationLook(['Granella di cioccolato'])).toEqual({ kind: 'grains', colour: DARK });
+    expect(decorationLook(['Gocce di cioccolato']).kind).toBe('grains');
+    expect(decorationLook(['Chocolate chips'])).toEqual({ kind: 'grains', colour: DARK });
+    expect(decorationLook(['Scaglie di pistacchio'])).toEqual({ kind: 'curls', colour: '#b6c277' });
+    expect(decorationLook(['Chocolate shavings']).kind).toBe('curls');
+    expect(decorationLook(['Ciuffi di crema al caffè'])).toEqual({ kind: 'rosettes', colour: '#9b6b45' });
+    expect(decorationLook(['Whipped cream']).kind).toBe('rosettes');
+  });
+  it('a meringue is piped, in the colour of its flavour', () => {
+    expect(decorationLook(['Meringa al limone'])).toEqual({ kind: 'rosettes', colour: '#f4e58a' });
+    expect(decorationLook(['Lemon meringue']).kind).toBe('rosettes');
+  });
+  it('with no form word the flavour decides the shape, as before', () => {
+    expect(decorationLook(['Cioccolato']).kind).toBe('curls');
+    expect(decorationLook(['Nocciola']).kind).toBe('grains');
+    expect(decorationLook(['Limone']).kind).toBe('plain');
+  });
+  it('mixed berries are not blueberries only (the longer phrase first)', () => {
+    expect(decorationLook(['Frutti di bosco e mirtilli'])).toEqual({ kind: 'berries', colour: '#d9566e' });
+    expect(decorationLook(['Mirtilli e lamponi']).kind).toBe('berries');
+    expect(decorationLook(['Mirtilli']).kind).toBe('blueberries');
+  });
+  it('a cream in chocolate is matte with no drips; a glaze or a ganache shines', () => {
+    for (const name of ['Crema al cioccolato', 'Panna al cioccolato', 'Chocolate cream', 'Mousse al cioccolato']) {
+      expect(coatingLook([name])).toEqual({ colour: DARK, glaze: false });
+    }
+    for (const name of ['Glassa al cioccolato', 'Ganache', 'Mirror glaze', 'Glassa a specchio']) expect(coatingLook([name]).glaze).toBe(true);
+    expect(fillingLook(['Crema al cioccolato']).glossy).toBe(false);
+    expect(fillingLook(['Ganache']).glossy).toBe(true);
+  });
+  it('the colour and the shine come from the SAME card, the first one that says anything', () => {
+    // Not a cream-coloured mirror glaze: the second card is never read.
+    expect(coatingLook(['Panna montata', 'Ganache'])).toEqual({ colour: '#f6eedd', glaze: false });
+    expect(coatingLook(['Ganache', 'Panna montata'])).toEqual({ colour: DARK, glaze: true });
+    expect(fillingLook(['Panna montata', 'Ganache']).glossy).toBe(false);
+    expect(decorationLook(['Granella', 'Panna al cioccolato'])).toEqual({ kind: 'grains', colour: null });
+  });
+});
+
 describe('the look of a sponge and its soak', () => {
   it('a sponge is golden, a cocoa sponge brown, anything else keeps the token', () => {
     for (const name of ['Pan di Spagna', 'Genoise', 'Vanilla sponge', 'Sponge']) expect(baseLook([name]).colour).toBe('#ecca8a');

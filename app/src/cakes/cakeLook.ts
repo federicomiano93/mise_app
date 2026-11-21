@@ -39,18 +39,21 @@ export const PLAIN_LOOK: TierLook = {
   decoration: { kind: 'plain', colour: null },
 };
 
-// One flavour: the words that name it, its colour, whether it is shiny, and what it makes of a decoration.
+// One flavour: the words that name it, its colour, and what it is by default (shiny or not, specks, and the kind of decoration it makes
+// when nothing in the name says otherwise). The FORM words below (granella, glassa, panna) override the last three, never the colour.
 interface Flavour { words: RegExp; colour: string; glossy: boolean; specks: boolean; decoration: DecorationKind }
 
 // ⚠️ THE ORDER IS THE PRIORITY: «cioccolato bianco» must meet the white entry before the chocolate one, «crema al pistacchio» the
-// pistachio before the cream, «blueberry» the blueberries before the general «berries». No look-behind in a pattern: Safari 16.0 to 16.3
-// refuses to even parse one. Words are matched on text already stripped of accents and lower-cased.
+// pistachio before the cream, «frutti di bosco e mirtilli» the mixed berries before the blueberries (the longer phrase first), «blueberry»
+// the blueberries before the general «berries». No look-behind in a pattern: Safari 16.0 to 16.3 refuses to even parse one. Words are
+// matched on text already stripped of accents and lower-cased.
 const FLAVOURS: readonly Flavour[] = [
   { words: /white\s+choc|cioccolat\w*\s+bianc|bianc\w*\s+cioccolat/, colour: '#f1e8d2', glossy: true, specks: false, decoration: 'curls' },
   { words: /cioccolat|cacao|ganache|fondent|chocolate|cocoa/, colour: '#3a1d12', glossy: true, specks: false, decoration: 'curls' },
   { words: /pistacchi|pistachio/, colour: '#b6c277', glossy: false, specks: false, decoration: 'grains' },
+  { words: /frutti di bosco|frutti rossi|mixed\s+berr|(?:mirtill|blueberr).*(?:fragol|lampon|strawberr|raspberr)|(?:fragol|lampon|strawberr|raspberr).*(?:mirtill|blueberr)/, colour: '#d9566e', glossy: false, specks: false, decoration: 'berries' },
   { words: /mirtill|blueberr/, colour: '#4a5a96', glossy: false, specks: false, decoration: 'blueberries' },
-  { words: /fragol|lampon|frutti di bosco|frutti rossi|bosco|strawberr|raspberr|berr(?:y|ies)/, colour: '#d9566e', glossy: false, specks: false, decoration: 'berries' },
+  { words: /fragol|lampon|bosco|strawberr|raspberr|berr(?:y|ies)/, colour: '#d9566e', glossy: false, specks: false, decoration: 'berries' },
   { words: /limon|lemon/, colour: '#f4e58a', glossy: false, specks: false, decoration: 'plain' },
   { words: /caff|coffee|espresso|tiramis|\bmoka\b/, colour: '#9b6b45', glossy: false, specks: false, decoration: 'plain' },
   { words: /nocciol|hazelnut|gianduia/, colour: '#b98456', glossy: false, specks: false, decoration: 'grains' },
@@ -62,8 +65,19 @@ const FLAVOURS: readonly Flavour[] = [
   { words: /\b(?:bianc[oa]|white)\b/, colour: '#f1e8d2', glossy: false, specks: false, decoration: 'plain' },
 ];
 
-// Words that make a coating or a filling shiny whatever its flavour.
+// The FORM words: what a card is (grains, curls, piped cream, a mirror glaze), whatever its flavour. They choose the decoration kind and the
+// finish; the flavour chooses the colour. «Panna al cioccolato» is piped cream in a chocolate colour, «granella di cioccolato» grains.
+// Several forms may name one kind: the first entry that matches wins. A meringue is piped like a cream: the nearest kind there is.
+const KIND_FORMS: readonly { words: RegExp; kind: DecorationKind }[] = [
+  { words: /granell|grain|crumble|gocce|\bchips?\b|sprinkle/, kind: 'grains' },
+  { words: /riccioli|scaglie|curls?|shavings?/, kind: 'curls' },
+  { words: /ciuffi|panna|chantilly|rosett|whipped|meringa|meringhe|meringue/, kind: 'rosettes' },
+];
+
+// A glaze or a ganache shines whatever its flavour; a cream (or a mousse) is matte whatever its flavour: «crema al cioccolato» is not a
+// chocolate glaze. The shine words win when a name has both.
 const SHINY = /glass|glaz|specchio|mirror|ganache/;
+const MATTE = /panna|chantilly|crema|cream|mousse|whipped/;
 
 // A sponge: cocoa is brown, a plain sponge is golden, anything else keeps the token colour.
 const SPONGES: readonly { words: RegExp; colour: string }[] = [
@@ -89,7 +103,26 @@ function firstMatch<T>(names: readonly string[], pick: (text: string) => T | und
   return undefined;
 }
 
-const flavourOf = (names: readonly string[]) => firstMatch(names, text => FLAVOURS.find(flavour => flavour.words.test(text)));
+// What ONE card says: its colour from the flavour, its shape and finish from the form words, the flavour's defaults filling what the
+// form words leave open. Undefined when the card names neither a flavour nor a form.
+interface Reading { colour: string | null; glossy: boolean; specks: boolean; kind: DecorationKind }
+
+function readCard(text: string): Reading | undefined {
+  const flavour = FLAVOURS.find(candidate => candidate.words.test(text));
+  const form = KIND_FORMS.find(candidate => candidate.words.test(text));
+  const shiny = SHINY.test(text);
+  if (!flavour && !form && !shiny) return undefined;
+  return {
+    colour: flavour?.colour ?? null,
+    glossy: shiny || (!MATTE.test(text) && (flavour?.glossy ?? false)),
+    specks: flavour?.specks ?? false,
+    kind: form?.kind ?? flavour?.decoration ?? 'plain',
+  };
+}
+
+// The FIRST card that says anything decides the colour, the shape and the finish together (never a colour from one card and a shine from
+// another).
+const readNames = (names: readonly string[]) => firstMatch(names, readCard);
 
 export function baseLook(names: readonly string[]): BaseLook {
   return { colour: firstMatch(names, text => SPONGES.find(sponge => sponge.words.test(text)))?.colour ?? null };
@@ -100,24 +133,18 @@ export function soakLook(names: readonly string[]): SoakLook {
 }
 
 export function fillingLook(names: readonly string[]): FillingLook {
-  const text = normalised(names).join(' ');
-  const flavour = flavourOf(names);
-  return {
-    colour: flavour?.colour ?? null,
-    glossy: (flavour?.glossy ?? false) || SHINY.test(text),
-    specks: flavour?.specks ?? false,
-  };
+  const read = readNames(names);
+  return { colour: read?.colour ?? null, glossy: read?.glossy ?? false, specks: read?.specks ?? false };
 }
 
 export function coatingLook(names: readonly string[]): CoatingLook {
-  const text = normalised(names).join(' ');
-  const flavour = flavourOf(names);
-  return { colour: flavour?.colour ?? null, glaze: (flavour?.glossy ?? false) || SHINY.test(text) };
+  const read = readNames(names);
+  return { colour: read?.colour ?? null, glaze: read?.glossy ?? false };
 }
 
 export function decorationLook(names: readonly string[]): DecorationLook {
-  const flavour = flavourOf(names);
-  return { kind: flavour?.decoration ?? 'plain', colour: flavour?.colour ?? null };
+  const read = readNames(names);
+  return { kind: read?.kind ?? 'plain', colour: read?.colour ?? null };
 }
 
 // The looks of a whole cake, per tier: `cardName` is the same lookup the labels use.
