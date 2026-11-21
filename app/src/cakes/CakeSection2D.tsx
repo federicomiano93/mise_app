@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { CakeGeometry, CakePart } from '@mise/shared/cake-model';
+import { DISC_GAP_SHARE } from './cake3dModel';
 import type { Selected } from './cakeEditorModel';
 import styles from './CakeSection2D.module.css';
 
@@ -27,7 +28,7 @@ type Props = {
 };
 
 // ⚠️ THE PICTURE'S UNITS ARE SCREEN PIXELS: the viewBox is as wide as the stage really is (measured), so a 12px label is 12px on
-// screen at every width. A fixed 640-unit viewBox shrank every word to 7px on the split. Before the stage is measured (and where
+// screen at every width. A fixed 640-unit viewBox shrank every word to 7px on a narrow stage. Before the stage is measured (and where
 // nothing measures, as in a test) it is 640 wide.
 const DEFAULT_WIDTH = 640;
 const MIN_WIDTH = 200;
@@ -110,7 +111,7 @@ export function CakeSection2D({ geometry, selected, tier: shownTier, onSelect, l
     const discPx = tier.discHeightCm * heightScale * DISC_SHARE;
     const layerPx = hasLayers ? tier.discHeightCm * heightScale * (1 - DISC_SHARE) : 0;
     // Without a filling the discs stand apart by an empty gap, so their number reads at a glance (as in the 3D view).
-    const spacePx = hasLayers ? layerPx : discPx * 0.25;
+    const spacePx = hasLayers ? layerPx : discPx * DISC_GAP_SHARE;
     const top = y - (tier.discs * discPx + (tier.discs - 1) * spacePx);
     const key = (part: string, n = 0) => `${tier.index}-${part}-${n}`;
     const chosen = (part: CakePart) => (sameSelection(selected, tier.index, part) ? styles.chosen : '');
