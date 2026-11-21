@@ -26,8 +26,9 @@ import styles from './TierParts.module.css';
 type Props = {
   // The working copy, and the moves on it (the form's `edit`).
   cake: Cake;
-  // The cake was started «from scratch»: with no reference on purpose, its lines just need their grams (no «missing» wording).
-  fromScratch?: boolean;
+  // The grams are typed by hand on purpose (a cake started «from scratch», saved or not, while the venue has reference grams): its lines
+  // just need their grams (no «missing» wording).
+  typedByHand?: boolean;
   edit: (change: (current: Cake) => Cake) => void;
   // The tier shown, and the part chosen (the drawing and this list choose together).
   tier: number;
@@ -62,10 +63,10 @@ const lineKey = (line: { tier: number; part: CakePart; productId: string }): str
 // ⚠️ ONE STEP IS OPEN AT A TIME, the rest show their title and what they hold. An open step shows ONLY a search box over the venue's
 // semi-finished cards, and the cards chosen with their grams. A closed step is a button (aria-expanded) that opens it.
 // ⚠️ A GRAMS BOX IS EMPTY WHILE THE RULE DECIDES: its placeholder is the rule's figure, and typing a number is «corrected by hand»
-// (the line says so, with the rule's figure beside it, and a ↺ puts the rule back). A cake that started «from scratch» has no rule: the
+// (the line says so, with the rule's figure beside it, and a ↺ puts the rule back). A cake typed by hand has no rule: the
 // placeholder is 0 and every line says «type the grams».
 export function TierParts({
-  cake, fromScratch = false, edit, tier, onTier, selected, onSelect, registerPack, openRequest = null, onOpenHandled, open, onOpen, costSummary, costBody,
+  cake, typedByHand = false, edit, tier, onTier, selected, onSelect, registerPack, openRequest = null, onOpenHandled, open, onOpen, costSummary, costBody,
 }: Props) {
   const { t } = useT();
   const money = useMoney();
@@ -77,7 +78,9 @@ export function TierParts({
 
   // The cards the open step lists: Food cost's semi-finished cards, the same rows its chooser offers (useSemiRows).
   const openPart = open !== null && open !== 'cost' ? open : null;
-  const used = useMemo(() => (openPart === null ? [] : cardsIn(cake, shown, openPart).map(line => line.productId)), [cake, shown, openPart]);
+  // Keyed on the ids as ONE string (a document id never holds «/»), so typing grams elsewhere does not rebuild the rows.
+  const usedKey = openPart === null ? '' : cardsIn(cake, shown, openPart).map(line => line.productId).join('/');
+  const used = useMemo(() => (usedKey === '' ? [] : usedKey.split('/')), [usedKey]);
   const semiRows = useSemiRows(cakeProductId(cake.id), used);
   const options = useMemo<ComboOption[]>(() => semiRows.map(row => ({
     id: row.card.id,
@@ -116,7 +119,8 @@ export function TierParts({
   const stepButtons = useRef(new Map<CakePart, HTMLButtonElement>());
   const combos = useRef(new Map<CakePart, HTMLInputElement>());
   const addPackButton = useRef<HTMLButtonElement | null>(null);
-  const focusStep = useRef<CakePart | typeof PACK_ADD | null>(null);
+  const costButton = useRef<HTMLButtonElement | null>(null);
+  const focusStep = useRef<CakePart | typeof PACK_ADD | 'cost' | null>(null);
   useLayoutEffect(() => {
     const key = focusNext.current;
     if (key !== null) {
@@ -136,7 +140,7 @@ export function TierParts({
     }
     const step = focusStep.current;
     if (step === null) return;
-    const node = step === PACK_ADD ? addPackButton.current : stepButtons.current.get(step);
+    const node = step === PACK_ADD ? addPackButton.current : step === 'cost' ? costButton.current : stepButtons.current.get(step);
     if (!node) return;
     focusStep.current = null;
     node.focus();
@@ -161,7 +165,7 @@ export function TierParts({
   // The rule in a sentence: the reference grams the cake took, scaled to this tier.
   const ruleSentence = (part: CakePart): string => {
     const ref = cake.ref;
-    if (ref === null) return t(fromScratch ? 'cakes.rule.typed' : 'cakes.rule.none');
+    if (ref === null) return t(typedByHand ? 'cakes.rule.typed' : 'cakes.rule.none');
     const d = diameters[shown] ?? cake.diameterCm;
     switch (part) {
       case 'base': return t('cakes.rule.base', { g: ref.baseG, n: cake.discs, d });
@@ -352,11 +356,11 @@ export function TierParts({
       <p className={styles.divider}>{t('cakes.steps.then')}</p>
       <ol className={styles.steps} start={STEP_PARTS.length + 1}>
         <li className={styles.step} data-open={open === 'cost'}>
-          {header('cost', t('cakes.cost.title'), costSummary === '' ? [] : [costSummary], false, false, () => { onOpen(toggleStep(open, 'cost')); })}
+          {header('cost', t('cakes.cost.title'), costSummary === '' ? [] : [costSummary], false, false, () => { onOpen(toggleStep(open, 'cost')); }, node => { costButton.current = node; })}
           {open === 'cost' ? (
             <div id={`${ids}-panel-cost`} className={styles.stepBody} role="group" aria-labelledby={`${ids}-step-cost`}>
               {costBody}
-              <Button className={styles.finish} variant="primary" onPress={() => { onOpen(null); }}>
+              <Button className={styles.finish} variant="secondary" onPress={() => { focusStep.current = 'cost'; onOpen(null); }}>
                 <Check aria-hidden="true" />
                 {t('cakes.steps.finish')}
               </Button>

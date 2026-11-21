@@ -109,7 +109,7 @@ export function CakeForm({ id, cake, start = 'standard', titleRef, onSaved }: Pr
   // The step that is open: the first one for a new cake, none for a saved one.
   const [openStepKey, setOpenStepKey] = useState<StepKey | null>(() => startStep(id !== null));
   const [selected, setSelected] = useState<Selected | null>(null);
-  // The 3D view's second tap on the chosen part: TierParts opens that part's «Add a card».
+  // The 3D view's second tap on the chosen part: TierParts opens that part's step and puts the cursor in its search box.
   const [openRequest, setOpenRequest] = useState<OpenRequest | null>(null);
   const [showNameError, setShowNameError] = useState(false);
   const [badNumber, setBadNumber] = useState<PriceField | null>(null);
@@ -392,7 +392,11 @@ export function CakeForm({ id, cake, start = 'standard', titleRef, onSaved }: Pr
   }), [t, money, working.tiers, working.discs, cardNames, figures, hasParts, rawText]);
 
   const venueRef = reference;
-  const refDiffers = !fromScratch && referenceChanged(working, venueRef);
+  // ⚠️ A CAKE WITH NO REFERENCE OF ITS OWN IS «TYPED BY HAND» once the venue has reference grams: a saved «from scratch» cake (it keeps
+  // `ref: null`) must not claim its grams were left out. With no venue reference at all it is the «no reference» case below.
+  const typedByHand = fromScratch || (working.ref === null && venueRef !== null);
+  // «The reference changed → update» is useful to a cake with no reference of its own only while some line has no grams at all.
+  const refDiffers = !fromScratch && referenceChanged(working, venueRef) && (working.ref !== null || working.lines.some(line => line.grams === null));
   // An existing cake with none of its own does not claim «no reference» before the venue's has answered.
   const noReference = !fromScratch && working.ref === null && venueRef === null && (id === null || referenceLoaded);
 
@@ -456,12 +460,12 @@ export function CakeForm({ id, cake, start = 'standard', titleRef, onSaved }: Pr
             <section className={`${styles.card} ${styles.parts}`} aria-labelledby={`${ids}-parts`}>
               <h3 id={`${ids}-parts`} className={styles.cardTitle}>
                 {t('cakes.parts.title')}
-                <span className={styles.caption}>{t(working.tiers > 1 ? 'cakes.parts.captionMany' : fromScratch ? 'cakes.parts.captionTyped' : 'cakes.parts.captionOne')}</span>
+                <span className={styles.caption}>{t(working.tiers > 1 ? 'cakes.parts.captionMany' : typedByHand ? 'cakes.parts.captionTyped' : 'cakes.parts.captionOne')}</span>
               </h3>
               <PartBoundary>
                 <TierParts
                   cake={working}
-                  fromScratch={fromScratch}
+                  typedByHand={typedByHand}
                   edit={edit}
                   tier={shownTier}
                   onTier={next => { setTier(next); }}
@@ -474,27 +478,29 @@ export function CakeForm({ id, cake, start = 'standard', titleRef, onSaved }: Pr
                   onOpen={setOpenStepKey}
                   costSummary={hasParts ? t('cakes.steps.costSummary', { cost: rawText }) : ''}
                   costBody={
-                    <CostCard
-                      totals={totals}
-                      sellingPrice={forCost.sellingPrice}
-                      texts={texts}
-                      showLabour={showLabour}
-                      invalid={badNumber}
-                      slices={working.slices}
-                      onSlices={n => { edit(current => setMeasure(current, 'slices', n)); }}
-                      assemblyMinutes={working.assemblyMinutes}
-                      onAssembly={n => { edit(current => setMeasure(current, 'assemblyMinutes', n)); }}
-                      onPrice={setPriceText}
-                      onTarget={setTargetText}
-                      onVatSelect={setVatSelect}
-                      onVatOther={setVatOther}
-                      onVatGuide={applyVatRate}
-                      registerBox={registerPrice}
-                      onOpenNeeds={opener => {
-                        needsOpener.current = opener;
-                        setNeedsOpen(true);
-                      }}
-                    />
+                    <PartBoundary>
+                      <CostCard
+                        totals={totals}
+                        sellingPrice={forCost.sellingPrice}
+                        texts={texts}
+                        showLabour={showLabour}
+                        invalid={badNumber}
+                        slices={working.slices}
+                        onSlices={n => { edit(current => setMeasure(current, 'slices', n)); }}
+                        assemblyMinutes={working.assemblyMinutes}
+                        onAssembly={n => { edit(current => setMeasure(current, 'assemblyMinutes', n)); }}
+                        onPrice={setPriceText}
+                        onTarget={setTargetText}
+                        onVatSelect={setVatSelect}
+                        onVatOther={setVatOther}
+                        onVatGuide={applyVatRate}
+                        registerBox={registerPrice}
+                        onOpenNeeds={opener => {
+                          needsOpener.current = opener;
+                          setNeedsOpen(true);
+                        }}
+                      />
+                    </PartBoundary>
                   }
                 />
               </PartBoundary>

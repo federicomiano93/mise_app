@@ -199,6 +199,17 @@ describe('what the steps never do', () => {
   });
 });
 
+describe('«Done»', () => {
+  it('closes the cost step and hands the focus to its own button, as a secondary button', async () => {
+    const { user } = await openSaved();
+    await user.click(step('Cost and price'));
+    const done = screen.getByRole('button', { name: 'Done' });
+    await user.click(done);
+    expect(expanded('Cost and price')).toBe('false');
+    expect(step('Cost and price')).toHaveFocus();
+  });
+});
+
 describe('in Italian', () => {
   it('says the steps and the search box in Italian', async () => {
     renderCakes('/cakes/new', { lang: 'it', cakes: fakeCakesSource({ cakes: [], reference: storedReference() }), foodcost: foodcost() });

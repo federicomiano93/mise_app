@@ -264,6 +264,22 @@ describe('the reference grams', () => {
     expect(await screen.findByRole('alertdialog')).toBeInTheDocument();
   });
 
+  it('a saved «from scratch» cake (no reference of its own, every gram typed) is not told its grams changed: it says they are typed by hand', async () => {
+    const typed = cakeDoc('c1', 'Plain', { diameterCm: 22, discs: 3, ref: null, lines: [{ tier: 0, part: 'base', productId: 'SPONGE', grams: 900 }] });
+    const { user } = await open('/cakes/c1', typed);
+    await openStep(user, 'Base');
+    expect(screen.queryByText('The reference grams have changed since this cake was made.')).not.toBeInTheDocument();
+    expect(screen.queryByText('There are no reference grams yet, so every line needs its grams typed by hand.')).not.toBeInTheDocument();
+    expect(screen.getByText('type the grams by hand')).toBeInTheDocument();
+    expect(screen.getByText('you type the grams of every part')).toBeInTheDocument();
+  });
+
+  it('a cake with no reference of its own and a line with no grams still offers the venue’s grams', async () => {
+    const empty = cakeDoc('c1', 'Plain', { diameterCm: 22, discs: 3, ref: null, lines: [{ tier: 0, part: 'base', productId: 'SPONGE', grams: null }] });
+    await open('/cakes/c1', empty);
+    expect(screen.getByText('The reference grams have changed since this cake was made.')).toBeInTheDocument();
+  });
+
   it('with no reference grams anywhere, says every line needs its grams and links to the reference screen', async () => {
     const view = renderCakes('/cakes/c1', {
       cakes: fakeCakesSource({ cakes: [cakeDoc('c1', 'Plain', { ref: null })], reference: null }),
