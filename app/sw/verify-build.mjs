@@ -47,6 +47,14 @@ for (const file of LEFT_OUT) {
   }
   if (!/^assets\/(html2canvas|purify\.es|index\.es|three)-/.test(file)) say(`left out, and neither a jsPDF optional part nor three.js: ${file}`);
 }
+// three.js (the cake's 3D view, ~0.5 MB) is loaded on demand: its ONE chunk must be left out of the precache, or every phone downloads it at
+// install. A build with none, or with two, is as wrong as one that precaches it (the check above only looks at what IS left out).
+const threeChunks = files.filter(file => /^assets\/three-[^/]+\.js$/.test(file));
+if (threeChunks.length !== 1) say(`expected exactly one assets/three-*.js chunk, found ${threeChunks.length}: ${threeChunks.join(', ') || 'none'}`);
+for (const chunk of threeChunks) {
+  if (!LEFT_OUT.includes(chunk)) say(`the three.js chunk is not left out of the precache: ${chunk}`);
+  if (listed.has(chunk)) say(`the three.js chunk is precached: ${chunk}`);
+}
 for (const pattern of [/^assets\/alarm-[^/]+\.wav$/, /^manifest\.json$/, /^icons\/icon-192\.png$/, /^icons\/icon-512\.png$/, /^index\.html$/]) {
   if (!PRECACHE.some(e => pattern.test(e.url))) say(`not precached: ${pattern}`);
 }

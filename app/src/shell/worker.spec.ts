@@ -3,6 +3,7 @@
 // The worker is composed exactly as the build composes it (sw-plugin.ts, composeWorker), over a small
 // invented build: index.html naming its entry script, two scripts, the alarm, a font.
 
+import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -305,6 +306,10 @@ describe('the build plugin', () => {
     expect(onDemandChunk(['/x/node_modules/three/build/three.core.js', '/x/app/src/cakes/Cake3D.tsx'])).toBe(false);
     expect(onDemandChunk(['/x/node_modules/threejs-helper/a.js'])).toBe(false);
     expect(onDemandChunk([])).toBe(false);
+    // The file that names what the scene takes from three may share its chunk, but a chunk of it alone, or with other app code, may not.
+    expect(onDemandChunk(['/x/node_modules/three/build/three.core.js', '/x/app/src/cakes/threeParts.ts'])).toBe(true);
+    expect(onDemandChunk(['C:\\x\\app\\src\\cakes\\threeParts.ts', 'C:\\x\\node_modules\\three\\build\\three.core.js'])).toBe(true);
+    expect(onDemandChunk(['/x/app/src/cakes/threeParts.ts'])).toBe(false);
 
     dir = mkdtempSync(join(tmpdir(), 'mise2-sw-'));
     const out = join(dir, 'dist');
@@ -325,5 +330,42 @@ describe('the build plugin', () => {
     expect(urls.some(url => /three/.test(url))).toBe(false);
     expect(urls).toContain('assets/Cake3D-x1.js');
     expect(vm.runInContext('LEFT_OUT', context)).toEqual(['assets/three-x1.js']);
+  });
+
+  // The build check (sw/verify-build.mjs, run by CI after the build) is run for real on an invented build. Its other complaints (no manifest,
+  // no icons) are not the point: only what it says about the three.js chunk is read.
+  describe('⚠️ sw/verify-build.mjs and the three.js chunk', () => {
+    const THREE_MODULE = { '/r/app/node_modules/three/build/three.core.js': {} };
+    const OWN_MODULE = { '/r/app/src/cakes/Cake3D.tsx': {} };
+    const verdict = (chunks: Record<string, object>): string => {
+      dir = mkdtempSync(join(tmpdir(), 'mise2-sw-'));
+      const out = join(dir, 'dist');
+      mkdirSync(join(out, 'assets'), { recursive: true });
+      for (const [file, body] of Object.entries(FILES)) writeFileSync(join(out, file), body);
+      const bundle: Record<string, unknown> = {};
+      for (const [name, modules] of Object.entries(chunks)) {
+        writeFileSync(join(out, 'assets', name), 'export default 1');
+        bundle[`assets/${name}`] = { type: 'chunk', fileName: `assets/${name}`, modules };
+      }
+      const plugin = miseServiceWorker(join(__dirname, '..', '..', '..'));
+      (plugin.configResolved as (c: unknown) => void)({ root: dir, base: BASE, build: { outDir: 'dist' } });
+      (plugin.generateBundle as (o: unknown, b: unknown) => void)({}, bundle);
+      (plugin.closeBundle as () => void)();
+      const run = spawnSync(process.execPath, [join(__dirname, '..', '..', 'sw', 'verify-build.mjs'), out], { encoding: 'utf8' });
+      return `${run.stdout}${run.stderr}`;
+    };
+
+    test('says nothing about three.js when there is one chunk, left out', () => {
+      expect(verdict({ 'three-x1.js': THREE_MODULE })).not.toMatch(/three/i);
+    });
+    test('fails a build with no three.js chunk', () => {
+      expect(verdict({ 'Cake3D-x1.js': OWN_MODULE })).toContain('expected exactly one assets/three-*.js chunk, found 0');
+    });
+    test('fails a build with two', () => {
+      expect(verdict({ 'three-x1.js': THREE_MODULE, 'three-x2.js': THREE_MODULE })).toContain('expected exactly one assets/three-*.js chunk, found 2');
+    });
+    test('fails a three.js chunk that the worker would precache', () => {
+      expect(verdict({ 'three-x1.js': OWN_MODULE })).toContain('the three.js chunk is not left out of the precache: assets/three-x1.js');
+    });
   });
 });

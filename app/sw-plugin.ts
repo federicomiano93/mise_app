@@ -104,12 +104,17 @@ export function neverLoadedChunk(moduleIds: readonly string[]): boolean {
 
 // ⚠️ three.js IS LOADED, BUT ONLY WHEN A CAKE EDITOR SHOWS THE 3D VIEW (cakes/Cake3D.tsx: import('three')). Precached, every phone would download
 // ~0.5 MB at every update for a view most never open, so its chunk (vite.config.ts names it 'three') is left out and fetched from the network on
-// demand. A chunk made ONLY of these packages: by the modules it holds, never by a file-name glob.
+// demand. A chunk made ONLY of these packages and of the one file that names what the scene takes from them (cakes/threeParts.ts), with at
+// least one module of three in it: by the modules it holds, never by a file-name glob.
 export const ON_DEMAND_PACKAGES = ['three'] as const;
 const ON_DEMAND = new RegExp(`[\\\\/]node_modules[\\\\/](${ON_DEMAND_PACKAGES.join('|')})[\\\\/]`);
 
+// The file that names what the scene takes from three (vite.config.ts puts it in the same chunk, so Cake3D loads ONE file, and no small
+// precached chunk statically imports the left-out one).
+const ON_DEMAND_OWN = /[\\/]src[\\/]cakes[\\/]threeParts\.ts$/;
+
 export function onDemandChunk(moduleIds: readonly string[]): boolean {
-  return moduleIds.length > 0 && moduleIds.every(id => ON_DEMAND.test(id));
+  return moduleIds.some(id => ON_DEMAND.test(id)) && moduleIds.every(id => ON_DEMAND.test(id) || ON_DEMAND_OWN.test(id));
 }
 
 // What is NOT precached: the worker itself, source maps, Vite's own manifest folder, the never-loaded chunks above,

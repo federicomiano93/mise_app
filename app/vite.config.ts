@@ -28,8 +28,8 @@ export default defineConfig({
     // (CSS nesting, for one, needs Chrome 120).
     target: ['chrome101', 'edge101', 'firefox104', 'safari16'],
     cssTarget: ['chrome101', 'edge101', 'firefox104', 'safari16'],
-    // Firestore's lazy chunk is ~554 KB by itself and expected (session/firebaseBackend.ts), and three.js's (the cake's 3D view, ~760 KB,
-    // ~190 KB gzipped, loaded on demand) is the other: the default 500 KB warning would print on every build and hide a real one.
+    // Firestore's lazy chunk is ~554 KB by itself and expected (session/firebaseBackend.ts), and three.js's (the cake's 3D view, ~560 KB,
+    // ~138 KB gzipped, loaded on demand) is the other: the default 500 KB warning would print on every build and hide a real one.
     chunkSizeWarningLimit: 800,
     rollupOptions: {
       output: {
@@ -39,6 +39,9 @@ export default defineConfig({
         // compiled code. Firestore is not listed: it is loaded on first use
         // (session/firebaseBackend.ts) and Vite already gives it a chunk of its own.
         manualChunks(id: string) {
+          // The file that names what the 3D scene takes from three goes WITH three: the view loads one file, and no small precached
+          // chunk statically imports the one the worker leaves out.
+          if (/[\\/]src[\\/]cakes[\\/]threeParts\.ts$/.test(id)) return 'three';
           if (!id.includes('node_modules')) return undefined;
           if (/[\\/]node_modules[\\/](react|react-dom|scheduler)[\\/]/.test(id)) return 'react';
           if (/[\\/]node_modules[\\/](react-aria-components|react-aria|react-stately|@react-aria|@react-stately|@react-types|@internationalized|@swc)[\\/]/.test(id)) return 'react-aria';
