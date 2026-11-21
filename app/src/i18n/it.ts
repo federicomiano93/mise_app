@@ -601,6 +601,8 @@ export const it: Messages = {
   'cakes.stage.note.webgl': 'Questo dispositivo non riesce a disegnare la vista 3D: ecco il disegno semplice.',
   'cakes.stage.note.load': 'Non è stato possibile caricare la vista 3D (c’è la connessione?): ecco il disegno semplice.',
   'cakes.stage.note.motion': 'Il dispositivo chiede meno movimento: ecco il disegno semplice. Scegli 3D per vedere la torta.',
+  'cakes.stage.note.error': 'La vista 3D si è fermata: ecco il disegno semplice.',
+  'cakes.stage.touchHint': 'Due dita per girare e ingrandire la torta.',
   'cakes.grams': '{g} g',
   'cakes.band.refChanged': 'I grammi di riferimento sono cambiati da quando questa torta è stata fatta.',
   'cakes.band.refUpdate': 'Aggiorna questa torta ai grammi di riferimento attuali',

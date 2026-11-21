@@ -52,6 +52,12 @@
   font-size: var(--fs-sm);
 }
 
+/* The note is always on the page (a live region must exist before it speaks); with nothing to say it takes no room: this cancels the
+   flex gap above it. */
+.note:empty {
+  margin-top: calc(-1 * var(--s3));
+}
+
 /* While the library arrives the stage keeps its height, so the page does not jump. */
 .loading {
   display: flex;

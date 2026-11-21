@@ -343,7 +343,7 @@ export function labelBoxFor(width: number, height: number): LabelBox {
   const labelWidth = columns === 2
     ? Math.round(Math.min(210, Math.max(140, width * 0.24)))
     : Math.round(Math.min(150, Math.max(112, width * 0.38)));
-  return { width, height, labelWidth, labelHeight: columns === 2 ? 46 : 64, gap: 10, margin: 10, columns };
+  return { width, height, labelWidth, labelHeight: columns === 2 ? 48 : 64, gap: 10, margin: 10, columns };
 }
 
 // The share of the stage's width the cake may use: what the label columns leave.
@@ -358,23 +358,10 @@ export function cakeShare(box: LabelBox): { share: number; centre: number } {
 // ── Which drawing the stage shows ────────────────────────────────────────────
 
 export type StageChoice = '3d' | '2d';
-export type StageFailure = 'webgl' | 'load';
-export type StageNote = 'webgl' | 'load' | 'motion';
-
-// Thrown by the 3D component (and read by the stage's boundary) when it cannot draw: it says why, so the note says it too.
-export class Cake3DUnavailable extends Error {
-  readonly reason: StageFailure;
-  constructor(reason: StageFailure) {
-    super(`The 3D view is unavailable: ${reason}`);
-    this.name = 'Cake3DUnavailable';
-    this.reason = reason;
-  }
-}
-
-// What a boundary that caught `error` calls the failure: the library not arriving (offline the first time) is «load».
-export function failureOf(error: unknown): StageFailure {
-  return error instanceof Cake3DUnavailable ? error.reason : 'load';
-}
+// Why the 3D cannot be drawn: no WebGL 2 on the device, the library did not arrive, or the drawing stopped working (a bug, or a graphics
+// context lost for good). The first two are EXPECTED and are reported by the 3D view itself (onUnavailable), never thrown.
+export type StageFailure = 'webgl' | 'load' | 'error';
+export type StageNote = StageFailure | 'motion';
 
 export interface StageDecision { show: StageChoice; note: StageNote | null }
 
@@ -387,15 +374,22 @@ export function stageDecision(opts: { choice: StageChoice | null; reducedMotion:
   return opts.reducedMotion ? { show: '2d', note: 'motion' } : { show: '3d', note: null };
 }
 
-// Whether the browser can make a WebGL context at all (asked before the library is downloaded).
+// Whether the browser can make a WebGL 2 context at all (asked before the library is downloaded: three.js 0.187 has no WebGL 1, so a
+// device with only WebGL 1 would download half a megabyte it can never use).
 export function webglAvailable(doc: Document = document): boolean {
   try {
-    const canvas = doc.createElement('canvas');
-    const gl = canvas.getContext('webgl2') ?? canvas.getContext('webgl');
+    const gl = doc.createElement('canvas').getContext('webgl2');
     if (!gl) return false;
     (gl.getExtension('WEBGL_lose_context') as { loseContext?: () => void } | null)?.loseContext?.();
     return true;
   } catch {
     return false;
   }
+}
+
+// What the scene is built from, as one string: the same string means the same meshes. The layout holds only numbers that decide the
+// shape (diameters, discs, which parts have cards), never grams or names, so typing a weight or renaming a card does not rebuild the
+// scene (and does not make the labels dip). The view (cut-away or whole) is part of it.
+export function sceneSignature(layout: CakeLayout, view: StageView): string {
+  return `${view}|${JSON.stringify(layout)}`;
 }

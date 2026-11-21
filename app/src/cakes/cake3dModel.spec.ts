@@ -3,7 +3,7 @@ import { cakeGeometry } from '@mise/shared/cake-model';
 import type { Cake } from '@mise/shared/cake-model';
 import {
   CUT_ANGLE, TIER_BOARD_CM, cakeLayout, cakeShare, homeView, labelBoxFor, leaderPath, leadersCross, partAnchors, pickedPart, placeLabels,
-  slotHeights, stageDecision, tapAction,
+  sceneSignature, slotHeights, stageDecision, tapAction, webglAvailable,
 } from './cake3dModel';
 import type { Anchor, LabelBox, PlacedLabel } from './cake3dModel';
 
@@ -232,5 +232,47 @@ describe('which drawing the stage shows', () => {
   it('falls back to the drawing, with the reason, whenever the 3D failed, whatever was chosen', () => {
     expect(stageDecision({ choice: '3d', reducedMotion: false, failure: 'webgl' })).toEqual({ show: '2d', note: 'webgl' });
     expect(stageDecision({ choice: null, reducedMotion: true, failure: 'load' })).toEqual({ show: '2d', note: 'load' });
+    expect(stageDecision({ choice: '3d', reducedMotion: false, failure: 'error' })).toEqual({ show: '2d', note: 'error' });
+  });
+});
+
+describe('whether the 3D can be drawn at all', () => {
+  const docWith = (contexts: Record<string, object | null>, asked: string[] = []) => ({
+    createElement: () => ({
+      getContext: (kind: string) => { asked.push(kind); return contexts[kind] ?? null; },
+    }),
+  }) as unknown as Document;
+
+  it('asks for WebGL 2 only (three.js has no WebGL 1) and says no when it is missing', () => {
+    const asked: string[] = [];
+    expect(webglAvailable(docWith({ webgl: {} }, asked))).toBe(false);
+    expect(asked).toEqual(['webgl2']);
+  });
+  it('says yes for a WebGL 2 context, and gives it back at once', () => {
+    const lose = { loseContext: () => { lost += 1; } };
+    let lost = 0;
+    expect(webglAvailable(docWith({ webgl2: { getExtension: () => lose } }))).toBe(true);
+    expect(lost).toBe(1);
+  });
+  it('says no when asking throws', () => {
+    expect(webglAvailable({ createElement: () => { throw new Error('no'); } } as unknown as Document)).toBe(false);
+  });
+});
+
+describe('what the scene is rebuilt on', () => {
+  const tiersOf = (change: (cake: Cake) => Cake, view: 'cut' | 'whole' = 'cut') => sceneSignature(cakeLayout(cakeGeometry(change(FULL))), view);
+  const base = tiersOf(cake => cake);
+
+  it('does not move when only grams or names change', () => {
+    expect(tiersOf(cake => ({ ...cake, lines: cake.lines.map(line => ({ ...line, grams: 123 })) }))).toBe(base);
+    expect(tiersOf(cake => ({ ...cake, name: 'Another name' }))).toBe(base);
+  });
+  it('moves with the diameter, the discs, the tiers, the view and which parts have cards', () => {
+    expect(tiersOf(cake => ({ ...cake, diameterCm: 28 }))).not.toBe(base);
+    expect(tiersOf(cake => ({ ...cake, discs: 2 }))).not.toBe(base);
+    expect(tiersOf(cake => ({ ...cake, tiers: 1 }))).not.toBe(base);
+    expect(tiersOf(cake => cake, 'whole')).not.toBe(base);
+    expect(tiersOf(cake => ({ ...cake, lines: cake.lines.filter(line => line.part !== 'soak') }))).not.toBe(base);
+    expect(tiersOf(cake => ({ ...cake, lines: [...cake.lines, { tier: 1, part: 'coating', productId: 'F', grams: null }] }))).not.toBe(base);
   });
 });

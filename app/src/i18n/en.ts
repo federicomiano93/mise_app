@@ -644,6 +644,8 @@ export const en = {
   'cakes.stage.note.webgl': 'This device cannot draw the 3D view, so the simple drawing is shown.',
   'cakes.stage.note.load': 'The 3D view could not be loaded (is there a connection?), so the simple drawing is shown.',
   'cakes.stage.note.motion': 'This device asks for less motion, so the simple drawing is shown. Choose 3D to see the cake.',
+  'cakes.stage.note.error': 'The 3D view stopped working, so the simple drawing is shown.',
+  'cakes.stage.touchHint': 'Two fingers to turn and zoom the cake.',
   'cakes.grams': '{g} g',
   'cakes.band.refChanged': 'The reference grams have changed since this cake was made.',
   'cakes.band.refUpdate': 'Update this cake to the current reference grams',

@@ -1,14 +1,14 @@
 // cake3dScene.ts — the IMPURE half of the cake's 3D view: turns a CakeLayout (cake3dModel.ts) into three.js meshes, draws on demand,
 // and answers where a point of the cake is on the screen and which part is under a pointer.
 //
-// ⚠️ THREE IS NEVER IMPORTED HERE (threeLoading.spec.ts): the library arrives as an argument, loaded by Cake3D.tsx with import(), so it
-// stays in a chunk of its own that nobody downloads until a cake editor shows the 3D. Only TYPES are imported.
+// ⚠️ THREE IS NEVER IMPORTED HERE (threeLoading.spec.ts): the library (threeParts.ts: the few classes this file uses and the orbit
+// controls) arrives as an argument, loaded by Cake3D.tsx with import(), so it stays in a chunk of its own that nobody downloads until a
+// cake editor shows the 3D. Only TYPES are imported.
 //
 // ⚠️ RESOURCES. One renderer per scene; `dispose()` frees every geometry, material, the renderer's context and every listener.
 // It draws ON DEMAND (when something changed or the camera is moving) and not at all while the tab is hidden.
 
 import type * as T from 'three';
-import type { OrbitControls as OrbitControlsType } from 'three/addons/controls/OrbitControls.js';
 import type { CakePart } from '@mise/shared/cake-model';
 import type { Selected } from './cakeEditorModel';
 import {
@@ -16,13 +16,14 @@ import {
 } from './cake3dModel';
 import type { Anchor, CakeLayout, StageView, TierLayout } from './cake3dModel';
 
-export type Three = typeof T;
-export type OrbitControlsClass = typeof OrbitControlsType;
+export type Three = typeof import('./threeParts');
 
 // The colours of the scene, as CSS values read from the tokens (Cake3D reads them with getComputedStyle, never typed here).
 export interface SceneColours {
   base: string; soak: string; filling: string; coating: string; decoration: string; board: string;
   accent: string; backdrop: string; ground: string;
+  // The hover glow (a light surface colour).
+  glow: string;
 }
 
 export interface SceneHooks {
@@ -32,6 +33,8 @@ export interface SceneHooks {
   onRest: () => void;
   onTap: (picked: Selected | null) => void;
   onHover: (hovered: Selected | null) => void;
+  // The graphics context was lost and did not come back in time: the scene cannot draw any more.
+  onGaveUp: () => void;
 }
 
 export interface CakeScene {
@@ -44,7 +47,9 @@ export interface CakeScene {
   dispose: () => void;
 }
 
-// The colour a CSS value stands for, as sRGB 0..255, by asking a canvas (it parses oklch and var() results alike).
+// The colour a CSS value stands for, as sRGB 0..255, by asking a canvas (it parses oklch and var() results alike). A value the canvas
+// cannot read leaves its fill at the sentinel, and then there is no colour (null: the caller uses its grey).
+const SENTINEL: readonly [number, number, number] = [1, 2, 3];
 export function resolveCss(value: string, doc: Document = document): [number, number, number] | null {
   const context = doc.createElement('canvas').getContext('2d');
   if (!context || value.trim() === '') return null;
@@ -52,20 +57,35 @@ export function resolveCss(value: string, doc: Document = document): [number, nu
   context.fillStyle = value;
   context.fillRect(0, 0, 1, 1);
   const data = context.getImageData(0, 0, 1, 1).data;
-  return [data[0] ?? 0, data[1] ?? 0, data[2] ?? 0];
+  const rgb: [number, number, number] = [data[0] ?? 0, data[1] ?? 0, data[2] ?? 0];
+  return rgb[0] === SENTINEL[0] && rgb[1] === SENTINEL[1] && rgb[2] === SENTINEL[2] ? null : rgb;
 }
 
 const SEGMENTS = 96;
 // The wedge cut out of «Spaccato», and the smallest move that is a drag and not a tap.
 const TAP_SLOP_PX = 6;
 const REST_MS = 140;
+// How long a lost graphics context may stay lost before the 3D is given up.
+const CONTEXT_GRACE_MS = 2000;
 const FLIGHT_MS = 700;
 
 type Tag = { tier: number; part: CakePart };
 const tagKey = (tag: Tag) => `${String(tag.tier)}|${tag.part}`;
 
-export function createCakeScene(lib: Three, Controls: OrbitControlsClass, canvas: HTMLCanvasElement, css: SceneColours, hooks: SceneHooks): CakeScene {
+// ⚠️ A SCENE THAT FAILS HALF WAY GIVES THE CONTEXT BACK: the renderer already holds a WebGL context (browsers allow a handful), so a throw
+// after it is made frees it before the error goes on.
+export function createCakeScene(lib: Three, canvas: HTMLCanvasElement, css: SceneColours, hooks: SceneHooks): CakeScene {
   const renderer = new lib.WebGLRenderer({ canvas, antialias: true });
+  try {
+    return assemble(lib, renderer, canvas, css, hooks);
+  } catch (error) {
+    renderer.dispose();
+    renderer.forceContextLoss();
+    throw error;
+  }
+}
+
+function assemble(lib: Three, renderer: T.WebGLRenderer, canvas: HTMLCanvasElement, css: SceneColours, hooks: SceneHooks): CakeScene {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = lib.PCFSoftShadowMap;
@@ -83,19 +103,24 @@ export function createCakeScene(lib: Three, Controls: OrbitControlsClass, canvas
   const palette = {
     base: colourOf(css.base), soak: colourOf(css.soak), filling: colourOf(css.filling), coating: colourOf(css.coating),
     decoration: colourOf(css.decoration), board: colourOf(css.board), accent: colourOf(css.accent),
-    backdrop: colourOf(css.backdrop), ground: colourOf(css.ground),
+    backdrop: colourOf(css.backdrop), ground: colourOf(css.ground), glow: colourOf(css.glow),
   };
 
   const scene = new lib.Scene();
   scene.background = palette.backdrop;
   const camera = new lib.PerspectiveCamera(CAMERA_FOV_DEG, 1, 1, 600);
-  const controls = new Controls(camera, canvas);
+  const controls = new lib.OrbitControls(camera, canvas);
+  // ⚠️ ON A TOUCH SCREEN ONE FINGER SCROLLS THE PAGE (the editor is long), two fingers turn and zoom the cake: with ONE left unset the
+  // controls ignore a single finger, and `pan-y` (set after the controls, which write `none`) lets the browser scroll. A tap still picks.
+  controls.touches = { ONE: null, TWO: lib.TOUCH.DOLLY_ROTATE };
+  canvas.style.touchAction = 'pan-y';
   controls.enableDamping = true;
   controls.dampingFactor = 0.1;
   controls.enablePan = false;
   controls.minPolarAngle = 0.25;
   controls.maxPolarAngle = 1.4;
 
+  // The lights are white on purpose: they are light, not a colour of the design.
   scene.add(new lib.HemisphereLight(0xffffff, palette.ground, 1.5));
   const sun = new lib.DirectionalLight(0xffffff, 2.1);
   sun.position.set(-26, 52, 34);
@@ -266,13 +291,13 @@ export function createCakeScene(lib: Three, Controls: OrbitControlsClass, canvas
   }
 
   // ── Highlights ────────────────────────────────────────────────────────────
-  const white = new lib.Color(1, 1, 1);
+  const none = new lib.Color(0, 0, 0);
   function applyHighlights() {
     for (const [key, list] of materialsOf) {
       const chosen = selectedNow !== null && tagKey(selectedNow) === key;
       const hovered = !chosen && hoveredNow !== null && tagKey(hoveredNow) === key;
       for (const mat of list) {
-        mat.emissive.copy(chosen ? palette.accent : hovered ? white : new lib.Color(0, 0, 0));
+        mat.emissive.copy(chosen ? palette.accent : hovered ? palette.glow : none);
         mat.emissiveIntensity = chosen ? 0.4 : hovered ? 0.2 : 0;
       }
     }
@@ -281,6 +306,7 @@ export function createCakeScene(lib: Three, Controls: OrbitControlsClass, canvas
   // ── Drawing on demand ─────────────────────────────────────────────────────
   let frameId = 0;
   let disposed = false;
+  // A gesture that has really begun (moved past the tap slop, a second finger, the wheel): only then does the camera stop being «at home».
   let interacting = false;
   let moving = false;
   let flight: { t0: number; from: T.Vector3; fromTarget: T.Vector3; to: T.Vector3; toTarget: T.Vector3 } | null = null;
@@ -327,13 +353,30 @@ export function createCakeScene(lib: Three, Controls: OrbitControlsClass, canvas
   }
 
   controls.addEventListener('change', requestRender);
-  controls.addEventListener('start', () => { interacting = true; atHome = false; flight = null; setMoving(true); requestRender(); });
+  // ⚠️ THE CONTROLS' 'start' FIRES ON EVERY TOUCH OF THE CANVAS, a plain tap included: a tap must not stop a return flight nor stop a
+  // resize re-framing the cake, so a gesture counts only when it has MOVED (see commitGesture).
+  function commitGesture() {
+    if (interacting) return;
+    interacting = true;
+    atHome = false;
+    flight = null;
+    setMoving(true);
+    requestRender();
+  }
   controls.addEventListener('end', () => { interacting = false; requestRender(); });
+  const onWheel = () => { commitGesture(); };
+  canvas.addEventListener('wheel', onWheel, { passive: true });
 
   const onVisibility = () => { if (!document.hidden) requestRender(); };
   document.addEventListener('visibilitychange', onVisibility);
-  const onLost = (event: Event) => { event.preventDefault(); };
-  const onRestored = () => { requestRender(); };
+  // A lost context is given a moment to come back (the browser may restore it); when it does not, the 3D is given up.
+  let lostTimer = 0;
+  const onLost = (event: Event) => {
+    event.preventDefault();
+    window.clearTimeout(lostTimer);
+    lostTimer = window.setTimeout(() => { if (!disposed) hooks.onGaveUp(); }, CONTEXT_GRACE_MS);
+  };
+  const onRestored = () => { window.clearTimeout(lostTimer); requestRender(); };
   canvas.addEventListener('webglcontextlost', onLost);
   canvas.addEventListener('webglcontextrestored', onRestored);
 
@@ -382,6 +425,8 @@ export function createCakeScene(lib: Three, Controls: OrbitControlsClass, canvas
   const onDown = (event: PointerEvent) => {
     touches += 1;
     down = touches === 1 ? { x: event.clientX, y: event.clientY, id: event.pointerId } : null;
+    // A second finger is a turn or a pinch: a real gesture at once.
+    if (touches > 1) commitGesture();
     setHover(null);
   };
   const onUp = (event: PointerEvent) => {
@@ -396,6 +441,7 @@ export function createCakeScene(lib: Three, Controls: OrbitControlsClass, canvas
   // Hover is for a mouse only (a finger has none), one pick per frame.
   let hoverAt: { x: number; y: number } | null = null;
   const onMove = (event: PointerEvent) => {
+    if (down && !interacting && Math.hypot(event.clientX - down.x, event.clientY - down.y) > TAP_SLOP_PX) commitGesture();
     if (event.pointerType !== 'mouse' || event.buttons !== 0) return;
     const queued = hoverAt !== null;
     hoverAt = { x: event.clientX, y: event.clientY };
@@ -481,6 +527,8 @@ export function createCakeScene(lib: Three, Controls: OrbitControlsClass, canvas
       document.removeEventListener('visibilitychange', onVisibility);
       canvas.removeEventListener('webglcontextlost', onLost);
       canvas.removeEventListener('webglcontextrestored', onRestored);
+      canvas.removeEventListener('wheel', onWheel);
+      window.clearTimeout(lostTimer);
       canvas.removeEventListener('pointerdown', onDown);
       canvas.removeEventListener('pointerup', onUp);
       canvas.removeEventListener('pointercancel', onCancel);
