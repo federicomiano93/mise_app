@@ -62,13 +62,13 @@ export function FoodcostList({ openProductId, onOpenProduct, onOpenNew, onOpenSe
   const found = useMemo(() => ranked.filter(({ product }) => nameMatches(product, query)), [ranked, query]);
 
   // ── Categories (model 4, 20 Nov 2026) ──
-  // The list is drawn in groups once the venue has at least one category: the categories in their order, then «No category» last,
-  // a group with no cards not drawn. ⚠️ EVERY GROUP STARTS CLOSED (his explicit ask) and a tap opens or closes one; the group of the
+  // The list is drawn in groups once the venue has at least one category: the categories in their order, then «Cakes» (every cake's
+  // card, display only), then «No category» last, a group with no cards not drawn. With no category the list is flat. ⚠️ EVERY GROUP STARTS CLOSED (his explicit ask) and a tap opens or closes one; the group of the
   // card that is open opens by itself; while a search is typed the matching cards show with their groups open, and clearing it
   // returns to the person's own taps. The taps live in this component's state only — nothing is stored.
   const [openGroups, setOpenGroups] = useState<ReadonlySet<string>>(() => new Set());
   const searching = query.trim() !== '';
-  const groups = useMemo(() => (grouped(categories, products) ? groupRows(found, categories) : null), [found, categories, products]);
+  const groups = useMemo(() => (grouped(categories) ? groupRows(found, categories) : null), [found, categories]);
   const toggleGroup = (id: string | null) => {
     const key = id ?? NO_CATEGORY_KEY;
     setOpenGroups(before => {

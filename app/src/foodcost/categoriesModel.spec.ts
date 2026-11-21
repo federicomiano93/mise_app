@@ -90,10 +90,9 @@ describe('the «Cakes» group', () => {
     expect(cardCounts([cake, other], cats).get('a')).toBe(1);
   });
 
-  test('the list is grouped when there is a cake, even with no category at all', () => {
-    expect(grouped([], [loose])).toBe(false);
-    expect(grouped([], [loose, cake])).toBe(true);
-    expect(grouped(cats, [])).toBe(true);
-    expect(groupRows(rows(loose, cake), []).map(group => group.id)).toEqual([CAKES_GROUP_ID, null]);
+  test('the list is grouped only when the venue has a real category; a cake alone does not group it', () => {
+    expect(grouped([])).toBe(false);
+    expect(grouped(cats)).toBe(true);
+    expect(groupRows(rows(loose, cake), cats).map(group => group.id)).toEqual([CAKES_GROUP_ID, null]);
   });
 });

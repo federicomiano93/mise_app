@@ -83,8 +83,8 @@ export interface Group<T> {
 }
 
 // The rows split into groups: the categories in order, then «Cakes» (every cake's card), then «No category» last. A group with no
-// rows is not drawn. With no category and no cake the list is one plain group (id null) and the screen draws no header for it — see
-// `grouped`. `rows` keep their own order inside each group (the list's worst-first order).
+// rows is not drawn. The screen calls this only when the venue has a category (see `grouped`); with none the list is flat and has no
+// headers. `rows` keep their own order inside each group (the list's worst-first order).
 export function groupRows<T extends { product: Product }>(rows: readonly T[], categories: readonly Category[]): Group<T>[] {
   const byId = new Map<string | null, T[]>();
   for (const row of rows) {
@@ -104,9 +104,10 @@ export function groupRows<T extends { product: Product }>(rows: readonly T[], ca
   return groups;
 }
 
-// Whether the list is drawn in groups at all: only when the venue has at least one category, or at least one cake.
-export function grouped(categories: readonly Category[], products: readonly Pick<Product, 'id'>[] = []): boolean {
-  return categories.length > 0 || products.some(product => isCakeProductId(product.id));
+// Whether the list is drawn in groups at all: only when the venue has at least one category. Without one the list stays flat (a
+// cake's row keeps its «Cake» tag); with one, the cakes sit together in their own «Cakes» group.
+export function grouped(categories: readonly Category[]): boolean {
+  return categories.length > 0;
 }
 
 // Which groups are open. All start CLOSED (the owner's ask); a search shows the matching cards with their groups open; the group of
