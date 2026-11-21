@@ -17,6 +17,7 @@ import { useStatusMessage } from '../ui/StatusMessage';
 import { useConfirm } from '../ui/useConfirm';
 import { useCakes, useCakesStore } from './CakesContext';
 import { CAKES_PATH } from './cakesPath';
+import { useCopyWait } from '../foodcost/copyWait';
 import { CAKE_FIELDS, GRAM_FIELDS, exampleGrams, firstProblem, isDirty, referenceFrom, textFrom } from './referenceModel';
 import type { ReferenceField, ReferenceKey, ReferenceText } from './referenceModel';
 import styles from './ReferenceScreen.module.css';
@@ -31,7 +32,9 @@ import styles from './ReferenceScreen.module.css';
 export function ReferenceScreen() {
   const { t } = useT();
   const { referenceLoaded } = useCakes();
-  if (!referenceLoaded) {
+  // After the deadline (offline on a first visit nothing ever answers) the form opens with empty boxes, as for a venue with none yet.
+  const waited = useCopyWait(referenceLoaded);
+  if (!waited) {
     return (
       <section className={styles.screen} aria-busy="true">
         <p className={styles.loading}>{t('session.loading')}</p>

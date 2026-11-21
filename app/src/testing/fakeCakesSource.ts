@@ -10,6 +10,7 @@ type CakesListener = { onChange: (list: StoredDoc[], meta: CakesMeta) => void; o
 type ReferenceListener = (data: Record<string, unknown> | null, meta: CakesMeta) => void;
 
 const FROM_SERVER: CakesMeta = { fromServer: true };
+const FROM_COPY: CakesMeta = { fromServer: false };
 
 export type FakeCakesSource = CakesSource & {
   cakes: Map<string, StoredDoc>;
@@ -19,6 +20,8 @@ export type FakeCakesSource = CakesSource & {
   refuse: { reference: boolean };
   // Every reference write that reached the source, in order.
   saved: { grams: unknown; updatedAt: string }[];
+  // The reference answers from this phone's own copy only (a first visit offline): a missing document is then NOT an answer.
+  referenceOffline: boolean;
   // Tells every watcher again, as another phone's write would.
   push(): void;
   // Holds back the first answer of the cakes until release() (Firestore still loading).
@@ -28,7 +31,7 @@ export type FakeCakesSource = CakesSource & {
   failCakes(): void;
 };
 
-export function fakeCakesSource(seed: { cakes?: StoredDoc[]; reference?: Record<string, unknown> | null } = {}): FakeCakesSource {
+export function fakeCakesSource(seed: { cakes?: StoredDoc[]; reference?: Record<string, unknown> | null; referenceOffline?: boolean } = {}): FakeCakesSource {
   const cakes = new Map((seed.cakes ?? []).map(doc => [doc.id, doc] as const));
   const cakeWatchers = new Set<CakesListener>();
   const referenceWatchers = new Set<ReferenceListener>();
@@ -40,11 +43,12 @@ export function fakeCakesSource(seed: { cakes?: StoredDoc[]; reference?: Record<
 
   const fake: FakeCakesSource = {
     cakes, refuse, saved,
+    referenceOffline: seed.referenceOffline === true,
     reference: seed.reference === undefined ? null : seed.reference,
 
     push() {
       if (!held) for (const w of cakeWatchers) w.onChange([...cakes.values()], FROM_SERVER);
-      for (const w of referenceWatchers) w(fake.reference, FROM_SERVER);
+      for (const w of referenceWatchers) w(fake.reference, fake.referenceOffline ? FROM_COPY : FROM_SERVER);
     },
     hold() { held = true; },
     release() { held = false; fake.push(); },
@@ -62,7 +66,7 @@ export function fakeCakesSource(seed: { cakes?: StoredDoc[]; reference?: Record<
 
     watchReference: vi.fn<CakesSource['watchReference']>(onChange => {
       referenceWatchers.add(onChange);
-      queueMicrotask(() => { if (referenceWatchers.has(onChange)) onChange(fake.reference, FROM_SERVER); });
+      queueMicrotask(() => { if (referenceWatchers.has(onChange)) onChange(fake.reference, fake.referenceOffline ? FROM_COPY : FROM_SERVER); });
       return () => { referenceWatchers.delete(onChange); };
     }),
 

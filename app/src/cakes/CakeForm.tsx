@@ -73,7 +73,7 @@ export function CakeForm({ id, cake, titleRef, onSaved }: Props) {
   const { t } = useT();
   const store = useFoodcostStore();
   const snap = useFoodcost();
-  const { reference } = useCakes();
+  const { reference, referenceLoaded } = useCakes();
   const { canManage, location } = useSession();
   const money = useMoney();
   const say = useStatusMessage();
@@ -350,7 +350,8 @@ export function CakeForm({ id, cake, titleRef, onSaved }: Props) {
 
   const venueRef = reference;
   const refDiffers = referenceChanged(working, venueRef);
-  const noReference = working.ref === null && venueRef === null;
+  // An existing cake with none of its own does not claim «no reference» before the venue's has answered.
+  const noReference = working.ref === null && venueRef === null && (id === null || referenceLoaded);
 
   return (
     <section className={styles.editor} aria-labelledby={titleId}>

@@ -3,6 +3,7 @@ import type { Ref } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { cakeProductId } from '@mise/shared/cake-model';
 import { useFoodcost, useFoodcostStore } from '../foodcost/FoodcostContext';
+import { useCopyWait } from '../foodcost/copyWait';
 import { cameFromFoodcost, cameFromList, useLeave } from '../foodcost/foodcostNav';
 import { NEW_OPENER, productOpener, useHandBack } from '../foodcost/handBack';
 import { useT } from '../i18n/useT';
@@ -15,7 +16,7 @@ import styles from './CakeEditor.module.css';
 // One cake's screen: a cake by its address (`id`), or a new one (`id` null).
 //
 // ⚠️ IT WAITS FOR EVERYTHING THE FORM COPIES AND COSTS FROM: the cakes, the Food cost cards, the recipes and the ingredients with their
-// prices, and the venue's reference grams (a new cake takes them: copied before they arrive, it would have none). A cake costed before
+// prices, and, for a NEW cake, the venue's reference grams (copied before they arrive, it would have none; see referenceReady). A cake costed before
 // its prices arrived would read «incomplete» only because they were on their way.
 //
 // ⚠️ A CAKE MISSING FROM THE LIST IS «GONE» ONLY ON THE SERVER'S WORD (`cakesFromServer`): this phone's own copy of the cakes may be an
@@ -40,7 +41,12 @@ export function CakeEditor({ id }: { id: string | null }) {
   const leave = useLeave(CAKES_PATH, onLeaving);
 
   const cake = id === null ? null : cakes.find(candidate => candidate.id === id) ?? null;
-  const ready = cakesLoaded && referenceLoaded && productsLoaded && recipesLoaded && ingredientsLoaded;
+  // ⚠️ AN EXISTING CAKE CARRIES ITS OWN `ref` and does not wait for the venue's: only the «reference changed» band does. A NEW cake copies the
+  // venue's, so it waits for the answer — but not for ever: offline on a first visit no answer comes, and after the deadline it starts as «no
+  // reference yet» (Food cost's own COPY_WAIT_MS).
+  const referenceWaited = useCopyWait(referenceLoaded);
+  const referenceReady = id !== null || referenceWaited;
+  const ready = cakesLoaded && referenceReady && productsLoaded && recipesLoaded && ingredientsLoaded;
   const firstSave = id === null ? null : store.firstSave(cakeProductId(id));
 
   // The form is keyed on the id, except that a new cake saved by it keeps its form when its address arrives.
