@@ -248,3 +248,12 @@
   font-size: var(--fs-sm);
   font-weight: 650;
 }
+
+/* The same total as the last line of the stacked list (the stage's own is hidden while the cake moves, which is always when stacked). */
+.noteTotal {
+  margin: 0;
+  padding: var(--s1) var(--s2);
+  color: var(--ink);
+  font-size: var(--fs-sm);
+  font-weight: 650;
+}

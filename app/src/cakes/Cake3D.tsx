@@ -66,7 +66,8 @@ export default function Cake3D({ geometry, selected, tier, onSelect, labels, onO
     const action = tapAction(picked, current);
     if (picked && action === 'select') select(picked);
     else if (picked && action === 'open') {
-      // The chooser this opens gives the focus back to where it was: the stage, not the page (a canvas tap focuses nothing by itself).
+      // The step this opens puts the cursor in its own search box; the focus is parked on the stage first, not on the page (a canvas tap
+      // focuses nothing by itself).
       viewport.current?.focus({ preventScroll: true });
       open?.(picked);
     }
@@ -235,7 +236,7 @@ export default function Cake3D({ geometry, selected, tier, onSelect, labels, onO
               </div>
             );
           })}
-          {labels.total ? <p className={styles.total}>{labels.total}</p> : null}
+          {labels.total && !stacked ? <p className={styles.total}>{labels.total}</p> : null}
         </div>
       </div>
       <p className={styles.touchHint}>{t('cakes.stage.touchHint')}</p>
@@ -257,6 +258,7 @@ export default function Cake3D({ geometry, selected, tier, onSelect, labels, onO
               </div>
             );
           })}
+          {labels.total ? <p className={styles.noteTotal}>{labels.total}</p> : null}
         </div>
       ) : null}
     </div>

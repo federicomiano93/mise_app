@@ -19,7 +19,7 @@ export interface StageLabels {
   // The 3D view's callout under a part's recipe name(s): «420 g · £0.84» (its grams and the raw-material cost of its cards). The flat
   // drawing keeps its own words and never reads this.
   callout?: (tier: number, part: CakePart) => string;
-  // «Raw materials so far: £4.20», over the 3D view; '' while the cake holds nothing.
+  // «Raw materials so far: £4.20», over the 3D view (and under the flat drawing, and last in the stacked list); '' while the cake holds nothing.
   total?: string;
 }
 
@@ -247,6 +247,7 @@ export function CakeSection2D({ geometry, selected, tier: shownTier, onSelect, l
         {shapes}
         {notes}
       </svg>
+      {labels.total ? <p className={styles.total}>{labels.total}</p> : null}
     </div>
   );
 }

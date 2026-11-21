@@ -22,7 +22,7 @@ export type CakeStageProps = {
   tier: number;
   onSelect: (selected: Selected) => void;
   labels: StageLabels;
-  // A second tap on the chosen part in the 3D view: the editor opens that part's «Add a card».
+  // A second tap on the chosen part in the 3D view: the editor opens that part's step, with the cursor in its search box.
   onOpenPart?: (selected: Selected) => void;
 };
 

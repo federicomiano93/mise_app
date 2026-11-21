@@ -273,6 +273,17 @@ describe('the callouts', () => {
     expect(screen.queryByText(/Raw materials so far/)).not.toBeInTheDocument();
   });
 
+  it('on a stage too narrow for labels, show «Raw materials so far» as the last line of the list and not over the cake', async () => {
+    size(300, 400);
+    world.anchors = [{ key: 'base', x: 150, y: 300 }];
+    const { container } = render(<Cake3D {...props({ labels: callouts }, full)} />);
+    await settled();
+    const totals = screen.getAllByText('Raw materials so far: £1.00');
+    expect(totals).toHaveLength(1);
+    expect(totals[0]?.parentElement?.lastElementChild).toBe(totals[0]);
+    expect(container.querySelector('[data-part="base"]')?.parentElement).toBe(totals[0]?.parentElement);
+  });
+
   it('are hidden from a screen reader: the steps beside the drawing say the same', async () => {
     size(900, 500);
     world.anchors = [{ key: 'base', x: 300, y: 300 }];

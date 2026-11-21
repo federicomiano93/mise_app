@@ -35,6 +35,13 @@ const draw = (tier = 0, selected: { tier: number; part: CakePart } | null = null
 };
 
 describe('the section drawing', () => {
+  it('says «Raw materials so far» under the drawing, and nothing while the cake holds nothing', () => {
+    const view = render(<CakeSection2D geometry={cakeGeometry(CAKE)} selected={null} tier={0} onSelect={vi.fn()} labels={{ ...LABELS, total: 'Raw materials so far: £1.00' }} />);
+    expect(screen.getByText('Raw materials so far: £1.00')).toBeInTheDocument();
+    view.rerender(<CakeSection2D geometry={cakeGeometry(CAKE)} selected={null} tier={0} onSelect={vi.fn()} labels={{ ...LABELS, total: '' }} />);
+    expect(screen.queryByText(/Raw materials so far/)).not.toBeInTheDocument();
+  });
+
   it('is one image with a summary for a screen reader', () => {
     draw();
     expect(screen.getByRole('img', { name: 'Section drawing of the cake: 2 tiers.' })).toBeInTheDocument();
