@@ -87,6 +87,12 @@ describe('the cake in space', () => {
     expect(whole.filling!.y).toBeCloseTo(cut.filling!.y, 6);
     expect(Object.keys(partAnchors(top!, 'cut')).sort()).toEqual(['base', 'decoration']);
   });
+
+  it('a base with no card is drawn but gets no callout (nothing to name)', () => {
+    const bare = cakeLayout(cakeGeometry({ ...FULL, tiers: 1, lines: [] })).tiers[0]!;
+    expect(bare.layers.filter(l => l.kind === 'base')).toHaveLength(3);
+    expect(partAnchors(bare, 'cut')).toEqual({});
+  });
 });
 
 describe('the camera’s home view', () => {

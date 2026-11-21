@@ -196,7 +196,8 @@ export function partAnchors(tier: TierLayout, view: StageView): Partial<Record<C
   const side = (angle: number, y: number) => around(angle, skin + 0.05, y);
 
   const base = layerMid(tier, 'base', 'first');
-  if (base !== null) out.base = view === 'cut' ? inside(-half, 0.55, base) : side(-0.75, base);
+  // A base with no card is drawn (faint discs) but has nothing to name: no callout for it.
+  if (base !== null && tier.hasBase) out.base = view === 'cut' ? inside(-half, 0.55, base) : side(-0.75, base);
   const soak = layerMid(tier, 'soak', 'last');
   if (soak !== null) out.soak = view === 'cut' ? inside(half, 0.6, soak) : side(0.5, soak);
   const filling = layerMid(tier, 'filling', 'last');
