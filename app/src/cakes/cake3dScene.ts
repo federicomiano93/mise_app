@@ -12,7 +12,7 @@ import type * as T from 'three';
 import type { CakePart } from '@mise/shared/cake-model';
 import type { Selected } from './cakeEditorModel';
 import {
-  BOARD_THICKNESS_CM, COATING_CM, CUT_ANGLE, TIER_BOARD_CM, CAMERA_FOV_DEG, appearedParts, homeView, partAnchors, pickedPart,
+  BOARD_THICKNESS_CM, CUT_ANGLE, TIER_BOARD_CM, CAMERA_FOV_DEG, appearedParts, homeView, partAnchors, pickedPart,
 } from './cake3dModel';
 import type { Anchor, CakeLayout, StageView, TierLayout } from './cake3dModel';
 import { FOOD, PLAIN_LOOK } from './cakeLook';
@@ -79,6 +79,11 @@ const FLIGHT_MS = 700;
 
 // The base's discs while the base has no card: drawn faint, so the person can count them while setting the measures.
 const GHOST_OPACITY = 0.3;
+// How wide, in cm round their middle, the pieces on top are: the cut-away drops the ones whose body would hang over the removed slice.
+const PLAIN_PIECE_CM = 0.6;
+const RASPBERRY_CM = 0.55;
+const BLUEBERRY_CM = 0.4;
+const MINT_CM = 0.6;
 // How far a disc or a berry drops from when it lands.
 const DROP_CM = 16;
 const BERRY_DROP_CM = 12;
@@ -152,24 +157,52 @@ function assemble(lib: Three, renderer: T.WebGLRenderer, canvas: HTMLCanvasEleme
   backdropCanvas.width = 256;
   backdropCanvas.height = 256;
   const backdropContext = backdropCanvas.getContext('2d');
-  if (backdropContext) {
-    const gradient = backdropContext.createRadialGradient(128, 115, 15, 128, 128, 190);
-    gradient.addColorStop(0, rgbOf(css.stageCenter));
-    gradient.addColorStop(1, rgbOf(css.stageEdge));
+  const centreRgb = rgbOf(css.stageCenter);
+  const edgeRgb = rgbOf(css.stageEdge);
+  // The square is stretched over the stage, so its circle becomes the ellipse that Cake3D.module.css's fallback gradient draws (74% of the
+  // width and height, from a core of 8%, centred 45% down): the first frame does not jump. `middle` is where the cake stands, as a share of the width.
+  const paintBackdrop = (middle: number) => {
+    if (!backdropContext) return;
+    const gradient = backdropContext.createRadialGradient(middle * 256, 115, 15, middle * 256, 115, 190);
+    gradient.addColorStop(0, centreRgb);
+    gradient.addColorStop(1, edgeRgb);
     backdropContext.fillStyle = gradient;
     backdropContext.fillRect(0, 0, 256, 256);
-  }
+  };
+  paintBackdrop(0.5);
   const backdrop = new lib.CanvasTexture(backdropCanvas);
   backdrop.colorSpace = lib.SRGBColorSpace;
   scene.background = backdrop;
-  // The studio the glaze, the plate and the fruit reflect: made once into a small environment map, the room itself freed at once.
-  const pmrem = new lib.PMREMGenerator(renderer);
-  const room = new lib.RoomEnvironment();
-  const environment = pmrem.fromScene(room, 0.04);
-  room.dispose();
-  pmrem.dispose();
-  scene.environment = environment.texture;
-  scene.environmentIntensity = 0.5;
+  // The studio the glaze, the plate and the fruit reflect: made into a small environment map, the room itself freed at once. A lost
+  // graphics context empties it (a render target lives in the context), so it is made again when the context comes back. Where it cannot
+  // be made (no half-float targets) the hemisphere light is raised instead: the cake is never darker than without the map.
+  const SKY_WITH_MAP = 0.45;
+  const SKY_WITHOUT_MAP = 1.1;
+  let environment: T.WebGLRenderTarget | null = null;
+  const sky = new lib.HemisphereLight(0xffffff, palette.ground, SKY_WITH_MAP);
+  function makeEnvironment() {
+    environment?.dispose();
+    environment = null;
+    scene.environment = null;
+    sky.intensity = SKY_WITHOUT_MAP;
+    try {
+      const pmrem = new lib.PMREMGenerator(renderer);
+      const room = new lib.RoomEnvironment();
+      try {
+        environment = pmrem.fromScene(room, 0.04);
+      } finally {
+        room.dispose();
+        pmrem.dispose();
+      }
+      scene.environment = environment.texture;
+      scene.environmentIntensity = 0.5;
+      sky.intensity = SKY_WITH_MAP;
+    } catch {
+      environment = null;
+      scene.environment = null;
+    }
+  }
+  makeEnvironment();
   const camera = new lib.PerspectiveCamera(CAMERA_FOV_DEG, 1, 1, 600);
   const controls = new lib.OrbitControls(camera, canvas);
   // ⚠️ ON A TOUCH SCREEN ONE FINGER SCROLLS THE PAGE (the editor is long), two fingers turn and zoom the cake: with ONE left unset the
@@ -183,7 +216,7 @@ function assemble(lib: Three, renderer: T.WebGLRenderer, canvas: HTMLCanvasEleme
   controls.maxPolarAngle = 1.4;
 
   // The lights are warm white on purpose: they are light, not a colour of the design. One small shadow map (1024).
-  scene.add(new lib.HemisphereLight(0xffffff, palette.ground, 0.45));
+  scene.add(sky);
   const sun = new lib.DirectionalLight(0xfff6ea, 1.9);
   sun.position.set(-26, 52, 34);
   sun.castShadow = true;
@@ -261,8 +294,15 @@ function assemble(lib: Three, renderer: T.WebGLRenderer, canvas: HTMLCanvasEleme
     const start = half;
     const length = Math.PI * 2 - 2 * half;
     const dirAt = (angle: number) => new lib.Vector3(Math.sin(angle), 0, Math.cos(angle));
-    // A point of the floor plan that the cut-away took out (a little margin for what has a width).
-    const inWedge = (x: number, z: number, margin = 0.12) => !whole && Math.abs(Math.atan2(x, z)) < half + margin;
+    // A piece of the floor plan that the cut-away took out: its centre is in the wedge, or its body (`body` cm round the centre) reaches
+    // into it. A piece nearer the axis than its own size always does, so it is dropped.
+    const inWedge = (x: number, z: number, margin = 0.12, body = 0) => {
+      if (whole) return false;
+      const d = Math.hypot(x, z);
+      if (body > 0 && d <= body) return true;
+      const spread = body > 0 ? Math.asin(Math.min(1, body / d)) : 0;
+      return Math.abs(Math.atan2(x, z)) < half + margin + spread;
+    };
 
     const track = (mat: T.MeshStandardMaterial, tag: Tag) => {
       const list = materialsOf.get(tagKey(tag)) ?? [];
@@ -339,8 +379,6 @@ function assemble(lib: Three, renderer: T.WebGLRenderer, canvas: HTMLCanvasEleme
       .map(([x, y]) => new lib.Vector2(x * fit, (y - 0.45) * lift));
     group.add(mesh(new lib.LatheGeometry(profile, SEGMENTS), plate, null));
 
-    const decorationGeometry = new lib.SphereGeometry(0.6, 24, 16);
-    decorationGeometry.scale(1, 0.85, 1);
     for (const tier of layout.tiers) {
       currentTier = tier.index;
       const look = looks[tier.index] ?? PLAIN_LOOK;
@@ -456,6 +494,8 @@ function assemble(lib: Three, renderer: T.WebGLRenderer, canvas: HTMLCanvasEleme
 
       if (kind === 'plain') {
         const mat = own(material(colourOf(look.decoration.colour ?? css.decoration), { roughness: 0.35 }));
+        const decorationGeometry = new lib.SphereGeometry(PLAIN_PIECE_CM, 24, 16);
+        decorationGeometry.scale(1, 0.85, 1);
         // Under another tier the pieces sit on the part of the top that tier leaves bare.
         const ring = tier.upperEdge === null ? outer * 0.78 : (tier.upperEdge + outer) / 2;
         const count = Math.max(5, Math.round((Math.PI * 2 * ring) / 1.6));
@@ -464,7 +504,7 @@ function assemble(lib: Three, renderer: T.WebGLRenderer, canvas: HTMLCanvasEleme
         };
         for (let i = 0; i < count; i += 1) {
           const p = dirAt((i / count) * Math.PI * 2).multiplyScalar(ring);
-          if (inWedge(p.x, p.z)) continue;
+          if (inWedge(p.x, p.z, 0.12, PLAIN_PIECE_CM)) continue;
           piece(p.x, p.z);
         }
         // A second, smaller ring on a broad tier, and one in the middle.
@@ -473,11 +513,11 @@ function assemble(lib: Three, renderer: T.WebGLRenderer, canvas: HTMLCanvasEleme
           const n = Math.max(4, Math.round((Math.PI * 2 * inner) / 1.8));
           for (let i = 0; i < n; i += 1) {
             const p = dirAt(((i + 0.5) / n) * Math.PI * 2).multiplyScalar(inner);
-            if (inWedge(p.x, p.z)) continue;
+            if (inWedge(p.x, p.z, 0.12, PLAIN_PIECE_CM)) continue;
             piece(p.x, p.z);
           }
         }
-        if (tier.upperEdge === null) piece(0, 0);
+        if (tier.upperEdge === null && !inWedge(0, 0, 0.12, PLAIN_PIECE_CM)) piece(0, 0);
         return;
       }
 
@@ -485,6 +525,9 @@ function assemble(lib: Three, renderer: T.WebGLRenderer, canvas: HTMLCanvasEleme
       const red = fruit && kind === 'berries'
         ? own(new lib.MeshPhysicalMaterial({ color: FOOD.raspberry, roughness: 0.38, clearcoat: 0.5, sheen: 0.4, sheenColor: new lib.Color(FOOD.raspberrySheen) }))
         : null;
+      // One drupelet geometry for every raspberry of this tier, made when the first one is drawn.
+      let drupeletGeometry: T.SphereGeometry | null = null;
+      const drupelet = () => (drupeletGeometry ??= new lib.SphereGeometry(0.15, 8, 6));
       const blue = fruit
         ? own(new lib.MeshPhysicalMaterial({ color: FOOD.blueberry, roughness: 0.55, sheen: 0.8, sheenColor: new lib.Color(FOOD.blueberrySheen) }))
         : null;
@@ -500,23 +543,24 @@ function assemble(lib: Three, renderer: T.WebGLRenderer, canvas: HTMLCanvasEleme
           const mat = own(material(pipe, { roughness: 0.62 }));
           const count = clamp(Math.round((Math.PI * 2 * ringRadius) / ((5.8 * scale) / 0.95)), 4, 18);
           const offsets = red ? raspberryOffsets(lib, random) : [];
-          const drupelet = new lib.SphereGeometry(0.15, 8, 6);
           const turn = new lib.Quaternion();
           const euler = new lib.Euler();
           const matrix = new lib.Matrix4();
           const at = new lib.Vector3();
+          // The widest the piped cream gets (its lobes swell it by 16%), scaled.
+          const rosetteCm = 1.25 * 1.16 * scale;
           for (let k = 0; k < count; k += 1) {
             const angle = (k / count) * Math.PI * 2 + 0.2;
             const x = Math.sin(angle) * ringRadius;
             const z = Math.cos(angle) * ringRadius;
-            if (inWedge(x, z, 0.25)) continue;
+            if (inWedge(x, z, 0.25, rosetteCm)) continue;
             record(tag, 'berry', top, () => {
               const rosette = mesh(geometry, mat, tag);
               rosette.rotation.y = random() * 3;
               place(rosette, x, top - 0.05, z);
               if (!red) return;
               turn.setFromEuler(euler.set(Math.PI + (random() - 0.5) * 0.6, random() * 6, (random() - 0.5) * 0.6));
-              const berry = register(new lib.InstancedMesh(drupelet, red, offsets.length), tag);
+              const berry = register(new lib.InstancedMesh(drupelet(), red, offsets.length), tag);
               offsets.forEach((offset, i) => {
                 at.copy(offset).applyQuaternion(turn).multiplyScalar(scale / 0.95);
                 at.set(at.x + x, at.y + top + 2.05 * scale, at.z + z);
@@ -532,7 +576,6 @@ function assemble(lib: Three, renderer: T.WebGLRenderer, canvas: HTMLCanvasEleme
       // Loose raspberries among them.
       if (red) {
         const offsets = raspberryOffsets(lib, random);
-        const drupelet = new lib.SphereGeometry(0.15, 8, 6);
         const turn = new lib.Quaternion();
         const euler = new lib.Euler();
         const matrix = new lib.Matrix4();
@@ -540,11 +583,11 @@ function assemble(lib: Three, renderer: T.WebGLRenderer, canvas: HTMLCanvasEleme
         const n = clamp(Math.round(area * 0.03), 2, 9);
         for (let i = 0; i < n; i += 1) {
           const [x, z] = spot();
-          if (inWedge(x, z, 0.2)) continue;
+          if (inWedge(x, z, 0.2, RASPBERRY_CM)) continue;
           const y = top + 0.5 + random() * 0.3;
           record(tag, 'berry', top, () => {
             turn.setFromEuler(euler.set(Math.PI + (random() - 0.5) * 0.6, random() * 6, (random() - 0.5) * 0.6));
-            const berry = register(new lib.InstancedMesh(drupelet, red, offsets.length), tag);
+            const berry = register(new lib.InstancedMesh(drupelet(), red, offsets.length), tag);
             offsets.forEach((offset, k) => {
               at.copy(offset).applyQuaternion(turn);
               at.set(at.x + x, at.y + y, at.z + z);
@@ -563,7 +606,7 @@ function assemble(lib: Three, renderer: T.WebGLRenderer, canvas: HTMLCanvasEleme
         const n = clamp(Math.round(area * (kind === 'blueberries' ? 0.35 : 0.2)), kind === 'blueberries' ? 8 : 4, kind === 'blueberries' ? 30 : 18);
         for (let i = 0; i < n; i += 1) {
           const [x, z] = spot();
-          if (inWedge(x, z, 0.1)) continue;
+          if (inWedge(x, z, 0.1, BLUEBERRY_CM)) continue;
           record(tag, 'berry', top, () => { place(mesh(geometry, blue, tag), x, top + 0.32 + random() * 0.3, z); });
         }
       }
@@ -576,7 +619,7 @@ function assemble(lib: Three, renderer: T.WebGLRenderer, canvas: HTMLCanvasEleme
           const angle = i * 2.1 + 0.4;
           const x = Math.sin(angle) * reach;
           const z = Math.cos(angle) * reach;
-          if (inWedge(x, z, 0.1)) continue;
+          if (inWedge(x, z, 0.1, MINT_CM)) continue;
           record(tag, 'berry', top, () => {
             const piece = mesh(geometry, leaf, tag);
             piece.rotation.set(0.2, angle, 0.25);
@@ -590,15 +633,14 @@ function assemble(lib: Three, renderer: T.WebGLRenderer, canvas: HTMLCanvasEleme
         const base = colourOf(look.decoration.colour ?? css.decoration);
         const dark = own(new lib.MeshPhysicalMaterial({ color: base, roughness: 0.45, clearcoat: 0.3 }));
         const light = own(new lib.MeshPhysicalMaterial({ color: base.clone().lerp(new lib.Color(1, 1, 1), 0.3), roughness: 0.5 }));
-        const shapes = ([[1.7, 2.2], [2.2, 2.8], [2.7, 3.2], [3, 3.6]] as const).map(([long, turns]) => curlGeometry(lib, long, turns));
+        const shapes = ([[1.7, 2.2], [2.2, 2.8], [2.7, 3.2], [3, 3.6]] as const).map(([long, turns]) => ({ geometry: curlGeometry(lib, long, turns), reach: long / 2 + 0.2 }));
         const n = clamp(Math.round(area * 0.12), 6, 36);
         for (let i = 0; i < n; i += 1) {
           const [x, z] = spot();
-          if (inWedge(x, z, 0.1)) continue;
           const shape = shapes[Math.floor(random() * shapes.length)];
-          if (!shape) continue;
+          if (!shape || inWedge(x, z, 0.1, shape.reach)) continue;
           record(tag, 'berry', top, () => {
-            const curl = mesh(shape, i % 4 === 0 ? light : dark, tag);
+            const curl = mesh(shape.geometry, i % 4 === 0 ? light : dark, tag);
             curl.rotation.set((random() - 0.5) * 0.5, random() * Math.PI * 2, (random() - 0.5) * 0.4);
             place(curl, x, top + 0.38 + random() * 0.35, z);
           });
@@ -867,7 +909,7 @@ function assemble(lib: Three, renderer: T.WebGLRenderer, canvas: HTMLCanvasEleme
     window.clearTimeout(lostTimer);
     lostTimer = window.setTimeout(() => { if (!disposed) hooks.onGaveUp(); }, CONTEXT_GRACE_MS);
   };
-  const onRestored = () => { window.clearTimeout(lostTimer); requestRender(); };
+  const onRestored = () => { window.clearTimeout(lostTimer); makeEnvironment(); requestRender(); };
   canvas.addEventListener('webglcontextlost', onLost);
   canvas.addEventListener('webglcontextrestored', onRestored);
 
@@ -996,6 +1038,8 @@ function assemble(lib: Three, renderer: T.WebGLRenderer, canvas: HTMLCanvasEleme
     // The label columns take the sides: shift what the camera sees so the cake stands in the middle of what is left.
     camera.setViewOffset(size.width, size.height, -(centre - size.width / 2), 0, size.width, size.height);
     camera.updateProjectionMatrix();
+    paintBackdrop(clamp(centre / size.width, 0.2, 0.8));
+    backdrop.needsUpdate = true;
     if (atHome) snapHome();
     requestRender();
   }
@@ -1039,7 +1083,7 @@ function assemble(lib: Three, renderer: T.WebGLRenderer, canvas: HTMLCanvasEleme
       (ground.material as T.Material).dispose();
       textures.dispose();
       backdrop.dispose();
-      environment.dispose();
+      environment?.dispose();
       renderer.dispose();
       renderer.forceContextLoss();
     },

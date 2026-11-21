@@ -23,8 +23,8 @@ export const FILLING_SHARE = 0.3;
 export const FILLING_MIN_CM = 0.5;
 // The empty gap between two discs while the filling has no card, as a share of a disc.
 export const DISC_GAP_SHARE = 0.25;
-// How high the decoration stands on top of a tier.
-export const DECORATION_CM = 1.6;
+// How high the decoration stands on top of a tier: the tallest is a raspberry on a piped rosette (about 2.5 cm), so the home view frames it.
+export const DECORATION_CM = 2.6;
 // «Spaccato»: the wedge cut out, facing the camera, in radians (72 degrees).
 export const CUT_ANGLE = (72 * Math.PI) / 180;
 
