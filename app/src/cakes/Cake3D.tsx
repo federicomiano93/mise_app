@@ -165,18 +165,18 @@ export default function Cake3D({ geometry, selected, tier, onSelect, labels, onO
 
   const box = labelBoxFor(Math.max(size.width, 1), Math.max(size.height, 1));
   const shown = geometry.tiers[Math.min(tier, geometry.tiers.length - 1)];
-  const narrow = box.columns === 1;
   const stacked = box.columns === 0;
   // The parts the chosen tier has, top to bottom (the labels of a stage with no room beside the cake).
   const listed = (['decoration', 'coating', 'filling', 'soak', 'base'] as const).filter(part => {
     const info = shown?.parts[part];
     return info !== undefined && info.productIds.length > 0 && !(part === 'filling' && (shown?.discs ?? 0) < 2);
   });
-  const noteOf = (part: CakePart) => {
+  // A part's callout: the recipe name(s), then its grams and cost — no part title (the cake itself shows which part it is).
+  const calloutOf = (part: CakePart) => {
     const info = shown?.parts[part];
     return {
-      title: `${labels.part[part]} · ${labels.grams(info?.grams ?? 0)}`,
       names: (info?.productIds ?? []).map(labels.cardName).filter(name => name !== '').join(' + '),
+      figures: labels.callout?.(tier, part) ?? labels.grams(info?.grams ?? 0),
     };
   };
 
@@ -212,10 +212,8 @@ export default function Cake3D({ geometry, selected, tier, onSelect, labels, onO
           </svg>
           {placed.map(label => {
             const part = label.key as CakePart;
-            const info = shown?.parts[part];
             const chosen = sameSelection(selected, { tier, part });
-            const names = (info?.productIds ?? []).map(labels.cardName).filter(name => name !== '').join(' + ');
-            const grams = labels.grams(info?.grams ?? 0);
+            const { names, figures } = calloutOf(part);
             const style = {
               top: label.slot.y - box.labelHeight / 2,
               height: box.labelHeight,
@@ -232,25 +230,19 @@ export default function Cake3D({ geometry, selected, tier, onSelect, labels, onO
                 data-part={part}
                 onClick={() => { act({ tier, part }); }}
               >
-                {narrow ? (
-                  <>
-                    <span className={styles.title}>{labels.part[part]}</span>
-                    <span className={styles.title}>{grams}</span>
-                  </>
-                ) : (
-                  <span className={styles.title}>{`${labels.part[part]} · ${grams}`}</span>
-                )}
-                <span className={styles.names}>{names}</span>
+                <span className={styles.title}>{names}</span>
+                <span className={styles.names}>{figures}</span>
               </div>
             );
           })}
+          {labels.total ? <p className={styles.total}>{labels.total}</p> : null}
         </div>
       </div>
       <p className={styles.touchHint}>{t('cakes.stage.touchHint')}</p>
       {stacked ? (
         <div className={styles.notes} aria-hidden="true">
           {listed.map(part => {
-            const note = noteOf(part);
+            const note = calloutOf(part);
             return (
               <div
                 key={part}
@@ -260,8 +252,8 @@ export default function Cake3D({ geometry, selected, tier, onSelect, labels, onO
                 data-part={part}
                 onClick={() => { act({ tier, part }); }}
               >
-                <span className={styles.title}>{note.title}</span>
-                <span className={styles.names}>{note.names}</span>
+                <span className={styles.title}>{note.names}</span>
+                <span className={styles.names}>{note.figures}</span>
               </div>
             );
           })}

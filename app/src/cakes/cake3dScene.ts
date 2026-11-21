@@ -12,7 +12,7 @@ import type * as T from 'three';
 import type { CakePart } from '@mise/shared/cake-model';
 import type { Selected } from './cakeEditorModel';
 import {
-  BOARD_THICKNESS_CM, COATING_CM, CUT_ANGLE, TIER_BOARD_CM, CAMERA_FOV_DEG, homeView, partAnchors, pickedPart,
+  BOARD_THICKNESS_CM, COATING_CM, CUT_ANGLE, TIER_BOARD_CM, CAMERA_FOV_DEG, appearedParts, homeView, partAnchors, pickedPart,
 } from './cake3dModel';
 import type { Anchor, CakeLayout, StageView, TierLayout } from './cake3dModel';
 
@@ -68,6 +68,32 @@ const REST_MS = 140;
 // How long a lost graphics context may stay lost before the 3D is given up.
 const CONTEXT_GRACE_MS = 2000;
 const FLIGHT_MS = 700;
+
+// The base's discs while the base has no card: drawn faint, so the person can count them while setting the measures.
+const GHOST_OPACITY = 0.3;
+// How far a disc or a berry drops from when it lands.
+const DROP_CM = 16;
+const BERRY_DROP_CM = 12;
+
+// A piece of the cake an intro moves: the meshes that make it (a layer is its cylinder and the two faces of the cut), where each one
+// stands when the cake is at rest, and the height of its underside (what it grows up from).
+interface Unit { objects: T.Object3D[]; ys: number[]; bottom: number }
+type Role = 'layer' | 'skin' | 'top' | 'berry';
+interface Tween { start: number; ms: number; curve: (k: number) => number; fn: (k: number) => void }
+
+const easeOut = (k: number) => 1 - (1 - k) ** 3;
+// A drop that lands and bounces: 0 at the start, 1 at the end, never above 1.
+function bounce(k: number): number {
+  const n = 7.5625;
+  const d = 2.75;
+  if (k < 1 / d) return n * k * k;
+  if (k < 2 / d) { const x = k - 1.5 / d; return n * x * x + 0.75; }
+  if (k < 2.5 / d) { const x = k - 2.25 / d; return n * x * x + 0.9375; }
+  const x = k - 2.625 / d;
+  return Math.min(1, n * x * x + 0.984375);
+}
+
+const reducedMotion = (): boolean => typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 type Tag = { tier: number; part: CakePart };
 const tagKey = (tag: Tag) => `${String(tag.tier)}|${tag.part}`;
@@ -142,6 +168,11 @@ function assemble(lib: Three, renderer: T.WebGLRenderer, canvas: HTMLCanvasEleme
   let layoutNow: CakeLayout | null = null;
   let viewNow: StageView = 'cut';
   const materialsOf = new Map<string, T.MeshStandardMaterial[]>();
+  // What an intro moves: the units of each part (a layer, the coating's skin and top, a berry), and every mesh of each tier (when the
+  // tier below grows, the ones above ride up).
+  let units = new Map<string, (Unit & { role: Role })[]>();
+  let tierUnits = new Map<number, Unit>();
+  let tweens: Tween[] = [];
   let selectedNow: Selected | null = null;
   let hoveredNow: Selected | null = null;
 
@@ -162,6 +193,9 @@ function assemble(lib: Three, renderer: T.WebGLRenderer, canvas: HTMLCanvasEleme
     });
     cake = null;
     materialsOf.clear();
+    units = new Map();
+    tierUnits = new Map();
+    tweens = [];
   }
 
   function build(layout: CakeLayout, view: StageView) {
@@ -182,12 +216,33 @@ function assemble(lib: Three, renderer: T.WebGLRenderer, canvas: HTMLCanvasEleme
       list.push(mat);
       materialsOf.set(tagKey(tag), list);
     };
+    // Every mesh made while a tier is being drawn is remembered for that tier, and for the piece being drawn (see `record`).
+    let currentTier = -1;
+    let collecting: T.Object3D[] | null = null;
+    const tierMeshes = new Map<number, T.Object3D[]>();
     const mesh = (geometry: T.BufferGeometry, mat: T.Material | T.Material[], tag: Tag | null): T.Mesh => {
       const m = new lib.Mesh(geometry, mat);
       m.castShadow = true;
       m.receiveShadow = true;
       if (tag) m.userData = { tier: tag.tier, part: tag.part };
+      if (currentTier >= 0) {
+        const list = tierMeshes.get(currentTier) ?? [];
+        list.push(m);
+        tierMeshes.set(currentTier, list);
+      }
+      collecting?.push(m);
       return m;
+    };
+    // One piece of a part: whatever `make` adds to the cake, kept together with where it stands (positions are final when it returns).
+    const record = (tag: Tag, role: Role, bottom: number, make: () => void): Unit => {
+      const list: T.Object3D[] = [];
+      collecting = list;
+      make();
+      collecting = null;
+      const unit = { role, objects: list, ys: list.map(object => object.position.y), bottom };
+      const key = tagKey(tag);
+      units.set(key, [...(units.get(key) ?? []), unit]);
+      return unit;
     };
     // The two faces a cut leaves, from `from` to `to` away from the middle.
     const cutFaces = (from: number, to: number, height: number, y: number, mat: T.Material, tag: Tag | null) => {
@@ -218,20 +273,24 @@ function assemble(lib: Three, renderer: T.WebGLRenderer, canvas: HTMLCanvasEleme
     const decorationGeometry = new lib.SphereGeometry(0.6, 24, 16);
     decorationGeometry.scale(1, 0.85, 1);
     for (const tier of layout.tiers) {
+      currentTier = tier.index;
       const first = tier.index === 0;
       if (!first) {
         // Cut like the tiers are, or it would hide what the cut shows of the tier below.
         slab(tier.radius + tier.coatingCm + 0.25, TIER_BOARD_CM, tier.yBase - TIER_BOARD_CM / 2, boardMat, null);
       }
       const kinds = {
-        base: material(palette.base, { roughness: 0.95 }),
+        base: material(palette.base, tier.hasBase ? { roughness: 0.95 } : { roughness: 0.95, transparent: true, opacity: GHOST_OPACITY, depthWrite: false }),
         soak: material(palette.soak, { roughness: 0.9 }),
         filling: material(palette.filling, { roughness: 0.6 }),
       };
       for (const kind of ['base', 'soak', 'filling'] as const) track(kinds[kind], { tier: tier.index, part: kind });
       for (const layer of tier.layers) {
         const radius = layer.kind === 'filling' ? tier.radius + 0.04 : tier.radius;
-        slab(radius, layer.h, tier.yBase + layer.y0 + layer.h / 2, kinds[layer.kind], { tier: tier.index, part: layer.kind });
+        const tag = { tier: tier.index, part: layer.kind };
+        const piece = record(tag, 'layer', tier.yBase + layer.y0, () => { slab(radius, layer.h, tier.yBase + layer.y0 + layer.h / 2, kinds[layer.kind], tag); });
+        // A faint disc throws no shadow: the shadow would say it is there.
+        if (layer.kind === 'base' && !tier.hasBase) for (const object of piece.objects) object.castShadow = false;
       }
       if (tier.hasCoating) {
         const tag = { tier: tier.index, part: 'coating' as const };
@@ -239,11 +298,15 @@ function assemble(lib: Three, renderer: T.WebGLRenderer, canvas: HTMLCanvasEleme
         track(mat, tag);
         const outer = tier.radius + tier.coatingCm;
         const yMid = tier.yBase + tier.stackHeight / 2;
-        const skin = mesh(new lib.CylinderGeometry(outer, outer, tier.stackHeight, SEGMENTS, 1, true, start, length), mat, tag);
-        skin.position.y = yMid;
-        group.add(skin);
-        cutFaces(tier.radius, outer, tier.stackHeight, yMid, mat, tag);
-        slab(outer, COATING_CM, tier.yBase + tier.stackHeight + COATING_CM / 2, mat, tag);
+        record(tag, 'skin', tier.yBase, () => {
+          const skin = mesh(new lib.CylinderGeometry(outer, outer, tier.stackHeight, SEGMENTS, 1, true, start, length), mat, tag);
+          skin.position.y = yMid;
+          group.add(skin);
+          cutFaces(tier.radius, outer, tier.stackHeight, yMid, mat, tag);
+        });
+        record(tag, 'top', tier.yBase + tier.stackHeight, () => {
+          slab(outer, COATING_CM, tier.yBase + tier.stackHeight + COATING_CM / 2, mat, tag);
+        });
       }
       if (tier.hasDecoration) addDecoration(tier);
     }
@@ -262,9 +325,11 @@ function assemble(lib: Three, renderer: T.WebGLRenderer, canvas: HTMLCanvasEleme
         return a < half + 0.12 || a > Math.PI * 2 - half - 0.12;
       };
       const berry = (x: number, z: number) => {
-        const m = mesh(decorationGeometry, mat, tag);
-        m.position.set(x, tier.yTop + 0.42, z);
-        group.add(m);
+        record(tag, 'berry', tier.yTop, () => {
+          const m = mesh(decorationGeometry, mat, tag);
+          m.position.set(x, tier.yTop + 0.42, z);
+          group.add(m);
+        });
       };
       for (let i = 0; i < count; i += 1) {
         const angle = (i / count) * Math.PI * 2;
@@ -286,8 +351,135 @@ function assemble(lib: Three, renderer: T.WebGLRenderer, canvas: HTMLCanvasEleme
       if (tier.upperEdge === null) berry(0, 0);
     }
 
+    for (const [index, list] of tierMeshes) tierUnits.set(index, { objects: list, ys: list.map(object => object.position.y), bottom: 0 });
+    group.updateMatrixWorld(true);
     applyHighlights();
     requestRender();
+  }
+
+  // ── Intros: a part that has just got its first card comes in ─────────────────────────────────
+  // Every mesh goes back exactly where the layout puts it (the end of every intro, and the proof that none is left half done).
+  function settleAll() {
+    for (const unit of tierUnits.values()) {
+      unit.objects.forEach((object, i) => {
+        object.position.y = unit.ys[i] ?? object.position.y;
+        object.scale.set(1, 1, 1);
+        object.visible = true;
+      });
+    }
+  }
+  const show = (unit: Unit, visible: boolean) => { for (const object of unit.objects) object.visible = visible; };
+  const shift = (unit: Unit, dy: number) => { unit.objects.forEach((object, i) => { object.position.y = (unit.ys[i] ?? 0) + dy; }); };
+  // Stretches a piece up from its underside: `k` 0 is flat, 1 is as it stands.
+  const growUp = (unit: Unit, k: number) => {
+    const grown = Math.max(0.001, k);
+    unit.objects.forEach((object, i) => {
+      object.scale.y = grown;
+      object.position.y = unit.bottom + ((unit.ys[i] ?? 0) - unit.bottom) * grown;
+    });
+  };
+  const unitsOf = (tier: number, part: CakePart, role?: Role) => (units.get(tagKey({ tier, part })) ?? []).filter(unit => role === undefined || unit.role === role);
+  const layerMid = (layout: CakeLayout, tierIndex: number, kind: 'base' | 'soak', n: number): number | null => {
+    const tier = layout.tiers[tierIndex];
+    const layer = tier?.layers.filter(candidate => candidate.kind === kind)[n];
+    return tier && layer ? tier.yBase + layer.y0 + layer.h / 2 : null;
+  };
+  function tween(delay: number, ms: number, curve: (k: number) => number, fn: (k: number) => void) {
+    tweens.push({ start: performance.now() + delay, ms, curve, fn });
+  }
+  // The pause between pieces of a row of `count`: `each` ms, less when the row would take more than `most` to start.
+  const stagger = (count: number, most: number, each: number) => (count > 1 ? Math.min(each, most / (count - 1)) : 0);
+
+  // Plays one part's intro starting `at` ms from now; returns how long it takes. The meshes are hidden or moved to where it starts
+  // NOW, so nothing shows in its final place for a moment before it comes in.
+  function play(prev: CakeLayout, next: CakeLayout, tierIndex: number, part: CakePart, at: number): number {
+    // The tiers above ride on this one: when it grows they start lower than they end.
+    const above = [...tierUnits].filter(([index]) => index > tierIndex).map(([index, unit]) => ({ unit, dy: (prev.tiers[index]?.yBase ?? 0) - (next.tiers[index]?.yBase ?? 0) }));
+    switch (part) {
+      case 'base': {
+        const discs = unitsOf(tierIndex, 'base');
+        const soaks = unitsOf(tierIndex, 'soak');
+        const fillings = unitsOf(tierIndex, 'filling');
+        const step = stagger(discs.length, 500, 280);
+        discs.forEach((disc, i) => {
+          // The soak and the filling already on this disc come down with it.
+          const together = [disc, soaks[i], fillings[i]].filter((unit): unit is NonNullable<typeof unit> => unit !== undefined);
+          for (const unit of together) { show(unit, false); shift(unit, DROP_CM); }
+          tween(at + i * step, 650, bounce, k => { for (const unit of together) { show(unit, true); shift(unit, DROP_CM * (1 - k)); } });
+        });
+        return (discs.length - 1) * step + 650;
+      }
+      case 'soak': {
+        const soaks = unitsOf(tierIndex, 'soak');
+        const step = stagger(soaks.length, 450, 250);
+        soaks.forEach((soak, i) => {
+          show(soak, false);
+          tween(at + i * step, 600, easeOut, k => { show(soak, true); growUp(soak, k); });
+        });
+        return (soaks.length - 1) * step + 600;
+      }
+      case 'filling': {
+        // The discs (and what stands on them) move apart to make room, then each layer of filling grows in the gap.
+        const movers: { unit: Unit; dy: number }[] = [];
+        for (const kind of ['base', 'soak'] as const) {
+          unitsOf(tierIndex, kind).forEach((unit, n) => {
+            const was = layerMid(prev, tierIndex, kind, n);
+            const now = layerMid(next, tierIndex, kind, n);
+            if (was !== null && now !== null) movers.push({ unit, dy: was - now });
+          });
+        }
+        movers.push(...above);
+        for (const { unit, dy } of movers) shift(unit, dy);
+        const fillings = unitsOf(tierIndex, 'filling');
+        for (const filling of fillings) show(filling, false);
+        tween(at, 450, easeOut, k => { for (const { unit, dy } of movers) shift(unit, dy * (1 - k)); });
+        const step = stagger(fillings.length, 400, 200);
+        fillings.forEach((filling, i) => {
+          tween(at + 450 + i * step, 500, easeOut, k => { show(filling, true); growUp(filling, k); });
+        });
+        return 450 + (fillings.length > 0 ? (fillings.length - 1) * step + 500 : 0);
+      }
+      case 'coating': {
+        const skins = unitsOf(tierIndex, 'coating', 'skin');
+        const tops = unitsOf(tierIndex, 'coating', 'top');
+        for (const unit of [...skins, ...tops]) show(unit, false);
+        for (const { unit, dy } of above) shift(unit, dy);
+        tween(at, 800, easeOut, k => { for (const unit of skins) { show(unit, true); growUp(unit, k); } });
+        tween(at + 800, 350, easeOut, k => { for (const unit of tops) { show(unit, true); growUp(unit, k); } });
+        tween(at, 1150, easeOut, k => { for (const { unit, dy } of above) shift(unit, dy * (1 - k)); });
+        return 1150;
+      }
+      case 'decoration': {
+        const berries = unitsOf(tierIndex, 'decoration');
+        const step = stagger(berries.length, 550, 90);
+        berries.forEach((berry, i) => {
+          show(berry, false);
+          shift(berry, BERRY_DROP_CM);
+          tween(at + i * step, 550, bounce, k => { show(berry, true); shift(berry, BERRY_DROP_CM * (1 - k)); });
+        });
+        return (berries.length - 1) * step + 550;
+      }
+    }
+  }
+
+  function startIntro(prev: CakeLayout, next: CakeLayout) {
+    if (reducedMotion()) return;
+    let at = 0;
+    for (const appeared of appearedParts(prev, next)) at += play(prev, next, appeared.tier, appeared.part, at);
+    if (tweens.length > 0) setMoving(true);
+  }
+
+  // Runs what is due; true while any intro is still going. The last frame puts every mesh back where it belongs.
+  function runTweens(now: number): boolean {
+    if (tweens.length === 0) return false;
+    tweens = tweens.filter(item => {
+      if (now < item.start) return true;
+      const k = Math.min(1, (now - item.start) / item.ms);
+      item.fn(item.curve(k));
+      return k < 1;
+    });
+    if (tweens.length === 0) settleAll();
+    return tweens.length > 0;
   }
 
   // ── Highlights ────────────────────────────────────────────────────────────
@@ -345,9 +537,10 @@ function assemble(lib: Three, renderer: T.WebGLRenderer, canvas: HTMLCanvasEleme
       camera.position.setFromSpherical(s).add(controls.target);
       if (k >= 1) flight = null;
     }
+    const playing = runTweens(now);
     const changed = controls.update();
     renderer.render(scene, camera);
-    const busy = changed || flight !== null || interacting;
+    const busy = changed || flight !== null || interacting || playing;
     setMoving(busy);
     if (busy) requestRender();
   }
@@ -511,7 +704,10 @@ function assemble(lib: Three, renderer: T.WebGLRenderer, canvas: HTMLCanvasEleme
   return {
     build(layout, view) {
       const tiersChanged = builtTiers !== 0 && builtTiers !== layout.tiers.length;
+      // Nothing plays for the scene's first build (opening a cake, a saved one).
+      const before = layoutNow;
       build(layout, view);
+      if (before !== null) startIntro(before, layout);
       builtTiers = layout.tiers.length;
       if (atHome) snapHome();
       if (tiersChanged && !atHome) goHome();
@@ -526,6 +722,7 @@ function assemble(lib: Three, renderer: T.WebGLRenderer, canvas: HTMLCanvasEleme
       disposed = true;
       cancelAnimationFrame(frameId);
       window.clearTimeout(restTimer);
+      tweens = [];
       document.removeEventListener('visibilitychange', onVisibility);
       canvas.removeEventListener('webglcontextlost', onLost);
       canvas.removeEventListener('webglcontextrestored', onRestored);

@@ -231,3 +231,20 @@
   white-space: normal;
   text-overflow: clip;
 }
+
+/* «Raw materials so far»: bottom left of the stage, in the strip the labels leave free (cake3dModel's `foot`). */
+.total {
+  position: absolute;
+  left: var(--s3);
+  bottom: var(--s3);
+  max-width: calc(100% - 2 * var(--s3));
+  margin: 0;
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+  color: var(--ink);
+  font-size: var(--fs-sm);
+  font-weight: 650;
+}

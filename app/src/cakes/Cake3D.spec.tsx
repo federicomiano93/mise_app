@@ -18,6 +18,7 @@ const world = vi.hoisted(() => ({
   created: 0,
   disposed: 0,
   throwOnCreate: false,
+  anchors: [] as Array<{ key: string; x: number; y: number }>,
   hooks: null as unknown,
   scenes: [] as Array<{ build: ReturnType<typeof vi.fn>; goHome: ReturnType<typeof vi.fn>; dispose: ReturnType<typeof vi.fn> }>,
 }));
@@ -34,7 +35,7 @@ vi.mock('./cake3dScene', () => ({
       setSelection: vi.fn(),
       resize: vi.fn(),
       goHome: vi.fn(),
-      anchors: () => [],
+      anchors: () => world.anchors,
       dispose: vi.fn(() => { world.disposed += 1; }),
     };
     world.scenes.push(scene);
@@ -68,6 +69,7 @@ beforeEach(() => {
   world.created = 0;
   world.disposed = 0;
   world.throwOnCreate = false;
+  world.anchors = [];
   world.hooks = null;
   world.scenes = [];
 });
@@ -221,5 +223,63 @@ describe('the touch hint', () => {
   it('is on the page for a touch screen to show (the stylesheet hides it elsewhere)', () => {
     render(<Cake3D {...props()} />);
     expect(screen.getByText('Two fingers to turn and zoom the cake.')).toBeInTheDocument();
+  });
+});
+
+describe('the callouts', () => {
+  const size = (width: number, height: number) => {
+    vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(width);
+    vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(height);
+  };
+  const callouts: StageLabels = {
+    ...LABELS,
+    callout: () => '500 g · £1.00',
+    total: 'Raw materials so far: £1.00',
+  };
+  const full: Cake = {
+    ...CAKE,
+    lines: [
+      { tier: 0, part: 'base', productId: 'SPONGE', grams: 500 },
+      { tier: 0, part: 'soak', productId: 'SPONGE', grams: 100 },
+      { tier: 0, part: 'coating', productId: 'SPONGE', grams: 200 },
+    ],
+  };
+
+  it('say only the recipe name and «g · €» — no part title — on each side of the cake, with a curved leader line each', async () => {
+    size(900, 500);
+    world.anchors = [{ key: 'base', x: 300, y: 300 }, { key: 'soak', x: 600, y: 200 }, { key: 'coating', x: 620, y: 260 }];
+    const { container } = render(<Cake3D {...props({ labels: callouts }, full)} />);
+    await settled();
+    await waitFor(() => { expect(container.querySelectorAll('[data-part]')).toHaveLength(3); });
+    const label = container.querySelector('[data-part="base"]') as HTMLElement;
+    expect(label).toHaveTextContent('Sponge');
+    expect(label).toHaveTextContent('500 g · £1.00');
+    expect(label).not.toHaveTextContent('Base');
+    expect(label.getAttribute('style')).toMatch(/left/);
+    expect((container.querySelector('[data-part="soak"]') as HTMLElement).getAttribute('style')).toMatch(/right/);
+    // One thin curve each (a cubic, never a straight line), joined to its point.
+    const paths = [...container.querySelectorAll('svg[viewBox="0 0 900 500"] path')];
+    expect(paths).toHaveLength(3);
+    for (const path of paths) expect(path.getAttribute('d')).toMatch(/^M [\d.]+ [\d.]+ C /);
+  });
+
+  it('show «Raw materials so far» over the cake, and nothing when the cake holds nothing', async () => {
+    size(900, 500);
+    world.anchors = [{ key: 'base', x: 300, y: 300 }];
+    const view = render(<Cake3D {...props({ labels: callouts }, full)} />);
+    await settled();
+    expect(screen.getByText('Raw materials so far: £1.00')).toBeInTheDocument();
+    view.rerender(<Cake3D {...props({ labels: { ...callouts, total: '' } }, full)} />);
+    expect(screen.queryByText(/Raw materials so far/)).not.toBeInTheDocument();
+  });
+
+  it('are hidden from a screen reader: the steps beside the drawing say the same', async () => {
+    size(900, 500);
+    world.anchors = [{ key: 'base', x: 300, y: 300 }];
+    const { container } = render(<Cake3D {...props({ labels: callouts }, full)} />);
+    await settled();
+    await waitFor(() => { expect(container.querySelector('[data-part="base"]')).not.toBeNull(); });
+    expect((container.querySelector('[data-part="base"]') as HTMLElement).closest('[aria-hidden="true"]')).not.toBeNull();
+    expect(screen.getByText('Raw materials so far: £1.00').closest('[aria-hidden="true"]')).not.toBeNull();
   });
 });
