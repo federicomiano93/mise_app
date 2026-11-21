@@ -28,6 +28,6 @@ describe('the product a cake is saved as', () => {
     const refused = Object.keys(document).filter(key => !allowed.has(key));
     expect(refused).toEqual([]);
     // …and it says what the rules need of a card: stamped by the data layer, a name, the model, and a sold piece.
-    expect(document).toMatchObject({ name: 'Sacher', sellingMode: 'piece', piecesPerBatch: 1, kind: 'finished', categoryId: 'cat' });
+    expect(document).toMatchObject({ name: 'Sacher', sellingMode: 'piece', piecesPerBatch: 1, kind: 'finished', categoryId: null });
   });
 });

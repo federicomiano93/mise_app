@@ -135,12 +135,17 @@ describe('cakeProduct', () => {
     expect(cakeProduct(cake).components.map(c => (c as { productId: string }).productId)).toEqual(['SPONGE']);
   });
   test('it is sold as one piece, carries the cake\'s money fields and is model 4 finished', () => {
-    const product = cakeProduct(cakeOf({ categoryId: 'CAT' }));
+    const product = cakeProduct(cakeOf());
     expect(product).toMatchObject({
       id: 'cake-c1', name: 'Wedding', sellingMode: 'piece', piecesPerBatch: 1, sellingPrice: 60, vatRate: 0, foodCostTarget: 30,
-      labourMinutes: 60, labourPeople: null, rawGrams: null, cookedGrams: null, model: PRODUCT_MODEL, kind: 'finished', categoryId: 'CAT',
+      labourMinutes: 60, labourPeople: null, rawGrams: null, cookedGrams: null, model: PRODUCT_MODEL, kind: 'finished', categoryId: null,
       packaging: [{ ingredientId: 'BOX', qtyPcs: 1 }],
     });
+  });
+  test('a cake carries no category: one that came in with a categoryId saves null on the card and on the document', () => {
+    const cake = cakeOf({ categoryId: 'CAT' });
+    expect(cakeProduct(cake).categoryId).toBeNull();
+    expect(toCakeDocument(cake, '2026-11-21T10:00:00.000Z')).toHaveProperty('categoryId', null);
   });
   test('normalizeProduct leaves it as it is', () => {
     const product = cakeProduct(cakeOf());
