@@ -37,6 +37,7 @@ import type { PriceField, PriceTexts } from './CostCard';
 import { MeasuresCard } from './MeasuresCard';
 import { NeedDialog } from './NeedDialog';
 import { TierParts } from './TierParts';
+import type { OpenRequest } from './TierParts';
 import styles from './CakeForm.module.css';
 
 type Props = {
@@ -97,6 +98,8 @@ export function CakeForm({ id, cake, titleRef, onSaved }: Props) {
   });
   const [tier, setTier] = useState(0);
   const [selected, setSelected] = useState<Selected | null>(null);
+  // The 3D view's second tap on the chosen part: TierParts opens that part's «Add a card».
+  const [openRequest, setOpenRequest] = useState<OpenRequest | null>(null);
   const [showNameError, setShowNameError] = useState(false);
   const [badNumber, setBadNumber] = useState<PriceField | null>(null);
   const [needsOpen, setNeedsOpen] = useState(false);
@@ -402,6 +405,7 @@ export function CakeForm({ id, cake, titleRef, onSaved }: Props) {
                   selected={selected}
                   tier={shownTier}
                   onSelect={next => { setTier(next.tier); setSelected(next); }}
+                  onOpenPart={next => { setTier(next.tier); setSelected(next); setOpenRequest({ part: next.part }); }}
                   labels={labels}
                 />
               </PartBoundary>
@@ -421,6 +425,7 @@ export function CakeForm({ id, cake, titleRef, onSaved }: Props) {
                   onSelect={next => { setSelected(next); }}
                   showLabour={showLabour}
                   registerPack={registerPack}
+                  openRequest={openRequest}
                 />
               </PartBoundary>
             </section>

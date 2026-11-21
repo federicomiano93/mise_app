@@ -2,8 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { cakeGeometry } from '@mise/shared/cake-model';
 import type { Cake, CakePart } from '@mise/shared/cake-model';
-import { CakeStage } from './CakeStage';
-import type { StageLabels } from './CakeStage';
+import { CakeSection2D } from './CakeSection2D';
+import type { StageLabels } from './CakeSection2D';
 
 const REF = { diameterCm: 22, discs: 3, discHeightCm: 3, baseG: 300, soakG: 90, fillingG: 280, coatingG: 450, decorationG: 200 };
 const CAKE: Cake = {
@@ -30,7 +30,7 @@ const LABELS: StageLabels = {
 };
 
 const draw = (tier = 0, selected: { tier: number; part: CakePart } | null = null, onSelect = vi.fn()) => {
-  render(<CakeStage geometry={cakeGeometry(CAKE)} selected={selected} tier={tier} onSelect={onSelect} labels={LABELS} />);
+  render(<CakeSection2D geometry={cakeGeometry(CAKE)} selected={selected} tier={tier} onSelect={onSelect} labels={LABELS} />);
   return onSelect;
 };
 
@@ -77,7 +77,7 @@ describe('the section drawing', () => {
   });
 
   it('draws nothing for a cake with no tier', () => {
-    const { container } = render(<CakeStage geometry={{ tiers: [] }} selected={null} tier={0} onSelect={vi.fn()} labels={LABELS} />);
+    const { container } = render(<CakeSection2D geometry={{ tiers: [] }} selected={null} tier={0} onSelect={vi.fn()} labels={LABELS} />);
     expect(container).toBeEmptyDOMElement();
   });
 });

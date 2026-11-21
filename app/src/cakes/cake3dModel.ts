@@ -326,7 +326,7 @@ export function labelBoxFor(width: number, height: number): LabelBox {
   const labelWidth = columns === 2
     ? Math.round(Math.min(210, Math.max(140, width * 0.24)))
     : Math.round(Math.min(150, Math.max(112, width * 0.38)));
-  return { width, height, labelWidth, labelHeight: columns === 2 ? 46 : 58, gap: 10, margin: 10, columns };
+  return { width, height, labelWidth, labelHeight: columns === 2 ? 46 : 64, gap: 10, margin: 10, columns };
 }
 
 // The share of the stage's width the cake may use: what the label columns leave.
@@ -342,6 +342,21 @@ export function cakeShare(box: LabelBox): { share: number; centre: number } {
 export type StageChoice = '3d' | '2d';
 export type StageFailure = 'webgl' | 'load';
 export type StageNote = 'webgl' | 'load' | 'motion';
+
+// Thrown by the 3D component (and read by the stage's boundary) when it cannot draw: it says why, so the note says it too.
+export class Cake3DUnavailable extends Error {
+  readonly reason: StageFailure;
+  constructor(reason: StageFailure) {
+    super(`The 3D view is unavailable: ${reason}`);
+    this.name = 'Cake3DUnavailable';
+    this.reason = reason;
+  }
+}
+
+// What a boundary that caught `error` calls the failure: the library not arriving (offline the first time) is «load».
+export function failureOf(error: unknown): StageFailure {
+  return error instanceof Cake3DUnavailable ? error.reason : 'load';
+}
 
 export interface StageDecision { show: StageChoice; note: StageNote | null }
 

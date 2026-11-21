@@ -28,9 +28,9 @@ export default defineConfig({
     // (CSS nesting, for one, needs Chrome 120).
     target: ['chrome101', 'edge101', 'firefox104', 'safari16'],
     cssTarget: ['chrome101', 'edge101', 'firefox104', 'safari16'],
-    // Firestore's lazy chunk is ~554 KB by itself and expected (session/firebaseBackend.ts): the
-    // default 500 KB warning would print on every build and hide a real one.
-    chunkSizeWarningLimit: 600,
+    // Firestore's lazy chunk is ~554 KB by itself and expected (session/firebaseBackend.ts), and three.js's (the cake's 3D view, ~760 KB,
+    // ~190 KB gzipped, loaded on demand) is the other: the default 500 KB warning would print on every build and hide a real one.
+    chunkSizeWarningLimit: 800,
     rollupOptions: {
       output: {
         // The libraries in chunks of their own (step 2c). A release of Mise 2 changes its own

@@ -1,4 +1,4 @@
-import { useCallback, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Plus, RotateCcw, X } from 'lucide-react';
 import { CAKE_PARTS, MAX_CARDS_PER_PART, cakeLineCosts, cakeProductId, tierDiameters } from '@mise/shared/cake-model';
 import type { Cake, CakeLineCost, CakePart, ResolvedLine } from '@mise/shared/cake-model';
@@ -29,7 +29,11 @@ type Props = {
   showLabour: boolean;
   // The form finds a packaging box by the ingredient (to focus it when Save refuses its 0 pieces).
   registerPack: (ingredientId: string, node: HTMLInputElement | null) => void;
+  // A second tap on the chosen part in the 3D view: opens that part's «Add a card» (a new object each time, so the same part twice opens twice).
+  openRequest?: OpenRequest | null;
 };
+
+export interface OpenRequest { part: CakePart }
 
 type Picking = { kind: 'card'; part: CakePart } | { kind: 'pack' };
 
@@ -53,7 +57,7 @@ const lineKey = (line: { tier: number; part: CakePart; productId: string }): str
 // top to bottom, because the cake does).
 // ⚠️ A GRAMS BOX IS EMPTY WHILE THE RULE DECIDES: its placeholder is the rule's figure, and typing a number is «corrected by hand»
 // (the line says so, with the rule's figure beside it, and a ↺ puts the rule back).
-export function TierParts({ cake, edit, tier, onTier, selected, onSelect, showLabour, registerPack }: Props) {
+export function TierParts({ cake, edit, tier, onTier, selected, onSelect, showLabour, registerPack, openRequest = null }: Props) {
   const { t } = useT();
   const money = useMoney();
   const ids = useId();
@@ -61,6 +65,17 @@ export function TierParts({ cake, edit, tier, onTier, selected, onSelect, showLa
   const [picking, setPicking] = useState<Picking | null>(null);
   const shown = Math.min(Math.max(tier, 0), cake.tiers - 1);
   const diameters = tierDiameters(cake.diameterCm, cake.tiers);
+
+  // The 3D view's second tap: the same dialog the part's «Add» button opens, and nothing where that button is not offered (a part with
+  // no layer to fill, or with all its cards).
+  useEffect(() => {
+    if (openRequest === null) return;
+    const { part } = openRequest;
+    if (part === 'filling' && cake.discs < 2) return;
+    if (cardsIn(cake, shown, part).length >= MAX_CARDS_PER_PART) return;
+    setPicking({ kind: 'card', part });
+    // Only a new request opens the dialog, never a later change of the cake.
+  }, [openRequest]);
 
   const costs = useMemo(() => {
     const byKey = new Map<string, CakeLineCost>();

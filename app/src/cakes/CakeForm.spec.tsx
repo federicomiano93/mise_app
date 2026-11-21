@@ -34,7 +34,7 @@ describe('a stored cake', () => {
     await open('/cakes/c1');
     expect(await heading('Sacher')).toBeInTheDocument();
     expect(screen.getByText('On the price list')).toBeInTheDocument();
-    expect(screen.getByRole('img', { name: /^Section drawing of the cake: 1 tier, 2 discs per tier/ })).toBeInTheDocument();
+    expect(await screen.findByRole('img', { name: /^Section drawing of the cake: 1 tier, 2 discs per tier/ })).toBeInTheDocument();
     expect(screen.getByRole('heading', { level: 3, name: /^Parts of the cake/ })).toBeInTheDocument();
     expect(screen.getByRole('heading', { level: 3, name: 'Measures' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { level: 3, name: 'Cost and price' })).toBeInTheDocument();
