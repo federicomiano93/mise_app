@@ -115,7 +115,8 @@ describe('a cake from scratch', () => {
     const grams = await screen.findByRole('textbox', { name: 'Sponge: grams' });
     expect(grams).toHaveAttribute('placeholder', '0');
     expect(screen.getByText('type the grams')).toBeInTheDocument();
-    expect(screen.getByText('no reference grams yet: type the grams')).toBeInTheDocument();
+    expect(screen.getByText('cake from scratch: type the grams')).toBeInTheDocument();
+    expect(screen.getByText('you type the grams of every part')).toBeInTheDocument();
     // The cost step says the cost is incomplete until they are.
     await user.click(screen.getByRole('button', { name: /^Cost and price/ }));
     expect(screen.getByText('1 line without grams: type the grams or fill in the reference cake in Settings.')).toBeInTheDocument();

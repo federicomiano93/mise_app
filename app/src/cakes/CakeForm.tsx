@@ -456,11 +456,12 @@ export function CakeForm({ id, cake, start = 'standard', titleRef, onSaved }: Pr
             <section className={`${styles.card} ${styles.parts}`} aria-labelledby={`${ids}-parts`}>
               <h3 id={`${ids}-parts`} className={styles.cardTitle}>
                 {t('cakes.parts.title')}
-                <span className={styles.caption}>{t(working.tiers > 1 ? 'cakes.parts.captionMany' : 'cakes.parts.captionOne')}</span>
+                <span className={styles.caption}>{t(working.tiers > 1 ? 'cakes.parts.captionMany' : fromScratch ? 'cakes.parts.captionTyped' : 'cakes.parts.captionOne')}</span>
               </h3>
               <PartBoundary>
                 <TierParts
                   cake={working}
+                  fromScratch={fromScratch}
                   edit={edit}
                   tier={shownTier}
                   onTier={next => { setTier(next); }}

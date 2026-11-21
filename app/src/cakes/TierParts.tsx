@@ -26,6 +26,8 @@ import styles from './TierParts.module.css';
 type Props = {
   // The working copy, and the moves on it (the form's `edit`).
   cake: Cake;
+  // The cake was started «from scratch»: with no reference on purpose, its lines just need their grams (no «missing» wording).
+  fromScratch?: boolean;
   edit: (change: (current: Cake) => Cake) => void;
   // The tier shown, and the part chosen (the drawing and this list choose together).
   tier: number;
@@ -63,7 +65,7 @@ const lineKey = (line: { tier: number; part: CakePart; productId: string }): str
 // (the line says so, with the rule's figure beside it, and a ↺ puts the rule back). A cake that started «from scratch» has no rule: the
 // placeholder is 0 and every line says «type the grams».
 export function TierParts({
-  cake, edit, tier, onTier, selected, onSelect, registerPack, openRequest = null, onOpenHandled, open, onOpen, costSummary, costBody,
+  cake, fromScratch = false, edit, tier, onTier, selected, onSelect, registerPack, openRequest = null, onOpenHandled, open, onOpen, costSummary, costBody,
 }: Props) {
   const { t } = useT();
   const money = useMoney();
@@ -159,7 +161,7 @@ export function TierParts({
   // The rule in a sentence: the reference grams the cake took, scaled to this tier.
   const ruleSentence = (part: CakePart): string => {
     const ref = cake.ref;
-    if (ref === null) return t('cakes.rule.none');
+    if (ref === null) return t(fromScratch ? 'cakes.rule.typed' : 'cakes.rule.none');
     const d = diameters[shown] ?? cake.diameterCm;
     switch (part) {
       case 'base': return t('cakes.rule.base', { g: ref.baseG, n: cake.discs, d });
