@@ -198,6 +198,14 @@ describe('the venue in the top bar', () => {
     expect(within(dialog).getAllByRole('button').map(button => button.textContent)).toEqual(['The Restaurant', 'Cancel']);
   });
 
+  // A switch reloads the app: an editor open in another section would lose unsaved edits without the router ever asking.
+  it.each(['/orders', '/recipes', '/settings'])('is the name alone, with no switch button, on %s even with several venues', path => {
+    renderApp(path, { session: TWO });
+    const header = topBar();
+    expect(header.getByText('The Bakery')).toBeInTheDocument();
+    expect(header.queryByRole('button')).not.toBeInTheDocument();
+  });
+
   it('switches to the venue picked, after asking whether anything is waiting to be sent', async () => {
     const { store, user } = renderApp('/home', { session: TWO });
     await user.click(topBar().getByRole('button', { name: 'The Bakery, switch venue' }));

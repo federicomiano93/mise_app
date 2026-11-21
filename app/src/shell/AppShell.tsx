@@ -88,7 +88,7 @@ function ShellFrame() {
         <SkipLink target={contentRef} />
         <Rail />
         <div className={styles.main}>
-          <TopBar kiosk={kioskBar} />
+          <TopBar kiosk={kioskBar} onHome={onHome} />
           <main id="main" ref={contentRef} tabIndex={-1} className={styles.content}>
             {/* ⚠️ The holiday reminder and refusal live HERE, not straight under the shell: each boundary is a <div>, and
                 a <div> under the shell's grid takes a cell — the rail and the screen sat low and jumped when the holiday
@@ -200,14 +200,14 @@ function RailLink({ section, spill }: { section: Section; spill: boolean }) {
   );
 }
 
-function TopBar({ kiosk }: { kiosk: boolean }) {
+function TopBar({ kiosk, onHome }: { kiosk: boolean; onHome: boolean }) {
   const { t, locale } = useT();
   const today = useToday(locale);
   const online = useOnline();
 
   return (
     <header className={styles.topbar}>
-      <Venue />
+      <Venue switchable={onHome} />
       <p className={styles.date}>{today}</p>
       <div className={styles.grow} />
       {/* The Home's kiosk pills only; in its own part, so a failure there cannot break the bar. */}
@@ -221,9 +221,11 @@ function TopBar({ kiosk }: { kiosk: boolean }) {
   );
 }
 
-// The venue this person is working on, left of the date. With more than one venue it is a button
+// The venue this person is working on, left of the date. ⚠️ A SWITCH IS A HOME (AND SETTINGS) ACTION ONLY: it reloads the app, and an editor open
+// in another section would lose its unsaved edits without the router ever asking (the blocker never sees a reload). So off the Home it is the name alone.
+// On the Home, with more than one venue it is a button
 // that opens the list of the others; with one it is just its name.
-function Venue() {
+function Venue({ switchable }: { switchable: boolean }) {
   const { t } = useT();
   const { name, options } = useSession();
   // The first letter, by code point: a name that starts with an emoji or an accented capital
@@ -236,7 +238,7 @@ function Venue() {
     </>
   );
 
-  if (options.length < 2) return <p className={styles.venueStatic}>{label}</p>;
+  if (options.length < 2 || !switchable) return <p className={styles.venueStatic}>{label}</p>;
 
   return (
     <SwitchVenueButton variant="bare" className={styles.venue} aria-label={t('account.switchVenueChip', { name })}>
