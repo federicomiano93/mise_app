@@ -28,6 +28,9 @@
 // or discarded (bookings/BookingEditor.tsx). The receipt printer's screen holds it while the address or the plain-letters choice
 // differs from the one saved on this device (bookings/PrinterScreen.tsx), and the bookings settings while they differ from the ones
 // they opened on (bookings/BookingSettingsScreen.tsx).
+// ⚠️ DELIBERATELY NOT A HOLDER: an unsaved cake set aside for the Recipes (cakes/cakeParking.ts). It sits in memory with nobody on its
+// screen, possibly for ever; a hold for it would keep the device off every update and every rollback, and the person who left it may
+// never come back. Losing it to a reload is the accepted price (the recipe editor it was parked for holds the mark while it is dirty).
 // ⚠️ A HOLD MUST END: a screen left open with a hold that never lets go keeps that device off every update, and off the
 // way back after a revert. (Not the sign-in form for that reason: a browser's autofill or a half-typed address left on
 // a shared tablet would block it for days, for a box that takes seconds to retype.) Each new editor adds itself here.

@@ -5,6 +5,7 @@ import { Link, NavLink, Outlet, useHref, useLocation, useNavigate } from 'react-
 import { RouterProvider as AriaRouterProvider } from 'react-aria-components';
 import { PartBoundary } from '../errors/PartBoundary';
 import { useT } from '../i18n/useT';
+import { clearParkedCakes } from '../cakes/cakeParking';
 import { useSession } from '../session/SessionContext';
 import { SwitchVenueButton } from '../session/SwitchVenueButton';
 import { AwayProvider } from './away/AwayContext';
@@ -43,6 +44,11 @@ export function AppShell() {
 
 function ShellFrame() {
   const { t } = useT();
+  const { user, locationId } = useSession();
+  // ⚠️ AN UNSAVED CAKE SET ASIDE FOR THE RECIPES BELONGS TO ONE PERSON IN ONE VENUE (cakes/cakeParking.ts): when either changes — or the shell
+  // goes away because the session left the ready state — the shelf is emptied. A sign-out or a venue switch does not always reload the page.
+  const uid = user?.uid ?? null;
+  useEffect(() => () => { clearParkedCakes(); }, [uid, locationId]);
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const contentRef = useRef<HTMLElement>(null);
