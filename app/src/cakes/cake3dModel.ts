@@ -279,6 +279,24 @@ export function tapAction(picked: Selected | null, selected: Selected | null): '
   return selected !== null && selected.tier === picked.tier && selected.part === picked.part ? 'open' : 'select';
 }
 
+// ── The chosen layer's highlight ─────────────────────────────────────────────
+
+// How strongly a layer lights up in ITS OWN colour: the chosen part, the part under the pointer, or neither. The glow is the material's own
+// colour (or its texture), never a tint of the app's: a custard stays yellow, a chocolate layer still reads as chocolate.
+export const HIGHLIGHT_CHOSEN = 0.35;
+export const HIGHLIGHT_HOVER = 0.15;
+export function highlightLevel(chosen: boolean, hovered: boolean): number {
+  return chosen ? HIGHLIGHT_CHOSEN : hovered ? HIGHLIGHT_HOVER : 0;
+}
+
+// What a material glows with: its picture (a textured one has a white `color`, which would wash it out), its own colour, or nothing
+// (a material with neither, and a see-through one such as the ghost tiers).
+export function glowSource(m: { map?: unknown; color?: unknown; transparent?: boolean }): 'map' | 'colour' | 'none' {
+  if (m.transparent === true) return 'none';
+  if (m.map) return 'map';
+  return m.color ? 'colour' : 'none';
+}
+
 // ── Labels and their leader lines ────────────────────────────────────────────
 
 export interface Anchor { key: string; x: number; y: number }
