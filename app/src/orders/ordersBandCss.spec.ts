@@ -29,6 +29,13 @@ describe('the title band', () => {
     expect(ordersSource).toMatch(/stickyBand\s+bandWraps/);
   });
 
+  it('keeps a lone gear\'s 48px from growing the phone bar, and leaves Orders\' wrapping band alone (its lines would overlap)', () => {
+    const phone = before(pageCss, '@media (min-width: 700px)');
+    expect(phone).toMatch(/\.band:not\(\.bandWraps\) > :not\(\.title\)\s*\{[^}]*margin-block:\s*calc\(-1 \* var\(--s3\)\)/);
+    expect(phone).not.toMatch(/(^|\})\s*\.bandWraps[^{]*\{[^}]*margin-block/);
+    expect(after(pageCss, '@media (min-width: 700px)')).toMatch(/\.band:not\(\.bandWraps\) > :not\(\.title\)\s*\{[^}]*margin-block:\s*0/);
+  });
+
   it('is 72px on the split and nothing on a phone, where it scrolls away', () => {
     expect(bare(tokensCss)).toMatch(/--band-h:\s*0px;/);
     expect(after(tokensCss, '@media (min-width: 1000px)')).toMatch(/--band-h:\s*72px;/);

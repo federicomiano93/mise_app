@@ -67,6 +67,13 @@
   flex: none;
 }
 
+/* ⚠️ THE GEAR KEEPS ITS 48px TOUCH HEIGHT WITHOUT GROWING THE BAR on a phone (as .action > button does): the negative block margin reaches into the
+   head's own padding, so a page with the gear is as tall as one without (measured 22 Nov 2026: 20px taller). NOT for Orders' wrapping band: its
+   second line would then overlap the first. From 700px the band has its own padding and height, and the margin goes. */
+.band:not(.bandWraps) > :not(.title) {
+  margin-block: calc(-1 * var(--s3));
+}
+
 .bandWraps {
   flex-wrap: wrap;
 }
@@ -103,6 +110,10 @@
   .band {
     padding-block: var(--s3);
     background: var(--surface);
+  }
+
+  .band:not(.bandWraps) > :not(.title) {
+    margin-block: 0;
   }
 
   .body {
