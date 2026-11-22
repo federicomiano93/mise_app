@@ -38,7 +38,7 @@ import {
   withoutMissingRecipeCards, workingFrom,
 } from './cakeEditorModel';
 import type { Selected } from './cakeEditorModel';
-import { dropParked, parkCake, parkedKeyOf, peekParked, useParkingOwner } from './cakeParking';
+import { dropParked, flushRemembered, forgetCake, parkCake, parkedKeyOf, peekParked, rememberCake, useParkingOwner } from './cakeParking';
 import { CakeStage } from './CakeStage';
 import type { StageLabels } from './CakeStage';
 import { useCakes } from './CakesContext';
@@ -185,6 +185,24 @@ export function CakeForm({ id, cake, start = 'standard', titleRef, onSaved, onPa
   const onScreen = useRef<ParkedView>({ working: initial, initial, texts, tier, openStepKey, selected });
   useLayoutEffect(() => { onScreen.current = { working, initial, texts, tier, openStepKey: openStepKey ?? (costOpen ? 'cost' : null), selected }; });
 
+  // ⚠️ THE UNSAVED CAKE IS ALSO KEPT ON THE DEVICE (cakeParking.ts): a moment after the last change while the form is dirty, so a window
+  // or an app closed with no way to ask (a tablet's recent apps) still finds «Unsaved cake: …» in the list next time. Clean again (saved, or
+  // every change taken back): nothing is kept. A form that goes away for any other reason (a part that fails) leaves its last copy there.
+  // ⚠️ «CLEAN AGAIN» FORGETS ONLY WHAT THIS FORM HAS REMEMBERED: a form that opens clean (the page reloaded onto it) must not wipe a copy of the
+  // same cake that Cakes has yet to offer.
+  const remembering = useRef(false);
+  useEffect(() => {
+    if (owner === null || parkedAway.current) return;
+    if (dirty) {
+      remembering.current = true;
+      rememberCake({ uid: owner.uid, locationId: owner.locationId, key: cakeId, savedId: id, ...onScreen.current, fromScratch });
+    } else if (remembering.current) {
+      remembering.current = false;
+      forgetCake(cakeId);
+    }
+  }, [dirty, working, initial, texts, tier, openStepKey, costOpen, selected, owner, cakeId, id, fromScratch]);
+  useEffect(() => () => { flushRemembered(); }, []);
+
   const onLeaving = useCallback(() => { handBack.expect(id === null ? NEW_OPENER : productOpener(id)); }, [handBack, id]);
   const leave = useLeave(CAKES_PATH, onLeaving);
 
@@ -231,6 +249,7 @@ export function CakeForm({ id, cake, start = 'standard', titleRef, onSaved, onPa
         const current = latestBlocker.current;
         if (current.state !== 'blocked') return;
         if (discard) {
+          forgetCake(cakeId);
           current.proceed();
         } else {
           // Staying: the Back button had already said whose button is owed the focus.
@@ -256,6 +275,7 @@ export function CakeForm({ id, cake, start = 'standard', titleRef, onSaved, onPa
         asking.current = false;
       }
       dirtyRef.current = false;
+      forgetCake(cakeId);
     }
     leave();
   }
@@ -404,6 +424,7 @@ export function CakeForm({ id, cake, start = 'standard', titleRef, onSaved, onPa
 
     // Saved: nothing is unsaved any more, so leaving asks nothing. The blocker reads the ref at the moment of the navigation below.
     dirtyRef.current = false;
+    forgetCake(cakeId);
     touched.current = true;
     setInitial(named);
     setWorking(named);
@@ -431,6 +452,7 @@ export function CakeForm({ id, cake, start = 'standard', titleRef, onSaved, onPa
     }
     leaving.current = true;
     dirtyRef.current = false;
+    forgetCake(cakeId);
     store.deleteProduct(productId, { kind: 'cake', id });
     say(t('cakes.deleted'));
     leave();
