@@ -15,12 +15,10 @@ export type ComboOption = {
   off: boolean;
 };
 
-// «+ New recipe “…”», the last option of the list: offered only for a typed name that no card has already.
+// The last option of the list, for a typed name that no card has already: «+ New recipe “…”», or «+ “…” from Recipes» for a recipe that
+// has no card. The form decides which (or none): given the typed name, trimmed, it answers the option's words and what choosing does.
 export type NewRecipeOption = {
-  // The option's words for what was typed.
-  label: (typed: string) => string;
-  // Chosen: the typed name, trimmed.
-  onCreate: (name: string) => void;
+  offer: (typed: string) => { label: string; run: () => void } | null;
 };
 
 // The id of that option. Not a document id (those are letters and digits), so it can never be taken for a card.
@@ -59,7 +57,7 @@ export function RecipeCombo({ label, placeholder, options, emptyText, openLabel,
   const shown = filterByName(options, text);
   // ⚠️ A NAME THAT A CARD ALREADY HAS IS NEVER OFFERED AGAIN (capitals and accents ignored, as the search is): the card is in the list.
   const typed = text.trim();
-  const offerNew = newRecipe !== undefined && typed !== '' && !options.some(option => normalizeSearchText(option.name) === normalizeSearchText(typed));
+  const offer = newRecipe !== undefined && typed !== '' && !options.some(option => normalizeSearchText(option.name) === normalizeSearchText(typed)) ? newRecipe.offer(typed) : null;
 
   return (
     <ComboBox
@@ -74,7 +72,7 @@ export function RecipeCombo({ label, placeholder, options, emptyText, openLabel,
         justPicked.current = true;
         setTimeout(() => { justPicked.current = false; }, 0);
         setText('');
-        if (key === NEW_RECIPE_KEY) newRecipe?.onCreate(typed); else onPick(String(key));
+        if (key === NEW_RECIPE_KEY) offer?.run(); else onPick(String(key));
       }}
       menuTrigger="focus"
       allowsEmptyCollection
@@ -95,9 +93,9 @@ export function RecipeCombo({ label, placeholder, options, emptyText, openLabel,
               {option.sub === '' ? null : <span className={styles.sub}>{option.sub}</span>}
             </ListBoxItem>
           ))}
-          {newRecipe !== undefined && offerNew ? (
-            <ListBoxItem key={NEW_RECIPE_KEY} id={NEW_RECIPE_KEY} textValue={newRecipe.label(typed)} className={`${styles.item} ${styles.create}`}>
-              <span className={styles.name}>{newRecipe.label(typed)}</span>
+          {offer !== null ? (
+            <ListBoxItem key={NEW_RECIPE_KEY} id={NEW_RECIPE_KEY} textValue={offer.label} className={`${styles.item} ${styles.create}`}>
+              <span className={styles.name}>{offer.label}</span>
             </ListBoxItem>
           ) : null}
         </ListBox>

@@ -4,6 +4,7 @@ import { Check, Plus, RotateCcw, X } from 'lucide-react';
 import { MAX_CARDS_PER_PART, cakeLineCosts, cakeProductId, tierDiameters } from '@mise/shared/cake-model';
 import type { Cake, CakeLineCost, CakePart, ResolvedLine } from '@mise/shared/cake-model';
 import type { CostTables } from '@mise/shared/foodcost-model';
+import { normalizeSearchText } from '@mise/shared/catalogue-model';
 import { fcMoney } from '@mise/shared/fc-number';
 import { localNumber } from '@mise/shared/currency';
 import { useFoodcost } from '../foodcost/FoodcostContext';
@@ -48,6 +49,9 @@ type Props = {
   // «+ New recipe “…”» chosen in a step's search box (only passed to someone who may make recipes): the form makes the recipe and its
   // card and puts the card on that part. Left out, the option is not offered.
   onNewRecipe?: ((name: string, part: CakePart) => void) | undefined;
+  // A typed name that is a recipe of the Recipes whose Food cost card is missing offers «+ “…” from Recipes» instead: the form makes the
+  // card only (never a second recipe) and says whether it was made; the card then goes on the part like any chosen one. Passed with onNewRecipe.
+  onCardFromBook?: ((recipeId: string) => Promise<boolean>) | undefined;
   // The sixth step, «Cost and price»: what its closed row says, and what it shows when open (the form owns the numbers).
   costSummary: string;
   costBody: ReactNode;
@@ -69,12 +73,12 @@ const lineKey = (line: { tier: number; part: CakePart; productId: string }): str
 // (the line says so, with the rule's figure beside it, and a ↺ puts the rule back). A cake typed by hand has no rule: the
 // placeholder is 0 and every line says «type the grams».
 export function TierParts({
-  cake, typedByHand = false, edit, tier, onTier, selected, onSelect, registerPack, openRequest = null, onOpenHandled, open, onOpen, costSummary, costBody, onNewRecipe,
+  cake, typedByHand = false, edit, tier, onTier, selected, onSelect, registerPack, openRequest = null, onOpenHandled, open, onOpen, costSummary, costBody, onNewRecipe, onCardFromBook,
 }: Props) {
   const { t } = useT();
   const money = useMoney();
   const ids = useId();
-  const { tables, productsLoaded, recipesLoaded, ingredientsLoaded } = useFoodcost();
+  const { tables, products, recipes, productsLoaded, recipesLoaded, ingredientsLoaded } = useFoodcost();
   const [pickingPack, setPickingPack] = useState(false);
   const shown = Math.min(Math.max(tier, 0), cake.tiers - 1);
   const diameters = tierDiameters(cake.diameterCm, cake.tiers);
@@ -184,6 +188,27 @@ export function TierParts({
     edit(cakeNow => addCard(cakeNow, shown, part, productId));
   };
 
+  // ⚠️ THE LAST OPTION OF A SEARCH BOX, FOR WHAT WAS TYPED: a name that a card of this list already has is never offered (the card is in
+  // the list, RecipeCombo checks it). A name that is a RECIPE with no Food cost card offers that card, «from Recipes»; one whose card
+  // exists (whatever its kind) offers nothing; any other name offers a new recipe. Capitals and accents ignored, as the search is.
+  const offerFor = (part: CakePart) => (typed: string): { label: string; run: () => void } | null => {
+    if (onNewRecipe === undefined) return null;
+    const wanted = normalizeSearchText(typed);
+    const same = Object.values(recipes).filter(recipe => normalizeSearchText(String(recipe.name ?? '').trim()) === wanted);
+    const bare = same.find(recipe => !products.some(card => card.id === `recipe-${recipe.id}`));
+    if (bare !== undefined && onCardFromBook !== undefined) {
+      const recipeId = String(bare.id);
+      return {
+        label: t('cakes.newRecipe.fromBook', { q: typed }),
+        run: () => {
+          void onCardFromBook(recipeId).then(made => { if (made) pick(part, `recipe-${recipeId}`); });
+        },
+      };
+    }
+    if (same.length > 0) return null;
+    return { label: t('cakes.newRecipe.option', { q: typed }), run: () => { onNewRecipe(typed, part); } };
+  };
+
   const packLoaded = { recipes: recipesLoaded, ingredients: ingredientsLoaded };
   const said = useSpoken(open === null ? '' : t('cakes.steps.opened', {
     n: stepNumber(open), total: STEP_PARTS.length + 1, part: open === 'cost' ? t('cakes.cost.title') : t(`cakes.part.${open}`),
@@ -278,10 +303,7 @@ export function TierParts({
                       openLabel={t('cakes.combo.open')}
                       inputRef={node => { if (node) combos.current.set(part, node); else combos.current.delete(part); }}
                       onPick={id => { pick(part, id); }}
-                      newRecipe={onNewRecipe === undefined ? undefined : {
-                        label: typed => t('cakes.newRecipe.option', { q: typed }),
-                        onCreate: name => { onNewRecipe(name, part); },
-                      }}
+                      newRecipe={onNewRecipe === undefined ? undefined : { offer: offerFor(part) }}
                     />
                   )}
 
@@ -441,7 +463,7 @@ function CakeLineRow({ idPrefix, cost, name, loss, registerBox, onGrams, onReset
       </div>
       <div className={styles.money} data-missing={cost.materials === null}>
         {cost.materials === null ? '—' : fcMoney(cost.materials, money)}
-        <small>{cost.materials === null ? t('cakes.row.noPrice') : t('cakes.row.materials')}</small>
+        <small>{cost.materials === null ? t('cakes.row.incomplete') : t('cakes.row.materials')}</small>
       </div>
       <div className={styles.actions}>
         {line.manual ? (
