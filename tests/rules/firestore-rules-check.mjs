@@ -2555,6 +2555,21 @@ async function products() {
   await expectDenied('a venue without Food Cost reads no reference', () =>
     fetch(`${FS}/locations/trattoria-x/cake-settings/reference`, { headers: asAccount(BOB) }));
   await expectDenied('the reference is never deleted', () => deleteWrite(`${CREF}/reference`));
+  // The table per diameter (22 Nov 2026, cakes rework step 4): `rows` is optional (the old shape above stays allowed for phones not yet
+  // updated) and judged by its type and count only — row by row hit the 1000-expressions limit at four full rows (see the rule).
+  const row = (over = {}) => ({ diameterCm: 22, baseG: 220, soakG: 70, fillingG: 300, coatingG: 350, decorationG: 120.5, ...over });
+  const twentyFull = Array.from({ length: 20 }, (_, i) => row({ diameterCm: 10 + 2 * i }));
+  await expectAllowed('the owner sets the table per diameter', () =>
+    wholeWrite(`${CREF}/reference`, refDoc({ rows: [row({ diameterCm: 16, baseG: null }), row(), row({ diameterCm: 26, soakG: null })] })));
+  await expectAllowed('…twenty FULL rows (the expressions limit is not reached)', () =>
+    wholeWrite(`${CREF}/reference`, refDoc({ rows: twentyFull })));
+  await expectDenied('…twenty-one rows', () => wholeWrite(`${CREF}/reference`, refDoc({ rows: [...twentyFull, row({ diameterCm: 60 })] })));
+  await expectDenied('…an empty table', () => wholeWrite(`${CREF}/reference`, refDoc({ rows: [] })));
+  await expectDenied('…rows that are not a list', () => wholeWrite(`${CREF}/reference`, refDoc({ rows: { a: row() } })));
+  await expectDenied('…a table without the old reference beside it (old phones read only that)', () => {
+    const d = refDoc({ rows: [row()] }); delete d.grams;
+    return wholeWrite(`${CREF}/reference`, d);
+  });
   await expectAllowed('the owner deletes a cake', () => deleteWrite(`${CK}/K2`));
 
   await expectAllowed('a member may delete a product', () => deleteWrite(`${P}/P2`));
@@ -4738,6 +4753,14 @@ async function staffCards() {
   await expectAllowed('…the shown employee reads them', readAs(SAM, `${L}/cake-settings/reference`));
   await expectDenied('⚠️ …but does not change them',
     () => wholeWrite(`${L}/cake-settings/reference`, { ...stamp, grams: { ...refGrams, baseG: 1 }, updatedAt: '2026-11-20' }, asAccount(SAM)));
+  await expectDenied('⚠️ …nor the table per diameter', () => wholeWrite(`${L}/cake-settings/reference`, {
+    ...stamp, grams: refGrams, updatedAt: '2026-11-22',
+    rows: [{ diameterCm: 22, baseG: 1, soakG: 1, fillingG: 1, coatingG: 1, decorationG: 1 }],
+  }, asAccount(SAM)));
+  await expectAllowed('the manager sets the table per diameter', () => wholeWrite(`${L}/cake-settings/reference`, {
+    ...stamp, grams: refGrams, updatedAt: '2026-11-22',
+    rows: [{ diameterCm: 22, baseG: 1, soakG: 1, fillingG: 1, coatingG: 1, decorationG: null }],
+  }, asAccount(MAYA)));
   await expectAllowed('the manager deletes a cake', () => deleteWrite(`${L}/cakes/C1`, asAccount(MAYA)));
   await expectDenied('⚠️ and a price is still written only by whoever runs the place',
     () => mergeWrite(`${L}/ingredient-prices/flour`, { ...stamp, priceUnit: 'kg', pricePerUnit: 9 }, asAccount(SAM)));
