@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { CakeGeometry, CakePart } from '@mise/shared/cake-model';
+import { DISC_GAP_SHARE } from './cake3dModel';
 import type { Selected } from './cakeEditorModel';
 import styles from './CakeSection2D.module.css';
 
@@ -15,6 +16,11 @@ export interface StageLabels {
   grams: (grams: number) => string;
   // «Ø 24».
   diameter: (diameterCm: number) => string;
+  // The 3D view's callout under a part's recipe name(s): «420 g · £0.84» (its grams and the raw-material cost of its cards). The flat
+  // drawing keeps its own words and never reads this.
+  callout?: (tier: number, part: CakePart) => string;
+  // «Raw materials so far: £4.20», over the 3D view (and under the flat drawing, and last in the stacked list); '' while the cake holds nothing.
+  total?: string;
 }
 
 type Props = {
@@ -27,7 +33,7 @@ type Props = {
 };
 
 // ⚠️ THE PICTURE'S UNITS ARE SCREEN PIXELS: the viewBox is as wide as the stage really is (measured), so a 12px label is 12px on
-// screen at every width. A fixed 640-unit viewBox shrank every word to 7px on the split. Before the stage is measured (and where
+// screen at every width. A fixed 640-unit viewBox shrank every word to 7px on a narrow stage. Before the stage is measured (and where
 // nothing measures, as in a test) it is 640 wide.
 const DEFAULT_WIDTH = 640;
 const MIN_WIDTH = 200;
@@ -109,7 +115,9 @@ export function CakeSection2D({ geometry, selected, tier: shownTier, onSelect, l
     const hasLayers = cards('filling').length > 0 && tier.discs > 1;
     const discPx = tier.discHeightCm * heightScale * DISC_SHARE;
     const layerPx = hasLayers ? tier.discHeightCm * heightScale * (1 - DISC_SHARE) : 0;
-    const top = y - (tier.discs * discPx + (tier.discs - 1) * layerPx);
+    // Without a filling the discs stand apart by an empty gap, so their number reads at a glance (as in the 3D view).
+    const spacePx = hasLayers ? layerPx : discPx * DISC_GAP_SHARE;
+    const top = y - (tier.discs * discPx + (tier.discs - 1) * spacePx);
     const key = (part: string, n = 0) => `${tier.index}-${part}-${n}`;
     const chosen = (part: CakePart) => (sameSelection(selected, tier.index, part) ? styles.chosen : '');
 
@@ -154,6 +162,8 @@ export function CakeSection2D({ geometry, selected, tier: shownTier, onSelect, l
         }
         lastLayerY = cursor - layerPx / 2;
         cursor -= layerPx;
+      } else if (disc < tier.discs - 1) {
+        cursor -= spacePx;
       }
     }
 
@@ -237,6 +247,7 @@ export function CakeSection2D({ geometry, selected, tier: shownTier, onSelect, l
         {shapes}
         {notes}
       </svg>
+      {labels.total ? <p className={styles.total}>{labels.total}</p> : null}
     </div>
   );
 }

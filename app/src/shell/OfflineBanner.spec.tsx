@@ -83,18 +83,12 @@ describe('OfflineBanner', () => {
 
   // jsdom applies no media query, so the parts by width are pinned in the stylesheet's text
   // (without its comments, which talk about the very words searched for).
-  it('is drawn by default, and from 700px hidden on the Home only, where the top bar says it', () => {
+  it('is drawn by default, and from 700px hidden on every screen, where the top bar says it', () => {
     const [phone = '', tablet = ''] = css.split('@media (min-width: 700px)');
     expect(phone).toMatch(/\.banner\s*\{[^}]*display:\s*flex/);
     expect(phone).not.toMatch(/display:\s*none/);
-    expect(tablet).toMatch(/\.banner\[data-home="true"\]\s*\{[^}]*display:\s*none/);
-    expect(tablet).not.toMatch(/\.banner\s*\{[^}]*display:\s*none/);
-  });
-
-  it('marks itself as the Home\'s only on the Home', () => {
-    onLine.mockReturnValue(false);
-    renderApp('/home');
-    expect(screen.getByText(ENGLISH).closest('[data-home]')).toHaveAttribute('data-home', 'true');
+    expect(tablet).toMatch(/\.banner\s*\{[^}]*display:\s*none/);
+    expect(css).not.toContain('data-home');
   });
 
   it('sits in a row with its icon, centred on each other', () => {
@@ -111,7 +105,6 @@ describe('OfflineBanner under the title of every screen', () => {
     const banner = main.getByText(ENGLISH);
     const heading = main.getByRole('heading', { level: 1, name: 'Orders' });
     expect(heading.compareDocumentPosition(banner) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(banner.closest('[data-home]')).toBeNull();
   });
 
   it('keeps its empty live region under the title while online', () => {
@@ -124,13 +117,12 @@ describe('OfflineBanner under the title of every screen', () => {
     expect(region).toBeEmptyDOMElement();
   });
 
-  it('follows the connection while a screen is open; off the Home there is no top bar to say it', () => {
+  it('follows the connection while a screen is open', () => {
     renderApp('/orders');
     expect(within(screen.getByRole('main')).queryByText(ENGLISH)).not.toBeInTheDocument();
 
     goOffline();
     expect(within(screen.getByRole('main')).getByText(ENGLISH)).toBeInTheDocument();
-    expect(screen.queryByText('No connection')).not.toBeInTheDocument();
 
     goOnline();
     expect(within(screen.getByRole('main')).queryByText(ENGLISH)).not.toBeInTheDocument();

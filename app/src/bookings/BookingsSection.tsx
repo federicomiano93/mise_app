@@ -3,6 +3,7 @@ import { Navigate, useLocation, useNavigate, useParams } from 'react-router';
 import { PartBoundary } from '../errors/PartBoundary';
 import { useT } from '../i18n/useT';
 import { KEEP_FOCUS, Page } from '../shell/Page';
+import { SettingsGear } from '../shell/SettingsGear';
 import { useOwnScrollArea } from '../shell/scrollArea';
 import { useTodayKey } from '../shell/useTodayKey';
 import { StatusMessageProvider, useStatusMessage } from '../ui/StatusMessage';
@@ -17,8 +18,8 @@ import { monthOf } from './bookingModel';
 import { BookingsProvider, FormDayContext, useBookings, useBookingsStore } from './BookingsContext';
 import { useDataServices } from '../data/DataContext';
 import { useSession } from '../session/SessionContext';
-import { dayOfState, savedDateOf } from './bookingsNav';
-import { BOOKINGS_PATH, parseBookingsPath } from './bookingsPath';
+import { FROM_LIST, dayOfState, savedDateOf } from './bookingsNav';
+import { BOOKINGS_PATH, parseBookingsPath, settingsPath } from './bookingsPath';
 import type { BookingsView } from './bookingsPath';
 import styles from './BookingsSection.module.css';
 
@@ -27,7 +28,7 @@ import styles from './BookingsSection.module.css';
 // and only for a person the venue shows it to (SectionRoute, session/visibility.ts).
 //
 // A phone shows the list OR one booking (its editor). From 1000px (the tablet, 19 Nov 2026) the list is the whole screen: «New
-// booking», the calendar and the printer and settings doors on the left, the picked day's card on the right, and a booking OPENS
+// booking», the calendar and the printer door on the left (the settings are the gear beside the title), the picked day's card on the right, and a booking OPENS
 // IN THAT CARD, in place of its row (BookingsList.tsx); the form, the printer and the settings take the whole width.
 // Its data lives exactly as long as it is on screen: BookingsProvider starts the one listener on mount and stops it on unmount (P14).
 // How long a failed read of a booking's day waits before it is tried again (it also tries when the connection comes back).
@@ -96,7 +97,7 @@ function BookingsScreen() {
   // from before the calendar): once the server has answered for the month held without it, its day is read once and the section
   // opens that month. A booking that is gone stays «no longer here».
   const services = useDataServices();
-  const { locationId } = useSession();
+  const { locationId, canManage } = useSession();
   const { status: heldStatus, confirmed, items } = useBookings();
   const openId = view.kind === 'booking' || view.kind === 'edit' ? view.id : null;
   const openNow = useRef(openId);
@@ -179,6 +180,21 @@ function BookingsScreen() {
     area.scrollTop = kind === 'list' && before.kind !== 'list' ? listTop.current : 0;
   }, [pathname]);
 
+  // ⚠️ BACK FROM THE SETTINGS HANDS THE FOCUS TO THE GEAR that opened them, as in the other sections (their hand-back): the gear is
+  // owed the focus from the press, so the browser's own Back gives it too. It is drawn only on the list and a booking, so the focus is
+  // given once the list is the view again, and only then.
+  const gearRef = useRef<HTMLButtonElement>(null);
+  const gearOwed = useRef(false);
+  const openSettings = () => {
+    gearOwed.current = true;
+    void navigate(settingsPath(), { state: FROM_LIST });
+  };
+  useLayoutEffect(() => {
+    if (kind !== 'list' || !gearOwed.current) return;
+    gearOwed.current = false;
+    gearRef.current?.focus();
+  }, [kind]);
+
   // ⚠️ A BOOKING OPEN IN THE LIST (the split) IS CLOSED BY REPLACING THE ADDRESS, never by Back: a Back could land on an older entry
   // carrying another day (a saved booking's), and the day being looked at would jump. The browser's own Back still pops to the list.
   const closeBooking = useCallback(() => {
@@ -210,7 +226,15 @@ function BookingsScreen() {
   return (
     // A booking's page on a phone draws its own h1, the customer's name (bookings rebuild step 3); the tab keeps the section's name,
     // never a customer's. On the tablet the card is in the list: the page keeps its own h1 and the name is the card's h2.
-    <Page title={t('section.bookings')} ownHeading={view.kind === 'booking' && !split}>
+    // The settings gear beside the title (21 Nov 2026), only for whoever manages bookings (the rules' managesBookings), and only on the
+    // list and an open booking (`null`, not `undefined`, keeps the title row the same white band without it): the form holds unsaved edits and the printer and settings are already a screen of their own.
+    <Page
+      title={t('section.bookings')}
+      ownHeading={view.kind === 'booking' && !split}
+      band={canManage && (view.kind === 'list' || view.kind === 'booking')
+        ? <SettingsGear ref={gearRef} onPress={openSettings} />
+        : null}
+    >
       <FormDayContext.Provider value={reportFormDays}>
         <div className={formOpen ? `${styles.layout} ${styles.fullForm}` : styles.layout} data-view={view.kind}>
           <div className={styles.list}>

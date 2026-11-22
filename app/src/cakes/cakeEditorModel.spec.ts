@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { CAKE_MODEL, MAX_CARDS_PER_PART, MAX_PACKAGING, cakeProductId } from '@mise/shared/cake-model';
 import type { Cake, ReferenceGrams } from '@mise/shared/cake-model';
+import { normalizeStandard, referenceFor } from '@mise/shared/cake-standard';
+import type { CakeStandard } from '@mise/shared/cake-standard';
 import {
-  addCard, addPack, canAddCard, cardsIn, firstEmptyPack, isDirty, referenceChanged, removeCard, removePack, resetGrams, setCategory,
-  setGrams, setMeasure, setName, setPackQty, setPrice, setTarget, setVat, takeReference, vatFromSelect, workingFrom,
+  addCard, addPack, canAddCard, cardsIn, firstEmptyPack, followStandard, isDirty, referenceChanged, removeCard, removePack, resetGrams,
+  setGrams, setMeasure, setName, setPackQty, setPrice, setTarget, setVat, takeReference, vatFromSelect, withoutMissingRecipeCards, workingFrom,
 } from './cakeEditorModel';
 
 const REF: ReferenceGrams = { diameterCm: 22, discs: 3, discHeightCm: 3, baseG: 300, soakG: 90, fillingG: 280, coatingG: 450, decorationG: 200 };
@@ -91,11 +93,9 @@ describe('setMeasure', () => {
   });
 });
 
-describe('the name, the category, the price, the target and the VAT', () => {
+describe('the name, the price, the target and the VAT', () => {
   it('sets each, and reads «» as none', () => {
     expect(setName(CAKE, 'x').name).toBe('x');
-    expect(setCategory(CAKE, '').categoryId).toBeNull();
-    expect(setCategory(CAKE, 'other').categoryId).toBe('other');
     expect(setPrice(CAKE, '12,5').sellingPrice).toBe(12.5);
     expect(setPrice(CAKE, '').sellingPrice).toBeNull();
     expect(setTarget(CAKE, '28').foodCostTarget).toBe(28);
@@ -150,6 +150,24 @@ describe('cards', () => {
     const next = removeCard(both, 0, 'base', 'SPONGE');
     expect(next.lines.map(line => `${line.tier}.${line.part}`)).toEqual(['1.base', '0.soak']);
     expect(removeCard(next, 0, 'base', 'SPONGE')).toBe(next);
+  });
+});
+
+describe('withoutMissingRecipeCards', () => {
+  const held = { ...CAKE, lines: [
+    { tier: 0, part: 'base' as const, productId: 'recipe-gone', grams: 100 },
+    { tier: 0, part: 'soak' as const, productId: 'recipe-here', grams: null },
+    { tier: 0, part: 'filling' as const, productId: 'ghost-card', grams: null },
+  ] };
+  const exists = (id: string) => id === 'recipe-here';
+
+  it('drops only a line whose recipe- card is not among the cards', () => {
+    expect(withoutMissingRecipeCards(held, exists).lines.map(line => line.productId)).toEqual(['recipe-here', 'ghost-card']);
+  });
+
+  it('leaves every other line alone, a card that is missing included, and returns the same cake when nothing goes', () => {
+    expect(withoutMissingRecipeCards(CAKE, () => false)).toBe(CAKE);
+    expect(withoutMissingRecipeCards(held, () => true)).toBe(held);
   });
 });
 
@@ -216,5 +234,57 @@ describe('the reference grams', () => {
   it('hand-typed grams stay when the reference is taken', () => {
     const typed = setGrams(CAKE, 1, 'base', 'SPONGE', '400');
     expect(takeReference(typed, NEWER).lines[1]?.grams).toBe(400);
+  });
+});
+
+describe('followStandard', () => {
+  // Two typed rows: 20 cm and 28 cm; the other diameters are scaled from them.
+  const STANDARD: CakeStandard = {
+    discs: 3, discHeightCm: 3,
+    rows: [
+      { diameterCm: 20, baseG: 250, soakG: 80, fillingG: 240, coatingG: 400, decorationG: 180 },
+      { diameterCm: 28, baseG: 490, soakG: 160, fillingG: 470, coatingG: 700, decorationG: 250 },
+    ],
+  };
+  const following = (): Cake => ({ ...CAKE, diameterCm: 20, tiers: 1, ref: referenceFor(STANDARD, 20) });
+  const widened = (cake: Cake): Cake => ({ ...cake, diameterCm: 28 });
+
+  it('a cake that follows the table takes the table’s figures at its new diameter', () => {
+    const before = following();
+    const after = followStandard(before, widened(before), STANDARD);
+    expect(after.ref).toEqual(referenceFor(STANDARD, 28));
+    expect(after.ref?.baseG).toBe(490);
+    expect(after.diameterCm).toBe(28);
+  });
+
+  it('a cake saved with the old single 22 cm reference follows a legacy table when its diameter changes', () => {
+    const legacy = normalizeStandard({ bakery: 'x', grams: { diameterCm: 22, discs: 3, discHeightCm: 3, baseG: 300, soakG: 90, fillingG: 280, coatingG: 450, decorationG: 200 }, updatedAt: '' });
+    const before: Cake = { ...CAKE, diameterCm: 20, tiers: 1, ref: referenceFor(legacy, 22) };
+    const after = followStandard(before, { ...before, diameterCm: 24 }, legacy);
+    expect(after.ref).toEqual(referenceFor(legacy, 24));
+    expect(after.ref?.diameterCm).toBe(24);
+  });
+
+  it('does not follow a cake made from scratch', () => {
+    const before = { ...following(), ref: null };
+    expect(followStandard(before, widened(before), STANDARD).ref).toBeNull();
+  });
+
+  it('does not follow a cake whose reference is from an older table', () => {
+    const before = { ...following(), ref: { ...(referenceFor(STANDARD, 20) as ReferenceGrams), baseG: 999 } };
+    const after = followStandard(before, widened(before), STANDARD);
+    expect(after.ref).toEqual(before.ref);
+  });
+
+  it('changes nothing when the diameter is the same', () => {
+    const before = following();
+    const after = { ...before, name: 'Other' };
+    expect(followStandard(before, after, STANDARD)).toBe(after);
+  });
+
+  it('changes nothing when the venue has no standard', () => {
+    const before = following();
+    const after = widened(before);
+    expect(followStandard(before, after, null)).toBe(after);
   });
 });

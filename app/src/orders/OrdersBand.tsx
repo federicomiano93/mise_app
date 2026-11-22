@@ -1,7 +1,9 @@
 import { useCallback } from 'react';
-import { History, Settings, Share } from 'lucide-react';
+import { History, Share } from 'lucide-react';
 import { PartBoundary } from '../errors/PartBoundary';
 import { useT } from '../i18n/useT';
+import iconStyles from '../shell/BandIcon.module.css';
+import { SettingsGear } from '../shell/SettingsGear';
 import { Button } from '../ui/Button';
 import { ListsDoor } from './ListsDoor';
 import { NoticesBell } from './NoticesBell';
@@ -35,11 +37,9 @@ export function OrdersBand({ onSettings, onHistory, onLists, onSend, showSend }:
   return (
     <>
       {/* Always there, even with no supplier yet: the settings are not about the suppliers. */}
-      <Button ref={settingsNode} variant="bare" className={styles.icon} aria-label={t('ord.settings.open')} onPress={onSettings}>
-        <Settings aria-hidden="true" />
-      </Button>
+      <SettingsGear ref={settingsNode} label={t('ord.settings.open')} onPress={onSettings} />
       {/* Always there: past orders outlive the suppliers they went to. */}
-      <Button ref={historyNode} variant="bare" className={styles.icon} aria-label={t('ord.history.title')} onPress={onHistory}>
+      <Button ref={historyNode} variant="bare" className={iconStyles.icon} aria-label={t('ord.history.title')} onPress={onHistory}>
         <History aria-hidden="true" />
       </Button>
       {/* In a part of its own: a failure in the bell must not take the band down. */}
@@ -50,7 +50,7 @@ export function OrdersBand({ onSettings, onHistory, onLists, onSend, showSend }:
       <span className={styles.grow} aria-hidden="true" />
       {/* ⚠️ AN ARROW OUT OF A TRAY, NOT A WHATSAPP MARK: the screen it opens offers several roads. */}
       {showSend ? (
-        <Button ref={sendNode} variant="bare" className={styles.icon} aria-label={t('ord.send.action')} onPress={onSend}>
+        <Button ref={sendNode} variant="bare" className={iconStyles.icon} aria-label={t('ord.send.action')} onPress={onSend}>
           <Share aria-hidden="true" />
         </Button>
       ) : null}

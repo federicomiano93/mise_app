@@ -2013,9 +2013,10 @@ Pieces 4 and 5 of the plan above, slice 4 of 4.
 Piece A of `docs/mockups/orders-tablet-2026-11.md` (items 1–6 and the phone); piece B (the Home's «Ordini da fare») is a later PR.
 No Firestore data, rules or queries changed: every point reads the streams Orders already had.
 
-- **Shell.** The top bar (venue · date · connection) is drawn on the Home only (`AppShell`, `data-topbar`); off the Home `--topbar-h`
-  is 0, so the split panes keep no room for it. `Page` holds the offline strip (`OfflineBanner`, «Offline: salvo qui e invio appena
-  torna la rete») under every title, hidden from 700px on the Home only. The rail is 104px, icons 27px stroke 2, labels 13.5px/500 in
+- **Shell.** The top bar (venue · date · connection) was drawn on the Home only (`AppShell`, `data-topbar`) when this was built; since 21-22 Nov 2026 it is
+  on EVERY section from 700px (no `data-topbar`, `--topbar-h` is never 0, so the split panes keep room for it), and the venue is a switch button on the
+  Home only. `Page` holds the offline strip (`OfflineBanner`, «Offline: salvo qui e invio appena torna la rete») under every title, hidden from
+  700px everywhere (the bar says the connection). The rail is 104px, icons 27px stroke 2, labels 13.5px/500 in
   `--rail-ink-strong`; the short-window steps trim the padding and drop the brand letter from 755px (646px needed at 648).
 - **Title band.** `Page` takes a `band`: white, no line, sticky on the split at exactly `--band-h` (72px; 0 on a phone, where it scrolls
   away and wraps). `OrdersBand`: settings, History, the bell, `ListsDoor` (icon, words, count; words visually hidden under 340px) and,
@@ -2081,3 +2082,17 @@ A phone that only granted the permission through the old button sees the button 
 - `not-configured` and a browser with `Notification` but no `PushManager` still get the permission-only button (the in-app calendar notices need it); once
   granted the line says «on». Focus follows to the sentence that replaces the button (`tabIndex -1`) for blocked / unsupported / install-first too.
 - A write cut off by the time limit stays in Firestore's queue (the same exposure as `pushTokenRefresh.ts`).
+
+## The settings gear and the top bar on every section — as built (22 Nov 2026)
+
+Federico, 21-22 Nov 2026: «the bar everywhere» and one settings door in the same place in every section. No Firestore data, rules or queries changed.
+
+- **Top bar.** Drawn on every section from 700px (it was the Home's only since 16 Nov). The venue in it is the SWITCH button on the Home only and the plain
+  name elsewhere: a switch reloads the app, and an editor open in another section would lose unsaved edits without the router's blocker ever seeing it.
+  Switching stays a Home and Settings action. The offline strip under a title is hidden from 700px everywhere.
+- **Gear.** `shell/SettingsGear.tsx` is passed as `Page`'s `band`: an icon-only 48px square right after the title, named «Settings» (the section's own name
+  where it has one), `aria-current` while the settings are open beside the list, registered under the section's hand-back so Back lands on it (Bookings
+  keeps its own small owed-focus ref for the same). Drawn only for who sees the settings (`canManage`; Bookings: whoever manages them).
+- **On a phone** the gear is the section's LIST view's only in Recipes, Suppliers and Food cost (a detail fills the page and has its own Back); on the split it
+  stays on every view, and pressing it on its own Settings view does nothing. Phone title bar: a lone gear takes a negative block margin like `.action > button`,
+  so a page with it is as tall as one without; Orders' wrapping band keeps its lines apart instead.

@@ -1,3 +1,4 @@
+import { isCakeProductId } from '@mise/shared/cake-model';
 import { productCooking } from '@mise/shared/foodcost-model';
 import type { CostTables, Product } from '@mise/shared/foodcost-model';
 import { fcMoney, fcNumber, fcWeight } from '@mise/shared/fc-number';
@@ -97,8 +98,9 @@ export function ReadProduct({ product, working, categories }: { product: Product
   const rows: Row[] = [
     { label: t('fc.name'), value: product.name.trim() || null },
     { label: t('fc.kind.label'), value: t(product.kind === 'semi' ? 'fc.kind.semi' : 'fc.kind.finished') },
-    { label: t('fc.category.label'), value: category ? category.name : t('fc.cat.none') },
   ];
+  // A cake's card has no category of its own (it sits in Food cost's «Cakes» group), so the row is not printed for it.
+  if (!isCakeProductId(product.id)) rows.push({ label: t('fc.category.label'), value: category ? category.name : t('fc.cat.none') });
   // How it is sold is for a card that is sold.
   if (product.kind === 'semi') return <ReadList rows={rows} />;
   rows.push({ label: t('fc.sold'), value: product.sellingMode === null ? null : t(SOLD_TEXT[product.sellingMode]) });

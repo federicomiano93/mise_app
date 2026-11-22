@@ -12,7 +12,7 @@ import { startTelemetry } from '../telemetry/startTelemetry';
 import { fakeStore } from '../testing/fakeSession';
 import { renderApp } from '../testing/renderApp';
 
-// The shell's own frame (the top bar — on the Home only since 16 Nov 2026 —, the rail, the tab bar) is not guarded by the section
+// The shell's own frame (the top bar — on every section since 21 Nov 2026 —, the rail, the tab bar) is not guarded by the section
 // boundary: when a part of it fails to draw, the ROUTER's boundary catches it. That boundary
 // writes a line of its own to console.error unless the router is given an onError, so one failing
 // part would be reported twice. These specs pin that it is reported once.

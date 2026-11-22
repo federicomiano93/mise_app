@@ -333,8 +333,18 @@ the only other one is `client-accounts` (managers, or the account itself — aud
   whoever is shown Food cost); delete: `canManage(lid, 'foodcost')`. Lines are judged only by
   their count, like a product's.
 - `cake-settings/reference` — `{ bakery, grams: { diameterCm, discs, discHeightCm, baseG, soakG,
-  fillingG, coatingG, decorationG }, updatedAt }`: the grams of ONE reference cake, scaled by area
-  (coating by surface) to every new cake. All eight keys required (`isCakeReference`). Read:
+  fillingG, coatingG, decorationG }, rows?, updatedAt }`: the grams of ONE reference cake, scaled by area
+  (coating by surface) to every new cake. All eight keys required (`isCakeReference`).
+  `rows` (22 Nov 2026, cakes rework step 4, `shared/src/cake-standard.ts`) = the standard cake PER DIAMETER:
+  a list of 1–20 maps `{ diameterCm (int 10–60), baseG, soakG, fillingG, coatingG, decorationG }`, each
+  figure a number 0–100,000 or null (= not typed; the app fills it in from the nearest typed diameter).
+  ⚠️ The rules judge `rows` by type and count ONLY: checking the rows one by one hit Firestore's
+  1000-expressions-per-request limit at four full rows (measured 22 Nov 2026); `normalizeStandard` drops junk.
+  Optional, so a phone not yet updated (which writes only `grams`) is never refused; ⚠️ that phone's save
+  DROPS the table (whole write) — accepted, managers only. The new app still writes `grams` = the table's
+  figures at 22 cm, so old phones keep reading sensible numbers, and a document without valid `rows` is
+  read as its one cake among 16–28 cm. A cake copies into its `ref` the table's figures AT ITS OWN
+  diameter (`referenceFor`). Read:
   `cardAccess(lid, 'foodcost', 'foodcost')`; write: `canManage(lid, 'foodcost')`; never deleted.
   Its own collection, never `config/{doc}`.
 - `foodcost-settings/main` — `{ bakery, labourCostPerHour, updatedAt }`; read and write

@@ -1,6 +1,8 @@
 /* The cake in section. Every colour is a token: the parts' own fills are --cake-* (tokens.css), outlines and words are the neutrals. */
 
 .draw {
+  flex-direction: column;
+  align-items: stretch;
   display: flex;
   justify-content: center;
   min-width: 0;
@@ -93,4 +95,12 @@
 .noteSub {
   fill: var(--ink-2);
   font-size: 12px;
+}
+
+/* «Raw materials so far», under the flat drawing (the 3D view shows it on the stage). */
+.total {
+  margin: var(--s2) 0 0;
+  color: var(--ink);
+  font-size: var(--fs-sm);
+  font-weight: 650;
 }

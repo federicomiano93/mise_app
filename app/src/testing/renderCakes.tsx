@@ -1,4 +1,3 @@
-import { vi } from 'vitest';
 import type { StoredDoc } from '../foodcost/foodcostSource';
 import { fakeCakesSource } from './fakeCakesSource';
 import type { FakeCakesSource } from './fakeCakesSource';
@@ -46,13 +45,3 @@ export function incompleteCake(id: string, name: string): StoredDoc {
 
 export const REFERENCE = { diameterCm: 22, discs: 3, discHeightCm: 3, baseG: 300, soakG: 90, fillingG: 280, coatingG: 450, decorationG: 200 };
 export const storedReference = (grams: Record<string, number> = REFERENCE) => ({ bakery: 'bakery', grams, updatedAt: '2026-11-20T10:00:00.000Z' });
-
-// Cakes' split starts at 1280px: jsdom applies no media query, so the query is answered by hand.
-export function splitCakes(): void {
-  vi.stubGlobal('matchMedia', (query: string) => ({
-    matches: query === '(min-width: 1280px)',
-    media: query,
-    addEventListener: () => undefined,
-    removeEventListener: () => undefined,
-  }));
-}

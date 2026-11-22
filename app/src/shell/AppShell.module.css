@@ -403,7 +403,7 @@
 /* A phone on kiosk mode: the bar is hidden on a phone, but «Standby» and «Exit» live in it, so it shows there too — the venue, the two
    round buttons and the connection (its dot alone, below); the date has no room. The pills never shrink; the venue gives way (its name
    shortens with dots, then the box itself clips). From 700px the rules below take over. */
-.shell[data-topbar="on"][data-kiosk="on"] .main {
+.shell[data-kiosk="on"] .main {
   grid-template-rows: auto minmax(0, 1fr);
 }
 
@@ -429,7 +429,7 @@
 }
 
 /* On a kiosk PHONE the connection is the dot alone: its words, even «Online», cost the venue its name (measured at 360 and 296,
-   20 Nov 2026), and on a phone a lost connection is already said in words by the Home's offline strip (OfflineBanner). The words stay
+   20 Nov 2026), and on a phone a lost connection is already said in words by the offline strip under every title (OfflineBanner). The words stay
    for a screen reader (the status is still announced). */
 @media (max-width: 699.98px) {
   .shell[data-kiosk="on"] .sync {
@@ -519,14 +519,10 @@
     display: flex;
   }
 
-  /* The top bar is drawn on the Home only (AppShell.tsx): elsewhere the scroll area is the whole column, and the split panes that
-     subtract the bar's height from the window (`--topbar-h`) subtract nothing. */
-  .shell[data-topbar="on"] .main {
+  /* The top bar is drawn on every section (AppShell.tsx, Federico 21 Nov 2026): the scroll area is the column less the bar, and the
+     split panes that subtract the bar's height from the window (`--topbar-h`, 60px) subtract it everywhere. */
+  .main {
     grid-template-rows: auto minmax(0, 1fr);
-  }
-
-  .shell[data-topbar="off"] {
-    --topbar-h: 0px;
   }
 
   .topbar {

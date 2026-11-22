@@ -8,6 +8,7 @@ import {
   cakeLayout, cakeShare, labelBoxFor, leaderPath, placeLabels, sceneSignature, tapAction, webglAvailable,
 } from './cake3dModel';
 import type { PlacedLabel, StageFailure, StageView } from './cake3dModel';
+import { cakeLooks, looksKey } from './cakeLook';
 import { createCakeScene } from './cake3dScene';
 import type { CakeScene, SceneColours, Three } from './cake3dScene';
 import { RovingRadios } from './RovingRadios';
@@ -27,7 +28,8 @@ function readColours(host: HTMLElement): SceneColours {
   return {
     base: read('--cake-base'), soak: read('--cake-soak'), filling: read('--cake-filling'), coating: read('--cake-coating'),
     decoration: read('--cake-decoration'), board: read('--cake-board'),
-    accent: read('--accent'), backdrop: read('--sunken'), ground: read('--line'), glow: read('--surface'),
+    accent: read('--accent'), ground: read('--line'), glow: read('--surface'),
+    stageCenter: read('--cake-stage-center'), stageEdge: read('--cake-stage-edge'),
   };
 }
 
@@ -55,18 +57,21 @@ export default function Cake3D({ geometry, selected, tier, onSelect, labels, onO
   const layout = useMemo(() => cakeLayout(geometry), [geometry]);
   // ⚠️ THE SCENE IS REBUILT ONLY WHEN ITS SHAPE CHANGES (diameters, discs, which parts have cards, cut-away or whole): grams and names
   // change the labels' words, which React redraws by itself, and never the meshes.
-  const signature = sceneSignature(layout, view);
+  // ⚠️ THE LOOK FOLLOWS THE RECIPES' NAMES: a card renamed to something that looks different repaints the cake; the grams never do.
+  const looks = cakeLooks(geometry, labels.cardName);
+  const signature = sceneSignature(layout, view, looksKey(looks));
 
   // What the scene's callbacks (made once) must see now.
-  const latest = useRef({ selected, tier, onSelect, onOpenPart, onUnavailable, layout, size });
-  useLayoutEffect(() => { latest.current = { selected, tier, onSelect, onOpenPart, onUnavailable, layout, size }; });
+  const latest = useRef({ selected, tier, onSelect, onOpenPart, onUnavailable, layout, looks, size });
+  useLayoutEffect(() => { latest.current = { selected, tier, onSelect, onOpenPart, onUnavailable, layout, looks, size }; });
 
   const act = useCallback((picked: Selected | null) => {
     const { selected: current, onSelect: select, onOpenPart: open } = latest.current;
     const action = tapAction(picked, current);
     if (picked && action === 'select') select(picked);
     else if (picked && action === 'open') {
-      // The chooser this opens gives the focus back to where it was: the stage, not the page (a canvas tap focuses nothing by itself).
+      // The step this opens puts the cursor in its own search box; the focus is parked on the stage first, not on the page (a canvas tap
+      // focuses nothing by itself).
       viewport.current?.focus({ preventScroll: true });
       open?.(picked);
     }
@@ -146,7 +151,7 @@ export default function Cake3D({ geometry, selected, tier, onSelect, labels, onO
 
   useEffect(() => {
     if (!ready) return;
-    sceneRef.current?.build(latest.current.layout, view);
+    sceneRef.current?.build(latest.current.layout, view, latest.current.looks);
     refreshLabels();
     // Keyed on the signature (the shape), not on the layout object, which is new at every keystroke.
   }, [ready, signature, view, refreshLabels]);
@@ -165,18 +170,18 @@ export default function Cake3D({ geometry, selected, tier, onSelect, labels, onO
 
   const box = labelBoxFor(Math.max(size.width, 1), Math.max(size.height, 1));
   const shown = geometry.tiers[Math.min(tier, geometry.tiers.length - 1)];
-  const narrow = box.columns === 1;
   const stacked = box.columns === 0;
   // The parts the chosen tier has, top to bottom (the labels of a stage with no room beside the cake).
   const listed = (['decoration', 'coating', 'filling', 'soak', 'base'] as const).filter(part => {
     const info = shown?.parts[part];
     return info !== undefined && info.productIds.length > 0 && !(part === 'filling' && (shown?.discs ?? 0) < 2);
   });
-  const noteOf = (part: CakePart) => {
+  // A part's callout: the recipe name(s), then its grams and cost — no part title (the cake itself shows which part it is).
+  const calloutOf = (part: CakePart) => {
     const info = shown?.parts[part];
     return {
-      title: `${labels.part[part]} · ${labels.grams(info?.grams ?? 0)}`,
       names: (info?.productIds ?? []).map(labels.cardName).filter(name => name !== '').join(' + '),
+      figures: labels.callout?.(tier, part) ?? labels.grams(info?.grams ?? 0),
     };
   };
 
@@ -204,6 +209,7 @@ export default function Cake3D({ geometry, selected, tier, onSelect, labels, onO
               const on = sameSelection(selected, { tier, part: label.key as CakePart });
               return (
                 <g key={label.key}>
+                  <path className={styles.leaderHalo} data-halo="true" data-chosen={on} fill="none" d={leaderPath(label)} />
                   <path className={styles.leader} data-chosen={on} fill="none" d={leaderPath(label)} />
                   <circle className={styles.leaderDot} data-chosen={on} cx={label.anchor.x} cy={label.anchor.y} r={3} />
                 </g>
@@ -212,10 +218,8 @@ export default function Cake3D({ geometry, selected, tier, onSelect, labels, onO
           </svg>
           {placed.map(label => {
             const part = label.key as CakePart;
-            const info = shown?.parts[part];
             const chosen = sameSelection(selected, { tier, part });
-            const names = (info?.productIds ?? []).map(labels.cardName).filter(name => name !== '').join(' + ');
-            const grams = labels.grams(info?.grams ?? 0);
+            const { names, figures } = calloutOf(part);
             const style = {
               top: label.slot.y - box.labelHeight / 2,
               height: box.labelHeight,
@@ -232,25 +236,19 @@ export default function Cake3D({ geometry, selected, tier, onSelect, labels, onO
                 data-part={part}
                 onClick={() => { act({ tier, part }); }}
               >
-                {narrow ? (
-                  <>
-                    <span className={styles.title}>{labels.part[part]}</span>
-                    <span className={styles.title}>{grams}</span>
-                  </>
-                ) : (
-                  <span className={styles.title}>{`${labels.part[part]} · ${grams}`}</span>
-                )}
-                <span className={styles.names}>{names}</span>
+                <span className={styles.title}>{names}</span>
+                <span className={styles.names}>{figures}</span>
               </div>
             );
           })}
+          {labels.total && !stacked ? <p className={styles.total}>{labels.total}</p> : null}
         </div>
       </div>
       <p className={styles.touchHint}>{t('cakes.stage.touchHint')}</p>
       {stacked ? (
         <div className={styles.notes} aria-hidden="true">
           {listed.map(part => {
-            const note = noteOf(part);
+            const note = calloutOf(part);
             return (
               <div
                 key={part}
@@ -260,11 +258,12 @@ export default function Cake3D({ geometry, selected, tier, onSelect, labels, onO
                 data-part={part}
                 onClick={() => { act({ tier, part }); }}
               >
-                <span className={styles.title}>{note.title}</span>
-                <span className={styles.names}>{note.names}</span>
+                <span className={styles.title}>{note.names}</span>
+                <span className={styles.names}>{note.figures}</span>
               </div>
             );
           })}
+          {labels.total ? <p className={styles.noteTotal}>{labels.total}</p> : null}
         </div>
       ) : null}
     </div>

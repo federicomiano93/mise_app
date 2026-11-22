@@ -1,0 +1,716 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Torte · passaggi</title>
+<style>
+  :root { --ink:#1b1917; --ink2:#5d5850; --line:#e2dfd8; --line2:#c9c5bd; --accent:#2a5bc8; --tint:#e6eefc; --page:#f6f5f1; --surface:#fff; --sunken:#efede8; --ok:#2f7d4f; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family:"Segoe UI",system-ui,sans-serif; background:var(--page); color:var(--ink); }
+  .bar { display:flex; align-items:center; gap:12px; padding:14px 24px; background:var(--surface); border-bottom:1px solid var(--line); }
+  .bar h1 { font-size:20px; margin:0; flex:1; }
+  .note { font-size:13px; color:var(--ink2); }
+  .wrap { display:grid; grid-template-columns:minmax(0,1fr) 400px; gap:20px; padding:20px 24px; max-width:1400px; }
+  .card { background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:16px; }
+  #stage { position:relative; height:560px; border-radius:10px; overflow:hidden; background:#dcdad6; }
+  #stage canvas { display:block; width:100%; height:100%; }
+  .tag { position:absolute; left:14px; top:14px; background:#fff; border-radius:8px; padding:8px 12px; font-weight:600; font-size:14px; box-shadow:0 1px 2px rgba(0,0,0,.08); }
+  .progress { display:flex; gap:6px; margin:4px 0 14px; }
+  .progress span { flex:1; height:6px; border-radius:3px; background:var(--line); }
+  .progress span.done { background:var(--accent); }
+  .progress span.now { background:#8fb0ef; }
+  .count { font-size:13px; color:var(--ink2); margin:0 0 4px; }
+  .steps { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px; }
+  .step { border:1px solid var(--line); border-radius:12px; }
+  .step > button.head { all:unset; box-sizing:border-box; width:100%; display:flex; align-items:center; gap:12px; padding:12px 14px; cursor:pointer; min-height:52px; }
+  .num { width:28px; height:28px; border-radius:50%; display:grid; place-items:center; font-weight:700; font-size:14px; background:var(--sunken); color:var(--ink2); flex:none; }
+  .step.done .num { background:var(--ok); color:#fff; }
+  .step.now { border-color:var(--accent); box-shadow:0 0 0 1px var(--accent); }
+  .step.now .num { background:var(--accent); color:#fff; }
+  .name { font-weight:650; flex:1; }
+  .what { font-size:13px; color:var(--ink2); }
+  .body { padding:0 14px 14px 54px; display:flex; flex-direction:column; gap:10px; }
+  .pick { display:flex; flex-wrap:wrap; gap:8px; }
+  .chip { border:1px solid var(--line2); background:#fff; border-radius:999px; padding:8px 14px; font:inherit; font-size:14px; cursor:pointer; min-height:40px; }
+  .chip[aria-pressed="true"] { background:var(--tint); border-color:var(--accent); color:#16357a; font-weight:600; }
+  .row { display:flex; gap:8px; }
+  .btn { font:inherit; font-weight:600; border-radius:10px; min-height:44px; padding:0 18px; cursor:pointer; border:1px solid var(--line2); background:#fff; }
+  .btn.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .btn:disabled { opacity:.45; cursor:default; }
+  .finished { padding:12px 14px; border-radius:12px; background:#e7f3ec; color:#1d5434; font-weight:600; display:none; }
+  .replay { margin-top:12px; }
+  .screen { padding:20px 24px; max-width:1400px; }
+  .listcol { width:384px; display:flex; flex-direction:column; gap:16px; align-items:flex-start; }
+  .empty { color:var(--ink2); font-size:17px; margin:0 4px; }
+  .scrim { position:fixed; inset:0; background:rgba(27,25,23,.45); display:none; align-items:center; justify-content:center; z-index:10; }
+  .dialog { background:#fff; border-radius:16px; padding:22px; width:min(460px,92vw); display:flex; flex-direction:column; gap:12px; }
+  .dialog h2 { margin:0 0 4px; font-size:20px; }
+  .choice { all:unset; box-sizing:border-box; display:flex; gap:14px; align-items:flex-start; border:1px solid var(--line2); border-radius:12px; padding:14px 16px; cursor:pointer; }
+  .choice:hover, .choice:focus-visible { border-color:var(--accent); background:var(--tint); }
+  .choice b { display:block; font-size:16px; margin-bottom:2px; }
+  .choice span.sub { color:var(--ink2); font-size:14px; }
+  .choice .ic { font-size:22px; line-height:1; }
+  .mode { font-size:13px; color:#16357a; background:var(--tint); border-radius:999px; padding:4px 12px; font-weight:600; }
+  .line { display:flex; align-items:center; gap:10px; padding:10px 12px; border:1px solid var(--line); border-radius:10px; background:var(--sunken); }
+  .line .rname { flex:1; font-weight:600; }
+  .line input { width:96px; min-height:40px; font:inherit; font-size:16px; text-align:right; padding:0 10px; border:1px solid var(--line2); border-radius:8px; }
+  .line input:focus { outline:3px solid var(--accent); outline-offset:1px; border-color:var(--accent); }
+  .line input::placeholder { color:#8c867c; }
+  .hint { font-size:12px; color:var(--ink2); }
+  .hint.todo { color:#8a4b00; }
+  .set { background:#fff; border:1px solid var(--line); border-radius:14px; padding:18px; width:520px; display:flex; flex-direction:column; gap:10px; }
+  .set .row2 { display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--line); padding:8px 0; }
+  .set .row2 input { width:110px; min-height:40px; font:inherit; text-align:right; padding:0 36px 0 10px; border:1px solid var(--line2); border-radius:8px; }
+  .set .unit { position:relative; display:block; }
+  .set .unit span { position:absolute; right:12px; top:50%; transform:translateY(-50%); color:var(--ink2); font-size:14px; pointer-events:none; }
+  .startnote { background:#fff6e0; color:#6b4300; border-radius:10px; padding:10px 12px; font-size:14px; }
+  .measures { display:grid; grid-template-columns:minmax(0,2.4fr) minmax(0,1.2fr) minmax(0,.8fr) minmax(0,.8fr); gap:10px; align-items:end; margin:0 0 16px; padding-bottom:16px; border-bottom:1px solid var(--line); }
+  .measures label, .fields label { display:flex; flex-direction:column; gap:4px; font-size:13px; color:var(--ink2); }
+  .measures input, .fields input { width:100%; min-height:40px; font:inherit; font-size:15px; color:var(--ink); padding:0 10px; border:1px solid var(--line2); border-radius:8px; background:#fff; }
+  .measures label { white-space:nowrap; }
+  .measures .unit { position:relative; display:block; }
+  .measures .unit input { padding-right:34px; }
+  .measures .unit span { position:absolute; right:10px; top:50%; transform:translateY(-50%); color:var(--ink2); font-size:14px; pointer-events:none; }
+  .fields { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .fields label.wide { grid-column:1 / -1; }
+  .fields span { display:flex; align-items:center; gap:6px; color:var(--ink); }
+  .res { display:grid; grid-template-columns:1fr auto; gap:6px 12px; padding:12px; border-radius:10px; background:var(--sunken); font-size:14px; }
+  .res b { text-align:right; }
+  .res .big { font-size:16px; }
+  .sugg { display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:14px; }
+  .btn.small { min-height:36px; padding:0 12px; font-size:14px; }
+  .divider { font-size:13px; color:var(--ink2); margin:10px 2px 0; padding-top:12px; border-top:1px dashed var(--line2); }
+  .callouts { position:absolute; inset:0; pointer-events:none; }
+  .callouts svg { position:absolute; inset:0; width:100%; height:100%; overflow:visible; }
+  .callout { position:absolute; width:176px; background:#fff; border-radius:10px; padding:7px 12px 8px; box-shadow:0 1px 3px rgba(0,0,0,.14); font-size:13px; line-height:1.35; opacity:0; transition:opacity .35s; }
+  .callout.in { opacity:1; }
+  .callout .k { display:block; color:var(--ink2); font-size:12px; }
+  .callout b { display:block; font-size:14px; }
+  .callout .todo { color:#8a4b00; }
+  .total { position:absolute; left:14px; bottom:14px; background:#fff; border-radius:10px; padding:8px 12px; font-size:14px; box-shadow:0 1px 3px rgba(0,0,0,.14); display:none; }
+  .combo { position:relative; }
+  .combo input { width:100%; min-height:44px; font:inherit; font-size:15px; color:var(--ink); padding:0 42px 0 38px; border:1px solid var(--line2); border-radius:10px; background:#fff; }
+  .combo input:focus { outline:3px solid var(--accent); outline-offset:1px; border-color:var(--accent); }
+  .combo input::placeholder { color:#8c867c; }
+  .combo .cico { position:absolute; left:12px; top:13px; width:18px; height:18px; color:var(--ink2); pointer-events:none; }
+  .combo .carrow { position:absolute; right:4px; top:4px; width:36px; height:36px; border:0; background:none; border-radius:8px; cursor:pointer; color:var(--ink2); display:grid; place-items:center; }
+  .combo .carrow:hover { background:var(--sunken); }
+  .clist { position:absolute; left:0; right:0; top:calc(100% + 4px); z-index:5; background:#fff; border:1px solid var(--line2); border-radius:10px; box-shadow:0 8px 22px rgba(0,0,0,.14); list-style:none; margin:0; padding:4px; max-height:248px; overflow:auto; }
+  .clist li { padding:10px 12px; border-radius:8px; cursor:pointer; display:flex; justify-content:space-between; align-items:center; font-size:15px; }
+  .clist li.act, .clist li[role=option]:hover { background:var(--tint); }
+  .clist li[aria-selected=true] { font-weight:600; color:#16357a; }
+  .clist li.none { color:var(--ink2); cursor:default; }
+  .clist mark { background:#fde9a8; color:inherit; border-radius:3px; padding:0 1px; }
+  .clist li.new { color:var(--accent); font-weight:600; border-top:1px solid var(--line); margin-top:4px; border-radius:0 0 8px 8px; }
+  .dialog.wide { width:min(580px,94vw); max-height:92vh; overflow:auto; }
+  .fl { display:flex; flex-direction:column; gap:6px; font-size:14px; color:var(--ink2); font-weight:600; }
+  .fl input, .irow input { min-height:42px; font:inherit; font-size:15px; color:var(--ink); padding:0 10px; border:1px solid var(--line2); border-radius:8px; background:#fff; font-weight:400; }
+  .irow { display:grid; grid-template-columns:1fr 92px 16px 40px; gap:8px; align-items:center; }
+  .irow input.g { text-align:right; }
+  .irow .del { width:40px; height:40px; border:0; background:none; border-radius:8px; cursor:pointer; color:var(--ink2); font-size:20px; }
+  .irow .del:hover { background:var(--sunken); }
+  .bad { outline:2px solid #c0392b !important; outline-offset:1px; border-color:#c0392b !important; }
+  .err { color:#b3261e; font-size:13px; font-weight:600; min-height:0; }
+  .alertbox { border-radius:10px; padding:12px 14px; font-size:15px; line-height:1.45; }
+  .alertbox.ok { background:#e7f3ec; color:#1d5434; }
+  .alertbox.warn { background:#fff6e0; color:#6b4300; }
+  .set.wide { width:min(800px,100%); }
+  .dtab { border-collapse:separate; border-spacing:0 6px; width:100%; margin-top:6px; table-layout:fixed; }
+  .dtab thead th:first-child { width:80px; }
+  .dtab thead th:last-child { width:48px; }
+  .dtab th { text-align:right; font-size:13px; color:var(--ink2); font-weight:600; padding:0 6px; vertical-align:bottom; }
+  .dtab th:first-child { text-align:left; }
+  .dtab th small { display:block; font-weight:400; font-size:12px; }
+  .dtab tbody th { font-size:15px; color:var(--ink); white-space:nowrap; text-align:left; vertical-align:middle; }
+  .dtab td { padding:0 6px; }
+  .dtab td input { width:100%; min-height:40px; font:inherit; font-size:15px; text-align:right; padding:0 10px; border:1px solid var(--line2); border-radius:8px; }
+  .dtab td input::placeholder { color:#8c867c; }
+  .dtab .del { width:40px; height:40px; border:0; background:none; border-radius:8px; cursor:pointer; color:var(--ink2); font-size:20px; }
+  .dtab .del:hover { background:var(--sunken); }
+  .addrow { display:flex; gap:8px; align-items:center; }
+  .addrow .unit input { width:110px; min-height:40px; font:inherit; text-align:right; padding:0 36px 0 10px; border:1px solid var(--line2); border-radius:8px; }
+  .addrow .unit { position:relative; display:block; }
+  .addrow .unit span { position:absolute; right:12px; top:50%; transform:translateY(-50%); color:var(--ink2); font-size:14px; pointer-events:none; }
+  .sr { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
+  @media (max-width: 1000px) { .wrap { grid-template-columns:1fr; } #stage { height:420px; } }
+</style>
+</head>
+<body>
+<div class="bar"><button class="btn" id="back" style="display:none">&lsaquo; Torte</button><h1 id="title">Torte</h1><span class="mode" id="mode" style="display:none"></span><span class="note">Anteprima: ricette e grammi finti, niente si salva.</span></div>
+<div class="screen" id="listScreen">
+  <div class="listcol">
+    <button class="btn primary" id="newCake">+ Nuova torta</button>
+    <p class="empty">Ancora nessuna torta</p>
+    <button class="btn" id="openSettings">&#9881; Impostazioni</button>
+  </div>
+</div>
+<div class="screen" id="settingsScreen" style="display:none">
+  <div class="set wide">
+    <b style="font-size:18px">La torta standard</b>
+    <div class="startnote">I numeri in grigio sono calcolati dal diametro più vicino dove hai scritto i tuoi grammi. Scrivi i tuoi dove servono: diventano neri.</div>
+    <div class="row2"><span>Dischi</span><span class="unit"><input id="sDiscs" inputmode="numeric" value="3"></span></div>
+    <div class="row2"><span>Altezza di un disco</span><span class="unit"><input inputmode="decimal" value="2"><span aria-hidden="true">cm</span></span></div>
+    <table class="dtab">
+      <thead><tr><th scope="col">Diametro</th><th scope="col">Base<small>g per disco</small></th><th scope="col">Bagna<small>g per disco</small></th><th scope="col">Farcitura<small>g per strato</small></th><th scope="col">Copertura<small>g, tutta la torta</small></th><th scope="col">Decorazione<small>g</small></th><th scope="col"><span class="sr">Togli</span></th></tr></thead>
+      <tbody id="dtBody"></tbody>
+    </table>
+    <div class="addrow"><span class="unit"><input id="newDia" inputmode="numeric" placeholder="es. 30" aria-label="Nuovo diametro in centimetri"><span aria-hidden="true">cm</span></span><button class="btn small" id="addDia">+ Aggiungi diametro</button><span class="err" id="diaErr" role="alert"></span></div>
+    <button class="btn primary" style="align-self:flex-start">Salva</button>
+  </div>
+</div>
+<div class="scrim" id="scrim"><div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dlgT">
+  <h2 id="dlgT">Come vuoi partire?</h2>
+  <button class="choice" id="fromRef"><span class="ic">&#9878;</span><span><b>Torta standard</b><span class="sub">grammi già pronti, li cambi quando vuoi</span></span></button>
+  <button class="choice" id="fromZero"><span class="ic">&#9998;</span><span><b>Da zero</b><span class="sub">scrivi tu i grammi di ogni parte</span></span></button>
+  <button class="btn" id="cancel" style="align-self:flex-end">Annulla</button>
+</div></div>
+<div class="scrim" id="scrim2"></div>
+<datalist id="ingList"></datalist>
+<div class="wrap" id="editor" style="display:none">
+  <div class="card">
+    <div id="stage"><div class="tag" id="tag">Base</div></div>
+  </div>
+  <div class="card">
+    <div class="measures">
+      <label>Nome<input placeholder="es. Sacher"></label>
+      <label>Diametro<span class="unit"><input id="mDia" inputmode="decimal" value="22" aria-label="Diametro in centimetri"><span aria-hidden="true">cm</span></span></label>
+      <label>Piani<input inputmode="numeric" value="1"></label>
+      <label>Dischi<input inputmode="numeric" value="3"></label>
+    </div>
+    <p class="count" id="count">Passo 1 di 6</p>
+    <div class="progress" id="progress"></div>
+    <ol class="steps" id="steps"></ol>
+    <div class="finished" id="finished">Torta pronta. Puoi salvarla a listino.</div>
+    <button class="btn replay" id="replay" style="display:none">Rivedi tutta l'animazione</button>
+  </div>
+</div>
+
+<script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.187.0/build/three.module.js" } }</script>
+<script type="module">
+import * as THREE from 'three';
+
+const STEPS = [
+  { key: 'base', name: 'Base', what: 'i dischi della torta', recipes: ['Pan di Spagna', 'Pan di Spagna al cacao', 'Frolla al cacao', 'Biscuit alle mandorle', 'Genoise', 'Base al pistacchio'] },
+  { key: 'soak', name: 'Bagna', what: 'sopra ogni disco', recipes: ['Bagna al rum', 'Bagna analcolica', 'Bagna al limoncello', 'Bagna al caff\u00e8', 'Bagna all\u2019arancia'] },
+  { key: 'filling', name: 'Farcitura', what: 'tra un disco e l’altro', recipes: ['Crema pasticcera', 'Ganache', 'Crema al pistacchio', 'Chantilly', 'Crema diplomatica', 'Mousse al cioccolato', 'Crema al limone'] },
+  { key: 'coating', name: 'Copertura', what: 'intorno e sopra', recipes: ['Panna montata', 'Glassa al cioccolato', 'Pasta di zucchero', 'Crema al burro', 'Glassa a specchio'] },
+  { key: 'decoration', name: 'Decorazione', what: 'in cima', recipes: ['Frutti di bosco', 'Riccioli di cioccolato', 'Fragole', 'Granella di pistacchio', 'Scaglie di mandorle'] },
+];
+const COLORS = {
+  base: { 'Pan di Spagna': 0xe3c27e, 'Frolla al cacao': 0x8a5a3c, 'Pan di Spagna al cacao': 0x6e4630, 'Base al pistacchio': 0xa9b86a },
+  soak: { 'Bagna al rum': 0xb98a4e, 'Bagna analcolica': 0xc9a46a },
+  filling: { 'Crema pasticcera': 0xf3e2a2, 'Ganache': 0x5a3424, 'Crema al pistacchio': 0xb7c47a, 'Mousse al cioccolato': 0x6b4030, 'Crema al limone': 0xf5e27a },
+  coating: { 'Panna montata': 0xfbf7f0, 'Glassa al cioccolato': 0x4a2a1c, 'Pasta di zucchero': 0xf7eef2, 'Glassa a specchio': 0x8e2440 },
+  decoration: { 'Frutti di bosco': 0xb2203f, 'Riccioli di cioccolato': 0x3b2216, 'Fragole': 0xd2283a, 'Granella di pistacchio': 0x8fae4a, 'Scaglie di mandorle': 0xe8d3a8 },
+};
+const REF_GRAMS = { base: 660, soak: 210, filling: 600, coating: 350, decoration: 120 };
+const REF_WHAT = { base: '3 dischi \u00d7 220 g', soak: '3 dischi \u00d7 70 g', filling: '2 strati \u00d7 300 g', coating: 'tutta la torta', decoration: 'in cima' };
+let startMode = 'ref';
+const typed = {};
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// ── Scene ──
+const stageEl = document.getElementById('stage');
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(2, devicePixelRatio));
+renderer.shadowMap.enabled = true;
+stageEl.prepend(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xdcdad6);
+const camera = new THREE.PerspectiveCamera(32, 1, 1, 500);
+scene.add(new THREE.HemisphereLight(0xffffff, 0xbdb8ae, 1.6));
+const sun = new THREE.DirectionalLight(0xffffff, 1.6);
+sun.position.set(30, 60, 25); sun.castShadow = true; sun.shadow.mapSize.set(1024, 1024);
+Object.assign(sun.shadow.camera, { left: -30, right: 30, top: 30, bottom: -30 });
+scene.add(sun);
+const ground = new THREE.Mesh(new THREE.CircleGeometry(200, 64), new THREE.MeshStandardMaterial({ color: 0xdcdad6, roughness: 1 }));
+ground.rotation.x = -Math.PI / 2; ground.position.y = -0.5; ground.receiveShadow = true; scene.add(ground);
+const board = new THREE.Mesh(new THREE.CylinderGeometry(14, 14, 0.5, 96), new THREE.MeshStandardMaterial({ color: 0xf4f4f2, roughness: 0.4 }));
+board.position.y = -0.25; board.receiveShadow = true; scene.add(board);
+
+const R = 10, DISCS = 3, DISC = 2.4, SOAK = 0.5, GAP = 0.6, FILL = 0.8, COAT = 0.35;
+const mat = c => new THREE.MeshStandardMaterial({ color: c, roughness: 0.85 });
+const cake = new THREE.Group(); scene.add(cake);
+
+// What has been chosen (null = not yet / skipped) and the meshes of each part.
+const chosen = { base: null, soak: null, filling: null, coating: null, decoration: null };
+const parts = { discs: [], soaks: [], fills: [], coat: null, top: null, decos: [] };
+
+function discY(i, withFill) { return i * (DISC + (withFill ? FILL : GAP)); }
+function stackHeight(withFill) { return DISCS * DISC + (DISCS - 1) * (withFill ? FILL : GAP); }
+
+function build() {
+  cake.clear();
+  parts.discs = []; parts.soaks = []; parts.fills = []; parts.decos = []; parts.coat = null; parts.top = null;
+  const baseM = mat(COLORS.base[chosen.base] ?? 0xe3c27e);
+  for (let i = 0; i < DISCS; i++) {
+    const d = new THREE.Mesh(new THREE.CylinderGeometry(R, R, DISC, 96), baseM);
+    d.castShadow = true; d.receiveShadow = true; d.userData.i = i; d.visible = false; cake.add(d); parts.discs.push(d);
+    const s = new THREE.Mesh(new THREE.CylinderGeometry(R + 0.02, R + 0.02, SOAK, 96), new THREE.MeshStandardMaterial({ color: COLORS.soak[chosen.soak] ?? 0xb98a4e, roughness: 0.9, transparent: true, opacity: 0 }));
+    s.visible = false; cake.add(s); parts.soaks.push(s);
+    if (i < DISCS - 1) {
+      const f = new THREE.Mesh(new THREE.CylinderGeometry(R + 0.05, R + 0.05, FILL, 96), mat(COLORS.filling[chosen.filling] ?? 0xf3e2a2));
+      f.visible = false; f.castShadow = true; cake.add(f); parts.fills.push(f);
+    }
+  }
+  const coatM = new THREE.MeshStandardMaterial({ color: COLORS.coating[chosen.coating] ?? 0xfbf7f0, roughness: 0.6, side: THREE.DoubleSide });
+  const coat = new THREE.Mesh(new THREE.CylinderGeometry(R + COAT, R + COAT, 1, 96, 1, true), coatM);
+  coat.visible = false; coat.castShadow = true; cake.add(coat); parts.coat = coat;
+  const top = new THREE.Mesh(new THREE.CylinderGeometry(R + COAT, R + COAT, COAT, 96), coatM);
+  top.visible = false; cake.add(top); parts.top = top;
+  const decoM = mat(COLORS.decoration[chosen.decoration] ?? 0xb2203f);
+  for (let k = 0; k < 14; k++) {
+    const b = new THREE.Mesh(new THREE.SphereGeometry(0.75, 24, 16), decoM);
+    const a = (k / 14) * Math.PI * 2; b.userData.a = a; b.visible = false; b.castShadow = true; cake.add(b); parts.decos.push(b);
+  }
+}
+
+// Places everything where it stands once every chosen part is in (no animation).
+function settle() {
+  const withFill = chosen.filling !== null;
+  parts.discs.forEach((d, i) => { d.visible = chosen.base !== null; d.position.y = discY(i, withFill) + DISC / 2; d.scale.set(1, 1, 1); });
+  parts.soaks.forEach((s, i) => { s.visible = chosen.soak !== null; s.material.opacity = 1; s.position.y = discY(i, withFill) + DISC - SOAK / 2 + 0.01; });
+  parts.fills.forEach((f, i) => { f.visible = withFill; f.scale.y = 1; f.position.y = discY(i, true) + DISC + FILL / 2; });
+  const h = stackHeight(withFill);
+  parts.coat.visible = chosen.coating !== null; parts.coat.scale.y = h; parts.coat.position.y = h / 2;
+  parts.top.visible = chosen.coating !== null; parts.top.position.y = h + COAT / 2;
+  const topY = h + (chosen.coating ? COAT : 0);
+  parts.decos.forEach(b => { b.visible = chosen.decoration !== null; b.position.set(Math.cos(b.userData.a) * (R - 1.2), topY + 0.6, Math.sin(b.userData.a) * (R - 1.2)); });
+}
+
+// ── Little animation engine ──
+const ease = t => 1 - Math.pow(1 - t, 3);
+const bounce = t => { const n = 7.5625, d = 2.75; if (t < 1 / d) return n * t * t; if (t < 2 / d) return n * (t -= 1.5 / d) * t + 0.75; if (t < 2.5 / d) return n * (t -= 2.25 / d) * t + 0.9375; return n * (t -= 2.625 / d) * t + 0.984375; };
+let tweens = [];
+function tween(ms, delay, fn, curve = ease) { return new Promise(res => tweens.push({ start: performance.now() + delay, ms: reduced ? 1 : ms, fn, curve, res })); }
+function runTweens(now) {
+  tweens = tweens.filter(t => {
+    if (now < t.start) return true;
+    const p = Math.min(1, (now - t.start) / t.ms);
+    t.fn(t.curve(p));
+    if (p >= 1) { t.res(); return false; }
+    return true;
+  });
+}
+
+// The camera turns to look at the part being added.
+let camTarget = { angle: 0.6, height: 0.55, look: 4 }, cam = { ...camTarget };
+const FOCUS = { base: { angle: 0.6, height: 0.5, look: 4 }, soak: { angle: 1.3, height: 0.75, look: 5 }, filling: { angle: 2.0, height: 0.35, look: 4.5 }, coating: { angle: 2.8, height: 0.45, look: 5 }, decoration: { angle: 3.4, height: 0.7, look: 5 } };
+
+async function animate(key) {
+  camTarget = { ...FOCUS[key] };
+  const withFill = chosen.filling !== null;
+  if (key === 'base') {
+    settle();
+    await Promise.all(parts.discs.map((d, i) => {
+      const to = discY(i, false) + DISC / 2; d.position.y = to + 18;
+      return tween(700, i * 380, p => { d.position.y = to + 18 * (1 - p); }, bounce);
+    }));
+  } else if (key === 'soak') {
+    parts.soaks.forEach(s => { s.visible = true; s.material.opacity = 0; });
+    await Promise.all(parts.soaks.map((s, i) => tween(650, i * 300, p => { s.material.opacity = p; s.scale.set(0.9 + 0.1 * p, 1, 0.9 + 0.1 * p); })));
+  } else if (key === 'filling') {
+    // The discs lift apart, then the cream grows in the space.
+    const from = parts.discs.map(d => d.position.y);
+    await Promise.all(parts.discs.map((d, i) => {
+      const to = discY(i, true) + DISC / 2;
+      return tween(600, 0, p => { d.position.y = from[i] + (to - from[i]) * p; parts.soaks[i].position.y = d.position.y + DISC / 2 - SOAK / 2 + 0.01; });
+    }));
+    parts.fills.forEach((f, i) => { f.visible = true; f.scale.y = 0.001; f.position.y = discY(i, true) + DISC + FILL / 2; });
+    await Promise.all(parts.fills.map((f, i) => tween(650, i * 250, p => { f.scale.set(0.6 + 0.4 * p, Math.max(0.001, p), 0.6 + 0.4 * p); })));
+  } else if (key === 'coating') {
+    const h = stackHeight(withFill);
+    parts.coat.visible = true;
+    await tween(1200, 0, p => { parts.coat.scale.y = Math.max(0.001, h * p); parts.coat.position.y = (h * p) / 2; });
+    parts.top.visible = true; parts.top.position.y = h + COAT / 2; parts.top.scale.set(0.01, 1, 0.01);
+    await tween(500, 0, p => { parts.top.scale.set(p, 1, p); });
+  } else if (key === 'decoration') {
+    const topY = stackHeight(withFill) + (chosen.coating ? COAT : 0) + 0.6;
+    await Promise.all(parts.decos.map((b, k) => {
+      b.visible = true; b.position.set(Math.cos(b.userData.a) * (R - 1.2), topY + 15, Math.sin(b.userData.a) * (R - 1.2));
+      return tween(600, k * 90, p => { b.position.y = topY + 15 * (1 - p); }, bounce);
+    }));
+  }
+}
+
+function resize() {
+  const w = stageEl.clientWidth, h = stageEl.clientHeight;
+  renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
+}
+addEventListener('resize', resize); resize();
+function frame(now) {
+  runTweens(now);
+  for (const k of ['angle', 'height', 'look']) cam[k] += (camTarget[k] - cam[k]) * (reduced ? 1 : 0.04);
+  const dist = 74;
+  camera.position.set(Math.cos(cam.angle) * dist * Math.cos(cam.height), 8 + Math.sin(cam.height) * dist * 0.75, Math.sin(cam.angle) * dist * Math.cos(cam.height));
+  camera.lookAt(0, cam.look, 0);
+  renderer.render(scene, camera);
+  drawCallouts();
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+// ── The steps: 5 to compose (recipe + grams only), then the cost, later ──
+const COST_STEP = { key: 'cost', name: 'Costo e prezzo', what: 'dopo aver composto la torta' };
+const ALL = [...STEPS, COST_STEP];
+const EUR_KG = { base: 6, soak: 4, filling: 9, coating: 8, decoration: 20 }; // fake prices, mockup only
+const LABOUR_H = 15, VAT = 0.10, TARGET = 0.30;
+const RECIPE_EUR_KG = {}, INCOMPLETE = {};
+const INGREDIENTS = { 'Farina 00': 0.9, 'Zucchero': 1.1, 'Uova': 4.5, 'Burro': 9, 'Cacao amaro': 12, 'Latte': 1.2, 'Panna fresca': 4.5,
+  'Pistacchi': 28, 'Mascarpone': null, 'Cioccolato fondente': 14, 'Fragole': 6, 'Limoni': 2.5, 'Mandorle': 16 }; // fake; null = no price yet
+const rateOf = key => RECIPE_EUR_KG[chosen[key]] ?? EUR_KG[key];
+const cost = { minutes: 20, slices: 12, price: '' };
+const euro = x => '\u20ac ' + x.toFixed(2).replace('.', ',');
+function gramsOf(key) {
+  const g = typed[key];
+  if (g !== undefined && g !== '') { const n = Number(String(g).replace(',', '.')); return Number.isFinite(n) && n >= 0 ? n : null; }
+  return startMode === 'ref' ? REF_GRAMS[key] : null;
+}
+function costing() {
+  let raw = 0; const missing = [], unpriced = [];
+  for (const s of STEPS) {
+    if (!chosen[s.key]) continue;
+    const g = gramsOf(s.key);
+    if (g === null) missing.push(s.name); else raw += g / 1000 * rateOf(s.key);
+    if (INCOMPLETE[chosen[s.key]]) unpriced.push(chosen[s.key]);
+  }
+  const labour = cost.minutes / 60 * LABOUR_H, total = raw + labour;
+  const price = Number(String(cost.price).replace(',', '.'));
+  const net = price > 0 ? price / (1 + VAT) : 0;
+  return { raw, labour, total, perSlice: cost.slices > 0 ? total / cost.slices : 0, fc: net > 0 ? raw / net * 100 : null,
+    suggested: Math.ceil(raw / TARGET * (1 + VAT) * 2) / 2, missing, unpriced };
+}
+function resultsHtml() {
+  const c = costing();
+  return `${c.missing.length ? `<div class="hint todo">Mancano i grammi di: ${c.missing.join(', ')}. Il costo \u00e8 incompleto.</div>` : ''}
+    ${c.unpriced.length ? `<div class="hint todo">Da completare nel Ricettario: ${c.unpriced.join(', ')}. Il costo \u00e8 incompleto.</div>` : ''}
+    <div class="res"><span>Materie prime</span><b>${euro(c.raw)}</b><span>Lavoro (montaggio)</span><b>${euro(c.labour)}</b>
+    <span class="big">Costo totale</span><b class="big">${euro(c.total)}</b><span>Costo a fetta</span><b>${euro(c.perSlice)}</b>
+    <span>Food cost</span><b>${c.fc === null ? '\u2014' : Math.round(c.fc) + '%'}</b></div>
+    <div class="sugg">Per stare al 30%: <b>${euro(c.suggested)}</b> <button class="btn small" id="useSugg">Usa questo prezzo</button></div>`;
+}
+// ── The labels on the cake: every part added gets a small window with its recipe, grams and cost ──
+let animating = null; // the part playing its animation: its label waits until it has landed
+const overlay = document.createElement('div'); overlay.className = 'callouts';
+overlay.innerHTML = '<svg aria-hidden="true"></svg>';
+stageEl.appendChild(overlay);
+const wires = overlay.querySelector('svg');
+const totalEl = document.createElement('div'); totalEl.className = 'total'; stageEl.appendChild(totalEl);
+const labels = {};
+const LABEL_W = 176, LABEL_H = 50;
+function anchorOf(key) {
+  const withFill = chosen.filling !== null, h = stackHeight(withFill), th = cam.angle;
+  const at = (r, y, da) => new THREE.Vector3(Math.cos(th + da) * r, y, Math.sin(th + da) * r);
+  if (key === 'base') return at(R, discY(0, withFill) + DISC / 2, 0.55);
+  if (key === 'soak') return at(R, discY(DISCS - 1, withFill) + DISC - SOAK / 2, -0.5);
+  if (key === 'filling') return at(R + 0.05, discY(0, true) + DISC + FILL / 2, 0.8);
+  if (key === 'coating') return at(R + COAT, h * 0.55, -0.85);
+  return at(R - 1.2, h + (chosen.coating ? COAT : 0) + 0.6, 0.15);
+}
+function labelText(sItem) {
+  const g = gramsOf(sItem.key);
+  const line = g === null ? '<span class="todo">grammi da scrivere</span>' : `${Math.round(g)} g \u00b7 ${INCOMPLETE[chosen[sItem.key]] ? '<span class="todo">costo incompleto</span>' : euro(g / 1000 * rateOf(sItem.key))}`;
+  return `<b>${chosen[sItem.key]}</b>${line}`;
+}
+function drawCallouts() {
+  const w = stageEl.clientWidth, h = stageEl.clientHeight;
+  if (!w) return;
+  const centre = new THREE.Vector3(0, 4, 0).project(camera), cx = (centre.x + 1) / 2 * w;
+  const cols = { left: [], right: [] };
+  for (const sItem of STEPS) {
+    let el = labels[sItem.key];
+    const on = chosen[sItem.key] && animating !== sItem.key;
+    if (!on) { if (el) { el.remove(); delete labels[sItem.key]; } continue; }
+    if (!el) { el = labels[sItem.key] = document.createElement('div'); el.className = 'callout'; overlay.appendChild(el); requestAnimationFrame(() => el.classList.add('in')); }
+    const html = labelText(sItem); if (el.innerHTML !== html) el.innerHTML = html;
+    const v = anchorOf(sItem.key).project(camera), ax = (v.x + 1) / 2 * w, ay = (1 - v.y) / 2 * h;
+    cols[ax >= cx ? 'right' : 'left'].push({ el, ax, ay });
+  }
+  let paths = '';
+  const bandTop = 64, bandBottom = h - 70;
+  for (const [side, list] of Object.entries(cols)) {
+    if (!list.length) continue;
+    list.sort((a, b) => a.ay - b.ay);
+    const n = list.length, step = Math.min(110, (bandBottom - bandTop) / n);
+    const mid = list.reduce((t, it) => t + it.ay, 0) / n;
+    let first = mid - (step * (n - 1)) / 2;
+    first = Math.max(bandTop + LABEL_H / 2, Math.min(bandBottom - LABEL_H / 2 - step * (n - 1), first));
+    list.forEach((it, k) => {
+      const cy = first + step * k;
+      const x = side === 'right' ? w - 14 - LABEL_W : 14;
+      it.el.style.left = x + 'px'; it.el.style.top = (cy - LABEL_H / 2) + 'px';
+      const bx = side === 'right' ? x : x + LABEL_W, by = cy;
+      // a gentle arc: the control point sits off the straight line, so the wire is always curved
+      const dx = it.ax - bx, dy = it.ay - by, len = Math.hypot(dx, dy) || 1;
+      const bend = Math.max(18, len * 0.22) * (side === 'right' ? 1 : -1);
+      const qx = (bx + it.ax) / 2 + (-dy / len) * bend, qy = (by + it.ay) / 2 + (dx / len) * bend;
+      paths += `<path d="M${bx},${by} Q${qx},${qy} ${it.ax},${it.ay}" fill="none" stroke="#3a3632" stroke-width="1.2" stroke-linecap="round"/><circle cx="${it.ax}" cy="${it.ay}" r="3" fill="#3a3632"/><circle cx="${bx}" cy="${by}" r="2" fill="#3a3632"/>`;
+    });
+  }
+  wires.innerHTML = paths;
+  const c = costing(), any = STEPS.some(x => chosen[x.key]);
+  totalEl.style.display = any ? 'block' : 'none';
+  const t = `Materie prime finora: <b>${euro(c.raw)}</b>${c.missing.length || c.unpriced.length ? ' <span style="color:#8a4b00">(costo incompleto)</span>' : ''}`;
+  if (totalEl.innerHTML !== t) totalEl.innerHTML = t;
+}
+let current = 0; const done = new Set();
+const stepsEl = document.getElementById('steps'), tag = document.getElementById('tag');
+let busy = false;
+function draw() {
+  const N = ALL.length;
+  document.getElementById('count').textContent = current < STEPS.length ? `Passo ${current + 1} di ${N} \u00b7 componi la torta` : current < N ? `Passo ${N} di ${N} \u00b7 il costo` : 'Torta pronta';
+  document.getElementById('progress').innerHTML = ALL.map((_, i) => `<span class="${done.has(i) ? 'done' : i === current ? 'now' : ''}"></span>`).join('');
+  document.getElementById('finished').style.display = current >= N ? 'block' : 'none';
+  tag.textContent = current < STEPS.length ? STEPS[current].name : current < N ? 'Costo e prezzo' : 'Torta pronta';
+  stepsEl.innerHTML = '';
+  ALL.forEach((s, i) => {
+    if (s.key === 'cost') { const dv = document.createElement('li'); dv.className = 'divider'; dv.textContent = 'Poi, quando la torta \u00e8 composta'; stepsEl.appendChild(dv); }
+    const li = document.createElement('li');
+    li.className = 'step' + (i === current ? ' now' : done.has(i) ? ' done' : '');
+    const picked = s.key === 'cost' ? null : chosen[s.key];
+    let sub = i === current ? '' : picked ? picked : done.has(i) ? 'saltata' : '';
+    if (s.key === 'cost' && done.has(i) && i !== current) { const c = costing(); sub = `${euro(c.total)}${c.fc === null ? '' : ' \u00b7 food cost ' + Math.round(c.fc) + '%'}`; }
+    li.innerHTML = `<button class="head" aria-expanded="${i === current}"><span class="num">${done.has(i) && i !== current ? '\u2713' : i + 1}</span><span class="name">${s.name}${sub ? `<div class="what">${sub}</div>` : ''}</span></button>`;
+    li.querySelector('.head').onclick = () => { if (!busy && (done.has(i) || i <= current)) { current = i; draw(); } };
+    if (i === current && s.key === 'cost') {
+      const body = document.createElement('div'); body.className = 'body';
+      body.innerHTML = `<div class="what">I grammi ci sono gi\u00e0: qui aggiungi solo il resto.</div>
+        <div class="fields">
+          <label>Montaggio<span><input id="cMin" inputmode="numeric" value="${cost.minutes}"> min</span></label>
+          <label>Fette<input id="cSl" inputmode="numeric" value="${cost.slices}"></label>
+          <label class="wide">Prezzo di vendita (IVA inclusa)<span>\u20ac <input id="cPr" inputmode="decimal" value="${cost.price}" placeholder="0,00"></span></label>
+        </div>
+        <div id="cRes" style="display:flex;flex-direction:column;gap:8px">${resultsHtml()}</div>
+        <div class="row"><button class="btn primary" id="cDone">Fatto</button></div>`;
+      const num = v => { const n = Number(String(v).replace(',', '.')); return Number.isFinite(n) && n >= 0 ? n : 0; };
+      const wire = () => { const b = body.querySelector('#useSugg'); if (b) b.onclick = () => { cost.price = costing().suggested.toFixed(2).replace('.', ','); body.querySelector('#cPr').value = cost.price; upd(); }; };
+      const upd = () => { body.querySelector('#cRes').innerHTML = resultsHtml(); wire(); };
+      body.querySelector('#cMin').oninput = e => { cost.minutes = Math.min(600, num(e.target.value)); upd(); };
+      body.querySelector('#cSl').oninput = e => { cost.slices = Math.min(100, Math.round(num(e.target.value))); upd(); };
+      body.querySelector('#cPr').oninput = e => { cost.price = e.target.value.trim(); upd(); };
+      body.querySelector('#cDone').onclick = () => { done.add(i); current = firstOpen(); draw(); };
+      wire();
+      li.appendChild(body);
+    } else if (i === current) {
+      const body = document.createElement('div'); body.className = 'body';
+      const g = typed[s.key] ?? '';
+      const hintText = startMode === 'ref'
+        ? (g === '' ? `dalla torta standard (${REF_WHAT[s.key]}): scrivi un numero per cambiarlo` : 'cambiato a mano')
+        : (g === '' ? 'scrivi i grammi di questa parte' : '');
+      const lineHtml = picked ? `<div class="line"><span class="rname">${picked}</span><input inputmode="decimal" aria-label="Grammi di ${picked}" value="${g}" placeholder="${startMode === 'ref' ? REF_GRAMS[s.key] : ''}"> g</div>
+        <div class="hint ${startMode === 'zero' && g === '' ? 'todo' : ''}">${hintText}</div>` : '';
+      body.innerHTML = `<div class="combo">
+          <svg class="cico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+          <input role="combobox" aria-label="Ricetta della ${s.name.toLowerCase()}" aria-expanded="false" aria-controls="lb-${s.key}" aria-autocomplete="list" placeholder="Cerca una ricetta\u2026" value="${picked ?? ''}">
+          <button class="carrow" tabindex="-1" aria-label="Apri l\u2019elenco"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+          <ul class="clist" role="listbox" id="lb-${s.key}" hidden></ul>
+        </div>
+        ${lineHtml}
+        <div class="row"><button class="btn primary" ${picked ? '' : 'disabled'}>Avanti</button><button class="btn">${picked ? 'Togli' : 'Salta'}</button></div>`;
+      const choose = async recipe => {
+        if (busy) return;
+        const first = chosen[s.key] === null; chosen[s.key] = recipe;
+        build(); settle();
+        if (first) { // only the newly added part plays: hide it, then animate it in
+          hideFor(s.key); busy = true; animating = s.key; draw(); focusGrams(); await animate(s.key); animating = null; busy = false;
+        }
+        draw(); focusGrams();
+      };
+      wireCombo(body, s, picked, choose);
+      const inp = body.querySelector('.line input');
+      if (inp) inp.onchange = () => { typed[s.key] = inp.value.trim(); draw(); };
+      const [next, skip] = body.querySelectorAll('.btn');
+      next.onclick = () => { if (busy) return; done.add(i); current = firstOpen(); draw(); };
+      skip.onclick = () => { if (busy) return; if (picked) { chosen[s.key] = null; build(); settle(); draw(); } else { done.add(i); current = firstOpen(); draw(); } };
+      li.appendChild(body);
+    }
+    stepsEl.appendChild(li);
+  });
+}
+// A search box with a drop-down list: tap opens every recipe, typing narrows it, arrows + Enter pick, Escape closes.
+function wireCombo(body, s, picked, choose) {
+  const box = body.querySelector('.combo'), input = box.querySelector('input'), list = box.querySelector('ul'), arrow = box.querySelector('.carrow');
+  const esc = t => t.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  let active = -1, items = [];
+  const query = () => { const q = input.value.trim().toLowerCase(); return q && q !== (picked ?? '').toLowerCase() ? q : ''; };
+  const render = () => {
+    const q = query();
+    items = q ? s.recipes.filter(r => r.toLowerCase().includes(q)) : s.recipes.slice();
+    if (active > items.length) active = items.length;
+    list.innerHTML = items.length ? items.map((r, k) => {
+      const at = q ? r.toLowerCase().indexOf(q) : -1;
+      const label = at >= 0 ? esc(r.slice(0, at)) + '<mark>' + esc(r.slice(at, at + q.length)) + '</mark>' + esc(r.slice(at + q.length)) : esc(r);
+      return `<li role="option" id="${s.key}-opt-${k}" aria-selected="${r === picked}" class="${k === active ? 'act' : ''}"><span>${label}</span>${r === picked ? '<span aria-hidden="true">\u2713</span>' : ''}</li>`;
+    }).join('') : '<li class="none">Nessuna ricetta trovata</li>';
+    const typedName = q ? input.value.trim() : '';
+    list.insertAdjacentHTML('beforeend', `<li role="option" id="${s.key}-opt-${items.length}" class="new ${active === items.length ? 'act' : ''}" aria-selected="false">+ Nuova ricetta${typedName ? ` \u00ab${esc(typedName)}\u00bb` : ''}</li>`);
+    list.querySelectorAll('li[role=option]').forEach((li, k) => { li.onmousedown = e => { e.preventDefault(); if (k < items.length) pick(items[k]); else createNew(); }; });
+    if (active >= 0) input.setAttribute('aria-activedescendant', `${s.key}-opt-${active}`); else input.removeAttribute('aria-activedescendant');
+    list.querySelector('.act')?.scrollIntoView({ block: 'nearest' });
+  };
+  const open = () => { list.hidden = false; input.setAttribute('aria-expanded', 'true'); render(); };
+  const close = () => { list.hidden = true; input.setAttribute('aria-expanded', 'false'); active = -1; };
+  const pick = r => { close(); input.value = r; choose(r); };
+  const createNew = () => { const name = query() ? input.value.trim() : ''; close(); input.blur(); openNewRecipe(s, name, choose); };
+  input.onfocus = () => { input.select(); open(); };
+  input.onclick = () => { if (list.hidden) open(); };
+  input.oninput = () => { active = 0; open(); };
+  input.onblur = () => { close(); input.value = picked ?? ''; };
+  arrow.onmousedown = e => { e.preventDefault(); if (list.hidden) { if (document.activeElement === input) open(); else input.focus(); } else close(); };
+  input.onkeydown = e => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); if (list.hidden) open(); active = Math.min(items.length, active + 1); render(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); active = Math.max(0, active - 1); render(); }
+    else if (e.key === 'Enter' && !list.hidden && active >= 0) { e.preventDefault(); if (active < items.length) pick(items[active]); else createNew(); }
+    else if (e.key === 'Escape' && !list.hidden) { e.preventDefault(); close(); }
+  };
+}
+// «Nuova ricetta» without leaving the cake: ONLY the name. It is saved to the Ricettario and the Food cost as an empty recipe
+// (mockup: only in memory) and an alert says it must be completed there; until then its cost is incomplete.
+function openNewRecipe(s, name, choose) {
+  const scrim = document.getElementById('scrim2');
+  const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const $q = sel => scrim.querySelector(sel);
+  const closeAll = () => { scrim.style.display = 'none'; scrim.innerHTML = ''; };
+  const taken = nm => STEPS.some(x => x.recipes.some(r => r.toLowerCase() === nm.toLowerCase()));
+  const askName = (value, error) => {
+    scrim.innerHTML = `<div class="dialog" role="dialog" aria-modal="true" aria-labelledby="nrT">
+      <h2 id="nrT">Nuova ricetta \u00b7 ${s.name}</h2>
+      <label class="fl">Nome della ricetta<input id="nrName" value="${esc(value)}" placeholder="es. Crema al mascarpone"></label>
+      <div class="err" id="nrErr" role="alert">${error ?? ''}</div>
+      <div class="row" style="justify-content:flex-end"><button class="btn" id="nrCancel">Annulla</button><button class="btn primary" id="nrSave">Crea la ricetta</button></div>
+    </div>`;
+    scrim.style.display = 'flex';
+    if (error) $q('#nrName').classList.add('bad');
+    $q('#nrName').focus(); $q('#nrName').select();
+    $q('#nrCancel').onclick = () => { closeAll(); document.querySelector('.step.now .combo input')?.focus(); };
+    $q('#nrName').onkeydown = e => { if (e.key === 'Enter') $q('#nrSave').click(); };
+    scrim.onkeydown = e => { if (e.key === 'Escape') $q('#nrCancel')?.click(); };
+    $q('#nrSave').onclick = () => save($q('#nrName').value.trim());
+  };
+  const save = nm => {
+    if (!nm) return askName('', 'Scrivi il nome della ricetta.');
+    if (taken(nm)) return askName(nm, 'C\u2019\u00e8 gi\u00e0 una ricetta con questo nome.');
+    RECIPE_EUR_KG[nm] = 0; INCOMPLETE[nm] = true;
+    s.recipes.push(nm);
+    scrim.innerHTML = `<div class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="alT" aria-describedby="alB">
+      <h2 id="alT">Ricetta creata</h2>
+      <div class="alertbox warn" id="alB">\u00ab${esc(nm)}\u00bb \u00e8 nel Ricettario e nel Food cost, ma \u00e8 ancora vuota. Completala nel Ricettario con ingredienti e grammi: finch\u00e9 non lo fai, il costo della torta resta incompleto.</div>
+      <div class="row" style="justify-content:flex-end"><button class="btn" id="alOpen">Apri nel Ricettario</button><button class="btn primary" id="alGo">Continua la torta</button></div>
+      <div class="hint" id="alNote" style="display:none">Nell\u2019app si aprirebbe la ricetta nel Ricettario; tornando indietro ritrovi la torta com\u2019era.</div>
+    </div>`;
+    scrim.style.display = 'flex';
+    $q('#alOpen').onclick = () => { $q('#alNote').style.display = 'block'; };
+    $q('#alGo').onclick = async () => { closeAll(); await choose(nm); };
+    scrim.onkeydown = e => { if (e.key === 'Escape') $q('#alGo')?.click(); };
+    $q('#alGo').focus();
+  };
+  if (name) save(name); else askName('');
+}
+function focusGrams() { const i = document.querySelector('.step.now .line input'); if (i) i.focus(); }
+function firstOpen() { for (let i = 0; i < ALL.length; i++) if (!done.has(i)) return i; return ALL.length; }
+function hideFor(key) {
+  if (key === 'soak') parts.soaks.forEach(s => { s.material.opacity = 0; });
+  if (key === 'filling') { parts.fills.forEach(f => { f.visible = false; }); const nofill = chosen.filling; chosen.filling = null; settle(); chosen.filling = nofill; parts.soaks.forEach(s => { s.material.opacity = chosen.soak ? 1 : 0; }); }
+  if (key === 'coating') { parts.coat.visible = false; parts.top.visible = false; }
+  if (key === 'decoration') parts.decos.forEach(b => { b.visible = false; });
+}
+
+document.getElementById('replay').onclick = async () => {
+  if (busy) return; busy = true;
+  const keep = { ...chosen };
+  for (const k of Object.keys(chosen)) chosen[k] = null;
+  build(); settle();
+  for (const s of STEPS) {
+    if (!keep[s.key]) continue;
+    chosen[s.key] = keep[s.key]; build(); settle(); hideFor(s.key);
+    animating = s.key; await animate(s.key); animating = null;
+    await new Promise(r => setTimeout(r, 250));
+  }
+  busy = false; draw();
+};
+
+// ── Standard grams PER DIAMETER: a table; an empty box shows (grey) the value scaled from the nearest diameter he filled in.
+const TABLE_KEYS = ['base', 'soak', 'filling', 'coating', 'decoration'];
+const PART_NAME = Object.fromEntries(STEPS.map(x => [x.key, x.name]));
+const table = { 22: { base: 220, soak: 70, filling: 300, coating: 350, decoration: 120 } }; // what he typed
+let diameters = [16, 18, 20, 22, 24, 26, 28];
+function scaleFrom(key, from, to, v) {
+  if (key === 'decoration') return v * to / from; // along the edge
+  if (key === 'coating') { const S = dd => Math.PI * (dd / 2) ** 2 + Math.PI * dd * 8; return v * S(to) / S(from); } // top + side
+  return v * (to / from) ** 2; // by area
+}
+function gramsAt(dd, key) {
+  const own = table[dd]?.[key];
+  if (own != null) return { v: own, own: true };
+  const src = Object.keys(table).map(Number).filter(x => table[x][key] != null).sort((x, y) => Math.abs(x - dd) - Math.abs(y - dd) || x - y)[0];
+  if (src == null) return { v: null, own: false };
+  return { v: Math.round(scaleFrom(key, src, dd, table[src][key]) / 10) * 10, own: false, from: src };
+}
+function refreshTable() {
+  document.querySelectorAll('#dtBody input').forEach(i => { const g = gramsAt(Number(i.dataset.d), i.dataset.k); i.placeholder = g.own || g.v == null ? '' : String(g.v); });
+}
+function drawTable() {
+  const body = document.getElementById('dtBody');
+  body.innerHTML = diameters.map(dd => `<tr><th scope="row">${dd} cm</th>${TABLE_KEYS.map(k => { const g = gramsAt(dd, k);
+    return `<td><input inputmode="decimal" data-d="${dd}" data-k="${k}" aria-label="${PART_NAME[k]} a ${dd} cm" value="${g.own ? g.v : ''}" placeholder="${g.own || g.v == null ? '' : g.v}"></td>`; }).join('')}
+    <td><button class="del" data-d="${dd}" aria-label="Togli ${dd} cm">&times;</button></td></tr>`).join('');
+  body.querySelectorAll('input').forEach(i => { i.onchange = () => {
+    const dd = Number(i.dataset.d), k = i.dataset.k, v = Number(i.value.replace(',', '.'));
+    if (i.value.trim() === '' || !(v >= 0)) { if (table[dd]) delete table[dd][k]; i.value = ''; }
+    else { (table[dd] ??= {})[k] = Math.min(100000, Math.round(v)); }
+    refreshTable();
+  }; });
+  body.querySelectorAll('.del').forEach(bt => { bt.onclick = () => { if (diameters.length > 1) { const dd = Number(bt.dataset.d); diameters = diameters.filter(x => x !== dd); delete table[dd]; drawTable(); } }; });
+}
+document.getElementById('addDia').onclick = () => {
+  const inp = document.getElementById('newDia'), err = document.getElementById('diaErr');
+  const dd = Math.round(Number(inp.value.replace(',', '.')));
+  inp.classList.remove('bad'); err.textContent = '';
+  if (!(dd >= 10 && dd <= 60)) { inp.classList.add('bad'); inp.focus(); err.textContent = 'Un diametro tra 10 e 60 cm.'; return; }
+  if (diameters.includes(dd)) { inp.classList.add('bad'); inp.focus(); err.textContent = `${dd} cm c\u2019\u00e8 gi\u00e0.`; return; }
+  diameters = [...diameters, dd].sort((x, y) => x - y); inp.value = ''; drawTable();
+  document.querySelector(`#dtBody input[data-d="${dd}"]`)?.focus();
+};
+// The editor's «Torta standard» takes its grams from the table at the cake's diameter.
+function updateRef() {
+  const dd = Math.min(60, Math.max(10, Number(document.getElementById('mDia').value.replace(',', '.')) || 22));
+  const discs = Math.max(1, Math.round(Number(document.getElementById('sDiscs').value) || 3));
+  const at = k => gramsAt(dd, k).v ?? 0;
+  REF_GRAMS.base = at('base') * discs; REF_GRAMS.soak = at('soak') * discs; REF_GRAMS.filling = at('filling') * (discs - 1);
+  REF_GRAMS.coating = at('coating'); REF_GRAMS.decoration = at('decoration');
+  REF_WHAT.base = `${dd} cm: ${discs} dischi \u00d7 ${at('base')} g`; REF_WHAT.soak = `${dd} cm: ${discs} dischi \u00d7 ${at('soak')} g`;
+  REF_WHAT.filling = `${dd} cm: ${discs - 1} strati \u00d7 ${at('filling')} g`; REF_WHAT.coating = `${dd} cm, tutta la torta`; REF_WHAT.decoration = `${dd} cm, in cima`;
+}
+document.getElementById('mDia').onchange = () => { updateRef(); draw(); };
+
+// Screens: the list, the start dialog, the settings, the editor.
+const $ = id => document.getElementById(id);
+function show(which) {
+  $('listScreen').style.display = which === 'list' ? 'block' : 'none';
+  $('settingsScreen').style.display = which === 'settings' ? 'block' : 'none';
+  $('editor').style.display = which === 'editor' ? 'grid' : 'none';
+  $('back').style.display = which === 'list' ? 'none' : 'inline-block';
+  $('mode').style.display = which === 'editor' ? 'inline-block' : 'none';
+  $('title').textContent = which === 'list' ? 'Torte' : which === 'settings' ? 'Impostazioni' : 'Nuova torta';
+  if (which === 'editor') resize();
+}
+$('newCake').onclick = () => { $('scrim').style.display = 'flex'; $('fromRef').focus(); };
+$('cancel').onclick = () => { $('scrim').style.display = 'none'; $('newCake').focus(); };
+addEventListener('keydown', e => { if (e.key === 'Escape' && $('scrim').style.display === 'flex') $('cancel').onclick(); });
+function start(mode) {
+  startMode = mode; $('scrim').style.display = 'none';
+  $('mode').textContent = mode === 'ref' ? 'Torta standard' : 'Da zero';
+  cost.minutes = 20; cost.slices = 12; cost.price = '';
+  for (const k of Object.keys(chosen)) chosen[k] = null;
+  for (const k of Object.keys(typed)) delete typed[k];
+  done.clear(); current = 0; updateRef(); build(); settle(); draw(); show('editor');
+}
+$('fromRef').onclick = () => start('ref');
+$('fromZero').onclick = () => start('zero');
+$('openSettings').onclick = () => { drawTable(); show('settings'); };
+$('back').onclick = () => show('list');
+build(); settle(); draw(); show('list');
+</script>
+</body>
+</html>

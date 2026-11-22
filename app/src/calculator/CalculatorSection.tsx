@@ -1,5 +1,5 @@
-import { useEffect, useId, useLayoutEffect } from 'react';
-import { ClipboardList, Inbox, Settings } from 'lucide-react';
+import { useCallback, useEffect, useId, useLayoutEffect } from 'react';
+import { ClipboardList, Inbox } from 'lucide-react';
 import { Navigate, useLocation, useNavigate, useNavigationType } from 'react-router';
 import { calculatorEmptyReason, getVisibleRecipes } from '@mise/shared/calculator-config';
 import type { EmptyReason } from '@mise/shared/calculator-config';
@@ -7,6 +7,7 @@ import { PartBoundary } from '../errors/PartBoundary';
 import type { MessageKey } from '../i18n/en';
 import { useT } from '../i18n/useT';
 import { KEEP_FOCUS, Page } from '../shell/Page';
+import { SettingsGear } from '../shell/SettingsGear';
 import { StatusMessageProvider } from '../ui/StatusMessage';
 import { CalculatorProvider, useCalculator } from './CalculatorContext';
 import {
@@ -16,6 +17,7 @@ import {
   ADD_RECIPE_OPENER, CHOOSE_RECIPES_OPENER, CLIENT_ORDERS_OPENER, DOUGH_HISTORY_OPENER, HandBackProvider, SETTINGS_OPENER, useHandBack,
   useHandBackState,
 } from './handBack';
+import { FROM_PARENT } from './calculatorNav';
 import { DoughHistory } from './DoughHistory';
 import { OpenButton } from './OpenButton';
 import { OrdersBanner } from './OrdersBanner';
@@ -51,8 +53,10 @@ function CalculatorScreen() {
   const { t } = useT();
   const { pathname, state } = useLocation();
   const navigationType = useNavigationType();
-  const { config } = useCalculator();
+  const { config, configAnswered } = useCalculator();
+  const navigate = useNavigate();
   const handBack = useHandBackState();
+  const gearNode = useCallback((node: HTMLButtonElement | null) => { handBack.register(SETTINGS_OPENER, node); }, [handBack]);
   const recipes = getVisibleRecipes(config);
   // The address as it is written, not React Router's «*»: a recipe id is split before it is decoded.
   const resolved = resolveCalculatorPath(pathname.slice(CALCULATOR_PATH.length), recipes.map(recipe => recipe.id));
@@ -63,9 +67,23 @@ function CalculatorScreen() {
     return <Navigate to={resolved.redirect} replace state={navigationType === 'POP' ? KEEP_FOCUS : state} />;
   }
 
+  // ⚠️ THE GEAR IS ON THE WORK VIEW ONLY, and not while the recipes are still loading (a door to Settings would be a promise it cannot
+  // keep yet): where the Settings button used to be. `null`, not `undefined`, keeps the title row the same white band on every screen.
+  const gear = 'active' in resolved && (resolved.active !== null || (calculatorEmptyReason(config, configAnswered) ?? 'loading') !== 'loading')
+    ? (
+      <SettingsGear
+        ref={gearNode}
+        onPress={() => {
+          handBack.expect(SETTINGS_OPENER);
+          void navigate(SETTINGS_PATH, { state: FROM_PARENT });
+        }}
+      />
+    )
+    : null;
+
   return (
     <HandBackProvider value={handBack}>
-      <Page title={t('section.calculator')}>
+      <Page title={t('section.calculator')} band={gear}>
         {'settings' in resolved ? (
           <PartBoundary resetKey={pathname}>
             <SettingsScreens view={resolved.settings} />
@@ -168,20 +186,16 @@ function WorkView({ active }: { active: string | null }) {
   );
 }
 
-// The doors to the Dough history, to Settings, to the clients' orders and to the market order («Send order», a dialog
+// The doors to the Dough history, to the clients' orders and to the market order («Send order», a dialog
 // rather than an address), at the top of the work view and of every empty state but «loading». The clients' orders door
 // is there unless the venue switched it off (`showClientOrdersButton`); the banner above the tabs does not follow that.
 function Doors({ showOrders }: { showOrders: boolean }) {
   const { t } = useT();
   return (
-    <div className={styles.top} data-doors={showOrders ? 4 : 3}>
+    <div className={styles.top}>
       <OpenButton opener={DOUGH_HISTORY_OPENER} to={LOG_PATH}>
         <ClipboardList aria-hidden="true" />
         {t('ui.log')}
-      </OpenButton>
-      <OpenButton opener={SETTINGS_OPENER} to={SETTINGS_PATH}>
-        <Settings aria-hidden="true" />
-        {t('ui.settings')}
       </OpenButton>
       {showOrders ? (
         <OpenButton opener={CLIENT_ORDERS_OPENER} to={ORDERS_PATH}>

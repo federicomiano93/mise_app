@@ -1,11 +1,10 @@
-import { useId } from 'react';
+import { useId, useState } from 'react';
 import type { Ref } from 'react';
-import { MAX_DISCS, MAX_SLICES, MAX_TIERS, MIN_DISCS, MIN_TIER_CM, maxTiersFor, minDiameterFor, tierDiameters } from '@mise/shared/cake-model';
+import { MAX_TIERS, MIN_TIER_CM, maxTiersFor, tierDiameters } from '@mise/shared/cake-model';
 import type { Cake } from '@mise/shared/cake-model';
-import { useFoodcost } from '../foodcost/FoodcostContext';
 import { useT } from '../i18n/useT';
 import { Button } from '../ui/Button';
-import { ASSEMBLY_STEP_MIN, DIAMETER_STEP_CM, EDITOR_MAX_DIAMETER_CM, setCategory, setMeasure, setName } from './cakeEditorModel';
+import { setMeasure, setName } from './cakeEditorModel';
 import { useStepFocus } from './useStepFocus';
 import styles from './MeasuresCard.module.css';
 
@@ -32,7 +31,8 @@ type StepperProps = {
 };
 
 // A measure the cake has: its name and what it means, then «−», the value and «+». Both buttons are 56px (the steppers' size).
-function Stepper({ title, sub, value, lessLabel, moreLabel, onLess, onMore, lessDisabled, moreDisabled, note }: StepperProps) {
+// Also used by the cost card, for the slices.
+export function Stepper({ title, sub, value, lessLabel, moreLabel, onLess, onMore, lessDisabled, moreDisabled, note }: StepperProps) {
   const noteId = useId();
   const focus = useStepFocus(lessDisabled, moreDisabled);
   return (
@@ -61,113 +61,98 @@ function Stepper({ title, sub, value, lessLabel, moreLabel, onLess, onMore, less
   );
 }
 
-// The cake's name and measures, and the Food cost category it files under.
+type MeasureBoxProps = {
+  id: string;
+  label: string;
+  // A name for the box when the label on screen is not the whole of it («Diameter in centimetres»).
+  ariaLabel?: string;
+  value: number;
+  // The unit drawn inside the box, at its right.
+  unit?: string;
+  onCommit: (value: number) => void;
+};
+
+// A number typed into a small box: the text stays as typed until the person leaves the box (or presses Enter), then it is handed up and
+// the box shows what the cake took (the cake clamps it: a diameter to what its tiers need, the discs to 1–5).
+// ⚠️ NOT PER KEYSTROKE: «2» on the way to «22» would be clamped to the smallest diameter at once.
+function MeasureBox({ id, label, ariaLabel, value, unit, onCommit }: MeasureBoxProps) {
+  const [typed, setTyped] = useState<string | null>(null);
+  const commit = () => {
+    if (typed === null) return;
+    const number = Number(typed.replace(',', '.'));
+    if (typed.trim() !== '' && Number.isFinite(number)) onCommit(number);
+    setTyped(null);
+  };
+  return (
+    <div className={styles.measure}>
+      <label htmlFor={id} className={styles.measureLabel}>{label}</label>
+      <span className={styles.unitBox}>
+        <input
+          id={id}
+          type="text"
+          inputMode="numeric"
+          autoComplete="off"
+          className={styles.input}
+          data-unit={unit !== undefined}
+          {...(ariaLabel === undefined ? {} : { 'aria-label': ariaLabel })}
+          value={typed ?? String(value)}
+          onChange={event => { setTyped(event.target.value); }}
+          onBlur={commit}
+          onKeyDown={event => { if (event.key === 'Enter') commit(); }}
+        />
+        {unit === undefined ? null : <span className={styles.unit} aria-hidden="true">{unit}</span>}
+      </span>
+    </div>
+  );
+}
+
+// The cake's name and measures, in one compact block over the steps: the name, then the diameter («cm» inside its box), the tiers and
+// the discs (the slices and the assembly minutes are in the cost step: they only change figures there). No category (his call, 21 Nov
+// 2026): every cake's card sits in Food cost's «Cakes» group.
 export function MeasuresCard({ cake, edit, nameRef, nameInvalid }: Props) {
   const { t } = useT();
   const ids = useId();
-  const { categories } = useFoodcost();
   const move = (measure: Parameters<typeof setMeasure>[1], value: number) => { edit(current => setMeasure(current, measure, value)); };
 
-  // A cake keeps its category when the category has gone: the select then reads «No category».
-  const categoryValue = categories.some(category => category.id === cake.categoryId) ? (cake.categoryId ?? '') : '';
   const carries = maxTiersFor(cake.diameterCm);
   const smallest = tierDiameters(cake.diameterCm, cake.tiers + 1)[cake.tiers] ?? 0;
-  const tiersBlocked = cake.tiers >= MAX_TIERS || carries <= cake.tiers;
   // Said only when it is the DIAMETER that stops another tier (not the three-tier ceiling).
   const tiersNote = cake.tiers < MAX_TIERS && carries <= cake.tiers
     ? t('cakes.measure.tiersLimit', { d: smallest, min: MIN_TIER_CM })
     : undefined;
-  const minutes = cake.assemblyMinutes ?? 0;
 
   return (
     <section className={styles.card} aria-labelledby={`${ids}-title`}>
       <h3 id={`${ids}-title`} className={styles.title}>{t('cakes.measures.title')}</h3>
 
-      <div className={styles.field}>
-        <label htmlFor={`${ids}-name`} className={styles.label}>{t('cakes.name')}</label>
-        <input
-          ref={nameRef}
-          id={`${ids}-name`}
-          type="text"
-          className={styles.input}
-          autoComplete="off"
-          maxLength={200}
-          aria-invalid={nameInvalid ? true : undefined}
-          data-invalid={nameInvalid}
-          value={cake.name}
-          onChange={event => { edit(current => setName(current, event.target.value)); }}
+      <div className={styles.grid}>
+        <div className={styles.measure} data-wide="true">
+          <label htmlFor={`${ids}-name`} className={styles.measureLabel}>{t('cakes.name')}</label>
+          <input
+            ref={nameRef}
+            id={`${ids}-name`}
+            type="text"
+            className={styles.input}
+            autoComplete="off"
+            maxLength={200}
+            aria-invalid={nameInvalid ? true : undefined}
+            data-invalid={nameInvalid}
+            value={cake.name}
+            onChange={event => { edit(current => setName(current, event.target.value)); }}
+          />
+        </div>
+        <MeasureBox
+          id={`${ids}-diameter`}
+          label={t('cakes.measure.diameter')}
+          ariaLabel={t('cakes.measure.diameterAria')}
+          value={cake.diameterCm}
+          unit={t('cakes.ref.unitCm')}
+          onCommit={value => { move('diameterCm', value); }}
         />
+        <MeasureBox id={`${ids}-tiers`} label={t('cakes.measure.tiers')} value={cake.tiers} onCommit={value => { move('tiers', value); }} />
+        <MeasureBox id={`${ids}-discs`} label={t('cakes.measure.discs')} value={cake.discs} onCommit={value => { move('discs', value); }} />
       </div>
-
-      <div className={styles.field}>
-        <label htmlFor={`${ids}-category`} className={styles.label}>{t('fc.category.label')}</label>
-        <select
-          id={`${ids}-category`}
-          className={styles.select}
-          value={categoryValue}
-          onChange={event => { edit(current => setCategory(current, event.target.value)); }}
-        >
-          <option value="">{t('fc.cat.none')}</option>
-          {categories.map(category => <option key={category.id} value={category.id}>{category.name}</option>)}
-        </select>
-      </div>
-
-      <Stepper
-        title={t('cakes.measure.diameter')}
-        sub={t('cakes.measure.diameterSub')}
-        value={t('cakes.measure.cm', { n: cake.diameterCm })}
-        lessLabel={t('cakes.measure.diameterLess')}
-        moreLabel={t('cakes.measure.diameterMore')}
-        lessDisabled={cake.diameterCm - DIAMETER_STEP_CM < minDiameterFor(cake.tiers)}
-        moreDisabled={cake.diameterCm >= EDITOR_MAX_DIAMETER_CM}
-        onLess={() => { move('diameterCm', cake.diameterCm - DIAMETER_STEP_CM); }}
-        onMore={() => { move('diameterCm', cake.diameterCm + DIAMETER_STEP_CM); }}
-      />
-      <Stepper
-        title={t('cakes.measure.tiers')}
-        sub={t('cakes.measure.tiersSub')}
-        value={String(cake.tiers)}
-        lessLabel={t('cakes.measure.tiersLess')}
-        moreLabel={t('cakes.measure.tiersMore')}
-        lessDisabled={cake.tiers <= 1}
-        moreDisabled={tiersBlocked}
-        {...(tiersNote === undefined ? {} : { note: tiersNote })}
-        onLess={() => { move('tiers', cake.tiers - 1); }}
-        onMore={() => { move('tiers', cake.tiers + 1); }}
-      />
-      <Stepper
-        title={t('cakes.measure.discs')}
-        sub={t('cakes.measure.discsSub')}
-        value={String(cake.discs)}
-        lessLabel={t('cakes.measure.discsLess')}
-        moreLabel={t('cakes.measure.discsMore')}
-        lessDisabled={cake.discs <= MIN_DISCS}
-        moreDisabled={cake.discs >= MAX_DISCS}
-        onLess={() => { move('discs', cake.discs - 1); }}
-        onMore={() => { move('discs', cake.discs + 1); }}
-      />
-      <Stepper
-        title={t('cakes.measure.slices')}
-        sub={t('cakes.measure.slicesSub')}
-        value={String(cake.slices)}
-        lessLabel={t('cakes.measure.slicesLess')}
-        moreLabel={t('cakes.measure.slicesMore')}
-        lessDisabled={cake.slices <= 1}
-        moreDisabled={cake.slices >= MAX_SLICES}
-        onLess={() => { move('slices', cake.slices - 1); }}
-        onMore={() => { move('slices', cake.slices + 1); }}
-      />
-      <Stepper
-        title={t('cakes.measure.assembly')}
-        sub={t('cakes.measure.assemblySub')}
-        value={t('cakes.measure.minutes', { n: minutes })}
-        lessLabel={t('cakes.measure.assemblyLess')}
-        moreLabel={t('cakes.measure.assemblyMore')}
-        lessDisabled={minutes <= 0}
-        moreDisabled={false}
-        onLess={() => { move('assemblyMinutes', minutes - ASSEMBLY_STEP_MIN); }}
-        onMore={() => { move('assemblyMinutes', minutes + ASSEMBLY_STEP_MIN); }}
-      />
+      {tiersNote === undefined ? null : <p className={styles.limit}>{tiersNote}</p>}
     </section>
   );
 }

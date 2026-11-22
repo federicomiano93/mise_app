@@ -1,13 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MockInstance } from 'vitest';
 import { screen } from '@testing-library/react';
+import { KIOSK_STORAGE_KEY } from '@mise/shared/kiosk-model';
 import { renderApp } from '../testing/renderApp';
 import shellCss from './AppShell.module.css?raw';
 
-// The top bar (venue · date · connection) is the Home's only (the Orders redesign of 16 Nov 2026, item 1): every other screen gives
-// its height to its own content, and says the connection only when it is lost (the strip under its title, OfflineBanner).
+// The top bar (venue · date · connection) is on EVERY section (Federico, 21 Nov 2026; it was the Home's only since 16 Nov): CSS shows it
+// from 700px. The kiosk pills (Standby / Exit) stay the Home's.
 
 const css = shellCss.replace(/\/\*[\s\S]*?\*\//g, '');
+const ON = '{"enabled":true,"restMinutes":5,"nightHours":1}';
 let onLine: MockInstance<() => boolean>;
 
 beforeEach(() => {
@@ -16,33 +18,44 @@ beforeEach(() => {
 
 afterEach(() => {
   onLine.mockRestore();
+  localStorage.clear();
 });
 
 const topBar = () => document.querySelector('header [role="status"]')?.closest('header') ?? null;
 
 describe('the top bar', () => {
-  it('is drawn on the Home, with the connection', () => {
-    renderApp('/home');
+  it.each(['/home', '/orders', '/settings', '/recipes'])('is drawn on %s, with the connection', path => {
+    renderApp(path);
     expect(topBar()).not.toBeNull();
     expect(screen.getByText('Online')).toBeInTheDocument();
   });
 
-  it.each(['/orders', '/settings'])('is not drawn on %s', path => {
-    renderApp(path);
-    expect(topBar()).toBeNull();
-    expect(screen.queryByText('Online')).not.toBeInTheDocument();
+  it('takes its row of the column from 700px, and no rule zeroes its height any more', () => {
+    renderApp('/orders');
+    expect(document.querySelector('[data-topbar]')).toBeNull();
+    expect(css).not.toContain('--topbar-h: 0px');
+    expect(css).toMatch(/@media \(min-width: 700px\)\s*\{[^@]*\.main\s*\{[^}]*grid-template-rows:\s*auto minmax\(0, 1fr\)/);
+    expect(css).toMatch(/\.topbar\s*\{[^}]*height:\s*var\(--topbar-h\)/);
   });
 
-  it('marks the shell, so the column and the split panes do not keep its room off the Home', () => {
+  it('carries the kiosk pills on the Home only, even with kiosk mode on', async () => {
+    localStorage.setItem(KIOSK_STORAGE_KEY, ON);
+    renderApp('/home');
+    expect(await screen.findByRole('group', { name: 'Kiosk mode' })).toBeInTheDocument();
+    expect(document.querySelector('[data-kiosk]')).toHaveAttribute('data-kiosk', 'on');
+  });
+
+  it('does not mark a kiosk phone\'s shell off the Home, so the bar stays hidden there', async () => {
+    localStorage.setItem(KIOSK_STORAGE_KEY, ON);
     renderApp('/orders');
-    expect(document.querySelector('[data-topbar]')).toHaveAttribute('data-topbar', 'off');
-    expect(css).toMatch(/\.shell\[data-topbar="off"\]\s*\{[^}]*--topbar-h:\s*0px/);
-    expect(css).toMatch(/\.shell\[data-topbar="on"\] \.main\s*\{[^}]*grid-template-rows:\s*auto minmax\(0, 1fr\)/);
+    expect(await screen.findByRole('heading', { level: 1, name: 'Orders' })).toBeInTheDocument();
+    expect(document.querySelector('[data-kiosk]')).toBeNull();
+    expect(screen.queryByRole('group', { name: 'Kiosk mode' })).not.toBeInTheDocument();
   });
 
   it('on a kiosk phone the bar shows, takes its own row, and gives way at the venue, never the page', () => {
     // CSS only (jsdom draws no layout): the rules that keep a long venue name from widening the page on a 360px phone (20 Nov 2026).
-    expect(css).toMatch(/\.shell\[data-topbar="on"\]\[data-kiosk="on"\] \.main\s*\{[^}]*grid-template-rows:\s*auto minmax\(0, 1fr\)/);
+    expect(css).toMatch(/\.shell\[data-kiosk="on"\] \.main\s*\{[^}]*grid-template-rows:\s*auto minmax\(0, 1fr\)/);
     expect(css).toMatch(/\.shell\[data-kiosk="on"\] \.topbar\s*\{[^}]*display:\s*flex/);
     expect(css).toMatch(/\.topbar\s*\{[^}]*min-width:\s*0/);
     expect(css).toMatch(/\.shell\[data-kiosk="on"\] \.venueStatic\s*\{[^}]*flex:\s*0 100 auto;[^}]*overflow:\s*hidden/);

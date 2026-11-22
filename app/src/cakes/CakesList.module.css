@@ -1,5 +1,5 @@
-/* The left column of Cakes: «New cake», the search, the cakes as one card of rows, and the reference grams at the foot. The card does
-   not clip (no `overflow`), so nothing that sticks inside the section is ever cut. */
+/* The Cakes list page: «New cake», the search, the cakes as one card of rows, and the cakes' card. The card
+   does not clip (no `overflow`), so nothing that sticks inside the section is ever cut. */
 
 .column {
   display: flex;
@@ -13,12 +13,27 @@
   gap: var(--s2);
 }
 
+/* «New cake» is as wide as its words, on the left: never stretched across the page (his ask, 21 Nov 2026). */
 .add {
-  flex: 1 1 160px;
+  flex: none;
 }
 
-.foot {
-  align-self: stretch;
+/* The line for an unsaved cake set aside by «Open in Recipes»: the editor's own band look, at the top of the list. */
+.parked {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s3);
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--accent-tint-2);
+  border-radius: var(--r-md);
+  background: var(--accent-tint);
+}
+
+.parked p {
+  flex: 1 1 200px;
+  margin: 0;
+  color: var(--ink);
 }
 
 .loading {
@@ -43,22 +58,9 @@
 }
 
 .empty {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--s3);
-  padding: var(--s6);
-  border: 1px dashed var(--line-2);
-  border-radius: var(--r-lg);
-}
-
-.emptyTitle {
-  font-size: var(--fs-lg);
-  font-weight: 650;
-}
-
-.emptySub {
+  padding: var(--s1);
   color: var(--ink-2);
+  font-size: var(--fs-lg);
 }
 
 .search {
@@ -137,12 +139,8 @@
   outline-offset: -3px;
 }
 
-.row[data-open="true"] {
-  background: var(--accent-tint);
-}
-
 @media (hover: hover) {
-  .row[data-open="false"]:hover {
+  .row:hover {
     background: var(--sunken);
   }
 }
@@ -236,4 +234,64 @@
   overflow: hidden;
   clip: rect(0 0 0 0);
   white-space: nowrap;
+}
+
+/* The start dialog's two choices: a title and one short line each, on a card that is a button. */
+.choices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+}
+
+.choice {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s3);
+  width: 100%;
+  min-height: var(--hit);
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.choice svg {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  margin-top: var(--s1);
+  color: var(--accent-ink);
+}
+
+.choice:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (hover: hover) {
+  .choice:hover {
+    border-color: var(--accent);
+    background: var(--accent-tint);
+  }
+}
+
+.choiceText {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+  min-width: 0;
+}
+
+.choiceText b {
+  font-size: var(--fs-md);
+}
+
+.choiceText span {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
 }

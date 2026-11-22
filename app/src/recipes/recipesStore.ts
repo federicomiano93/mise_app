@@ -28,13 +28,14 @@
 // in the console — and the wait ends, so a screen never waits for them for ever.
 
 import {
-  calculatorImportKind, isScaledEntryFresh, labelFieldsOf,
+  calculatorImportKind, isScaledEntryFresh,
 } from '@mise/shared/catalogue-model';
 import type { CalculatorImportKind, CatalogueRecipe, ImportAction } from '@mise/shared/catalogue-model';
 import { normalizeEndNote, normalizeSteps, ridOf, withRowIds } from '@mise/shared/guided-model';
 import { categoryKey, isArchivedRecipe, normalizeRecipeCategories, removeCategory } from '@mise/shared/recipe-shelf';
 import type { KeyValueStorage } from '../session/backend';
-import { LABEL_TEXT_FIELDS, labelTextPatchOf, normalizeStoredRecipe, normalizeStoredRecipes } from './labelTexts';
+import { LABEL_TEXT_FIELDS, normalizeStoredRecipe, normalizeStoredRecipes } from './labelTexts';
+import { recipeDataOf } from './recipeDocument';
 import { newRecipeId, withoutPrice } from './recipesSource';
 import type { RecipesMeta, RecipesSource, StoredDoc } from './recipesSource';
 
@@ -94,16 +95,6 @@ export interface RecipeToSave {
   // and an untouched save must not remove the word — it comes back if the word is put back on the list. The archived flag
   // is never part of a save: archiving is its own action (setArchived), for whoever runs the place.
   readonly category?: unknown;
-}
-
-// The rules' bound on a recipe's category word (firestore.rules, `recipes`).
-const CATEGORY_FIELD_MAX = 100;
-
-// What a save sends for the category, from what the editor handed over (see RecipeToSave.category).
-function categoryPatchOf(recipe: RecipeToSave): { category?: string | null } {
-  if (typeof recipe.category !== 'string') return {};
-  const word = recipe.category.trim().slice(0, CATEGORY_FIELD_MAX);
-  return { category: word === '' ? null : word };
 }
 
 // What the steps editor saves (step 3d-8): the procedure and its closing message, as typed (the store normalises
@@ -759,16 +750,7 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
     // its `rid` still finds it after a rename or a row inserted above it. A row that has one keeps it.
     saveRecipe(recipe) {
       const rows = withRowIds(recipe.ingredients.map(withoutUndefined));
-      const data: Record<string, unknown> = {
-        name: recipe.name,
-        ingredients: rows,
-        // A number, or null for an emptied box, which the source sends as a removal.
-        ...labelFieldsOf(recipe),
-        // The image label's texts only when the editor handed them over (null = emptied, a removal too).
-        ...labelTextPatchOf(recipe),
-        // The category only when the person moved the choice (null = «no category», a removal).
-        ...categoryPatchOf(recipe),
-      };
+      const data = recipeDataOf(recipe, rows);
       const id = recipe.id || newRecipeId();
       const prev = recipes.find(candidate => candidate.id === id) ?? null;
       // ⚠️ A NEW RECIPE MAY ARRIVE WITH A PROCEDURE (a duplicate): shaped exactly as saveProcedure shapes it, and a step

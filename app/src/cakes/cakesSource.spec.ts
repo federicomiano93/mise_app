@@ -86,24 +86,23 @@ describe('the Cakes source, as firestore.rules expect it', () => {
     ]);
   });
 
-  test('⚠️ the reference is written WHOLE with setDoc (never merged), stamped for the venue, exactly the eight keys', async () => {
+  test('⚠️ the standard cake is written WHOLE with setDoc (never merged), exactly what it was handed', async () => {
     const { kit, fs } = fakeKit();
     const source = createFirestoreCakesSource(() => Promise.resolve(kit), 'panificio-miano');
-    await source.saveReference({ ...REF, sneaked: 1 } as ReferenceGrams, '2026-11-21T09:00:00.000Z');
+    const row = { diameterCm: 22, baseG: 300, soakG: 90, fillingG: 280, coatingG: 450, decorationG: 200 };
+    const doc = { bakery: 'panificio-miano', grams: REF, rows: [row], updatedAt: '2026-11-21T09:00:00.000Z' };
+    await source.saveStandard(doc);
     expect(fs.writeBatch).not.toHaveBeenCalled();
     const [ref, data, options] = fs.setDoc.mock.calls[0]!;
     expect(ref.path).toBe('locations/panificio-miano/cake-settings/reference');
     expect(options).toBeUndefined();
-    expect(data).toEqual({ bakery: 'panificio-miano', grams: REF, updatedAt: '2026-11-21T09:00:00.000Z' });
-    expect(Object.keys(data.grams as object).sort()).toEqual(
-      ['baseG', 'coatingG', 'decorationG', 'diameterCm', 'discHeightCm', 'discs', 'fillingG', 'soakG'],
-    );
+    expect(data).toEqual(doc);
   });
 
   test('⚠️ this source writes no cake, ever: it has no such call', () => {
     const { kit } = fakeKit();
     const source = createFirestoreCakesSource(() => Promise.resolve(kit), 'bakery');
-    expect(Object.keys(source).sort()).toEqual(['saveReference', 'watchCakes', 'watchReference']);
+    expect(Object.keys(source).sort()).toEqual(['saveStandard', 'watchCakes', 'watchReference']);
   });
 
   test('the venue id is checked before anything is built from it', () => {

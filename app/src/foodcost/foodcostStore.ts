@@ -50,7 +50,10 @@ export type FoodcostMessage =
   | { readonly kind: 'products-stream-broken' }
   // A category's save or removal was refused (model 4): it is back as it was.
   | { readonly kind: 'category-not-saved'; readonly name: string }
-  | { readonly kind: 'category-not-deleted'; readonly name: string };
+  | { readonly kind: 'category-not-deleted'; readonly name: string }
+  // Cakes' «+ New recipe» was refused: the recipe and its card are both gone again (`productId` is the card, so a cake that already
+  // holds it can let it go).
+  | { readonly kind: 'recipe-not-created'; readonly name: string; readonly productId: string };
 
 export interface FoodcostSnapshot {
   readonly products: readonly Product[];
@@ -142,6 +145,11 @@ export interface FoodcostStore {
   // on another phone is never overwritten. The live list brings the new products in; no local copy is touched.
   // `kinds` says, by recipe id, which of them are semi-finished (model 4: Federico decides each one); any other is finished.
   createProductsFromRecipes(recipes: readonly unknown[], kinds?: Readonly<Record<string, ProductKind>>): Promise<CreatedFromRecipes>;
+  // Cakes' «+ New recipe» (22 Nov 2026): a Ricettario recipe with only its name AND its semi-finished card `recipe-<recipeId>`, LOCAL-FIRST,
+  // both written in ONE batch. `recipeData` is the document the catalogue itself writes for that name (recipes/recipeDocument.ts); the
+  // card is made exactly as «Schede dal Ricettario» makes one (productFromRecipe, toProductDocument). Returns the card's id at once. A
+  // refusal takes both off again and says so (`recipe-not-created`).
+  createRecipeWithCard(recipeId: string, recipeData: Readonly<Record<string, unknown>>): string;
   // The state of this product's first save: 'sending' (in the air — a snapshot lacking the product may only be a stale one, so a screen
   // WAITS), 'refused' (the product is going or gone, the refusal has its own message — a screen leaves without saying it was deleted)
   // or null (settled: a product that disappears was deleted).
@@ -491,6 +499,31 @@ export function createFoodcostStore(
         say({ kind: 'product-not-saved', name: product.name });
       });
       return id;
+    },
+
+    // ⚠️ BOTH ARE SHOWN AT ONCE AND BOTH GO WHEN THE ONE BATCH IS REFUSED: a card kept without its recipe (or the other way round) would
+    // be a half of something the database never held.
+    createRecipeWithCard(recipeId, recipeData) {
+      const recipe: StoredDoc = { ...recipeData, id: recipeId };
+      const made = productFromRecipe(recipe, 'semi') as unknown as Product | null;
+      if (!made) throw new Error('A recipe made from Cakes needs a name.');
+      // ⚠️ ONE KILO OF THE RECIPE, NOT ITS WEIGHT TODAY: the recipe is empty now (0 kg), and nothing updates this card when the recipe is
+      // filled in later; a 0 kg line would read «no price» for ever. A kilo makes the card's price per kilo the recipe's raw price per
+      // kilo at any weight, and no weighing is claimed (a loss is set on the card by hand).
+      const card: Product = { ...made, components: [{ recipeId, qtyKg: 1 }], rawGrams: null, cookedGrams: null };
+      const data = toProductDocument(card);
+      recipes = { ...recipes, [recipeId]: recipe };
+      writeJson(RECIPES_KEY, Object.values(recipes));
+      upsertLocal(normalizeProduct({ id: card.id, ...data }) as Product);
+      track(source.createRecipeWithCard(recipeId, recipeData, card.id, data), err => {
+        deps.warn('Recipe made from Cakes did not sync to Firestore:', err);
+        const { [recipeId]: _gone, ...rest } = recipes;
+        recipes = rest;
+        writeJson(RECIPES_KEY, Object.values(recipes));
+        removeLocal(card.id);
+        say({ kind: 'recipe-not-created', name: card.name, productId: card.id });
+      });
+      return card.id;
     },
 
     // ⚠️⚠️ THE LINK IS THE ID (shared/from-recipes.ts), so the only way a create goes wrong is by landing on a product that already

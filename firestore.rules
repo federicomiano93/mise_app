@@ -51,6 +51,16 @@ service cloud.firestore {
         && m.decorationG is number && m.decorationG >= 0 && m.decorationG <= 100000;
     }
 
+    // The standard cake per diameter (22 Nov 2026, the cakes rework step 4; shared/src/cake-standard.ts): cake-settings/reference.rows,
+    // one row per diameter `{ diameterCm, baseG, soakG, fillingG, coatingG, decorationG }`, each figure a number or null.
+    // ⚠️ JUDGED BY ITS TYPE AND COUNT ONLY, like a cake's or a product's lines: rules cannot loop, and checking the rows one by one
+    // written out hit Firestore's 1000-expressions-per-request limit at FOUR full rows (measured on the emulator, 22 Nov 2026) — a
+    // refused save with every row valid. Only whoever runs the place writes it, into its own venue; the app reads it through
+    // normalizeStandard, which drops junk rows and figures. The count is MAX_STANDARD_ROWS (pinned in cake-standard.spec.ts). No read.
+    function isStandardRows(rows) {
+      return rows is list && rows.size() >= 1 && rows.size() <= 20;
+    }
+
     // ── Who may enter a location ──────────────────────────────────────────
     // users/{uid} lists the locations an account may open. It is readable only
     // by that account and writable by NOBODY through the app — the Firebase
@@ -2992,14 +3002,18 @@ service cloud.firestore {
       // ONE document, `reference`. Read by whoever sees Food cost (every cake is scaled from it); written by whoever
       // runs the place: it changes the start of every new cake. Its OWN collection, never config/{doc} (the
       // Calculator's block; rules are additive — the config/labels lesson).
+      // `rows` (22 Nov 2026) is the table per diameter and is OPTIONAL: a phone that has not updated writes the old
+      // shape and must not be refused. `grams` stays REQUIRED: the new app writes the table's figures at 22 cm there,
+      // which is all an old phone reads.
       match /cake-settings/{settingsId} {
         allow read: if settingsId == 'reference' && cardAccess(lid, 'foodcost', 'foodcost') != 'none';
 
         allow create, update: if settingsId == 'reference'
           && canManage(lid, 'foodcost')
           && stampedFor(lid)
-          && request.resource.data.keys().hasOnly(['bakery', 'grams', 'updatedAt'])
+          && request.resource.data.keys().hasOnly(['bakery', 'grams', 'rows', 'updatedAt'])
           && isCakeReference(request.resource.data.grams)
+          && (!('rows' in request.resource.data) || isStandardRows(request.resource.data.rows))
           && request.resource.data.updatedAt is string
           && request.resource.data.updatedAt.size() <= 64;
 

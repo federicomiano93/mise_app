@@ -25,5 +25,7 @@ export function messageText(
       return t('fc.cat.couldNotSave', { name: message.name });
     case 'category-not-deleted':
       return t('fc.cat.couldNotRemove', { name: message.name });
+    case 'recipe-not-created':
+      return t('cakes.newRecipe.refused', { name: message.name });
   }
 }

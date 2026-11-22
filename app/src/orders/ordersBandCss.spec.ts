@@ -9,6 +9,7 @@ import headCss from './OrdersHead.module.css?raw';
 import sectionCss from './OrdersSection.module.css?raw';
 import listsCss from './ListsDoor.module.css?raw';
 import listsSource from './ListsDoor.tsx?raw';
+import ordersSource from './OrdersSection.tsx?raw';
 
 const bare = (css: string) => css.replace(/\/\*[\s\S]*?\*\//g, '');
 const after = (css: string, query: string) => bare(css).split(query).slice(1).join('');
@@ -17,7 +18,22 @@ const before = (css: string, query: string) => bare(css).split(query)[0] ?? '';
 describe('the title band', () => {
   it('sticks on the split only, one line exactly --band-h tall', () => {
     expect(before(pageCss, '@media (min-width: 1000px)')).not.toMatch(/\.band\s*\{[^}]*position:\s*sticky/);
-    expect(after(pageCss, '@media (min-width: 1000px)')).toMatch(/\.band\s*\{[^}]*position:\s*sticky;[^}]*top:\s*0;[^}]*height:\s*var\(--band-h\)/);
+    expect(after(pageCss, '@media (min-width: 1000px)')).toMatch(/\.stickyBand\s*\{[^}]*position:\s*sticky;[^}]*top:\s*0/);
+  });
+
+  it('keeps one gear beside a long title, and lets only Orders\' five controls wrap (measured at 296px, 22 Nov 2026)', () => {
+    const phone = before(pageCss, '@media (min-width: 700px)');
+    expect(phone).toMatch(/\.band\s*\{[^}]*flex-wrap:\s*nowrap/);
+    expect(phone).toMatch(/\.band:not\(\.bandWraps\) \.title\s*\{[^}]*flex:\s*0 1 auto;[^}]*min-width:\s*0/);
+    expect(phone).toMatch(/\.bandWraps\s*\{[^}]*flex-wrap:\s*wrap/);
+    expect(ordersSource).toMatch(/stickyBand\s+bandWraps/);
+  });
+
+  it('keeps a lone gear\'s 48px from growing the phone bar, and leaves Orders\' wrapping band alone (its lines would overlap)', () => {
+    const phone = before(pageCss, '@media (min-width: 700px)');
+    expect(phone).toMatch(/\.band:not\(\.bandWraps\) > :not\(\.title\)\s*\{[^}]*margin-block:\s*calc\(-1 \* var\(--s3\)\)/);
+    expect(phone).not.toMatch(/(^|\})\s*\.bandWraps[^{]*\{[^}]*margin-block/);
+    expect(after(pageCss, '@media (min-width: 700px)')).toMatch(/\.band:not\(\.bandWraps\) > :not\(\.title\)\s*\{[^}]*margin-block:\s*0/);
   });
 
   it('is 72px on the split and nothing on a phone, where it scrolls away', () => {

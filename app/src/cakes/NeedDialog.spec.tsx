@@ -35,12 +35,15 @@ const open = async (path = '/cakes/c1', cake = SACHER, products = [SPONGE]) => {
 };
 
 const openNeeds = async (view: Awaited<ReturnType<typeof open>>) => {
+  // The button is in the cost step, which is closed until it is opened.
+  const costStep = await screen.findByRole('button', { name: /^Cost and price/ }, LOAD);
+  if (costStep.getAttribute('aria-expanded') !== 'true') await view.user.click(costStep);
   await view.user.click(await screen.findByRole('button', { name: 'Open “What you need”' }, LOAD));
   return screen.findByRole('dialog', { name: /^What you need/ });
 };
 
 describe('opening it', () => {
-  it('is a button in the cost card, and the dialog is named after the cake and the count', async () => {
+  it('is a button in the cost step, and the dialog is named after the cake and the count', async () => {
     const view = await open();
     const dialog = await openNeeds(view);
     expect(within(dialog).getByRole('heading', { name: 'What you need · Sacher × 1' })).toBeInTheDocument();
@@ -49,6 +52,7 @@ describe('opening it', () => {
 
   it('⚠️ works from the WORKING copy: grams typed and not saved are in the table', async () => {
     const view = await open();
+    await view.user.click(screen.getByRole('button', { name: /^Base/ }));
     const box = screen.getByRole('textbox', { name: 'Sponge: grams' });
     await view.user.clear(box);
     await view.user.type(box, '1500');
@@ -145,8 +149,8 @@ describe('the two tabs and the count', () => {
 describe('focus and the scrolling table', () => {
   it('Close gives the focus back to the button that opened it', async () => {
     const view = await open();
-    const opener = await screen.findByRole('button', { name: 'Open “What you need”' }, LOAD);
     const dialog = await openNeeds(view);
+    const opener = screen.getByRole('button', { name: 'Open “What you need”', hidden: true });
     await view.user.click(within(dialog).getByRole('button', { name: 'Close' }));
     await waitFor(() => { expect(document.activeElement).toBe(opener); });
   });

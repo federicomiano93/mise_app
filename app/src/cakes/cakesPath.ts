@@ -46,3 +46,12 @@ export function cakesScreenName(rest: string): string {
   if (view.kind === 'list') return 'cakes';
   return view.kind === 'reference' ? 'cakes-reference' : 'cakes-editor';
 }
+
+// How a NEW cake starts, chosen in the list's «How do you want to start?» dialog and carried to the editor in the navigation state
+// (never saved): `standard` takes the venue's reference grams, `zero` starts with none, so every line needs its grams typed. A new
+// cake opened by its address alone (a reload that lost the state, a bookmark) starts as `standard`, the way it always did.
+export type CakeStart = 'standard' | 'zero';
+
+export function startOf(state: unknown): CakeStart {
+  return typeof state === 'object' && state !== null && 'cakeStart' in state && (state as { cakeStart: unknown }).cakeStart === 'zero' ? 'zero' : 'standard';
+}

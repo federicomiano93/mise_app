@@ -18,6 +18,15 @@ export const FROM_SHEET = { ...FROM_LIST, fromSheet: true } as const;
 // REPLACES the label's entry with the recipe, and that entry must not claim the list is one step behind it.
 export const FROM_RECIPE = { ...KEEP_FOCUS, fromRecipe: true } as const;
 
+// The same, from Cakes (22 Nov 2026): «Open in Recipes» on the dialog that says a recipe was just made for a cake. The editor opens one level
+// below the cake, and Back AND Save return to the cake's own address (the browser's Back: the cake is the entry behind), never to the list
+// of recipes. It rides on FROM_RECIPE, so the editor's own Back already steps back; only Save and Delete (leaveForList) read `fromCake`.
+export const FROM_CAKE = { ...FROM_RECIPE, fromCake: true } as const;
+
+export function cameFromCake(state: unknown): boolean {
+  return typeof state === 'object' && state !== null && 'fromCake' in state;
+}
+
 // The same, from a row of the HACCP list to that recipe's HACCP label (image labels step 2): Back from the label is the browser's
 // Back, and the focus is owed to the row. Deliberately NOT `fromList`: the label is not a recipe opened from the list.
 export const FROM_HACCP = { ...KEEP_FOCUS, fromHaccp: true } as const;

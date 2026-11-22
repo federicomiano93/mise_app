@@ -1,10 +1,10 @@
-/* The parts of one tier, and the packaging. Nothing here clips (no `overflow`): the form bar above sticks to the top of the scroll area.
-   A card is a grid row (name, grams, materials, labour, buttons) where there is room, and wraps where there is not (the last rule). */
+/* The guided steps of one tier, the packaging, and the cost step. Nothing here clips (no `overflow`): the form bar above sticks to the
+   top of the scroll area. A card line is a flex row that wraps: the name on its own line while the card is narrow (the 400px side). */
 
 .parts {
   display: flex;
   flex-direction: column;
-  gap: var(--s2);
+  gap: var(--s3);
   min-width: 0;
 }
 
@@ -47,49 +47,142 @@
 }
 
 .tab:focus-visible,
-.choose:focus-visible,
+.stepButton:focus-visible,
 .add:focus-visible,
 .icon:focus-visible {
   outline: 3px solid var(--accent);
   outline-offset: 2px;
 }
 
-/* The column names, over the first part. */
-.head {
-  display: none;
+.steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.step {
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+
+/* The step that is open (and the part chosen in the drawing) stands out in the one accent. */
+.step[data-open="true"],
+.step[data-selected="true"] {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.stepName {
+  margin: 0;
+  font-size: var(--fs-md);
+}
+
+/* The whole title row is the button that opens the step. */
+.stepButton {
+  display: flex;
+  align-items: center;
   gap: var(--s3);
-  padding-bottom: var(--s2);
-  border-bottom: 1px solid var(--line);
-  color: var(--ink-3);
-  font-size: var(--fs-xs);
+  width: 100%;
+  min-height: var(--hit);
+  padding: var(--s2) var(--s3);
+  border: 0;
+  border-radius: var(--r-md);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (hover: hover) {
+  .stepButton:hover {
+    background: var(--sunken);
+  }
+}
+
+/* The step's number; a tick instead once it holds a recipe. */
+.num {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--sunken);
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+}
+
+.num svg {
+  width: 16px;
+  height: 16px;
+}
+
+.num[data-done="true"] {
+  background: var(--ok-tint);
+  color: var(--ok-ink);
+}
+
+.step[data-open="true"] .num {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.stepText {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.stepTitle {
   font-weight: 650;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
 }
 
-.right {
-  text-align: right;
+.stepSub {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  font-weight: 400;
+  overflow-wrap: anywhere;
 }
 
-.part {
+.stepSub[data-todo="true"] {
+  color: var(--warn-ink);
+  font-weight: 600;
+}
+
+.stepBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  padding: 0 var(--s3) var(--s3);
+}
+
+.none,
+.full,
+.hint {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.none {
+  font-style: italic;
+}
+
+/* The packaging of the whole cake, set apart from the steps by a line. */
+.pack {
   display: flex;
   flex-direction: column;
   gap: var(--s1);
-  padding: var(--s3) 0;
+  padding-top: var(--s3);
   border-top: 1px solid var(--line);
-}
-
-.part:first-of-type {
-  border-top: 0;
-}
-
-/* The part chosen (in the drawing or here). */
-.part[data-selected="true"] {
-  margin: 0 calc(-1 * var(--s3));
-  padding: var(--s3);
-  border-top-color: transparent;
-  border-radius: var(--r-md);
-  background: var(--accent-tint);
 }
 
 .partHead {
@@ -104,39 +197,22 @@
   font-size: var(--fs-md);
 }
 
-/* The part's name is a button that chooses it in the drawing: it looks like the heading it is. */
-.choose {
-  display: inline-flex;
-  align-items: center;
-  min-width: var(--hit);
-  min-height: var(--hit);
-  margin: calc(-1 * var(--s2)) 0;
-  padding: 0;
-  text-align: left;
-  border: 0;
-  background: transparent;
-  color: var(--ink);
-  font: 700 var(--fs-md) var(--font);
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-}
-
 .rule {
   color: var(--ink-2);
   font-size: var(--fs-sm);
 }
 
-.none {
-  margin: 0;
-  padding: var(--s1) 0;
-  color: var(--ink-3);
-  font-style: italic;
-}
-
-.full {
-  margin: 0;
+/* «Then, once the cake is composed»: the dashed line before the cost step. */
+.divider {
+  margin: var(--s1) var(--s1) 0;
+  padding-top: var(--s3);
+  border-top: 1px dashed var(--line-2);
   color: var(--ink-2);
   font-size: var(--fs-sm);
+}
+
+.finish {
+  align-self: flex-start;
 }
 
 .line {
@@ -144,12 +220,15 @@
   flex-wrap: wrap;
   align-items: center;
   gap: var(--s2) var(--s3);
-  padding: var(--s2) 0;
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--sunken);
 }
 
 .what {
   display: flex;
-  flex: 1 1 100%;
+  flex: 1 1 160px;
   flex-direction: column;
   min-width: 0;
   font-weight: 600;
@@ -178,10 +257,9 @@
 
 .qty {
   display: flex;
-  flex: 1 1 120px;
+  flex: 0 1 128px;
   align-items: center;
   gap: var(--s2);
-  max-width: 160px;
 }
 
 .unit {
@@ -229,7 +307,7 @@
 
 @media (hover: hover) {
   .icon:hover {
-    background: var(--sunken);
+    background: var(--surface);
   }
 }
 
@@ -257,40 +335,4 @@
 .add svg {
   width: 18px;
   height: 18px;
-}
-
-/* ⚠️ THE ROW IS A GRID ONLY WHERE THE CARD IS WIDE ENOUGH (about 560px of it), and a media query can only see the window — a container query is newer than the lab
-   tablet's Chrome 101. The editor is one column from 700px up to 1279px (the card is the screen minus the rail: wide from 860px) and two
-   columns from 1280px, where the parts get what is left beside the 380px side and the list (wide only from 1600px). Anywhere else the
-   row wraps: the name on its own line, the figures under it. */
-@media (min-width: 860px) and (max-width: 1279.98px), (min-width: 1600px) {
-  .head,
-  .line {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 136px 88px auto;
-    align-items: center;
-  }
-
-  .parts[data-labour="true"] .head,
-  .parts[data-labour="true"] .line {
-    grid-template-columns: minmax(0, 1fr) 136px 88px 88px auto;
-  }
-
-  .what {
-    flex: none;
-  }
-
-  .qty {
-    max-width: none;
-  }
-
-  /* The two buttons (↺ and ✕) take the width they need; a row with only ✕ keeps the column as wide, so the figures line up. */
-  .actions {
-    justify-content: flex-end;
-    min-width: calc(2 * var(--hit));
-  }
-
-  .head > span:last-child {
-    min-width: calc(2 * var(--hit));
-  }
 }

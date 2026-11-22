@@ -331,7 +331,8 @@ export function cakeProduct(cake: Cake): Product {
     cookedGrams: null,
     model: PRODUCT_MODEL,
     kind: 'finished',
-    categoryId: cake.categoryId,
+    // A cake carries no category: Food cost draws every cake's card in its own «Cakes» group.
+    categoryId: null,
   };
 }
 
@@ -351,7 +352,8 @@ export function toCakeDocument(cake: Cake, nowIso: string): Record<string, unkno
     sellingPrice: cake.sellingPrice,
     vatRate: cake.vatRate,
     foodCostTarget: cake.foodCostTarget,
-    categoryId: cake.categoryId,
+    // Always null (the key stays: the rules' whitelist has it, and old cakes may carry a value that is dropped on the next save).
+    categoryId: null,
     ref: cake.ref ? { ...cake.ref } : null,
     model: CAKE_MODEL,
     updatedAt: nowIso,

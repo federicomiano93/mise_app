@@ -15,8 +15,8 @@ describe('cakesMessageText', () => {
     expect(cakesMessageText(italiano, { kind: 'cakes-stream-broken' })).toBe('Sincronizzazione interrotta — le torte potrebbero non essere aggiornate.');
   });
 
-  it('says the reference grams are back as they were, in both languages', () => {
-    expect(cakesMessageText(english, { kind: 'reference-not-saved' })).toContain('They are back as they were.');
-    expect(cakesMessageText(italiano, { kind: 'reference-not-saved' })).toContain('Sono tornati com’erano.');
+  it('says the standard cake is back as it was, in both languages', () => {
+    expect(cakesMessageText(english, { kind: 'reference-not-saved' })).toContain('It is back as it was.');
+    expect(cakesMessageText(italiano, { kind: 'reference-not-saved' })).toContain('È tornata com’era.');
   });
 });

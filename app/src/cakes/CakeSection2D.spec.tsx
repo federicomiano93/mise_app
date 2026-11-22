@@ -35,6 +35,13 @@ const draw = (tier = 0, selected: { tier: number; part: CakePart } | null = null
 };
 
 describe('the section drawing', () => {
+  it('says «Raw materials so far» under the drawing, and nothing while the cake holds nothing', () => {
+    const view = render(<CakeSection2D geometry={cakeGeometry(CAKE)} selected={null} tier={0} onSelect={vi.fn()} labels={{ ...LABELS, total: 'Raw materials so far: £1.00' }} />);
+    expect(screen.getByText('Raw materials so far: £1.00')).toBeInTheDocument();
+    view.rerender(<CakeSection2D geometry={cakeGeometry(CAKE)} selected={null} tier={0} onSelect={vi.fn()} labels={{ ...LABELS, total: '' }} />);
+    expect(screen.queryByText(/Raw materials so far/)).not.toBeInTheDocument();
+  });
+
   it('is one image with a summary for a screen reader', () => {
     draw();
     expect(screen.getByRole('img', { name: 'Section drawing of the cake: 2 tiers.' })).toBeInTheDocument();
@@ -74,6 +81,33 @@ describe('the section drawing', () => {
     draw(0, { tier: 0, part: 'base' });
     expect(screen.getByText('Base · 1071 g')).toHaveAttribute('data-chosen', 'true');
     expect(screen.getByText('Filling · 666 g')).toHaveAttribute('data-chosen', 'false');
+  });
+
+  describe('the discs of the first tier', () => {
+    const rects = (container: HTMLElement, part: string) => [...container.querySelectorAll('rect')]
+      .filter(rect => new RegExp(`(^|[\\s_])${part}([\\s_]|$)`).test(rect.getAttribute('class') ?? ''));
+    const num = (rect: Element, name: string) => Number(rect.getAttribute(name));
+    const without = (part: CakePart) => ({ ...CAKE, lines: CAKE.lines.filter(line => !(line.tier === 0 && line.part === part)) });
+
+    it('stand apart when there is no filling card, with no filling layer between them', () => {
+      const { container } = render(
+        <CakeSection2D geometry={cakeGeometry(without('filling'))} selected={null} tier={0} onSelect={vi.fn()} labels={LABELS} />,
+      );
+      const discs = rects(container, 'base').sort((a, b) => num(a, 'y') - num(b, 'y'));
+      expect(rects(container, 'filling')).toHaveLength(0);
+      expect(discs.length).toBeGreaterThan(2);
+      for (let i = 0; i < discs.length - 1; i += 1) {
+        const upper = discs[i]!;
+        const lower = discs[i + 1]!;
+        const gap = num(lower, 'y') - (num(upper, 'y') + num(upper, 'height'));
+        if (num(upper, 'width') === num(lower, 'width')) expect(gap).toBeGreaterThan(0);
+      }
+    });
+
+    it('have a filling layer between them when there is a filling card', () => {
+      const { container } = render(<CakeSection2D geometry={cakeGeometry(CAKE)} selected={null} tier={0} onSelect={vi.fn()} labels={LABELS} />);
+      expect(rects(container, 'filling').length).toBeGreaterThan(0);
+    });
   });
 
   it('draws nothing for a cake with no tier', () => {

@@ -2,10 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { cakeGeometry } from '@mise/shared/cake-model';
 import type { Cake } from '@mise/shared/cake-model';
 import {
-  CUT_ANGLE, TIER_BOARD_CM, cakeLayout, cakeShare, homeView, labelBoxFor, leaderPath, leadersCross, partAnchors, pickedPart, placeLabels,
+  appearedParts, CUT_ANGLE, DISC_GAP_SHARE, SLOT_SPREAD_PX, TIER_BOARD_CM, cakeLayout, cakeShare, homeView, labelBoxFor, leaderPath, leadersCross, partAnchors, pickedPart, placeLabels,
   sceneSignature, slotHeights, stageDecision, tapAction, webglAvailable,
 } from './cake3dModel';
 import type { Anchor, LabelBox, PlacedLabel } from './cake3dModel';
+import { cakeLooks, looksKey } from './cakeLook';
 
 const REF = { diameterCm: 22, discs: 3, discHeightCm: 3, baseG: 300, soakG: 90, fillingG: 280, coatingG: 450, decorationG: 200 };
 const FULL: Cake = {
@@ -51,6 +52,13 @@ describe('the cake in space', () => {
     expect(layout.height).toBeGreaterThan(top!.yTop);
   });
 
+  it('without a filling the discs stand apart by an empty gap, so the person can count them', () => {
+    // 3 discs of 3 cm, two gaps of 0.75 cm: the second disc starts one disc and one gap up.
+    const discs = top!.layers.filter(l => l.kind === 'base');
+    expect(discs[1]!.y0 - (discs[0]!.y0 + discs[0]!.h)).toBeCloseTo(3 * DISC_GAP_SHARE, 6);
+    expect(top!.stackHeight).toBeCloseTo(9 + 2 * 3 * DISC_GAP_SHARE, 6);
+  });
+
   it('knows what stands on a tier, so its decoration goes on the ring of the top that is left bare', () => {
     expect(top!.upperEdge).toBeNull();
     expect(bottom!.upperEdge).toBe(9);
@@ -79,6 +87,12 @@ describe('the cake in space', () => {
     expect(Math.hypot(whole.base!.x, whole.base!.z)).toBeGreaterThan(bottom!.radius);
     expect(whole.filling!.y).toBeCloseTo(cut.filling!.y, 6);
     expect(Object.keys(partAnchors(top!, 'cut')).sort()).toEqual(['base', 'decoration']);
+  });
+
+  it('a base with no card is drawn but gets no callout (nothing to name)', () => {
+    const bare = cakeLayout(cakeGeometry({ ...FULL, tiers: 1, lines: [] })).tiers[0]!;
+    expect(bare.layers.filter(l => l.kind === 'base')).toHaveLength(3);
+    expect(partAnchors(bare, 'cut')).toEqual({});
   });
 });
 
@@ -193,12 +207,26 @@ describe('the labels', () => {
     expect(crossings(placed)).toBe(0);
   });
 
-  it('spreads slots in order, never closer than a label plus its gap, inside the stage', () => {
+  it('spaces the slots of a column EVENLY, never closer than a label plus its gap, inside the stage and clear of the total’s strip', () => {
     const slots = slotHeights([100, 105, 110], wide);
     expect(slots[1]! - slots[0]!).toBeGreaterThanOrEqual(wide.labelHeight + wide.gap);
+    expect(slots[2]! - slots[1]!).toBeCloseTo(slots[1]! - slots[0]!, 6);
+    expect(slots[1]! - slots[0]!).toBeLessThanOrEqual(SLOT_SPREAD_PX);
     expect(slotHeights([5, 6], wide)[0]!).toBeGreaterThanOrEqual(wide.margin + wide.labelHeight / 2);
-    expect(slotHeights([wide.height, wide.height - 1], wide).at(-1)!).toBeLessThanOrEqual(wide.height - wide.margin - wide.labelHeight / 2);
+    const lowest = wide.height - wide.margin - wide.foot - wide.labelHeight / 2;
+    expect(slotHeights([wide.height, wide.height - 1], wide).at(-1)!).toBeLessThanOrEqual(lowest);
     expect(slotHeights([], wide)).toEqual([]);
+  });
+
+  it('centres a column on where its anchors are, and one label stands at its anchor’s height', () => {
+    expect(slotHeights([250], wide)).toEqual([250]);
+    const slots = slotHeights([200, 300], wide);
+    expect((slots[0]! + slots[1]!) / 2).toBeCloseTo(250, 6);
+  });
+
+  it('leaves the strip along the bottom free for the total: no label reaches into it', () => {
+    const placed = placeLabels([0, 1, 2, 3].map(i => ({ key: `p${String(i)}`, x: 300, y: 500 + i })), wide);
+    for (const label of placed) expect(label.slot.y + wide.labelHeight / 2).toBeLessThanOrEqual(wide.height - wide.foot);
   });
 
   it('draws each leader as one smooth curve from the label to the point, with no dashes', () => {
@@ -220,19 +248,15 @@ describe('the labels', () => {
 
 describe('which drawing the stage shows', () => {
   it('is the 3D by default', () => {
-    expect(stageDecision({ choice: null, reducedMotion: false, failure: null })).toEqual({ show: '3d', note: null });
+    expect(stageDecision({ reducedMotion: false, failure: null })).toEqual({ show: '3d', note: null });
   });
-  it('is the simple drawing, with a note, when the device asks for less motion, and 3D is still a choice away', () => {
-    expect(stageDecision({ choice: null, reducedMotion: true, failure: null })).toEqual({ show: '2d', note: 'motion' });
-    expect(stageDecision({ choice: '3d', reducedMotion: true, failure: null })).toEqual({ show: '3d', note: null });
+  it('is the simple drawing, with a note, when the device asks for less motion', () => {
+    expect(stageDecision({ reducedMotion: true, failure: null })).toEqual({ show: '2d', note: 'motion' });
   });
-  it('keeps what the person chose', () => {
-    expect(stageDecision({ choice: '2d', reducedMotion: false, failure: null })).toEqual({ show: '2d', note: null });
-  });
-  it('falls back to the drawing, with the reason, whenever the 3D failed, whatever was chosen', () => {
-    expect(stageDecision({ choice: '3d', reducedMotion: false, failure: 'webgl' })).toEqual({ show: '2d', note: 'webgl' });
-    expect(stageDecision({ choice: null, reducedMotion: true, failure: 'load' })).toEqual({ show: '2d', note: 'load' });
-    expect(stageDecision({ choice: '3d', reducedMotion: false, failure: 'error' })).toEqual({ show: '2d', note: 'error' });
+  it('falls back to the drawing, with the reason, whenever the 3D failed', () => {
+    expect(stageDecision({ reducedMotion: false, failure: 'webgl' })).toEqual({ show: '2d', note: 'webgl' });
+    expect(stageDecision({ reducedMotion: true, failure: 'load' })).toEqual({ show: '2d', note: 'load' });
+    expect(stageDecision({ reducedMotion: false, failure: 'error' })).toEqual({ show: '2d', note: 'error' });
   });
 });
 
@@ -274,5 +298,70 @@ describe('what the scene is rebuilt on', () => {
     expect(tiersOf(cake => cake, 'whole')).not.toBe(base);
     expect(tiersOf(cake => ({ ...cake, lines: cake.lines.filter(line => line.part !== 'soak') }))).not.toBe(base);
     expect(tiersOf(cake => ({ ...cake, lines: [...cake.lines, { tier: 1, part: 'coating', productId: 'F', grams: null }] }))).not.toBe(base);
+  });
+});
+
+describe('what the scene is rebuilt on: the look the names give', () => {
+  const NAMES: Record<string, string> = { A: 'Pan di spagna', B: 'Bagna al rum', C: 'Crema pasticcera', D: 'Panna', E: 'Frutti di bosco' };
+  // The signature the 3D view computes: the layout, the view and the looks of the names.
+  const signatureOf = (cake: Cake, names: Record<string, string>) =>
+    sceneSignature(cakeLayout(cakeGeometry(cake)), 'cut', looksKey(cakeLooks(cakeGeometry(cake), id => names[id] ?? '')));
+  const base = signatureOf(FULL, NAMES);
+
+  it('a recipe that looks different rebuilds: a chocolate coating instead of a cream one', () => {
+    expect(signatureOf(FULL, { ...NAMES, D: 'Glassa al cioccolato' })).not.toBe(base);
+    expect(signatureOf(FULL, { ...NAMES, E: 'Riccioli di cioccolato' })).not.toBe(base);
+    expect(signatureOf(FULL, { ...NAMES, B: 'Bagna al caffè' })).not.toBe(base);
+  });
+  it('typing grams, or a rename that looks the same, does not', () => {
+    expect(signatureOf({ ...FULL, lines: FULL.lines.map(line => ({ ...line, grams: 321 })) }, NAMES)).toBe(base);
+    expect(signatureOf(FULL, { ...NAMES, A: 'Genoise', D: 'Chantilly' })).toBe(base);
+  });
+});
+
+describe('what a change of the cake makes appear', () => {
+  const withLines = (lines: Cake['lines'], extra: Partial<Cake> = {}) => cakeLayout(cakeGeometry({ ...FULL, lines, ...extra }));
+  const base = { tier: 0, part: 'base' as const, productId: 'A', grams: null };
+  const soak = { tier: 0, part: 'soak' as const, productId: 'B', grams: null };
+  const filling = { tier: 0, part: 'filling' as const, productId: 'C', grams: null };
+  const coating = { tier: 0, part: 'coating' as const, productId: 'D', grams: null };
+
+  it('a first build never plays', () => {
+    expect(appearedParts(null, withLines([base, soak]))).toEqual([]);
+  });
+
+  it('lists a part that went from no card to a card, per tier', () => {
+    expect(appearedParts(withLines([]), withLines([base]))).toEqual([{ tier: 0, part: 'base' }]);
+    expect(appearedParts(withLines([base]), withLines([base, soak]))).toEqual([{ tier: 0, part: 'soak' }]);
+    expect(appearedParts(withLines([base]), withLines([base, filling]))).toEqual([{ tier: 0, part: 'filling' }]);
+    const decoration = { tier: 1, part: 'decoration' as const, productId: 'E', grams: null };
+    expect(appearedParts(withLines([base]), withLines([base, decoration]))).toEqual([{ tier: 1, part: 'decoration' }]);
+  });
+
+  it('lists several in the order a cake is built', () => {
+    expect(appearedParts(withLines([]), withLines([coating, soak, base])).map(a => a.part)).toEqual(['base', 'soak', 'coating']);
+  });
+
+  it('says nothing for a second card in a part, a part that goes away, or no change', () => {
+    expect(appearedParts(withLines([base]), withLines([base, { ...base, productId: 'Z' }]))).toEqual([]);
+    expect(appearedParts(withLines([base, soak]), withLines([base]))).toEqual([]);
+    expect(appearedParts(withLines([base, soak]), withLines([base, soak]))).toEqual([]);
+  });
+
+  it('says nothing when the shape changed (another diameter or number of discs): that is a different cake, not a part added', () => {
+    expect(appearedParts(withLines([]), withLines([base], { discs: 2 }))).toEqual([]);
+    expect(appearedParts(withLines([]), withLines([base], { diameterCm: 30 }))).toEqual([]);
+  });
+
+  it('a tier that did not exist before does not play', () => {
+    expect(appearedParts(withLines([], { tiers: 1 }), withLines([{ tier: 1, part: 'base', productId: 'A', grams: null }]))).toEqual([]);
+  });
+
+  it('the layout knows whether the base has a card, so the discs of a base with none are drawn faint', () => {
+    expect(withLines([]).tiers[0]!.hasBase).toBe(false);
+    expect(withLines([]).tiers[0]!.layers.filter(l => l.kind === 'base')).toHaveLength(3);
+    expect(withLines([base]).tiers[0]!.hasBase).toBe(true);
+    // The signature changes with it, so the scene is rebuilt when the first base card arrives.
+    expect(sceneSignature(withLines([]), 'cut')).not.toBe(sceneSignature(withLines([base]), 'cut'));
   });
 });

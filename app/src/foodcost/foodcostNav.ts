@@ -1,5 +1,6 @@
 import { createContext, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router';
+import type { ProductKind } from '@mise/shared/foodcost-model';
 import { recipeAddress } from '@mise/shared/recipe-link';
 import { KEEP_FOCUS } from '../shell/Page';
 
@@ -17,6 +18,12 @@ export const FROM_LIST = { ...KEEP_FOCUS, fromList: true } as const;
 // What a product puts in the state when it opens its margin history on a phone: «you came from the
 // product, so Back is the browser's Back».
 export const FROM_PRODUCT = { ...KEEP_FOCUS, fromProduct: true } as const;
+
+// «New product» pressed while the list shows «Semi-finished» opens the new card already set to that kind (21 Nov 2026): the kind travels in
+// the navigation state, never saved, and stays editable on the card. A new card opened by its address alone starts as a finished product.
+export function newKindOf(state: unknown): ProductKind {
+  return typeof state === 'object' && state !== null && 'newKind' in state && (state as { newKind: unknown }).newKind === 'semi' ? 'semi' : 'finished';
+}
 
 export function cameFromList(state: unknown): boolean {
   return typeof state === 'object' && state !== null && 'fromList' in state;

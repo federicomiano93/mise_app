@@ -1,5 +1,6 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
+import { normalizeStandard, referenceFor } from '@mise/shared/cake-standard';
 import { fakeCakesSource } from '../testing/fakeCakesSource';
 import { REFERENCE, cakeDoc, renderCakes, storedReference } from '../testing/renderCakes';
 import { EMPLOYEE, LOAD } from '../testing/renderFoodcost';
@@ -31,15 +32,17 @@ const heading = (name: string | RegExp) => screen.findByRole('heading', { level:
 
 describe('a stored cake', () => {
   it('opens named, with the «On the price list» tag, its drawing, its parts, its measures and its cost', async () => {
-    await open('/cakes/c1');
+    const { user } = await open('/cakes/c1');
     expect(await heading('Sacher')).toBeInTheDocument();
     expect(screen.getByText('On the price list')).toBeInTheDocument();
     expect(await screen.findByRole('img', { name: /^Section drawing of the cake: 1 tier, 2 discs per tier/ })).toBeInTheDocument();
     expect(screen.getByRole('heading', { level: 3, name: /^Parts of the cake/ })).toBeInTheDocument();
     expect(screen.getByRole('heading', { level: 3, name: 'Measures' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { level: 3, name: 'Cost and price' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Cost and price/ })).toHaveAttribute('aria-expanded', 'false');
     expect(screen.getByRole('textbox', { name: 'Name' })).toHaveValue('Sacher');
-    // 1000 g of the sponge at £2.00 a kilo.
+    // Every step is closed when a saved cake opens; the first one holds the sponge, 1000 g of it at £2.00 a kilo.
+    expect(screen.getByRole('button', { name: /^Base/ })).toHaveTextContent(/Sponge · 1,?000 g/);
+    await user.click(screen.getByRole('button', { name: /^Base/ }));
     expect(screen.getByRole('textbox', { name: 'Sponge: grams' })).toHaveValue('1000');
     expect(screen.getByText('adjusted by hand · the rule says 600 g')).toBeInTheDocument();
   });
@@ -106,7 +109,7 @@ describe('Save', () => {
     expect(foodcost.saved).toHaveLength(0);
   });
 
-  it('a new cake copies the venue’s reference grams, is saved under its own address and stays open, now «On the price list»', async () => {
+  it('a new cake takes the standard cake’s figures at its own diameter, is saved under its own address and stays open, now «On the price list»', async () => {
     const { user, foodcost, router } = await open('/cakes/new');
     await heading('New cake');
     await user.type(screen.getByRole('textbox', { name: 'Name' }), 'Torta di prova');
@@ -117,7 +120,10 @@ describe('Save', () => {
     const cakeId = (write?.companion as { id: string }).id;
     expect(write?.id).toBe(`cake-${cakeId}`);
     const data = (write?.companion as { data: Record<string, unknown> }).data;
-    expect(data).toMatchObject({ name: 'Torta di prova', tiers: 1, discs: 3, lines: [], ref: REFERENCE });
+    expect(data).toMatchObject({ name: 'Torta di prova', tiers: 1, discs: 3, lines: [] });
+    // 20 cm is not a typed row of the legacy table (22 cm is): the figures are the table's, scaled to 20 cm.
+    expect(data['ref']).toEqual(referenceFor(normalizeStandard(storedReference()), 20));
+    expect(data['ref']).toMatchObject({ diameterCm: 20, discs: 3, discHeightCm: 3, baseG: 248 });
     await waitFor(() => { expect(router.state.location.pathname).toBe(`/cakes/${cakeId}`); });
     expect(router.state.historyAction).toBe('REPLACE');
     // Its own address names it: the header says the name, no longer «New cake» (the form is kept, it is not remounted).
@@ -155,6 +161,7 @@ describe('leaving', () => {
   it('a change that is undone is not a change', async () => {
     const { user, router } = await open('/cakes/c1');
     await heading('Sacher');
+    await user.click(screen.getByRole('button', { name: /^Cost and price/ }));
     await user.click(screen.getByRole('button', { name: 'One slice more' }));
     await user.click(screen.getByRole('button', { name: 'One slice fewer' }));
     await user.click(screen.getByRole('button', { name: 'Back' }));

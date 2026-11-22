@@ -60,7 +60,7 @@ describe('the search over the list', () => {
 
   it('says so, in a region that was there before, when no name holds the text, and brings the rows back when it is cleared', async () => {
     const { user } = await loaded('/food-cost', editorSource([BRIOCHE, GREEN]));
-    const region = screen.getAllByRole('status').find(node => node.parentElement?.className.includes('column')) as HTMLElement;
+    const region = screen.getAllByRole('status').find(node => node.parentElement?.className.includes('panel')) as HTMLElement;
     expect(region).toBeEmptyDOMElement();
     await user.type(search(), ' zzz ');
     expect(within(screen.getByRole('main')).queryAllByRole('listitem')).toHaveLength(0);

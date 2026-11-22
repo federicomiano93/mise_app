@@ -45,12 +45,14 @@ describe('the list of recipes', () => {
     expect(rowOf('Pane')).toBeInTheDocument();
   });
 
-  it('is one h1, «Recipes», with the Allergen sheet and then Settings at its foot, and «New recipe» above the rows', async () => {
+  it('is one h1, «Recipes», with the Settings gear on its line, the Allergen sheet at the foot, and «New recipe» above the rows', async () => {
     await loaded();
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
     expect(screen.getByRole('heading', { level: 1, name: 'Recipes' })).toBeInTheDocument();
     const door = main().getByRole('button', { name: 'Allergen sheet' });
-    expect(door.compareDocumentPosition(main().getByRole('button', { name: 'Settings' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const gear = main().getByRole('button', { name: 'Settings' });
+    expect(gear.closest('header')).toContainElement(screen.getByRole('heading', { level: 1 }));
+    expect(gear.compareDocumentPosition(door) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     const lastRow = main().getAllByRole('listitem').at(-1) as HTMLElement;
     expect(lastRow.compareDocumentPosition(door) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     // The button that makes a recipe stands above the rows, after the search box.
@@ -74,9 +76,9 @@ describe('the list of recipes', () => {
     renderRecipes('/recipes', { source: sourceWith([]) });
     expect(await screen.findByText('No recipes yet', undefined, LOAD)).toBeInTheDocument();
     expect(screen.getByText('Add your first recipe: its ingredients and their amounts.')).toBeInTheDocument();
-    // The buttons: the one that makes a recipe, then the four doors — the Allergen sheet, the HACCP labels, the ingredient book (14 Nov
-    // 2026) and Settings (the default session runs the place).
-    expect(main().getAllByRole('button').map(button => button.textContent)).toEqual(['New recipe', 'Allergen sheet', 'HACCP labels', 'Ingredients in recipes', 'Settings']);
+    // The buttons: the one that makes a recipe, then the three doors — the Allergen sheet, the HACCP labels and the ingredient book (14 Nov
+    // 2026) — and, first, the Settings gear on the title row (the default session runs the place).
+    expect(main().getAllByRole('button').map(button => button.textContent)).toEqual(['', 'New recipe', 'Allergen sheet', 'HACCP labels', 'Ingredients in recipes']); // the gear on the title is icon-only, so its text is empty
   });
 
   it('says it in Italian', async () => {

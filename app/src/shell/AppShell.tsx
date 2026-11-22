@@ -5,6 +5,7 @@ import { Link, NavLink, Outlet, useHref, useLocation, useNavigate } from 'react-
 import { RouterProvider as AriaRouterProvider } from 'react-aria-components';
 import { PartBoundary } from '../errors/PartBoundary';
 import { useT } from '../i18n/useT';
+import { clearParkedCakes } from '../cakes/cakeParking';
 import { useSession } from '../session/SessionContext';
 import { SwitchVenueButton } from '../session/SwitchVenueButton';
 import { AwayProvider } from './away/AwayContext';
@@ -25,7 +26,7 @@ import styles from './AppShell.module.css';
 const sectionOf = (pathname: string): string => pathname.split('/')[1] ?? '';
 
 // The frame around every screen: a rail on a tablet, a tab bar on a phone, a top bar on a
-// tablet's Home (and on a kiosk phone's Home, for «Standby» and «Exit»), and the section itself in the middle.
+// tablet's every section (and on a kiosk phone's Home, for «Standby» and «Exit»), and the section itself in the middle.
 //
 // ⚠️ BOTH NAVIGATIONS ARE ALWAYS IN THE DOM; CSS MEDIA QUERIES DECIDE WHICH ONE SHOWS. No
 // script measures the width or the height: a tablet turned from landscape to portrait, or a window resized,
@@ -43,18 +44,25 @@ export function AppShell() {
 
 function ShellFrame() {
   const { t } = useT();
+  const { user, locationId } = useSession();
+  // ⚠️ AN UNSAVED CAKE SET ASIDE FOR THE RECIPES BELONGS TO ONE PERSON IN ONE VENUE (cakes/cakeParking.ts): when either changes — or the shell
+  // goes away because the session left the ready state — the shelf is emptied. A sign-out or a venue switch does not always reload the page.
+  const uid = user?.uid ?? null;
+  useEffect(() => () => { clearParkedCakes(); }, [uid, locationId]);
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const contentRef = useRef<HTMLElement>(null);
   const { area, isOwned } = useScrollAreaState(contentRef);
   const lastPathname = useRef<string | null>(null);
-  // ⚠️ THE TOP BAR (venue, date, connection) IS THE HOME'S ONLY (Federico, 16 Nov 2026: «too many elements» on the lab tablet):
-  // every other screen gives its 60px to its own content, and says the connection only when it is lost, with the strip under
-  // its title (Page). The venue switch lives in the bar, so it stays reachable from the Home.
-  const topBar = sectionOf(pathname) === 'home';
+  // ⚠️ THE TOP BAR (venue, date, connection) IS ON EVERY SECTION from 700px (Federico, 21 Nov 2026: the bar everywhere). On 16 Nov
+  // it was the Home's only («too many elements» on the lab tablet); his later word wins, so the lab tablet loses 60px of height
+  // in every section again — his choice. The offline strip under a title (Page) is hidden from 700px for the same reason: the bar says it.
+  // On a phone the bar stays hidden, except on a kiosk device's Home (below).
+  const onHome = sectionOf(pathname) === 'home';
   // On a kiosk device the Home's bar also carries «Standby» and «Exit», so on a phone (where the bar is otherwise hidden) it shows too.
+  // Only the Home: the kiosk pills never appear on the other sections, and a kiosk phone shows no bar there.
   const kioskOn = useKioskSettings().enabled;
-  const kioskBar = topBar && kioskOn;
+  const kioskBar = onHome && kioskOn;
 
   // One scroll area serves every section, so without this a long Orders list scrolled to the
   // bottom would open Recipes halfway down.
@@ -82,11 +90,11 @@ function ShellFrame() {
     // Lets React Aria components that take an `href` navigate through the router instead of
     // reloading the page.
     <AriaRouterProvider navigate={to => navigate(to)} useHref={useHref}>
-      <div className={styles.shell} data-topbar={topBar ? 'on' : 'off'} data-kiosk={kioskBar ? 'on' : undefined}>
+      <div className={styles.shell} data-kiosk={kioskBar ? 'on' : undefined}>
         <SkipLink target={contentRef} />
         <Rail />
         <div className={styles.main}>
-          {topBar ? <TopBar kiosk={kioskBar} /> : null}
+          <TopBar kiosk={kioskBar} onHome={onHome} />
           <main id="main" ref={contentRef} tabIndex={-1} className={styles.content}>
             {/* ⚠️ The holiday reminder and refusal live HERE, not straight under the shell: each boundary is a <div>, and
                 a <div> under the shell's grid takes a cell — the rail and the screen sat low and jumped when the holiday
@@ -198,17 +206,17 @@ function RailLink({ section, spill }: { section: Section; spill: boolean }) {
   );
 }
 
-function TopBar({ kiosk }: { kiosk: boolean }) {
+function TopBar({ kiosk, onHome }: { kiosk: boolean; onHome: boolean }) {
   const { t, locale } = useT();
   const today = useToday(locale);
   const online = useOnline();
 
   return (
     <header className={styles.topbar}>
-      <Venue />
+      <Venue switchable={onHome} />
       <p className={styles.date}>{today}</p>
       <div className={styles.grow} />
-      {/* Home only and kiosk only; in its own part, so a failure there cannot break the bar. */}
+      {/* The Home's kiosk pills only; in its own part, so a failure there cannot break the bar. */}
       {kiosk ? <PartBoundary><KioskPills /></PartBoundary> : null}
       <p className={styles.sync} role="status">
         {/* The dot is decoration: the words carry the meaning, so colour is never the only signal. */}
@@ -219,9 +227,11 @@ function TopBar({ kiosk }: { kiosk: boolean }) {
   );
 }
 
-// The venue this person is working on, left of the date. With more than one venue it is a button
+// The venue this person is working on, left of the date. ⚠️ A SWITCH IS A HOME (AND SETTINGS) ACTION ONLY: it reloads the app, and an editor open
+// in another section would lose its unsaved edits without the router ever asking (the blocker never sees a reload). So off the Home it is the name alone.
+// On the Home, with more than one venue it is a button
 // that opens the list of the others; with one it is just its name.
-function Venue() {
+function Venue({ switchable }: { switchable: boolean }) {
   const { t } = useT();
   const { name, options } = useSession();
   // The first letter, by code point: a name that starts with an emoji or an accented capital
@@ -234,7 +244,7 @@ function Venue() {
     </>
   );
 
-  if (options.length < 2) return <p className={styles.venueStatic}>{label}</p>;
+  if (options.length < 2 || !switchable) return <p className={styles.venueStatic}>{label}</p>;
 
   return (
     <SwitchVenueButton variant="bare" className={styles.venue} aria-label={t('account.switchVenueChip', { name })}>

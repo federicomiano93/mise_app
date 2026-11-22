@@ -2,7 +2,7 @@ import { describe, expect, test } from 'vitest';
 import { normalizeProduct } from '@mise/shared/foodcost-model';
 import type { Product } from '@mise/shared/foodcost-model';
 import {
-  MAX_CATEGORY_NAME, cardCounts, categoryIdOf, categoryNameProblem, groupRows, isGroupOpen, nextRank, readCategories,
+  CAKES_GROUP_ID, MAX_CATEGORY_NAME, cardCounts, categoryIdOf, categoryNameProblem, groupRows, grouped, isGroupOpen, nextRank, readCategories,
 } from './categoriesModel';
 
 // The pure half of Food cost's categories (model 4, 20 Nov 2026): reading them, naming them, counting and grouping the cards.
@@ -71,5 +71,28 @@ describe('which groups are open', () => {
     expect(isGroupOpen('a', group, { userOpen: none, searching: false, openProductId: '1' })).toBe(true);
     expect(isGroupOpen('a', group, { userOpen: none, searching: false, openProductId: '9' })).toBe(false);
     expect(isGroupOpen('a', group, { userOpen: none, searching: true, openProductId: null })).toBe(true);
+  });
+});
+
+describe('the «Cakes» group', () => {
+  const cake = card('cake-c1', 'a');
+  const other = card('p1', 'a');
+  const loose = card('p2', null);
+
+  test('every cake card sits in it, whatever category it carries, after the categories and before «No category»', () => {
+    const groups = groupRows(rows(cake, other, loose), cats);
+    expect(groups.map(group => group.id)).toEqual(['a', CAKES_GROUP_ID, null]);
+    expect(groups[0]?.items.map(row => row.product.id)).toEqual(['p1']);
+    expect(groups[1]?.items.map(row => row.product.id)).toEqual(['cake-c1']);
+  });
+
+  test('a cake card is not counted in the category it carries', () => {
+    expect(cardCounts([cake, other], cats).get('a')).toBe(1);
+  });
+
+  test('the list is grouped only when the venue has a real category; a cake alone does not group it', () => {
+    expect(grouped([])).toBe(false);
+    expect(grouped(cats)).toBe(true);
+    expect(groupRows(rows(loose, cake), cats).map(group => group.id)).toEqual([CAKES_GROUP_ID, null]);
   });
 });

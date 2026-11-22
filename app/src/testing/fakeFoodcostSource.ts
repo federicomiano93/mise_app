@@ -1,4 +1,5 @@
 import { vi } from 'vitest';
+import type { Mock } from 'vitest';
 import { withPrices } from '@mise/shared/price-model';
 import type { FoodcostSource, ProductsMeta, RecipeLossPatch, StoredDoc } from '../foodcost/foodcostSource';
 
@@ -33,11 +34,14 @@ export type FakeFoodcostSource = FoodcostSource & {
   // The next calls of this kind fail.
   // `recipes`: the recipes' stream fails when it is opened.
   // `category`: a category's save or removal is refused.
-  refuse: { save: boolean; create: boolean; loss: boolean; remove: boolean; rate: boolean; history: boolean; products: boolean; recipes: boolean; publish?: boolean; category?: boolean };
+  // `newRecipe`: Cakes' recipe-with-its-card batch is refused (both documents or neither).
+  refuse: { save: boolean; create: boolean; loss: boolean; remove: boolean; rate: boolean; history: boolean; products: boolean; recipes: boolean; publish?: boolean; category?: boolean; newRecipe?: boolean };
   // Every write that reached the source, in order.
   // `companion` is the cake that travelled in the same batch (Cakes); the fake also keeps it in `cakes`.
-  saved: { kind: 'product' | 'create' | 'loss' | 'remove' | 'rate' | 'category' | 'category-remove'; id?: string; data?: unknown; snapshot?: unknown; companion?: unknown }[];
+  saved: { kind: 'product' | 'create' | 'new-recipe' | 'loss' | 'remove' | 'rate' | 'category' | 'category-remove'; id?: string; data?: unknown; snapshot?: unknown; companion?: unknown }[];
   cakes: Map<string, StoredDoc>;
+  // The recipe-with-its-card batch, as a mock (what it was called with).
+  createRecipeWithCard: Mock<FoodcostSource['createRecipeWithCard']>;
   // Tells every watcher again (as another phone's write would).
   push(): void;
   // Holds back the first answer of the products until release() (Firestore still loading).
@@ -86,7 +90,7 @@ export function fakeFoodcostSource(seed: {
   const categoryWatchers = new Set<ProductsListener>();
   const settingsWatchers = new Set<(data: Record<string, unknown> | null, meta: { readonly fromServer: boolean }) => void>();
   const priceListWatchers = new Set<(data: Record<string, unknown> | null, meta: { readonly fromServer: boolean }) => void>();
-  const refuse = { save: false, create: false, loss: false, remove: false, rate: false, history: false, products: false, recipes: false, publish: false, category: false };
+  const refuse = { save: false, create: false, loss: false, remove: false, rate: false, history: false, products: false, recipes: false, publish: false, category: false, newRecipe: false };
   const saved: FakeFoodcostSource['saved'] = [];
   let held = false;
   let ingredientsHeld = false;
@@ -230,6 +234,15 @@ export function fakeFoodcostSource(seed: {
       products.set(id, { ...data, id });
       fake.push();
       return true;
+    }),
+
+    // Both documents land together, or (refused) neither does; `saved` gets ONE entry holding both, as the batch is one write.
+    createRecipeWithCard: vi.fn<FoodcostSource['createRecipeWithCard']>(async (recipeId, recipe, productId, product) => {
+      if (refuse.newRecipe) throw refused();
+      saved.push({ kind: 'new-recipe', id: productId, data: { recipeId, recipe, product } });
+      recipes.set(recipeId, { ...recipe, id: recipeId });
+      products.set(productId, { ...product, id: productId });
+      fake.push();
     }),
 
     saveRecipeLoss: vi.fn<FoodcostSource['saveRecipeLoss']>(async (id: string, patch: RecipeLossPatch) => {

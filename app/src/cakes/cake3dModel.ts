@@ -21,8 +21,10 @@ export const BOARD_THICKNESS_CM = 0.5;
 export const SOAK_SHARE = 0.22;
 export const FILLING_SHARE = 0.3;
 export const FILLING_MIN_CM = 0.5;
-// How high the decoration stands on top of a tier.
-export const DECORATION_CM = 1.6;
+// The empty gap between two discs while the filling has no card, as a share of a disc.
+export const DISC_GAP_SHARE = 0.25;
+// How high the decoration stands on top of a tier: the tallest is a raspberry on a piped rosette (about 2.5 cm), so the home view frames it.
+export const DECORATION_CM = 2.6;
 // «Spaccato»: the wedge cut out, facing the camera, in radians (72 degrees).
 export const CUT_ANGLE = (72 * Math.PI) / 180;
 
@@ -44,6 +46,9 @@ export interface TierLayout {
   coatingCm: number;
   yTop: number;
   layers: LayerLayout[];
+  // Whether the part has a card. A base with none is still drawn (its discs, faint) so the person can count them while setting the
+  // measures; the other parts are not drawn without one.
+  hasBase: boolean;
   hasSoak: boolean;
   hasFilling: boolean;
   hasCoating: boolean;
@@ -66,8 +71,10 @@ function hasCards(tier: CakeGeometryTier, part: CakePart): boolean {
 }
 
 // The stack of one tier: discs from the bottom, the soak on top of each, a layer of filling between two discs (only when the filling
-// has a card, as the flat drawing does).
+// has a card, as the flat drawing does). Without one the discs stand apart by an empty gap, so a new cake shows how many discs it has
+// at a glance (his ask, 21 Nov 2026); the flat drawing does the same.
 export function tierLayout(tier: CakeGeometryTier, yBase: number): TierLayout {
+  const hasBase = hasCards(tier, 'base');
   const hasSoak = hasCards(tier, 'soak');
   const hasFilling = hasCards(tier, 'filling') && tier.discs > 1;
   const hasCoating = hasCards(tier, 'coating');
@@ -87,6 +94,8 @@ export function tierLayout(tier: CakeGeometryTier, yBase: number): TierLayout {
     if (hasFilling && disc < tier.discs - 1) {
       layers.push({ kind: 'filling', y0: y, h: fillingCm });
       y += fillingCm;
+    } else if (disc < tier.discs - 1) {
+      y += discCm * DISC_GAP_SHARE;
     }
   }
   const coatingCm = hasCoating ? COATING_CM : 0;
@@ -98,6 +107,7 @@ export function tierLayout(tier: CakeGeometryTier, yBase: number): TierLayout {
     coatingCm,
     yTop: yBase + y + coatingCm,
     layers,
+    hasBase,
     hasSoak,
     hasFilling,
     hasCoating,
@@ -127,6 +137,42 @@ export function cakeLayout(geometry: CakeGeometry): CakeLayout {
   };
 }
 
+// ── What a change of the cake makes appear ────────────────────────────────────
+
+export interface Appeared { tier: number; part: CakePart }
+
+// The order a cake is built in: the parts that appear together play in this order.
+const BUILD_ORDER: readonly CakePart[] = ['base', 'soak', 'filling', 'coating', 'decoration'];
+
+function hasPart(tier: TierLayout, part: CakePart): boolean {
+  switch (part) {
+    case 'base': return tier.hasBase;
+    case 'soak': return tier.hasSoak;
+    case 'filling': return tier.hasFilling;
+    case 'coating': return tier.hasCoating;
+    case 'decoration': return tier.hasDecoration;
+  }
+}
+
+const baseLayers = (tier: TierLayout): number => tier.layers.filter(layer => layer.kind === 'base').length;
+
+// What went from «no card» to «has a card» between the layout on show and the new one, per tier (bottom first), parts in the order a cake
+// is built. Nothing at all for a first build (`prev` null: opening a cake never plays), for a tier that did not exist, and for a tier whose
+// shape changed (another diameter or number of discs): that is a different cake, not a part being added. A part that goes away, or stays,
+// is not listed.
+export function appearedParts(prev: CakeLayout | null, next: CakeLayout): Appeared[] {
+  if (prev === null) return [];
+  const out: Appeared[] = [];
+  for (const tier of next.tiers) {
+    const before = prev.tiers[tier.index];
+    if (!before || before.radius !== tier.radius || baseLayers(before) !== baseLayers(tier)) continue;
+    for (const part of BUILD_ORDER) {
+      if (hasPart(tier, part) && !hasPart(before, part)) out.push({ tier: tier.index, part });
+    }
+  }
+  return out;
+}
+
 // ── Where a part is, for its label ───────────────────────────────────────────
 
 export interface Point3 { x: number; y: number; z: number }
@@ -150,7 +196,8 @@ export function partAnchors(tier: TierLayout, view: StageView): Partial<Record<C
   const side = (angle: number, y: number) => around(angle, skin + 0.05, y);
 
   const base = layerMid(tier, 'base', 'first');
-  if (base !== null) out.base = view === 'cut' ? inside(-half, 0.55, base) : side(-0.75, base);
+  // A base with no card is drawn (faint discs) but has nothing to name: no callout for it.
+  if (base !== null && tier.hasBase) out.base = view === 'cut' ? inside(-half, 0.55, base) : side(-0.75, base);
   const soak = layerMid(tier, 'soak', 'last');
   if (soak !== null) out.soak = view === 'cut' ? inside(half, 0.6, soak) : side(0.5, soak);
   const filling = layerMid(tier, 'filling', 'last');
@@ -245,6 +292,8 @@ export interface LabelBox {
   labelHeight: number;
   gap: number;
   margin: number;
+  // The strip kept free along the bottom, for the «raw materials so far» total: no label stands in it.
+  foot: number;
   // One column on each side, one on the right only (a narrow stage), or none: a stage under STACKED_UNDER px wide has no room for the cake beside
   // its labels, so the cake takes the whole width and the labels stand in a list under it, with no leader lines.
   columns: 0 | 1 | 2;
@@ -257,21 +306,22 @@ function permutations<T>(items: readonly T[]): T[][] {
   return items.flatMap((item, i) => permutations([...items.slice(0, i), ...items.slice(i + 1)]).map(rest => [item, ...rest]));
 }
 
-// Slot heights for `count` labels of one column: as close as can be to the anchors' own heights, in order, never closer than a label
-// plus its gap, and inside the stage.
+// The most the labels of one column are spread apart: further than this they would stand far from the cake they name.
+export const SLOT_SPREAD_PX = 110;
+
+// Slot heights for the labels of one column: EVENLY SPACED (one step between every two, as wide as the stage allows up to
+// SLOT_SPREAD_PX, never less than a label plus its gap when the stage has the room), centred on where the anchors are on average, and
+// kept inside the stage. The order is the ascending order of the anchors.
 export function slotHeights(wanted: readonly number[], box: LabelBox): number[] {
-  const step = box.labelHeight + box.gap;
+  const count = wanted.length;
+  if (count === 0) return [];
   const low = box.margin + box.labelHeight / 2;
-  const high = box.height - box.margin - box.labelHeight / 2;
-  const slots = [...wanted].sort((a, b) => a - b).map(y => Math.min(high, Math.max(low, y)));
-  // Push down from the top, then back up from the bottom: the stack keeps the labels' order and fits when it can.
-  for (let i = 1; i < slots.length; i += 1) slots[i] = Math.max(slots[i] as number, (slots[i - 1] as number) + step);
-  if (slots.length > 0) slots[slots.length - 1] = Math.min(slots[slots.length - 1] as number, high);
-  for (let i = slots.length - 2; i >= 0; i -= 1) slots[i] = Math.min(slots[i] as number, (slots[i + 1] as number) - step);
-  if (slots.length > 0 && (slots[0] as number) < low) {
-    slots.forEach((_, i) => { slots[i] = low + i * step; });
-  }
-  return slots;
+  const high = box.height - box.margin - box.foot - box.labelHeight / 2;
+  const room = Math.max(0, high - low);
+  const step = count > 1 ? Math.min(SLOT_SPREAD_PX, room / (count - 1)) : 0;
+  const middle = wanted.reduce((sum, y) => sum + y, 0) / count;
+  const first = Math.min(Math.max(middle - (step * (count - 1)) / 2, low), Math.max(low, high - step * (count - 1)));
+  return Array.from({ length: count }, (_, i) => first + step * i);
 }
 
 // ⚠️ NO TWO LEADER LINES CROSS. A label column is a vertical line of slots; pairing the anchors with the slots so the total length of
@@ -283,7 +333,7 @@ export function placeLabels(anchors: readonly Anchor[], box: LabelBox): PlacedLa
   const sides: Record<'left' | 'right', Anchor[]> = { left: [], right: [] };
   for (const anchor of anchors) sides[box.columns !== 2 || anchor.x >= box.width / 2 ? 'right' : 'left'].push(anchor);
   // A column that would hold more than the stage's height allows hands its extra to the other column.
-  const fits = Math.max(1, Math.floor((box.height - 2 * box.margin + box.gap) / (box.labelHeight + box.gap)));
+  const fits = Math.max(1, Math.floor((box.height - 2 * box.margin - box.foot + box.gap) / (box.labelHeight + box.gap)));
   if (box.columns === 2) {
     while (sides.left.length > fits || sides.right.length > fits) {
       const from = sides.left.length > fits ? 'left' : 'right';
@@ -343,7 +393,7 @@ export function labelBoxFor(width: number, height: number): LabelBox {
   const labelWidth = columns === 2
     ? Math.round(Math.min(210, Math.max(140, width * 0.24)))
     : Math.round(Math.min(150, Math.max(112, width * 0.38)));
-  return { width, height, labelWidth, labelHeight: columns === 2 ? 48 : 64, gap: 10, margin: 10, columns };
+  return { width, height, labelWidth, labelHeight: columns === 2 ? 48 : 52, gap: 10, margin: 10, foot: 44, columns };
 }
 
 // The share of the stage's width the cake may use: what the label columns leave.
@@ -357,20 +407,18 @@ export function cakeShare(box: LabelBox): { share: number; centre: number } {
 
 // ── Which drawing the stage shows ────────────────────────────────────────────
 
-export type StageChoice = '3d' | '2d';
 // Why the 3D cannot be drawn: no WebGL 2 on the device, the library did not arrive, or the drawing stopped working (a bug, or a graphics
 // context lost for good). The first two are EXPECTED and are reported by the 3D view itself (onUnavailable), never thrown.
 export type StageFailure = 'webgl' | 'load' | 'error';
 export type StageNote = StageFailure | 'motion';
 
-export interface StageDecision { show: StageChoice; note: StageNote | null }
+export interface StageDecision { show: '3d' | '2d'; note: StageNote | null }
 
-// The 3D view is the default; the simple drawing is shown, with a one-line note, when the 3D cannot be (no WebGL, the library did not
-// load) or when the device asks for less motion (then 3D is still one tap away). A choice made by the person wins over the motion
-// preference, never over a failure.
-export function stageDecision(opts: { choice: StageChoice | null; reducedMotion: boolean; failure: StageFailure | null }): StageDecision {
+// The 3D view is always the first choice; the simple section drawing is shown instead, with a one-line note, when the 3D cannot be
+// drawn (no WebGL, the library did not load, it stopped working) or when the device asks for less motion. There is no switch between
+// the two: the person cannot override either reason.
+export function stageDecision(opts: { reducedMotion: boolean; failure: StageFailure | null }): StageDecision {
   if (opts.failure !== null) return { show: '2d', note: opts.failure };
-  if (opts.choice !== null) return { show: opts.choice, note: null };
   return opts.reducedMotion ? { show: '2d', note: 'motion' } : { show: '3d', note: null };
 }
 
@@ -389,7 +437,8 @@ export function webglAvailable(doc: Document = document): boolean {
 
 // What the scene is built from, as one string: the same string means the same meshes. The layout holds only numbers that decide the
 // shape (diameters, discs, which parts have cards), never grams or names, so typing a weight or renaming a card does not rebuild the
-// scene (and does not make the labels dip). The view (cut-away or whole) is part of it.
-export function sceneSignature(layout: CakeLayout, view: StageView): string {
-  return `${view}|${JSON.stringify(layout)}`;
+// scene (and does not make the labels dip). The view (cut-away or whole) is part of it, and so is the LOOK the names of the cards give
+// (cakeLook.ts `looksKey`): another recipe that looks different repaints the cake, a rename that looks the same does not.
+export function sceneSignature(layout: CakeLayout, view: StageView, looks = ''): string {
+  return `${view}|${looks}|${JSON.stringify(layout)}`;
 }

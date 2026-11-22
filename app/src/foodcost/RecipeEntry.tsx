@@ -4,6 +4,7 @@ import { draftFromRecipe, productsUsingRecipe, sortByMargin } from '@mise/shared
 import { useT } from '../i18n/useT';
 import { SPLIT_QUERY } from '../ui/split';
 import { useMediaQuery } from '../ui/useMediaQuery';
+import { kindOf } from './categoriesModel';
 import { useFoodcost } from './FoodcostContext';
 import { useCopyWait } from './copyWait';
 import { FOODCOST_PATH, newForRecipePath, productPath, usingPath } from './foodcostPath';
@@ -51,7 +52,9 @@ export function RecipeEntry({ recipeId }: { recipeId: string }) {
       // ⚠️ Federico, 4 Nov 2026 (current app 35b1f3e0): «forse non mostra subito la scheda food cost». Beside the list the
       // pane was left empty («Choose a product»), so on the split the product the narrowed list ranks FIRST (the list sorts
       // with sortByMargin too) opens at once, the narrowed list still on the left to switch. A phone keeps the list alone.
-      const first = split ? sortByMargin(using, tables)[0]?.product : undefined;
+      // The list opens on «Finished products» when it has any, so the card beside it is the first FINISHED one, else the first semi-finished.
+      const ranked = split ? sortByMargin(using, tables) : [];
+      const first = (ranked.find(({ product }) => kindOf(product) === 'finished') ?? ranked[0])?.product;
       to = first === undefined ? usingPath(recipeId) : productPath(first.id, { recipe: null, using: recipeId });
     }
     else if (draftFromRecipe(recipes[recipeId]) !== null) to = newForRecipePath(recipeId);

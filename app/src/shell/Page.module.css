@@ -45,7 +45,7 @@
    (below): on a phone a sticky band of five buttons would take the rows' room (the trap in docs/architecture.md). */
 .band {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: var(--s2);
   border-bottom: 0;
@@ -53,6 +53,29 @@
 
 .band .title {
   margin-right: var(--s2);
+}
+
+/* One gear beside the title (every band but Orders'): the title may shrink and wrap on itself, the gear never leaves its side
+   (measured 22 Nov 2026: «Ingredienti e fornitori» at 296px pushed it to a line of its own). */
+.band:not(.bandWraps) .title {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+
+.band:not(.bandWraps) > :not(.title) {
+  flex: none;
+}
+
+/* ⚠️ THE GEAR KEEPS ITS 48px TOUCH HEIGHT WITHOUT GROWING THE BAR on a phone (as .action > button does): the negative block margin reaches into the
+   head's own padding, so a page with the gear is as tall as one without (measured 22 Nov 2026: 20px taller). NOT for Orders' wrapping band: its
+   second line would then overlap the first. From 700px the band has its own padding and height, and the margin goes. */
+.band:not(.bandWraps) > :not(.title) {
+  margin-block: calc(-1 * var(--s3));
+}
+
+.bandWraps {
+  flex-wrap: wrap;
 }
 
 .title {
@@ -89,20 +112,29 @@
     background: var(--surface);
   }
 
+  .band:not(.bandWraps) > :not(.title) {
+    margin-block: 0;
+  }
+
   .body {
     padding: 0 calc(var(--s8) + env(safe-area-inset-right)) var(--s8) var(--s8);
   }
 }
 
-/* ⚠️ THE BAND STICKS ONLY ON THE SPLIT, and only because nothing between it and the scroll area (the shell's main) clips. */
+/* ⚠️ A BAND IS ONE LINE HIGH on the split; it STICKS only where the section asks (`.stickyBand`: Orders), and only because nothing
+   between it and the scroll area (the shell's main) clips. The other sections' panes stick at the top of the scroll area, so a band
+   that stuck would cover their first 56px. */
 @media (min-width: 1000px) {
-  /* ONE line high and exactly --band-h tall: the parts that stick under it (Orders' search box and pane) read that token. */
+  /* Exactly --band-h tall: the parts that stick under it (Orders' search box and pane) read that token. */
   .band {
-    position: sticky;
-    top: 0;
-    z-index: 5;
     flex-wrap: nowrap;
     height: var(--band-h);
     padding-block: 0;
+  }
+
+  .stickyBand {
+    position: sticky;
+    top: 0;
+    z-index: 5;
   }
 }

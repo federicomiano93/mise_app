@@ -1,10 +1,8 @@
-/* The frame of Cakes. Below 1280px (a phone, the lab tablet held sideways at 1024, a tablet held upright): ONE LEVEL AT A TIME, the
-   list is the screen and a cake, a new cake or the reference grams replaces it. From 1280px: the list on the left (`--list-w`) and
-   the chosen screen on the right, with a prompt while nothing is chosen. 1280, not Food cost's 1000: a cake's editor has two columns
-   of its own and needs the room (cakesSplit.ts, pinned by cakesSplit.spec.ts).
+/* The frame of Cakes: ONE LEVEL AT A TIME at every width (his call, 21 Nov 2026). The list is the screen, and a cake, a new cake or the
+   settings replace it over the whole page; Back returns to the list.
 
-   ⚠️ NOTHING IN THE CHAIN FROM THE SCROLL AREA DOWN TO THE LIST CLIPS (no `overflow` on .layout or .list). Below the split .detail
-   does not clip either (the form bar sticks to the top of the screen); on the split it is its own scroll area, on purpose. */
+   ⚠️ NOTHING IN THE CHAIN FROM THE SCROLL AREA DOWN TO THE LIST CLIPS (no `overflow` on .layout, .list or .detail): the form bar sticks to
+   the top of the screen. */
 
 .layout {
   display: grid;
@@ -16,32 +14,12 @@
   min-width: 0;
 }
 
-/* One pane at a time: with the list on screen the right-hand side (only a prompt) is not drawn, and with anything open the list is
-   not drawn behind it. The list stays mounted, so the place in it is still there when Back returns to it. */
-@media (max-width: 1279.98px) {
-  .layout[data-view="list"] .detail {
-    display: none;
-  }
-
-  .layout[data-view="detail"] .list {
-    display: none;
-  }
+/* One pane at a time: with the list on screen the other side is not drawn, and with anything open the list is not drawn behind it. The
+   list stays mounted, so the place in it is still there when Back returns to it. */
+.layout[data-view="list"] .detail {
+  display: none;
 }
 
-@media (min-width: 1280px) {
-  .layout {
-    grid-template-columns: var(--list-w) minmax(0, 1fr);
-    gap: var(--s6);
-    align-items: start;
-  }
-
-  /* ⚠️ THE RIGHT-HAND SIDE STAYS ON SCREEN WHILE THE LIST SCROLLS (as in Food cost): stuck to the top of the scroll area it is always
-     in view, and never taller than it, so it scrolls on its own. NO `overscroll-behavior: contain`: a scroll that reaches the pane's
-     end goes on to the page. */
-  .detail {
-    position: sticky;
-    top: var(--s4);
-    max-height: calc(var(--vh100) - var(--topbar-h) - 2 * var(--s4));
-    overflow-y: auto;
-  }
+.layout[data-view="detail"] .list {
+  display: none;
 }

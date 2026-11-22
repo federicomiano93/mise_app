@@ -532,6 +532,8 @@ function OrdersLayout({ view }: { view: ShownView }) {
       <Page
         title={t('section.orders')}
         // The title band (the redesign of 16 Nov 2026, item 3): white, sticky on the split, the tools after the title.
+        stickyBand
+        bandWraps
         band={<OrdersBand onSettings={openSettings} onHistory={openHistory} onLists={openLists} onSend={openSend} showSend={showSend} />}
       >
         <StatusLine />

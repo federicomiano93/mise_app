@@ -102,6 +102,27 @@ describe('the Food cost source, as firestore.rules expect it', () => {
     expect(batch!.sets[1]![1]).toEqual({ name: 'Sacher', model: 1, bakery: 'panificio-miano' });
   });
 
+  // Cakes' «+ New recipe» (22 Nov 2026).
+  test('⚠️ a recipe and its card are created in ONE batch, both stamped for the venue, at their own paths', async () => {
+    const { kit, fs, batches } = fakeKit();
+    const source = createFirestoreFoodcostSource(() => Promise.resolve(kit), 'panificio-miano');
+    await source.createRecipeWithCard('r1', { name: 'Crema', ingredients: [] }, 'recipe-r1', { name: 'Crema', model: 4, kind: 'semi' });
+    expect(fs.writeBatch).toHaveBeenCalledTimes(1);
+    expect(fs.setDoc).not.toHaveBeenCalled();
+    expect(batches[0]!.committed).toBe(true);
+    expect(batches[0]!.sets.map(([ref]) => ref.path)).toEqual(['locations/panificio-miano/recipes/r1', 'locations/panificio-miano/products/recipe-r1']);
+    expect(batches[0]!.sets[0]![1]).toEqual({ name: 'Crema', ingredients: [], bakery: 'panificio-miano' });
+    expect(batches[0]!.sets[1]![1]).toEqual({ name: 'Crema', model: 4, kind: 'semi', bakery: 'panificio-miano' });
+  });
+
+  test('⚠️ an id that could name another path writes nothing of the recipe-with-its-card batch', async () => {
+    const { kit, batches } = fakeKit();
+    const source = createFirestoreFoodcostSource(() => Promise.resolve(kit), 'bakery');
+    await expect(source.createRecipeWithCard('a/b', { name: 'x' }, 'recipe-a', { name: 'x' })).rejects.toThrow('Not a document id');
+    await expect(source.createRecipeWithCard('r1', { name: 'x' }, '', { name: 'x' })).rejects.toThrow('Not a document id');
+    expect(batches.every(batch => !batch.committed)).toBe(true);
+  });
+
   test('without a companion the batch holds exactly what it held before', async () => {
     const { kit, batches } = fakeKit();
     const source = createFirestoreFoodcostSource(() => Promise.resolve(kit), 'bakery');

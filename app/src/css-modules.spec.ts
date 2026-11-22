@@ -20,9 +20,14 @@ function classesIn(css: string): Set<string> {
   return new Set([...withoutComments.matchAll(/\.(-?[_a-zA-Z][\w-]*)/g)].map(m => m[1] ?? ''));
 }
 
+// The module a component imports, as a key of the glob above: `./orders/X.tsx` + `../shell/Y.module.css` → `./shell/Y.module.css`.
 function resolve(from: string, relative: string): string {
-  const dir = from.slice(0, from.lastIndexOf('/'));
-  return `${dir}/${relative.replace(/^\.\//, '')}`;
+  const parts = from.split('/').slice(0, -1);
+  for (const part of relative.split('/')) {
+    if (part === '..') parts.pop();
+    else if (part !== '.') parts.push(part);
+  }
+  return parts.join('/');
 }
 
 describe('CSS modules', () => {

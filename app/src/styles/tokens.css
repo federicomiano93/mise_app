@@ -54,6 +54,10 @@
   --cake-coating: #fffbf2;
   --cake-decoration: #e0574b;
   --cake-board: #ffffff;
+  /* The 3D stage's backdrop, a radial grey-blue (his choice, 21 Nov 2026): lighter behind the cake, darker at the edges. Only the cake and
+     its soft shadow stand on it; every label and the raw-materials total sit on their own --surface boxes. */
+  --cake-stage-center: #c9d1d9;
+  --cake-stage-edge: #6f7c8a;
 
   /* The kiosk's rest screen (kiosk/RestScreen.tsx, staff slice 5), the current app's two values: grey text on pure black, the
      one black screen of the app. #8c8c8c on #000 is 6.3:1, above the 4.5:1 small text needs, and dim enough not to light up a

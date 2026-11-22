@@ -97,6 +97,15 @@ export interface FoodcostSource {
   // product is there. Resolves true when created and false when it already existed (nothing written); rejects when the server
   // cannot be reached (offline: it FAILS, it does not queue) or when the write is refused. No margin point: nothing is priced yet.
   createProductIfAbsent(id: string, data: Readonly<Record<string, unknown>>): Promise<boolean>;
+  // Cakes' «+ New recipe» (22 Nov 2026): a recipe with only its name AND its semi-finished card, in ONE batch, both stamped for the
+  // venue and both ids checked. Both are created or neither is; offline it queues like any local-first write and settles when the
+  // server answers, and it rejects when either document is refused.
+  createRecipeWithCard(
+    recipeId: string,
+    recipe: Readonly<Record<string, unknown>>,
+    productId: string,
+    product: Readonly<Record<string, unknown>>,
+  ): Promise<void>;
   // The oven loss onto a recipe: three fields, never the whole recipe.
   saveRecipeLoss(id: string, patch: RecipeLossPatch): Promise<void>;
   // A product's document. With a cake companion the cake goes in the SAME batch: product and cake leave together or not at all
@@ -325,6 +334,18 @@ export function createFirestoreFoodcostSource(
       batch.set(ref, withBakery(data));
       if (companion && cakeRef) batch.set(cakeRef, withBakery(companion.data));
       if (snapshot) batch.set(fs.doc(fs.collection(db, productsPath, id, SNAPSHOTS)), withBakery(snapshot));
+      await batch.commit();
+    },
+
+    // ⚠️ ONE BATCH, TWO CREATES (set, whole): the recipe the catalogue would save for a name alone, and the card that stands for it. A
+    // card without its recipe would be a card with nothing behind it, and a recipe without its card would be one the cake cannot use.
+    async createRecipeWithCard(recipeId, recipe, productId, product) {
+      const { fs, db } = await firestore();
+      const recipeRef: DocumentReference = fs.doc(db, recipesPath, checkId(recipeId));
+      const productRef: DocumentReference = fs.doc(db, productsPath, checkId(productId));
+      const batch = fs.writeBatch(db);
+      batch.set(recipeRef, withBakery(recipe));
+      batch.set(productRef, withBakery(product));
       await batch.commit();
     },
 

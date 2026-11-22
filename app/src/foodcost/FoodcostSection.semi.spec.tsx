@@ -46,21 +46,28 @@ async function listed(products: ReturnType<typeof product>[], categories = CATEG
 }
 
 describe('the list in groups', () => {
-  it('draws one header per category and «No category» last, every group CLOSED to begin with, each with its number of cards', async () => {
-    await listed([GANACHE, ICING, CAKE, PLAIN]);
+  it('draws one header per category and «No category» last, every group CLOSED to begin with, each with its number of cards — the chosen kind only', async () => {
+    const { user } = await listed([GANACHE, ICING, CAKE, PLAIN]);
+    // «Finished products» is the tab it starts on: the semi-finished group is not drawn there.
+    const cakes = await screen.findByRole('button', { name: /^Cakes/ }, LOAD);
+    expect(cakes).toHaveAttribute('aria-expanded', 'false');
+    expect(cakes).toHaveTextContent('1 card');
+    expect(group(/^No category/)).toHaveTextContent('1 card');
+    expect(screen.queryByRole('button', { name: /^Semis/ })).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /(Semis|Cakes|No category)/ }).map(b => b.textContent?.replace(/\d.*$/, ''))).toEqual(['Cakes', 'No category']);
+    // Closed: no card is drawn.
+    expect(screen.queryByRole('button', { name: /^Plain/ })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('tab', { name: 'Semi-finished' }));
     const semis = await screen.findByRole('button', { name: /^Semis/ }, LOAD);
     expect(semis).toHaveAttribute('aria-expanded', 'false');
     expect(semis).toHaveTextContent('2 cards');
-    expect(group(/^Cakes/)).toHaveTextContent('1 card');
-    expect(group(/^No category/)).toHaveTextContent('1 card');
-    expect(screen.getAllByRole('button', { name: /(Semis|Cakes|No category)/ }).map(b => b.textContent?.replace(/\d.*$/, ''))).toEqual(['Semis', 'Cakes', 'No category']);
-    // Closed: no card is drawn.
+    expect(screen.queryByRole('button', { name: /^Cakes/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^Ganache/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /^Plain/ })).not.toBeInTheDocument();
   });
 
   it('a tap opens a group and a second tap closes it; a semi-finished card says its cost per kilo and what it is made of', async () => {
     const { user } = await listed([GANACHE, CAKE]);
+    await user.click(await screen.findByRole('tab', { name: 'Semi-finished' }, LOAD));
     await user.click(await screen.findByRole('button', { name: /^Semis/ }, LOAD));
     expect(group(/^Semis/)).toHaveAttribute('aria-expanded', 'true');
     const row = screen.getByRole('button', { name: /^Ganache/ });
@@ -81,6 +88,7 @@ describe('the list in groups', () => {
 
   it('a search shows the matching cards with their groups open, and clearing it returns to the closed groups', async () => {
     const { user } = await listed([GANACHE, ICING, CAKE]);
+    await user.click(await screen.findByRole('tab', { name: 'Semi-finished' }, LOAD));
     await screen.findByRole('button', { name: /^Semis/ }, LOAD);
     await user.type(screen.getByRole('searchbox', { name: 'Search products' }), 'ganac');
     expect(group(/^Semis/)).toHaveAttribute('aria-expanded', 'true');
@@ -95,7 +103,8 @@ describe('the list in groups', () => {
     split();
     await listed([GANACHE, CAKE], CATEGORIES, '/food-cost/product/Cake');
     expect(await screen.findByRole('button', { name: /^Cakes/ }, LOAD)).toHaveAttribute('aria-expanded', 'true');
-    expect(group(/^Semis/)).toHaveAttribute('aria-expanded', 'false');
+    // The semi-finished group belongs to the other tab, which the finished card does not open.
+    expect(screen.queryByRole('button', { name: /^Semis/ })).not.toBeInTheDocument();
   });
 
   it('a venue with no category at all gets the plain list, with no «No category» header', async () => {

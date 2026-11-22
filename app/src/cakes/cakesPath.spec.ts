@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CAKES_PATH, cakePath, cakesScreenName, newCakePath, parseCakesPath, referencePath } from './cakesPath';
+import { CAKES_PATH, cakePath, cakesScreenName, newCakePath, parseCakesPath, referencePath, startOf } from './cakesPath';
 
 describe('the addresses of Cakes', () => {
   it('builds them', () => {
@@ -32,5 +32,11 @@ describe('the addresses of Cakes', () => {
     expect(cakesScreenName('/reference')).toBe('cakes-reference');
     expect(cakesScreenName('/a/b')).toBe('cakes');
     expect(cakesScreenName('/%E0%A4%A')).toBe('cakes');
+  });
+
+  it('reads how a new cake starts from the navigation state, «standard» when it says nothing', () => {
+    expect(startOf({ cakeStart: 'zero' })).toBe('zero');
+    expect(startOf({ cakeStart: 'standard' })).toBe('standard');
+    for (const state of [null, undefined, {}, 'zero', 7, { cakeStart: 'other' }]) expect(startOf(state)).toBe('standard');
   });
 });

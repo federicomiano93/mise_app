@@ -1,10 +1,11 @@
-import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { Navigate, useLocation, useNavigate, useNavigationType } from 'react-router';
 import { allergensOn } from '@mise/shared/venue-features';
 import { PartBoundary } from '../errors/PartBoundary';
 import { useT } from '../i18n/useT';
 import { useSession } from '../session/SessionContext';
 import { KEEP_FOCUS, Page } from '../shell/Page';
+import { SettingsGear } from '../shell/SettingsGear';
 import { useOwnScrollArea } from '../shell/scrollArea';
 import { SPLIT_QUERY } from '../ui/split';
 import { StatusMessageProvider, useStatusMessage } from '../ui/StatusMessage';
@@ -98,10 +99,12 @@ function RecipesScreen() {
 
 function RecipesLayout({ view }: { view: ShownView }) {
   const { t } = useT();
+  const { canManage } = useSession();
   const navigate = useNavigate();
   const { pathname, state } = useLocation();
   const split = useMediaQuery(SPLIT_QUERY);
   const handBack = useHandBackState();
+  const gearNode = useCallback((node: HTMLButtonElement | null) => { handBack.register(SETTINGS_OPENER, node); }, [handBack]);
   // The recipes this phone's own screens are deleting (recipeDeletions.ts).
   const deletions = useMemo(createRecipeDeletions, []);
 
@@ -303,7 +306,13 @@ function RecipesLayout({ view }: { view: ShownView }) {
     <HandBackProvider value={handBack}>
       <RecipeReturnProvider value={recipeReturn}>
       <RecipeDeletionsProvider value={deletions}>
-      <Page title={t('section.recipes')}>
+      <Page
+        title={t('section.recipes')}
+      // ⚠️ THE GEAR EXISTS ONLY FOR WHOEVER RUNS THE PLACE (owner or manager): a screen of switches that an employee could not save would be
+      // worse than no screen. The address is checked again by the section, and the rules are the real guard. `null` keeps the title row
+      // one white band either way.
+      band={canManage && (split || view.kind === 'list') ? <SettingsGear ref={gearNode} aria-current={view.kind === 'settings' ? 'true' : undefined} onPress={openSettings} /> : null}
+      >
         {/* A mix left unfinished is offered back once per opening, when the list is what is on screen. */}
         {view.kind === 'list' ? <ResumeOffer /> : null}
         <div className={styles.layout} data-view={view.kind === 'list' ? 'list' : view.kind === 'mix' ? 'run' : 'detail'}>
@@ -315,8 +324,6 @@ function RecipesLayout({ view }: { view: ShownView }) {
                 onOpenRecipe={openRecipe}
                 sheetOpen={view.kind === 'allergens'}
                 onOpenSheet={openSheet}
-                settingsOpen={view.kind === 'settings'}
-                onOpenSettings={openSettings}
                 haccpOpen={view.kind === 'haccp'}
                 onOpenHaccp={openHaccp}
                 ingredientsOpen={view.kind === 'ingredients'}

@@ -71,10 +71,24 @@ describe('a cake\'s own card', () => {
 });
 
 describe('the list', () => {
-  it('tags a cake\'s row «Cake», and no other row', async () => {
+  it('with no category the list stays flat: both rows are there at once, only the cake\'s is tagged «Cake»', async () => {
     renderFoodcost('/food-cost', { source: sourceWith([CAKE_CARD, product('Green')]) });
     const cakeRow = await screen.findByRole('button', { name: /Sacher/ }, LOAD);
     expect(within(cakeRow).getByText('Cake')).toBeInTheDocument();
     expect(within(screen.getByRole('button', { name: /Green/ })).queryByText('Cake')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Cakes/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^No category/ })).not.toBeInTheDocument();
+  });
+
+  it('with a real category the cake sits in the «Cakes» group, which has to be opened', async () => {
+    const source = sourceWith([CAKE_CARD, product('Green')], { categories: [{ id: 'bread', name: 'Bread', rank: 1 }] });
+    const { user } = renderFoodcost('/food-cost', { source });
+    // The groups start closed: «Cakes» holds the cake, «No category» the other card.
+    const cakes = await screen.findByRole('button', { name: /^Cakes/ }, LOAD);
+    expect(screen.getByRole('button', { name: /^No category/ })).toBeInTheDocument();
+    expect(cakes).toHaveAttribute('aria-expanded', 'false');
+    await user.click(cakes);
+    const cakeRow = await screen.findByRole('button', { name: /Sacher/ }, LOAD);
+    expect(within(cakeRow).getByText('Cake')).toBeInTheDocument();
   });
 });

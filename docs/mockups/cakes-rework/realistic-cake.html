@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Torta realistica</title>
+<style>
+  :root { --ink:#1b1917; --ink2:#5d5850; --line:#e2dfd8; --line2:#c9c5bd; --accent:#2a5bc8; --tint:#e6eefc; --page:#f6f5f1; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:"Segoe UI",system-ui,sans-serif; background:var(--page); color:var(--ink); }
+  .bar { display:flex; align-items:center; gap:12px; padding:14px 24px; background:#fff; border-bottom:1px solid var(--line); }
+  .bar h1 { font-size:20px; margin:0; flex:1; }
+  .note { font-size:13px; color:var(--ink2); }
+  .controls { display:flex; flex-wrap:wrap; gap:16px; padding:16px 24px 0; }
+  .group { display:flex; gap:6px; flex-wrap:wrap; }
+  .group button { font:inherit; font-size:14px; font-weight:600; min-height:42px; padding:0 14px; border-radius:999px; border:1px solid var(--line2); background:#fff; cursor:pointer; }
+  .group button[aria-pressed="true"] { background:var(--tint); border-color:var(--accent); color:#16357a; }
+  .panes { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.35fr); gap:16px; padding:16px 24px; }
+  .pane { margin:0; background:#fff; border:1px solid var(--line); border-radius:14px; padding:12px; }
+  .pane figcaption { font-weight:650; margin:2px 4px 10px; }
+  .pane figcaption small { font-weight:400; color:var(--ink2); margin-left:6px; }
+  .stage { height:560px; border-radius:10px; overflow:hidden; background:#e9e6e1; touch-action:none; }
+  .stage canvas { display:block; width:100%; height:100%; }
+  .recipe { margin:0 24px 24px; font-size:14px; color:var(--ink2); }
+  .recipe b { color:var(--ink); }
+  @media (max-width: 1000px) { .panes { grid-template-columns:1fr; } .stage { height:420px; } }
+</style>
+</head>
+<body>
+<div class="bar"><h1>Torta più realistica · anteprima</h1><span class="note">Trascina per girare la torta, rotella per avvicinarti. Niente si salva.</span></div>
+<div class="controls">
+  <div class="group" role="group" aria-label="Torta di esempio">
+    <button data-p="classica" aria-pressed="true">Classica · panna e frutti di bosco</button>
+    <button data-p="cioccolato" aria-pressed="false">Cioccolato · glassa a specchio</button>
+    <button data-p="pistacchio" aria-pressed="false">Pistacchio · granella</button>
+  </div>
+  <div class="group" role="group" aria-label="Vista">
+    <button data-v="whole" aria-pressed="true">Intera</button>
+    <button data-v="cut" aria-pressed="false">Tagliata</button>
+  </div>
+  <div class="group" role="group" aria-label="Sfondo">
+    <button data-b="slate" aria-pressed="true">Sfondo grigio-blu</button>
+    <button data-b="dark" aria-pressed="false">Sfondo scuro</button>
+    <button data-b="light" aria-pressed="false">Sfondo chiaro (oggi)</button>
+  </div>
+</div>
+<div class="panes">
+  <figure class="pane"><figcaption>Com'è oggi<small>colori fissi per parte</small></figcaption><div class="stage" id="s1"></div></figure>
+  <figure class="pane"><figcaption>Più realistica<small>colori e decorazioni dal nome delle ricette</small></figcaption><div class="stage" id="s2"></div></figure>
+</div>
+<p class="recipe" id="recipe"></p>
+
+<script type="importmap">{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.187.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.187.0/examples/jsm/"
+} }</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+
+// Fake example cakes: what the app would read from the recipe names.
+const PRESETS = {
+  classica: { text: 'Pan di Spagna · Bagna al rum · Crema pasticcera · Panna montata · Frutti di bosco',
+    sponge: '#ecca8a', soak: 'rgba(150,85,25,0.38)', fill: '#f3da82', fillRough: 0.55, specks: true,
+    coat: '#f6eedd', glaze: false, deco: 'berries', rosettes: 10 },
+  cioccolato: { text: 'Pan di Spagna al cacao · Bagna al caffè · Ganache · Glassa a specchio al cioccolato · Riccioli di cioccolato',
+    sponge: '#7a4c30', soak: 'rgba(35,15,5,0.4)', fill: '#2c140b', fillRough: 0.3, specks: false,
+    coat: '#3a1d12', glaze: true, deco: 'curls', rosettes: 0 },
+  pistacchio: { text: 'Pan di Spagna · Bagna analcolica · Crema al pistacchio · Crema al burro · Granella di pistacchio',
+    sponge: '#ecca8a', soak: 'rgba(160,105,35,0.28)', fill: '#b6c277', fillRough: 0.6, specks: false,
+    coat: '#d3dea4', glaze: false, deco: 'grains', rosettes: 8 },
+};
+const R = 10, DISC = 2.4, FILL = 0.9, N = 3, C = 0.45, H = N * DISC + (N - 1) * FILL, RC = R + C;
+const KEEP_START = Math.PI / 4, KEEP_LEN = Math.PI * 1.5; // the part kept when cut: the missing slice faces the camera
+const PLATE = 0.45;
+
+// A repeatable random, so the same cake looks the same every time.
+function rng(seed) { return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+const inSlice = (x, z) => { const a = Math.atan2(x, z); return a > -Math.PI / 4 - 0.08 && a < Math.PI / 4 + 0.08; };
+
+// ── Textures painted on a canvas (no image files) ──
+function canvasTex(w, h, paint, rep = [1, 1]) {
+  const c = document.createElement('canvas'); c.width = w; c.height = h; paint(c.getContext('2d'), w, h);
+  const map = new THREE.CanvasTexture(c); map.colorSpace = THREE.SRGBColorSpace; map.wrapS = map.wrapT = THREE.RepeatWrapping; map.repeat.set(...rep); map.anisotropy = 8;
+  const bump = new THREE.CanvasTexture(c); bump.wrapS = bump.wrapT = THREE.RepeatWrapping; bump.repeat.set(...rep);
+  return { map, bump };
+}
+function sponge(base, soak, seed) {
+  return (g, w, h) => {
+    const r = rng(seed); g.fillStyle = base; g.fillRect(0, 0, w, h);
+    for (let i = 0; i < 2600; i++) { g.fillStyle = `rgba(0,0,0,${0.1 + r() * 0.16})`; g.beginPath(); g.ellipse(r() * w, r() * h, 0.8 + r() * 3.2, 0.6 + r() * 2.2, r() * 3, 0, 7); g.fill(); }
+    for (let i = 0; i < 1400; i++) { g.fillStyle = `rgba(255,250,235,${0.08 + r() * 0.12})`; g.beginPath(); g.arc(r() * w, r() * h, 0.6 + r() * 1.8, 0, 7); g.fill(); }
+    if (soak) { const gr = g.createLinearGradient(0, 0, 0, h * 0.45); gr.addColorStop(0, soak); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(0, 0, w, h * 0.45); }
+  };
+}
+function cream(base, seed, specks, strokes) {
+  return (g, w, h) => {
+    const r = rng(seed); g.fillStyle = base; g.fillRect(0, 0, w, h);
+    for (let i = 0; i < 5000; i++) { g.fillStyle = r() < 0.5 ? `rgba(0,0,0,${r() * 0.05})` : `rgba(255,255,255,${r() * 0.07})`; g.beginPath(); g.arc(r() * w, r() * h, 1 + r() * 5, 0, 7); g.fill(); }
+    if (strokes) for (let i = 0; i < 70; i++) { // spatula strokes
+      const y = r() * h, len = 80 + r() * 260, x = r() * w; g.strokeStyle = r() < 0.5 ? `rgba(0,0,0,${0.012 + r() * 0.022})` : `rgba(255,255,255,${0.05 + r() * 0.08})`; g.lineWidth = 2 + r() * 6;
+      g.beginPath(); g.moveTo(x, y); g.bezierCurveTo(x + len / 3, y + (r() - 0.5) * 14, x + 2 * len / 3, y + (r() - 0.5) * 14, x + len, y + (r() - 0.5) * 8); g.stroke();
+    }
+    if (specks) for (let i = 0; i < 180; i++) { g.fillStyle = 'rgba(40,25,15,0.55)'; g.beginPath(); g.arc(r() * w, r() * h, 0.5 + r() * 0.9, 0, 7); g.fill(); } // vanilla
+  };
+}
+const texCache = new Map();
+function texturesFor(key) {
+  if (texCache.has(key)) return texCache.get(key);
+  const p = PRESETS[key];
+  const t = {
+    face: canvasTex(512, 128, sponge(p.sponge, p.soak, 7)),
+    side: canvasTex(512, 128, sponge(p.sponge, null, 11), [6, 1]),
+    fill: canvasTex(512, 64, cream(p.fill, 3, p.specks)),
+    coat: canvasTex(512, 512, cream(p.coat, 5, false, true), [3, 2]),
+  };
+  texCache.set(key, t); return t;
+}
+
+// ── One stage: renderer, light, camera you can turn ──
+function makeStage(el) {
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(2, devicePixelRatio));
+  renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 0.92;
+  el.appendChild(renderer.domElement);
+  const scene = new THREE.Scene(); scene.background = new THREE.Color(0xe9e6e1); scene.environmentIntensity = 0.5;
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  const camera = new THREE.PerspectiveCamera(30, 1, 1, 400); camera.position.set(0, 23, 47);
+  const controls = new OrbitControls(camera, renderer.domElement);
+  controls.target.set(0, 4.8, 0); controls.enableDamping = true; controls.enablePan = false;
+  controls.autoRotate = true; controls.autoRotateSpeed = 0.6; controls.minDistance = 22; controls.maxDistance = 90; controls.maxPolarAngle = 1.42;
+  controls.addEventListener('start', () => { controls.autoRotate = false; });
+  const sun = new THREE.DirectionalLight(0xfff6ea, 1.9); sun.position.set(20, 32, 18); sun.castShadow = true;
+  sun.shadow.mapSize.set(2048, 2048); Object.assign(sun.shadow.camera, { left: -22, right: 22, top: 22, bottom: -22, near: 1, far: 120 });
+  sun.shadow.radius = 5; sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.02;
+  scene.add(sun, new THREE.HemisphereLight(0xffffff, 0xcdc6ba, 0.45));
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(300, 300), new THREE.ShadowMaterial({ opacity: 0.28 }));
+  ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
+  const cake = new THREE.Group(); scene.add(cake);
+  const resize = () => { const w = el.clientWidth, h = el.clientHeight; if (!w) return; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); };
+  addEventListener('resize', resize); resize();
+  return { renderer, scene, camera, controls, cake, pmrem, ground, el };
+}
+
+// Backdrops: a soft radial gradient (lighter behind the cake, darker at the edges), painted on a canvas.
+const BACKDROPS = { slate: ['#c9d1d9', '#6f7c8a', 0.32], dark: ['#5a524c', '#221e1b', 0.45], light: ['#ece9e4', '#e2ded7', 0.2] };
+function backdrop(stage, key) {
+  const [inner, outer, shadow] = BACKDROPS[key];
+  const c = document.createElement('canvas'); c.width = 512; c.height = 512; const g = c.getContext('2d');
+  const gr = g.createRadialGradient(256, 230, 30, 256, 256, 380); gr.addColorStop(0, inner); gr.addColorStop(1, outer);
+  g.fillStyle = gr; g.fillRect(0, 0, 512, 512);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  stage.scene.background = t; stage.ground.material.opacity = shadow; stage.el.style.background = outer;
+}
+
+// A layer of the cake; when cut, the missing slice gets its two cut faces.
+function layer(group, r, h, y, sideMat, faceMat, cut) {
+  const geo = cut ? new THREE.CylinderGeometry(r, r, h, 128, 1, false, KEEP_START, KEEP_LEN) : new THREE.CylinderGeometry(r, r, h, 128);
+  const m = new THREE.Mesh(geo, [sideMat, faceMat, faceMat]); m.position.y = y + h / 2; m.castShadow = m.receiveShadow = true; group.add(m);
+  if (cut) for (const th of [KEEP_START, KEEP_START + KEEP_LEN]) cutFace(group, r, h, r / 2, y + h / 2, th, faceMat);
+}
+function cutFace(group, w, h, along, y, th, mat) {
+  const p = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
+  p.rotation.y = th - Math.PI / 2; p.position.set(Math.sin(th) * along, y, Math.cos(th) * along); p.receiveShadow = true; group.add(p);
+}
+
+// ── «Com'è oggi»: plain cylinders, one fixed colour per part ──
+function buildSimple(group, cut) {
+  const mat = c => new THREE.MeshStandardMaterial({ color: c, roughness: 0.85, side: THREE.DoubleSide });
+  const base = mat(0xd9b97c), fill = mat(0xf1e3b0), coat = mat(0xf5f1e8), deco = mat(0xb2203f);
+  for (let i = 0; i < N; i++) {
+    const y = i * (DISC + FILL); layer(group, R, DISC, y, base, base, cut);
+    if (i < N - 1) layer(group, R, FILL, y + DISC, fill, fill, cut);
+  }
+  const shell = new THREE.Mesh(cut ? new THREE.CylinderGeometry(RC, RC, H, 128, 1, true, KEEP_START, KEEP_LEN) : new THREE.CylinderGeometry(RC, RC, H, 128, 1, true), coat);
+  shell.position.y = H / 2; shell.castShadow = true; group.add(shell);
+  const top = new THREE.Mesh(cut ? new THREE.CylinderGeometry(RC, RC, C, 128, 1, false, KEEP_START, KEEP_LEN) : new THREE.CylinderGeometry(RC, RC, C, 128), coat);
+  top.position.y = H + C / 2; group.add(top);
+  for (let k = 0; k < 14; k++) {
+    const a = k / 14 * Math.PI * 2, x = Math.sin(a) * (R - 1.2), z = Math.cos(a) * (R - 1.2);
+    if (cut && inSlice(x, z)) continue;
+    const b = new THREE.Mesh(new THREE.SphereGeometry(0.75, 24, 16), deco); b.position.set(x, H + C + 0.6, z); b.castShadow = true; group.add(b);
+  }
+}
+
+// ── «Più realistica» ──
+function plate(group) {
+  const prof = [[0.01, 0], [13.2, 0], [14.6, 0.18], [15.6, 0.55], [15.75, 0.62], [15.55, 0.66], [14.4, 0.42], [13.0, PLATE], [0.01, PLATE]].map(([x, y]) => new THREE.Vector2(x, y));
+  const m = new THREE.Mesh(new THREE.LatheGeometry(prof, 128), new THREE.MeshPhysicalMaterial({ color: 0xfbfbf9, roughness: 0.25, clearcoat: 0.6, side: THREE.DoubleSide }));
+  m.receiveShadow = true; m.castShadow = true; group.add(m);
+}
+function rosetteGeo() {
+  const pts = [new THREE.Vector2(0.001, 0)];
+  for (let i = 0; i <= 28; i++) { const t = i / 28; pts.push(new THREE.Vector2(Math.max(0.001, 1.25 * Math.pow(Math.cos(t * Math.PI / 2), 0.55)), 1.9 * t)); }
+  const g = new THREE.LatheGeometry(pts, 96), pos = g.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i), a = Math.atan2(x, z), f = 1 + 0.16 * Math.sin(8 * a + y * 3.4);
+    pos.setXYZ(i, x * f, y, z * f);
+  }
+  g.computeVertexNormals(); return g;
+}
+function raspberry(r) {
+  const offs = [];
+  for (let i = 0; i < 7; i++) {
+    const phi = 0.35 + i * 0.42, rr = 0.42 * Math.sin(phi), yy = -0.5 * Math.cos(phi), n = Math.max(4, Math.round(rr * 17));
+    for (let k = 0; k < n; k++) { const a = k / n * Math.PI * 2 + i * 0.4 + r() * 0.2; offs.push(new THREE.Vector3(Math.sin(a) * rr, yy, Math.cos(a) * rr)); }
+  }
+  return offs;
+}
+function curlGeo(len, turns) {
+  const pts = [];
+  for (let i = 0; i <= 80; i++) { const t = i / 80, a = t * Math.PI * 2 * turns; pts.push(new THREE.Vector3(Math.cos(a) * 0.34, Math.sin(a) * 0.34, (t - 0.5) * len)); }
+  return new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 160, 0.13, 10, false);
+}
+function buildReal(group, key, cut) {
+  const p = PRESETS[key], tx = texturesFor(key), r = rng(42);
+  plate(group);
+  const cakeG = new THREE.Group(); cakeG.position.y = PLATE; group.add(cakeG);
+  const spongeFace = new THREE.MeshStandardMaterial({ map: tx.face.map, bumpMap: tx.face.bump, bumpScale: 1.6, roughness: 0.95, side: THREE.DoubleSide });
+  const spongeSide = new THREE.MeshStandardMaterial({ map: tx.side.map, bumpMap: tx.side.bump, bumpScale: 1.6, roughness: 0.95 });
+  const fill = new THREE.MeshPhysicalMaterial({ map: tx.fill.map, bumpMap: tx.fill.bump, bumpScale: 0.4, roughness: p.fillRough, clearcoat: p.fillRough < 0.4 ? 0.4 : 0, side: THREE.DoubleSide });
+  const coat = p.glaze
+    ? new THREE.MeshPhysicalMaterial({ color: p.coat, roughness: 0.1, clearcoat: 1, clearcoatRoughness: 0.04, side: THREE.DoubleSide })
+    : new THREE.MeshStandardMaterial({ map: tx.coat.map, bumpMap: tx.coat.bump, bumpScale: 2.2, roughness: 0.78, side: THREE.DoubleSide });
+  for (let i = 0; i < N; i++) {
+    const y = i * (DISC + FILL); layer(cakeG, R, DISC, y, spongeSide, spongeFace, cut);
+    if (i < N - 1) layer(cakeG, R - 0.06, FILL, y + DISC, fill, fill, cut);
+  }
+  // The coating: a shell with a rounded top edge.
+  const rad = 0.8, prof = [new THREE.Vector2(0.001, H + C), new THREE.Vector2(RC - rad, H + C)];
+  for (let i = 1; i <= 10; i++) { const a = i / 10 * Math.PI / 2; prof.push(new THREE.Vector2(RC - rad + Math.sin(a) * rad, H + C - rad + Math.cos(a) * rad)); }
+  prof.push(new THREE.Vector2(RC, 0.12), new THREE.Vector2(RC + 0.08, 0.02), new THREE.Vector2(RC + 0.02, 0));
+  const shell = new THREE.Mesh(cut ? new THREE.LatheGeometry(prof, 160, KEEP_START, KEEP_LEN) : new THREE.LatheGeometry(prof, 160), coat);
+  shell.castShadow = true; shell.receiveShadow = true; cakeG.add(shell);
+  if (cut) for (const th of [KEEP_START, KEEP_START + KEEP_LEN]) {
+    cutFace(cakeG, RC - 0.3, C, (RC - 0.3) / 2, H + C / 2, th, coat);
+    cutFace(cakeG, C, H, R + C / 2, H / 2, th, coat);
+  }
+  const top = H + C;
+  const add = (mesh, x, y, z) => { if (cut && inSlice(x, z)) return false; mesh.position.set(x, y, z); mesh.castShadow = true; mesh.receiveShadow = true; cakeG.add(mesh); return true; };
+  // Glaze drips down the side.
+  if (p.glaze) for (let k = 0; k < 26; k++) {
+    const a = k / 26 * Math.PI * 2 + (r() - 0.5) * 0.12, L = 0.6 + r() * 2.6;
+    const d = new THREE.Mesh(new THREE.CapsuleGeometry(0.3, L, 6, 16), coat);
+    d.rotation.y = a; d.scale.set(1.25, 1, 0.5);
+    add(d, Math.sin(a) * (RC - 0.03), top - 0.45 - L / 2, Math.cos(a) * (RC - 0.03));
+  }
+  // Piped rosettes around the edge.
+  const ros = rosetteGeo(), rosPos = [];
+  for (let k = 0; k < p.rosettes; k++) {
+    const a = k / p.rosettes * Math.PI * 2 + 0.2, x = Math.sin(a) * (R - 1.25), z = Math.cos(a) * (R - 1.25);
+    const m = new THREE.Mesh(ros, coat); m.rotation.y = r() * 3; m.scale.setScalar(0.95); if (add(m, x, top - 0.05, z)) rosPos.push([x, z]);
+  }
+  if (p.deco === 'berries') {
+    const red = new THREE.MeshPhysicalMaterial({ color: 0xa8102f, roughness: 0.38, clearcoat: 0.5, sheen: 0.4, sheenColor: 0xff8899 });
+    const blue = new THREE.MeshPhysicalMaterial({ color: 0x29355f, roughness: 0.55, sheen: 0.8, sheenColor: 0x9fb2d9 });
+    const leaf = new THREE.MeshStandardMaterial({ color: 0x3f8a3a, roughness: 0.5, side: THREE.DoubleSide });
+    const drupe = new THREE.SphereGeometry(0.15, 10, 8);
+    const berries = [...rosPos.map(([x, z]) => [x, top + 1.95, z])];
+    for (let i = 0; i < 9; i++) { const a = r() * 6.28, d = Math.sqrt(r()) * 3.6; berries.push([Math.sin(a) * d, top + 0.5 + r() * 0.5, Math.cos(a) * d]); }
+    const offs = raspberry(r), inst = new THREE.InstancedMesh(drupe, red, berries.length * offs.length);
+    const mtx = new THREE.Matrix4(); let n = 0;
+    for (const [bx, by, bz] of berries) { if (cut && inSlice(bx, bz)) continue; const rot = new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI + (r() - 0.5) * 0.6, r() * 6, (r() - 0.5) * 0.6)); for (const o of offs) { const v = o.clone().applyQuaternion(rot); mtx.makeTranslation(bx + v.x, by + v.y, bz + v.z); inst.setMatrixAt(n++, mtx); } }
+    inst.count = n; inst.castShadow = true; cakeG.add(inst);
+    for (let i = 0; i < 12; i++) { const a = r() * 6.28, d = Math.sqrt(r()) * 4.2; const b = new THREE.Mesh(new THREE.SphereGeometry(0.36, 24, 16), blue); b.scale.y = 0.86; add(b, Math.sin(a) * d, top + 0.32 + r() * 0.3, Math.cos(a) * d); }
+    for (let i = 0; i < 3; i++) { const a = i * 2.1 + 0.4; const l = new THREE.Mesh(new THREE.SphereGeometry(0.55, 20, 10), leaf); l.scale.set(1, 0.07, 0.45); l.rotation.set(0.2, a, 0.25); add(l, Math.sin(a) * 1.2, top + 1.0, Math.cos(a) * 1.2); }
+  } else if (p.deco === 'curls') {
+    const choc = new THREE.MeshPhysicalMaterial({ color: 0x2e170d, roughness: 0.45, clearcoat: 0.3 });
+    const light = new THREE.MeshPhysicalMaterial({ color: 0x8a5a3a, roughness: 0.5 });
+    for (let i = 0; i < 26; i++) {
+      const a = r() * 6.28, d = Math.sqrt(r()) * 4.8, m = new THREE.Mesh(curlGeo(1.6 + r() * 1.4, 2 + r() * 1.5), i % 4 === 0 ? light : choc);
+      m.rotation.set((r() - 0.5) * 0.5, r() * 6.28, (r() - 0.5) * 0.4); add(m, Math.sin(a) * d, top + 0.38 + r() * 0.35, Math.cos(a) * d);
+    }
+  } else if (p.deco === 'grains') {
+    const g = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.7 });
+    const geo = new THREE.IcosahedronGeometry(0.1, 0), mtx = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), v = new THREE.Vector3(), col = new THREE.Color();
+    const spots = [];
+    for (let i = 0; i < 700; i++) { const a = r() * 6.28, d = Math.sqrt(r()) * (R - 2.6); spots.push([Math.sin(a) * d, top + 0.06, Math.cos(a) * d]); }
+    for (let i = 0; i < 1500; i++) { const a = r() * 6.28; spots.push([Math.sin(a) * (RC + 0.05), 0.15 + r() * H * 0.33, Math.cos(a) * (RC + 0.05)]); }
+    const inst = new THREE.InstancedMesh(geo, g, spots.length); let n = 0;
+    for (const [x, y, z] of spots) {
+      if (cut && inSlice(x, z)) continue;
+      q.setFromEuler(new THREE.Euler(r() * 6, r() * 6, r() * 6)); s.set(0.8 + r() * 1.4, 0.6 + r(), 0.8 + r() * 1.2); v.set(x, y, z);
+      inst.setMatrixAt(n, mtx.compose(v, q, s)); inst.setColorAt(n, r() < 0.15 ? col.setHSL(0.92 + r() * 0.05, 0.35, 0.3) : col.setHSL(0.2 + r() * 0.08, 0.55 + r() * 0.2, 0.2 + r() * 0.14)); n++;
+    }
+    inst.count = n; inst.castShadow = true; cakeG.add(inst);
+  }
+}
+
+// ── Wiring ──
+const s1 = makeStage(document.getElementById('s1')), s2 = makeStage(document.getElementById('s2'));
+const room = new RoomEnvironment();
+s1.scene.environment = s1.pmrem.fromScene(room, 0.04).texture;
+s2.scene.environment = s2.pmrem.fromScene(room, 0.04).texture;
+let preset = 'classica', cut = false;
+function clear(g) { g.traverse(o => { if (o.geometry) o.geometry.dispose(); }); g.clear(); }
+function rebuild() {
+  clear(s1.cake); clear(s2.cake);
+  buildSimple(s1.cake, cut); buildReal(s2.cake, preset, cut);
+  document.getElementById('recipe').innerHTML = `<b>Ricette di esempio:</b> ${PRESETS[preset].text}`;
+}
+document.querySelectorAll('[data-p]').forEach(b => b.onclick = () => { preset = b.dataset.p; document.querySelectorAll('[data-p]').forEach(x => x.setAttribute('aria-pressed', String(x === b))); rebuild(); });
+document.querySelectorAll('[data-v]').forEach(b => b.onclick = () => { cut = b.dataset.v === 'cut'; document.querySelectorAll('[data-v]').forEach(x => x.setAttribute('aria-pressed', String(x === b))); rebuild(); });
+document.querySelectorAll('[data-b]').forEach(b => b.onclick = () => { document.querySelectorAll('[data-b]').forEach(x => x.setAttribute('aria-pressed', String(x === b))); backdrop(s1, b.dataset.b); backdrop(s2, b.dataset.b); });
+backdrop(s1, 'slate'); backdrop(s2, 'slate');
+rebuild();
+function frame() {
+  for (const s of [s1, s2]) { s.controls.update(); s.renderer.render(s.scene, s.camera); }
+  requestAnimationFrame(frame);
+}
+frame();
+window.__ready = true;
+</script>
+</body>
+</html>

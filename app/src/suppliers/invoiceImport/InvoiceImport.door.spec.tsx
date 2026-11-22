@@ -31,11 +31,13 @@ const NOT_ALLOWED = [
 ] as const;
 
 describe('the door', () => {
-  it('⚠️ is beside the Settings door for an owner of an Italian venue with Food cost on, and says what it is', async () => {
+  it('⚠️ is there for an owner of an Italian venue with Food cost on, beside the list, and says what it is', async () => {
     renderImport('/suppliers');
     const door = await screen.findByRole('button', { name: 'Import from invoices' }, LOAD);
     expect(screen.getByRole('button', { name: 'Settings' })).toBeInTheDocument();
-    expect(door.parentElement).toBe(screen.getByRole('button', { name: 'Settings' }).parentElement);
+    // The Settings door is the gear on the title row now, not a neighbour of this one.
+    expect(screen.getByRole('button', { name: 'Settings' }).closest('header')).toContainElement(screen.getByRole('heading', { level: 1 }));
+    expect(door.closest('header')).toBeNull();
   });
 
   it('a manager has it too', async () => {

@@ -25,7 +25,7 @@ const foodcost = () => fakeFoodcostSource({ products: [SPONGE], ingredients: [FL
 const offline = (cakes: ReturnType<typeof cakeDoc>[] = []) => fakeCakesSource({ cakes, reference: null, referenceOffline: true });
 const deadline = () => act(async () => { await vi.advanceTimersByTimeAsync(COPY_WAIT_MS + 50); });
 
-const NO_REFERENCE = 'There are no reference grams yet, so every line needs its grams typed by hand.';
+const NO_REFERENCE = 'There is no standard cake yet, so every line needs its grams typed by hand.';
 
 describe('the reference grams never answer', () => {
   it('an existing cake opens at once, without waiting for the deadline', async () => {
@@ -35,7 +35,7 @@ describe('the reference grams never answer', () => {
     expect(screen.queryByText(NO_REFERENCE)).not.toBeInTheDocument();
   });
 
-  it('a new cake waits for the deadline, then opens with the «no reference grams» band', async () => {
+  it('a new cake waits for the deadline, then opens with the «no standard cake» band', async () => {
     renderCakes('/cakes/new', { cakes: offline(), foodcost: foodcost() });
     await act(async () => { await vi.advanceTimersByTimeAsync(100); });
     expect(screen.queryByRole('heading', { level: 2, name: 'New cake' })).not.toBeInTheDocument();
@@ -44,12 +44,12 @@ describe('the reference grams never answer', () => {
     expect(screen.getByText(NO_REFERENCE)).toBeInTheDocument();
   });
 
-  it('the Reference screen waits for the deadline, then opens its empty boxes and its Save', async () => {
+  it('the Reference screen waits for the deadline, then opens its empty table and its Save', async () => {
     renderCakes('/cakes/reference', { cakes: offline(), foodcost: foodcost() });
     await act(async () => { await vi.advanceTimersByTimeAsync(100); });
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
     await deadline();
-    expect(await screen.findByRole('textbox', { name: /^Diameter/ }, LOAD)).toHaveValue('');
+    expect(await screen.findByRole('textbox', { name: /^Discs/ }, LOAD)).toHaveValue('');
     expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument();
   });
 });
