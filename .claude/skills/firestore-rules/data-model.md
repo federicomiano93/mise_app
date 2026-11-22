@@ -324,7 +324,9 @@ the only other one is `client-accounts` (managers, or the account itself — aud
   narrower, the smallest ≥ 10 cm, so `diameterCm − 6·(tiers−1) ≥ 10`), discs (int 1–5), slices
   (int 1–200), lines[] (≤ 90 maps: tier, part, productId of a Food cost card, grams: a number, or null = «from the rule»; no `manual` key),
   packaging[] (≤ 20), assemblyMinutes, sellingPrice, vatRate (0 real), foodCostTarget, categoryId,
-  ref (the reference grams as the cake took them, the shape below, or null), model (CAKE_MODEL =
+  ref (the reference grams as the cake took them, the shape below, or null), discHeightCm (22 Nov 2026,
+  optional: the cake's own disc height, 0.5–20 cm, or null/absent = the reference's, else 3 cm for the
+  drawing; it scales the base's rule grams by height and the coating's by surface), model (CAKE_MODEL =
   1, never lowered), updatedAt }`, written WHOLE (`shared/src/cake-model.ts`). ⚠️ Its money lives
   in Food cost: «Salva a listino» writes this document AND the product `cake-<id>` (an ordinary
   model-4 product, its components the semi lines summed per card, assembly minutes as labour) and,

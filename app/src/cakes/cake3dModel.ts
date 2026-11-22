@@ -18,7 +18,8 @@ export const TIER_BOARD_CM = 0.22;
 export const BOARD_MARGIN_CM = 3.2;
 export const BOARD_THICKNESS_CM = 0.5;
 // The part of a disc that is soaked (its top), and the thickness of a layer of filling as a share of a disc.
-export const SOAK_SHARE = 0.22;
+// The soak is a thin band, far thinner than the filling (his ask, 22 Nov 2026: at 0.22 it looked as thick as the cream).
+export const SOAK_SHARE = 0.07;
 export const FILLING_SHARE = 0.3;
 export const FILLING_MIN_CM = 0.5;
 // The empty gap between two discs while the filling has no card, as a share of a disc.

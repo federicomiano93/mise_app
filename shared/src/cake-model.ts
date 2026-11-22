@@ -38,8 +38,11 @@ export const MAX_LINE_GRAMS = 100000;
 export const MAX_SELLING_PRICE = 100000;
 export const CAKE_PRODUCT_PREFIX = 'cake-';
 
-// Only used to draw a cake whose venue has no reference grams yet (cakeGeometry); no cost depends on it.
+// The height of one disc when neither the cake nor its reference says one: only the drawing uses it (cakeGeometry), no cost.
 export const DEFAULT_DISC_HEIGHT_CM = 3;
+// The cake's own disc height (his ask, 22 Nov 2026), in cm: the rules' bounds (firestore.rules, match /cakes), one decimal.
+export const MIN_DISC_HEIGHT_CM = 0.5;
+export const MAX_DISC_HEIGHT_CM = 20;
 // What junk input falls back to in normalizeCake: a plain one-tier cake.
 const DEFAULT_DIAMETER_CM = 20;
 const DEFAULT_DISCS = 3;
@@ -90,6 +93,9 @@ export interface Cake {
   foodCostTarget: number | null;
   categoryId: string | null;
   ref: ReferenceGrams | null;
+  // The height of one disc typed for THIS cake; null = the reference's (or DEFAULT_DISC_HEIGHT_CM). Optional in the rules: a cake
+  // saved before 22 Nov 2026 has none, and keeps drawing and costing exactly as before.
+  discHeightCm: number | null;
   model: number | null;
 }
 
@@ -220,11 +226,24 @@ export function normalizeCake(raw: unknown): Cake | null {
     foodCostTarget: positiveOrNull(raw.foodCostTarget, 100),
     categoryId: typeof raw.categoryId === 'string' && raw.categoryId.trim() !== '' && raw.categoryId.length <= 64 ? raw.categoryId : null,
     ref: normalizeReference(raw.ref),
+    discHeightCm: normalizeDiscHeight(raw.discHeightCm),
     model: model !== null && Number.isInteger(model) && model > 0 ? model : null,
   };
 }
 
 // ── Measures ─────────────────────────────────────────────────────────────────
+
+// A disc height from arbitrary input: null when absent or not a positive number, else clamped to the rules' bounds, one decimal.
+export function normalizeDiscHeight(raw: unknown): number | null {
+  const value = finite(raw);
+  if (value === null || !(value > 0)) return null;
+  return clamp(Math.round(value * 10) / 10, MIN_DISC_HEIGHT_CM, MAX_DISC_HEIGHT_CM);
+}
+
+// The height one disc of this cake has: its own, else its reference's, else the drawing's default.
+export function discHeightOf(cake: Pick<Cake, 'discHeightCm' | 'ref'>): number {
+  return cake.discHeightCm ?? cake.ref?.discHeightCm ?? DEFAULT_DISC_HEIGHT_CM;
+}
 
 // Bottom tier first: each tier above is one step narrower.
 export function tierDiameters(diameterCm: number, tiers: number): number[] {
@@ -251,17 +270,22 @@ function surface(diameterCm: number, discs: number, discHeightCm: number): numbe
 }
 
 // Grams of one part for ONE tier, scaled from the reference cake by area. NOT rounded (resolveLines rounds the share).
+// A cake whose discs are taller or shorter than the reference's (`discHeightCm`, the cake's own) scales the BASE by the height too (a
+// thicker sponge takes more batter) and the coating by its larger or smaller side; the soak and the filling follow the area only.
 // ⚠️ The coating is approximate: the lower tops left uncovered under an upper tier are not subtracted.
 // null while the venue has no reference grams.
-export function ruleGrams(ref: ReferenceGrams | null, part: CakePart, tierDiameterCm: number, discs: number): number | null {
+export function ruleGrams(
+  ref: ReferenceGrams | null, part: CakePart, tierDiameterCm: number, discs: number, discHeightCm: number | null = null,
+): number | null {
   if (!ref) return null;
   const area = (tierDiameterCm / ref.diameterCm) ** 2;
+  const height = discHeightCm ?? ref.discHeightCm;
   switch (part) {
-    case 'base': return ref.baseG * area * discs;
+    case 'base': return ref.baseG * area * discs * (height / ref.discHeightCm);
     case 'soak': return ref.soakG * area * discs;
     case 'filling': return ref.fillingG * area * Math.max(0, discs - 1);
     case 'coating':
-      return ref.coatingG * surface(tierDiameterCm, discs, ref.discHeightCm) / surface(ref.diameterCm, ref.discs, ref.discHeightCm);
+      return ref.coatingG * surface(tierDiameterCm, discs, height) / surface(ref.diameterCm, ref.discs, ref.discHeightCm);
     case 'decoration': return ref.decorationG * area;
   }
 }
@@ -289,7 +313,7 @@ export function resolveLines(cake: Cake): ResolvedLine[] {
   }
   return live.map(line => {
     const diameterCm = diameters[line.tier] as number;
-    const ruleG = ruleGrams(cake.ref, line.part, diameterCm, cake.discs);
+    const ruleG = ruleGrams(cake.ref, line.part, diameterCm, cake.discs, cake.discHeightCm);
     const share = ruleG === null ? null : Math.round(ruleG / (cardsIn.get(`${line.tier}|${line.part}`) as number));
     const manual = line.grams !== null;
     return {
@@ -355,6 +379,7 @@ export function toCakeDocument(cake: Cake, nowIso: string): Record<string, unkno
     // Always null (the key stays: the rules' whitelist has it, and old cakes may carry a value that is dropped on the next save).
     categoryId: null,
     ref: cake.ref ? { ...cake.ref } : null,
+    discHeightCm: cake.discHeightCm,
     model: CAKE_MODEL,
     updatedAt: nowIso,
   };
@@ -557,7 +582,7 @@ export function cakeGeometry(cake: Cake): CakeGeometry {
         const mine = resolved.filter(line => line.tier === index && line.part === part);
         parts[part] = { productIds: mine.map(line => line.productId), grams: mine.reduce((sum, line) => sum + line.grams, 0) };
       }
-      return { index, diameterCm, discs: cake.discs, discHeightCm: cake.ref?.discHeightCm ?? DEFAULT_DISC_HEIGHT_CM, parts };
+      return { index, diameterCm, discs: cake.discs, discHeightCm: discHeightOf(cake), parts };
     }),
   };
 }

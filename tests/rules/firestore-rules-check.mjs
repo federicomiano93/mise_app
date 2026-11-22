@@ -2510,6 +2510,14 @@ async function products() {
   await expectDenied('a reference with an unknown key', () => wholeWrite(`${CK}/K3`, cake({ ref: { ...REF, sugarG: 5 } })));
   await expectDenied('a reference with negative grams', () => wholeWrite(`${CK}/K3`, cake({ ref: { ...REF, fillingG: -1 } })));
   await expectDenied('a reference disc 0 cm high', () => wholeWrite(`${CK}/K3`, cake({ ref: { ...REF, discHeightCm: 0 } })));
+  // The cake's own disc height (22 Nov 2026): optional, null, or 0.5–20 cm.
+  await expectAllowed('a cake with its own disc height of 4.5 cm', () => wholeWrite(`${CK}/K3`, cake({ discHeightCm: 4.5 })));
+  await expectAllowed('a cake whose disc height is null (the reference\'s)', () => wholeWrite(`${CK}/K3`, cake({ discHeightCm: null })));
+  await expectAllowed('the lowest disc height, 0.5 cm', () => wholeWrite(`${CK}/K3`, cake({ discHeightCm: 0.5 })));
+  await expectAllowed('the highest disc height, 20 cm', () => wholeWrite(`${CK}/K3`, cake({ discHeightCm: 20 })));
+  await expectDenied('a disc 0.4 cm high', () => wholeWrite(`${CK}/K3`, cake({ discHeightCm: 0.4 })));
+  await expectDenied('a disc 20.1 cm high', () => wholeWrite(`${CK}/K3`, cake({ discHeightCm: 20.1 })));
+  await expectDenied('a disc height sent as text', () => wholeWrite(`${CK}/K3`, cake({ discHeightCm: '4' })));
   await expectDenied('an unknown key on a cake', () => wholeWrite(`${CK}/K3`, cake({ customer: 'Rossi' })));
   await expectDenied('a cake stamped for another location', () => wholeWrite(`${CK}/K3`, cake({ bakery: 'trattoria-x' })));
   await expectDenied('a cake with no model', () => {
