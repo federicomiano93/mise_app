@@ -1012,3 +1012,15 @@ section, not in the summary panel (a semi card has no summary).
 ## Cakes (Mise 2 only, 20 Nov 2026)
 
 A new section with no original in the current app: a cake is a Food cost price-list card (`products/cake-<id>`, shown in the list with a «Torta» tag and opened READ-ONLY, with a link «Apri nelle Torte») plus its own document in `cakes/`, saved in the same batch. Its cost and food cost come from this section's engine (`costProduct` on the product built from the cake); «Cosa serve» is `cakeNeeds`, which opens each semi-finished card with `costPerKg` (dough only), so a card with no price is named «non aperta». How it is built: `docs/architecture.md`, the `cakes/` bullet.
+
+## Finished products | Semi-finished tabs — as built (22 Nov 2026)
+
+- **Tabs.** `FoodcostList` shows two tabs under «New product» and «Categories»; the list below is the chosen kind (`kindOf(product)`, in `categoriesModel.ts`: a
+  cake's card is always finished). Each list keeps its worst-first order; changing the tab clears the search (a search that finds nothing says how many it
+  finds in the other list). The choice lives in the list's state only: a new visit starts on «Finished products».
+- **Which tab opens.** A card of the other kind opened by address (a recipe's link, Cakes) moves the tab to its kind once. The list narrowed to a recipe
+  (`?using=`) starts on «Finished products» if it has any, else «Semi-finished», decided once — but an OPEN card of the narrowed list decides the tab, in
+  whichever order the products, recipes and prices arrive. «Open in Food cost» from a recipe with several products opens, on the split, the first FINISHED product,
+  else the first semi-finished card.
+- **«New product»** carries the tab's kind in the navigation state (`newKind`); on the split, pressed from the other tab while an UNTOUCHED new card is open, the card
+  takes the new kind; a card with typed edits keeps both its text and its kind.
