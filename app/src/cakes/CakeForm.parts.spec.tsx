@@ -6,6 +6,7 @@ import { BOX, PACKAGING_PRICES } from '../testing/foodcostEditorFixtures';
 import { REFERENCE, SPONGE, cakeDoc, renderCakes, storedReference } from '../testing/renderCakes';
 import { FLOUR, FLOUR_PRICES, LOAD, product } from '../testing/renderFoodcost';
 import { fakeFoodcostSource } from '../testing/fakeFoodcostSource';
+import { openMeasures } from '../testing/openMeasures';
 import type { StoredDoc } from '../foodcost/foodcostSource';
 
 // The parts of a cake: the tiers, the cards in each step, the grams (the rule, or typed by hand), the packaging, and the bands about the
@@ -296,6 +297,7 @@ describe('the reference grams', () => {
 
   describe('changing the diameter', () => {
     const diameter = async (user: UserEvent, value: string) => {
+      await openMeasures(user);
       const field = screen.getByRole('textbox', { name: 'Diameter in centimetres' });
       await user.clear(field);
       await user.type(field, `${value}{Enter}`);

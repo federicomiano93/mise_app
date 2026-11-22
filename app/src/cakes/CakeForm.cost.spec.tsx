@@ -4,6 +4,7 @@ import { fakeCakesSource } from '../testing/fakeCakesSource';
 import { fakeFoodcostSource } from '../testing/fakeFoodcostSource';
 import { REFERENCE, SPONGE, cakeDoc, incompleteCake, renderCakes, storedReference } from '../testing/renderCakes';
 import { EMPLOYEE, FLOUR, FLOUR_PRICES, LOAD, product } from '../testing/renderFoodcost';
+import { openMeasures } from '../testing/openMeasures';
 
 // A cake's measures, and what it costs and sells for (the sixth step): the measure boxes and their limits, the materials, the labour (only for somebody who
 // can read the labour rate), the slice, the price with its VAT and target, the food cost with its light, and the suggested price.
@@ -262,20 +263,24 @@ describe('the measures', () => {
     await user.tab();
   };
 
-  it('sits in one block with the name, the diameter («cm» inside its box), the tiers and the discs, and nothing else', async () => {
-    await open();
+  it('sits in one block with the name, the diameter («cm» inside its box), the tiers, the discs and the discs’ height, and nothing else', async () => {
+    const { user } = await open();
+    await openMeasures(user);
     const measures = within(card('Measures'));
     expect(measures.getByRole('textbox', { name: 'Name' })).toHaveValue('Sacher');
     expect(measures.getByRole('textbox', { name: 'Diameter in centimetres' })).toHaveValue('22');
-    expect(measures.getByText('cm')).toBeInTheDocument();
+    // «cm» sits inside the diameter's box and the disc height's.
+    expect(measures.getAllByText('cm')).toHaveLength(2);
     expect(measures.getByRole('textbox', { name: 'Tiers' })).toHaveValue('1');
     expect(measures.getByRole('textbox', { name: 'Discs' })).toHaveValue('2');
+    expect(measures.getByRole('textbox', { name: 'Height of one disc in centimetres' })).toHaveValue('3');
     expect(measures.queryByText('Slices')).not.toBeInTheDocument();
     expect(measures.queryByText('Assembly')).not.toBeInTheDocument();
   });
 
   it('takes each measure when the person leaves the box, and clamps it to what the cake can be', async () => {
     const { user } = await open();
+    await openMeasures(user);
     await type(user, 'Diameter in centimetres', '24');
     expect(box('Diameter in centimetres')).toHaveValue('24');
     await type(user, 'Discs', '4');
@@ -288,6 +293,7 @@ describe('the measures', () => {
 
   it('does not clamp while the person is still typing («2» on the way to «26»)', async () => {
     const { user } = await open();
+    await openMeasures(user);
     await user.clear(box('Diameter in centimetres'));
     await user.type(box('Diameter in centimetres'), '2');
     expect(box('Diameter in centimetres')).toHaveValue('2');
@@ -297,6 +303,7 @@ describe('the measures', () => {
 
   it('an empty or junk box goes back to the value the cake has', async () => {
     const { user } = await open();
+    await openMeasures(user);
     await type(user, 'Tiers', '');
     expect(box('Tiers')).toHaveValue('1');
     await type(user, 'Discs', 'abc');
@@ -305,6 +312,7 @@ describe('the measures', () => {
 
   it('the slices and the assembly time sit in the cost step, beside what they change', async () => {
     const { user } = await open();
+    await openMeasures(user);
     expect(within(card('Measures')).queryByText('Slices')).not.toBeInTheDocument();
     const cost = await openCost(user);
     await user.click(cost.getByRole('button', { name: 'One slice more' }));
@@ -325,6 +333,7 @@ describe('the measures', () => {
 
   it('a tier more is refused when it would be under 10 cm, and the note says why on its own line', async () => {
     const { user } = await open(cakeDoc('c1', 'Small', { diameterCm: 20, tiers: 1, discs: 2, ref: REFERENCE }));
+    await openMeasures(user);
     const measures = within(card('Measures'));
     expect(measures.queryByText(/Another tier would be/)).not.toBeInTheDocument();
     await type(user, 'Tiers', '2');
@@ -342,6 +351,7 @@ describe('the measures', () => {
 
   it('the tiers cannot go below 1', async () => {
     const { user } = await open();
+    await openMeasures(user);
     await type(user, 'Tiers', '0');
     expect(box('Tiers')).toHaveValue('1');
   });
@@ -350,6 +360,7 @@ describe('the measures', () => {
 describe('in Italian', () => {
   it('says the measures, the cost and the tier note in Italian', async () => {
     const { user } = await open(cakeDoc('c1', 'Torta', { diameterCm: 20, tiers: 2, discs: 2, ref: REFERENCE, assemblyMinutes: 20 }), { lang: 'it', foodcost: foodcost({ labourCostPerHour: 18 }) });
+    await openMeasures(user);
     await user.click(screen.getByRole('button', { name: /^Costo e prezzo/ }));
     expect(screen.getByRole('heading', { level: 3, name: 'Misure' })).toBeInTheDocument();
     expect(screen.getByRole('textbox', { name: 'Dischi' })).toBeInTheDocument();

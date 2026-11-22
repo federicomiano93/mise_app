@@ -60,7 +60,7 @@ const CAKE: Cake = {
     { tier: 1, part: 'coating', productId: 'D', grams: null },
     { tier: 1, part: 'decoration', productId: 'E', grams: null },
   ],
-  packaging: [], assemblyMinutes: null, sellingPrice: null, vatRate: null, foodCostTarget: null, categoryId: null, ref: null, model: 1,
+  packaging: [], assemblyMinutes: null, sellingPrice: null, vatRate: null, foodCostTarget: null, categoryId: null, discHeightCm: null, ref: null, model: 1,
 };
 const layout = cakeLayout(cakeGeometry(CAKE));
 const KINDS: DecorationKind[] = ['plain', 'berries', 'blueberries', 'curls', 'grains', 'rosettes'];

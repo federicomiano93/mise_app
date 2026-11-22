@@ -17,7 +17,7 @@ const CAKE: Cake = {
     { tier: 1, part: 'base', productId: 'SPONGE', grams: null },
     { tier: 1, part: 'decoration', productId: 'FRUIT', grams: null },
   ],
-  packaging: [], assemblyMinutes: null, sellingPrice: null, vatRate: null, foodCostTarget: null, categoryId: null, ref: REF, model: 1,
+  packaging: [], assemblyMinutes: null, sellingPrice: null, vatRate: null, foodCostTarget: null, categoryId: null, discHeightCm: null, ref: REF, model: 1,
 };
 
 const NAMES: Record<string, string> = { SPONGE: 'Sponge', SYRUP: 'Syrup', CREAM: 'Cream', FRUIT: 'Fruit', WHIP: 'Whipped cream' };

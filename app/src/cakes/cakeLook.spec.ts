@@ -160,7 +160,7 @@ describe('the looks of a whole cake', () => {
       { tier: 0, part: 'coating', productId: 'B', grams: 300 },
       { tier: 1, part: 'decoration', productId: 'C', grams: 40 },
     ],
-    packaging: [], assemblyMinutes: null, sellingPrice: null, vatRate: null, foodCostTarget: null, categoryId: null, ref: null, model: 1,
+    packaging: [], assemblyMinutes: null, sellingPrice: null, vatRate: null, foodCostTarget: null, categoryId: null, discHeightCm: null, ref: null, model: 1,
   };
   const names: Record<string, string> = { A: 'Pan di spagna', B: 'Ganache', C: 'Frutti di bosco' };
   const looks = (lookup: Record<string, string>) => cakeLooks(cakeGeometry(CAKE), id => lookup[id] ?? '');

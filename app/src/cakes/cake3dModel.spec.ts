@@ -19,7 +19,7 @@ const FULL: Cake = {
     { tier: 1, part: 'base', productId: 'A', grams: null },
     { tier: 1, part: 'decoration', productId: 'E', grams: null },
   ],
-  packaging: [], assemblyMinutes: null, sellingPrice: null, vatRate: null, foodCostTarget: null, categoryId: null, ref: REF, model: 1,
+  packaging: [], assemblyMinutes: null, sellingPrice: null, vatRate: null, foodCostTarget: null, categoryId: null, discHeightCm: null, ref: REF, model: 1,
 };
 
 describe('the cake in space', () => {

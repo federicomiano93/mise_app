@@ -1,8 +1,11 @@
 import { useId, useState } from 'react';
+import { ChevronDown } from 'lucide-react';
 import type { Ref } from 'react';
-import { MAX_TIERS, MIN_TIER_CM, maxTiersFor, tierDiameters } from '@mise/shared/cake-model';
+import { MAX_TIERS, MIN_TIER_CM, discHeightOf, maxTiersFor, tierDiameters } from '@mise/shared/cake-model';
 import type { Cake } from '@mise/shared/cake-model';
+import { localNumber } from '@mise/shared/currency';
 import { useT } from '../i18n/useT';
+import { useMoney } from '../session/useMoney';
 import { Button } from '../ui/Button';
 import { setMeasure, setName } from './cakeEditorModel';
 import { useStepFocus } from './useStepFocus';
@@ -14,6 +17,9 @@ type Props = {
   // The name's box, and whether Save found it empty (it is then highlighted and takes the focus).
   nameRef: Ref<HTMLInputElement>;
   nameInvalid: boolean;
+  // Whether the card shows its body or only its title and one summary line. Held by the form: Save with an empty name opens it.
+  open: boolean;
+  onToggle: (open: boolean) => void;
 };
 
 type StepperProps = {
@@ -69,13 +75,17 @@ type MeasureBoxProps = {
   value: number;
   // The unit drawn inside the box, at its right.
   unit?: string;
+  // The keyboard a phone raises: whole numbers by default, 'decimal' for a box that takes «4,5».
+  inputMode?: 'numeric' | 'decimal';
+  // What the box shows when nothing is being typed (default: the plain number); a decimal box passes the venue's separator.
+  display?: string;
   onCommit: (value: number) => void;
 };
 
 // A number typed into a small box: the text stays as typed until the person leaves the box (or presses Enter), then it is handed up and
 // the box shows what the cake took (the cake clamps it: a diameter to what its tiers need, the discs to 1–5).
 // ⚠️ NOT PER KEYSTROKE: «2» on the way to «22» would be clamped to the smallest diameter at once.
-function MeasureBox({ id, label, ariaLabel, value, unit, onCommit }: MeasureBoxProps) {
+function MeasureBox({ id, label, ariaLabel, value, unit, inputMode = 'numeric', display, onCommit }: MeasureBoxProps) {
   const [typed, setTyped] = useState<string | null>(null);
   const commit = () => {
     if (typed === null) return;
@@ -90,12 +100,12 @@ function MeasureBox({ id, label, ariaLabel, value, unit, onCommit }: MeasureBoxP
         <input
           id={id}
           type="text"
-          inputMode="numeric"
+          inputMode={inputMode}
           autoComplete="off"
           className={styles.input}
           data-unit={unit !== undefined}
           {...(ariaLabel === undefined ? {} : { 'aria-label': ariaLabel })}
-          value={typed ?? String(value)}
+          value={typed ?? display ?? String(value)}
           onChange={event => { setTyped(event.target.value); }}
           onBlur={commit}
           onKeyDown={event => { if (event.key === 'Enter') commit(); }}
@@ -109,8 +119,9 @@ function MeasureBox({ id, label, ariaLabel, value, unit, onCommit }: MeasureBoxP
 // The cake's name and measures, in one compact block over the steps: the name, then the diameter («cm» inside its box), the tiers and
 // the discs (the slices and the assembly minutes are in the cost step: they only change figures there). No category (his call, 21 Nov
 // 2026): every cake's card sits in Food cost's «Cakes» group.
-export function MeasuresCard({ cake, edit, nameRef, nameInvalid }: Props) {
+export function MeasuresCard({ cake, edit, nameRef, nameInvalid, open, onToggle }: Props) {
   const { t } = useT();
+  const money = useMoney();
   const ids = useId();
   const move = (measure: Parameters<typeof setMeasure>[1], value: number) => { edit(current => setMeasure(current, measure, value)); };
 
@@ -121,10 +132,30 @@ export function MeasuresCard({ cake, edit, nameRef, nameInvalid }: Props) {
     ? t('cakes.measure.tiersLimit', { d: smallest, min: MIN_TIER_CM })
     : undefined;
 
+  // The height as the venue writes numbers («4,5» in Italy, «4.5» in the UK), the same way the reference screen says it.
+  const height = discHeightOf(cake);
+  const heightText = localNumber(String(height), money, false);
+  // Folded, the measures read as one line under the title.
+  const summary = [
+    cake.name.trim() === '' ? t('cakes.measures.summaryUntitled') : cake.name.trim(),
+    `${localNumber(String(cake.diameterCm), money, false)} ${t('cakes.ref.unitCm')}`,
+    t('cakes.measures.summaryTiers', { n: cake.tiers }),
+    t('cakes.measures.summaryDiscs', { n: cake.discs }),
+    t('cakes.measures.summaryHeight', { h: heightText }),
+  ].join(' · ');
   return (
     <section className={styles.card} aria-labelledby={`${ids}-title`}>
-      <h3 id={`${ids}-title`} className={styles.title}>{t('cakes.measures.title')}</h3>
+      <h3 id={`${ids}-title`} className={styles.title}>
+        <button type="button" className={styles.fold} aria-expanded={open} aria-controls={`${ids}-body`} onClick={() => { onToggle(!open); }}>
+          <span className={styles.foldText}>
+            <span>{t('cakes.measures.title')}</span>
+            {open ? null : <small className={styles.foldSummary}>{summary}</small>}
+          </span>
+          <ChevronDown aria-hidden="true" className={styles.chevron} data-open={open} />
+        </button>
+      </h3>
 
+      {open ? <div id={`${ids}-body`}>
       <div className={styles.grid}>
         <div className={styles.measure} data-wide="true">
           <label htmlFor={`${ids}-name`} className={styles.measureLabel}>{t('cakes.name')}</label>
@@ -151,8 +182,19 @@ export function MeasuresCard({ cake, edit, nameRef, nameInvalid }: Props) {
         />
         <MeasureBox id={`${ids}-tiers`} label={t('cakes.measure.tiers')} value={cake.tiers} onCommit={value => { move('tiers', value); }} />
         <MeasureBox id={`${ids}-discs`} label={t('cakes.measure.discs')} value={cake.discs} onCommit={value => { move('discs', value); }} />
+        <MeasureBox
+          id={`${ids}-height`}
+          label={t('cakes.measure.discHeight')}
+          ariaLabel={t('cakes.measure.discHeightAria')}
+          value={height}
+          display={heightText}
+          unit={t('cakes.ref.unitCm')}
+          inputMode="decimal"
+          onCommit={value => { move('discHeightCm', value); }}
+        />
       </div>
       {tiersNote === undefined ? null : <p className={styles.limit}>{tiersNote}</p>}
+      </div> : null}
     </section>
   );
 }

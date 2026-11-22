@@ -253,7 +253,15 @@ export function CakeForm({ id, cake, start = 'standard', titleRef, onSaved, onPa
   const priceBoxes = useRef<Partial<Record<PriceField, HTMLInputElement | null>>>({});
   // The box Save refused, waiting for its step to open (see save()).
   const revealAfterRender = useRef<PriceField | null>(null);
+  // The Measures card starts open for a new cake and folded for a saved one. Save with an empty name opens it, and the name box takes the
+  // focus once it is on the page.
+  const [measuresOpen, setMeasuresOpen] = useState(id === null);
+  const focusNameAfterRender = useRef(false);
   useLayoutEffect(() => {
+    if (focusNameAfterRender.current && nameBox.current) {
+      focusNameAfterRender.current = false;
+      reveal(nameBox.current);
+    }
     const field = revealAfterRender.current;
     if (field === null) return;
     const node = priceBoxes.current[field];
@@ -312,7 +320,11 @@ export function CakeForm({ id, cake, start = 'standard', titleRef, onSaved, onPa
     const name = working.name.trim();
     if (name === '') {
       setShowNameError(true);
-      reveal(nameBox.current);
+      if (nameBox.current) reveal(nameBox.current);
+      else {
+        focusNameAfterRender.current = true;
+        setMeasuresOpen(true);
+      }
       say(t('cakes.nameEmpty'));
       return;
     }
@@ -573,7 +585,7 @@ export function CakeForm({ id, cake, start = 'standard', titleRef, onSaved, onPa
           </div>
           <div className={styles.side}>
             <div className={styles.measures}>
-              <MeasuresCard cake={working} edit={edit} nameRef={nameBox} nameInvalid={showNameError && working.name.trim() === ''} />
+              <MeasuresCard cake={working} edit={edit} nameRef={nameBox} nameInvalid={showNameError && working.name.trim() === ''} open={measuresOpen} onToggle={setMeasuresOpen} />
             </div>
             <section className={`${styles.card} ${styles.parts}`} aria-labelledby={`${ids}-parts`}>
               <h3 id={`${ids}-parts`} className={styles.cardTitle}>

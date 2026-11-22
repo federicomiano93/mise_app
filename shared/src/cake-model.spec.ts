@@ -9,7 +9,7 @@ import { describe, expect, test } from 'vitest';
 import rules from '../../firestore.rules?raw';
 import {
   CAKE_MODEL, CAKE_PARTS, REFERENCE_KEYS, cakeGeometry, cakeIdOfProduct, cakeLineCosts, cakeNeeds, cakeProduct, cakeProductId,
-  cakeTotals, isCakeProductId, maxTiersFor, minDiameterFor, normalizeCake, normalizeReference, resolveLines, ruleGrams,
+  DEFAULT_DISC_HEIGHT_CM, cakeTotals, discHeightOf, isCakeProductId, maxTiersFor, normalizeDiscHeight, minDiameterFor, normalizeCake, normalizeReference, resolveLines, ruleGrams,
   sameReference, tierDiameters, toCakeDocument,
 } from './cake-model';
 import type { Cake, CakeLine, CakePart, ReferenceGrams } from './cake-model';
@@ -55,7 +55,7 @@ function cakeOf(overrides: Partial<Cake> = {}): Cake {
     id: 'c1', name: 'Wedding', diameterCm: 22, tiers: 1, discs: 3, slices: 20,
     lines: [line(0, 'base', 'SPONGE'), line(0, 'filling', 'GANACHE'), line(0, 'coating', 'GANACHE')],
     packaging: [{ ingredientId: 'BOX', qtyPcs: 1 }],
-    assemblyMinutes: 60, sellingPrice: 60, vatRate: 0, foodCostTarget: 30, categoryId: null, ref: REF, model: CAKE_MODEL,
+    assemblyMinutes: 60, sellingPrice: 60, vatRate: 0, foodCostTarget: 30, categoryId: null, discHeightCm: null, ref: REF, model: CAKE_MODEL,
     ...overrides,
   };
 }
@@ -83,6 +83,15 @@ describe('the grams rule', () => {
     expect(at('filling')).toBeCloseTo(782.1, 1);
     expect(at('coating')).toBeCloseTo(568.5, 1);
     expect(at('decoration')).toBeCloseTo(279.3, 1);
+  });
+  test('a cake with its own disc height scales the base by the height and the coating by the surface; soak and filling stay put', () => {
+    const at = (part: CakePart, height: number | null) => ruleGrams(REF, part, 22, 3, height) as number;
+    expect(at('base', 6)).toBeCloseTo(at('base', 3) * 2, 6);
+    const surface = (height: number) => Math.PI * 11 ** 2 + Math.PI * 22 * (3 * height);
+    expect(at('coating', 6)).toBeCloseTo(at('coating', 3) * surface(6) / surface(3), 6);
+    expect(at('coating', 6)).toBeGreaterThan(at('coating', 3));
+    for (const part of ['soak', 'filling', 'decoration'] as const) expect(at(part, 6)).toBeCloseTo(at(part, 3), 6);
+    expect(at('base', null)).toBeCloseTo(at('base', 3), 6);
   });
   test('one disc has no layer between two discs, and no reference gives no rule', () => {
     expect(ruleGrams(REF, 'filling', 22, 1)).toBe(0);
@@ -186,6 +195,15 @@ describe('toCakeDocument', () => {
     expect(doc['ref']).toEqual(REF);
     expect(doc['ref']).not.toBe(REF);
     expect(toCakeDocument(cakeOf({ ref: null }), 'now')['ref']).toBeNull();
+  });
+  test('it carries the cake’s own disc height, and a missing one reads back as null', () => {
+    expect(toCakeDocument(cakeOf({ discHeightCm: 4.5 }), 'now')['discHeightCm']).toBe(4.5);
+    expect(toCakeDocument(cakeOf(), 'now')['discHeightCm']).toBeNull();
+    const cake = cakeOf({ discHeightCm: 4.5 });
+    expect(normalizeCake({ ...toCakeDocument(cake, 'now'), id: cake.id })?.discHeightCm).toBe(4.5);
+    const bare = { ...toCakeDocument(cakeOf(), 'now'), id: 'c1' } as Record<string, unknown>;
+    delete bare['discHeightCm'];
+    expect(normalizeCake(bare)?.discHeightCm).toBeNull();
   });
   test('a saved document reads back to the same cake', () => {
     const cake = cakeOf();
@@ -341,6 +359,20 @@ describe('references', () => {
     expect(block).not.toBeNull();
     const listed = [...(block as RegExpExecArray)[1]!.matchAll(/'(\w+)'/g)].map(m => m[1]);
     expect([...REFERENCE_KEYS].sort()).toEqual([...listed].sort());
+  });
+});
+
+describe('the disc height', () => {
+  test('normalizeDiscHeight: none for absent or non-positive, else one decimal inside 0.5–20', () => {
+    for (const raw of [undefined, null, 'x', Number.NaN, 0, -2]) expect(normalizeDiscHeight(raw)).toBeNull();
+    expect(normalizeDiscHeight(4.46)).toBe(4.5);
+    expect(normalizeDiscHeight(0.1)).toBe(0.5);
+    expect(normalizeDiscHeight(99)).toBe(20);
+  });
+  test('discHeightOf: the cake’s own, else the reference’s, else the default', () => {
+    expect(discHeightOf({ discHeightCm: 5, ref: REF })).toBe(5);
+    expect(discHeightOf({ discHeightCm: null, ref: { ...REF, discHeightCm: 4 } })).toBe(4);
+    expect(discHeightOf({ discHeightCm: null, ref: null })).toBe(DEFAULT_DISC_HEIGHT_CM);
   });
 });
 

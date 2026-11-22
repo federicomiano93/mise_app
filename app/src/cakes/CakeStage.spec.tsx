@@ -33,7 +33,7 @@ vi.mock('./Cake3D', () => ({
 const CAKE: Cake = {
   id: 'c1', name: 'Plain', diameterCm: 22, tiers: 1, discs: 2, slices: 12,
   lines: [{ tier: 0, part: 'base', productId: 'SPONGE', grams: 500 }],
-  packaging: [], assemblyMinutes: null, sellingPrice: null, vatRate: null, foodCostTarget: null, categoryId: null, ref: null, model: 1,
+  packaging: [], assemblyMinutes: null, sellingPrice: null, vatRate: null, foodCostTarget: null, categoryId: null, discHeightCm: null, ref: null, model: 1,
 };
 const LABELS: StageLabels = {
   summary: 'Section drawing of the cake: 1 tier.',

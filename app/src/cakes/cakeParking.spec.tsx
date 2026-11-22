@@ -16,7 +16,7 @@ afterEach(() => { vi.unstubAllGlobals(); window.localStorage.clear(); resetParke
 
 const cake = (name: string): Cake => ({
   id: 'k', name, diameterCm: 20, tiers: 1, discs: 2, slices: 8, lines: [], packaging: [], assemblyMinutes: null,
-  sellingPrice: null, vatRate: null, foodCostTarget: null, categoryId: null, ref: null, model: 1,
+  sellingPrice: null, vatRate: null, foodCostTarget: null, categoryId: null, discHeightCm: null, ref: null, model: 1,
 });
 
 function copy(key: string, owner: { uid: string; locationId: string }, name = 'Torta'): ParkedCake {
