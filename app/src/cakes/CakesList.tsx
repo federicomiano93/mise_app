@@ -7,6 +7,9 @@ import { useT } from '../i18n/useT';
 import { useMoney } from '../session/useMoney';
 import { Button } from '../ui/Button';
 import { Dialog } from '../ui/Dialog';
+import { useConfirm } from '../ui/useConfirm';
+import { dropParked, useParkedCakes } from './cakeParking';
+import type { ParkedCake } from './cakeParking';
 import { useCakes } from './CakesContext';
 import { cakeSubLine, costCakes, matchingCakes } from './cakesListModel';
 import type { CakeRowData } from './cakesListModel';
@@ -17,6 +20,8 @@ type Props = {
   onOpenCake: (id: string) => void;
   // The question «How do you want to start?» is answered here, so the editor opens already knowing.
   onOpenNew: (start: CakeStart) => void;
+  // «Resume» on an unsaved cake set aside by «Open in Recipes»: opens its editor, which takes the copy back.
+  onResume: (copy: ParkedCake) => void;
 };
 
 // The list page: «New cake» over the cakes by name (the reference grams' Settings are the gear beside the title, CakesSection). A cake, a new cake or Settings
@@ -24,10 +29,12 @@ type Props = {
 //
 // ⚠️ A ROW IS COSTED FROM FOOD COST'S TABLES (products, recipes, prices), so the list waits for all of them: a cake would read
 // «incomplete» only because its numbers were still on their way.
-export function CakesList({ onOpenCake, onOpenNew }: Props) {
+export function CakesList({ onOpenCake, onOpenNew, onResume }: Props) {
   const { t } = useT();
   const money = useMoney();
   const handBack = useHandBack();
+  const parkedCakes = useParkedCakes();
+  const [confirm, confirmDialog] = useConfirm();
   const headId = useId();
   const { cakes, cakesLoaded } = useCakes();
   const { productsLoaded, recipesLoaded, ingredientsLoaded, tables } = useFoodcost();
@@ -44,8 +51,26 @@ export function CakesList({ onOpenCake, onOpenNew }: Props) {
 
   const newRef = useCallback((node: HTMLButtonElement | null) => { handBack.register(NEW_OPENER, node); }, [handBack]);
 
+  // ⚠️ P20: A COPY SET ASIDE IS NEVER DROPPED WITHOUT ASKING.
+  const discard = async (copy: ParkedCake) => {
+    const ok = await confirm({
+      title: t('cakes.parked.discardQ'),
+      okLabel: t('cakes.parked.discard'),
+      cancelLabel: t('common.cancel'),
+      danger: true,
+    });
+    if (ok) dropParked(copy.key);
+  };
+
   return (
     <div className={styles.column}>
+      {parkedCakes.map(copy => (
+        <div key={copy.key} className={styles.parked} role="group" aria-label={t('cakes.parked.line')}>
+          <p>{t('cakes.parked.line')}</p>
+          <Button variant="primary" onPress={() => { onResume(copy); }}>{t('cakes.parked.resume')}</Button>
+          <Button variant="quiet" onPress={() => { void discard(copy); }}>{t('cakes.parked.discard')}</Button>
+        </div>
+      ))}
       <div className={styles.actions}>
         <Button ref={newRef} variant="primary" className={styles.add} onPress={() => { setStarting(true); }}>
           <Plus aria-hidden="true" />
@@ -91,6 +116,8 @@ export function CakesList({ onOpenCake, onOpenNew }: Props) {
           ? <p className={styles.nothing}>{t('cakes.searchNone', { q: query.trim() })}</p>
           : null}
       </div>
+
+      {confirmDialog}
 
       {/* ⚠️ ONLY A NEW CAKE ASKS: a saved cake opens straight on its steps. Cancelling (or Escape) stays on the list. */}
       <Dialog

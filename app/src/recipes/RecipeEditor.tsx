@@ -38,7 +38,7 @@ import { ReorderRows } from './ReorderRows';
 import { NEW_OPENER, recipeOpener, useHandBack } from './handBack';
 import { FROM_EDITOR, cameFromDuplicate, carryOwner, forgetHandover, hasTypedCopy, peekHandedOver, typedCopyOf, withTypedCopy, withoutTypedCopy } from './photoCarry';
 import { recipePhotoOn } from './photoGate';
-import { cameFromList, cameFromRecipe, recipeCameFromList, useLeave } from './recipesNav';
+import { cameFromCake, cameFromList, cameFromRecipe, recipeCameFromList, useLeave } from './recipesNav';
 import { PHOTO_PATH, RECIPES_PATH, recipePath } from './recipesPath';
 import { useDeleteRecipe } from './useDeleteRecipe';
 import styles from './RecipeEditor.module.css';
@@ -504,6 +504,8 @@ export function RecipeEditor({ id, recipe, titleRef, onTyped }: Props) {
   // recipe that is gone). Opened [list, recipe, editor] from the list, that is a jump of two steps; any other way in (an
   // address, the Allergen sheet) replaces the editor with the list, as before.
   const leaveForList = () => {
+    // ⚠️ OPENED FROM A CAKE (Cakes' «Open in Recipes»): the cake's screen is the entry behind, and it is where a Save goes back to.
+    if (cameFromCake(state)) { void navigate(-1); return; }
     if (cameFromRecipe(state) && recipeCameFromList(state)) void navigate(-2);
     else void navigate(RECIPES_PATH, { replace: true, state: KEEP_FOCUS });
   };

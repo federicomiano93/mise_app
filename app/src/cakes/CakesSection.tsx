@@ -10,6 +10,7 @@ import { Page } from '../shell/Page';
 import { SettingsGear } from '../shell/SettingsGear';
 import { useOwnScrollArea } from '../shell/scrollArea';
 import { StatusMessageProvider, useStatusMessage } from '../ui/StatusMessage';
+import type { ParkedCake } from './cakeParking';
 import { CakesProvider, useCakesStore } from './CakesContext';
 import { CakesDetail } from './CakesDetail';
 import { CakesList } from './CakesList';
@@ -83,6 +84,12 @@ function CakesLayout({ view }: { view: CakesView }) {
     handBack.expect(NEW_OPENER);
     openScreen(newCakePath, { cakeStart: start });
   };
+  // «Resume» on an unsaved cake set aside by «Open in Recipes»: its editor opens and takes the copy back (the copy's key rides in the
+  // navigation state, which is how a NEW cake, whose address is always /cakes/new, finds its own).
+  const resume = (copy: ParkedCake) => {
+    handBack.expect(copy.savedId === null ? NEW_OPENER : productOpener(copy.savedId));
+    openScreen(copy.savedId === null ? newCakePath : cakePath(copy.savedId), { parkedCake: copy.key });
+  };
   const openReference = () => {
     handBack.expect(SETTINGS_OPENER);
     openScreen(referencePath);
@@ -124,7 +131,7 @@ function CakesLayout({ view }: { view: CakesView }) {
         <div className={styles.layout} data-view={view.kind === 'list' ? 'list' : 'detail'}>
           <div className={styles.list}>
             <PartBoundary>
-              <CakesList onOpenCake={openCake} onOpenNew={openNew} />
+              <CakesList onOpenCake={openCake} onOpenNew={openNew} onResume={resume} />
             </PartBoundary>
           </div>
           <div className={styles.detail}>

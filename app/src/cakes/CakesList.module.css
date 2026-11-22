@@ -18,6 +18,24 @@
   flex: none;
 }
 
+/* The line for an unsaved cake set aside by «Open in Recipes»: the editor's own band look, at the top of the list. */
+.parked {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s3);
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--accent-tint-2);
+  border-radius: var(--r-md);
+  background: var(--accent-tint);
+}
+
+.parked p {
+  flex: 1 1 200px;
+  margin: 0;
+  color: var(--ink);
+}
+
 .loading {
   padding: var(--s6);
   color: var(--ink-2);
