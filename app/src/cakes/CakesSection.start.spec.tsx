@@ -89,14 +89,14 @@ describe('a standard cake', () => {
     // A new cake is 20 cm with 3 discs, on the venue's reference: the rule gives a figure.
     expect(Number(grams.getAttribute('placeholder'))).toBeGreaterThan(0);
     expect(screen.getByText('ready')).toBeInTheDocument();
-    expect(screen.queryByText('There are no reference grams yet, so every line needs its grams typed by hand.')).not.toBeInTheDocument();
+    expect(screen.queryByText('There is no standard cake yet, so every line needs its grams typed by hand.')).not.toBeInTheDocument();
   });
 
-  it('with no reference grams anywhere still works as before: the band says to fill in the reference cake', async () => {
+  it('with no reference grams anywhere still works as before: the band says to fill in the standard cake', async () => {
     const { user } = await openList({ reference: false });
     await user.click((await ask(user)).getByRole('button', { name: /^Standard cake/ }));
     await screen.findByRole('heading', { level: 2, name: 'New cake' }, LOAD);
-    expect(screen.getByText('There are no reference grams yet, so every line needs its grams typed by hand.')).toBeInTheDocument();
+    expect(screen.getByText('There is no standard cake yet, so every line needs its grams typed by hand.')).toBeInTheDocument();
   });
 });
 
@@ -119,7 +119,7 @@ describe('a cake from scratch', () => {
     expect(screen.getByText('you type the grams of every part')).toBeInTheDocument();
     // The cost step says the cost is incomplete until they are.
     await user.click(screen.getByRole('button', { name: /^Cost and price/ }));
-    expect(screen.getByText('1 line without grams: type the grams or fill in the reference cake in Settings.')).toBeInTheDocument();
+    expect(screen.getByText('1 line without grams: type the grams or fill in the standard cake in Settings.')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /^Base/ }));
     await user.type(await screen.findByRole('textbox', { name: 'Sponge: grams' }), '500');
     await user.click(screen.getByRole('button', { name: /^Cost and price/ }));
@@ -128,8 +128,8 @@ describe('a cake from scratch', () => {
 
   it('keeps quiet about the venue’s reference grams: the person chose to ignore them', async () => {
     await start();
-    expect(screen.queryByText('The reference grams have changed since this cake was made.')).not.toBeInTheDocument();
-    expect(screen.queryByText('There are no reference grams yet, so every line needs its grams typed by hand.')).not.toBeInTheDocument();
+    expect(screen.queryByText('The standard cake has changed since this cake was made.')).not.toBeInTheDocument();
+    expect(screen.queryByText('There is no standard cake yet, so every line needs its grams typed by hand.')).not.toBeInTheDocument();
   });
 
   it('saves with no reference grams of its own', async () => {

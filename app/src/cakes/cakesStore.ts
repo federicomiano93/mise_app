@@ -11,17 +11,19 @@
 // ⚠️ A CAKE IS READ HERE AND SAVED BY FOOD COST'S STORE (foodcostStore.saveProduct with a companion): this store has no cake write,
 // so a cake and its Food cost card cannot be saved apart.
 //
-// ⚠️ THE REFERENCE GRAMS ARE LOCAL-FIRST (P20): memory and the screen move at once — offline too — and a write the database REFUSES
+// ⚠️ THE STANDARD CAKE IS LOCAL-FIRST (P20): memory and the screen move at once — offline too — and a write the database REFUSES
 // is rolled back and said out loud.
 
-import { normalizeCake, normalizeReference } from '@mise/shared/cake-model';
-import type { Cake, ReferenceGrams } from '@mise/shared/cake-model';
+import { normalizeCake } from '@mise/shared/cake-model';
+import type { Cake } from '@mise/shared/cake-model';
+import { normalizeStandard, sameStandard, toStandardDocument } from '@mise/shared/cake-standard';
+import type { CakeStandard } from '@mise/shared/cake-standard';
 import type { CakesSource } from './cakesSource';
 
 export type CakesMessage =
   // The cakes' live stream died.
   | { readonly kind: 'cakes-stream-broken' }
-  // The reference grams were refused: they are back as they were.
+  // The standard cake was refused: it is back as it was.
   | { readonly kind: 'reference-not-saved' };
 
 export interface CakesSnapshot {
@@ -31,8 +33,9 @@ export interface CakesSnapshot {
   readonly cakesLoaded: boolean;
   // The SERVER has answered about the cakes once: only then is «this cake no longer exists» the truth.
   readonly cakesFromServer: boolean;
-  // The venue's reference grams: null until they arrive, when there are none, and when they are not all eight and valid.
-  readonly reference: ReferenceGrams | null;
+  // The venue's standard cake (the table of grams per diameter): null until it arrives, when there is none, and when its `grams` are
+  // not all eight and valid. A document written before the table is read as a table with its one cake typed (normalizeStandard).
+  readonly standard: CakeStandard | null;
   // The reference has answered once: the server's word, or a copy that exists. A «missing» from this phone's own database is not an
   // answer (a device that never read it), so a screen never starts a cake from «no reference» when there is one.
   readonly referenceLoaded: boolean;
@@ -52,8 +55,8 @@ export interface CakesStore {
   // Starts the listeners; stop() ends them. Safe to call start → stop → start (React's development mode does exactly that).
   start(): void;
   stop(): void;
-  // The venue's reference grams, local-first; a refusal puts them back and says so. Whoever may not write them is refused by the rules.
-  saveReference(grams: ReferenceGrams): void;
+  // The venue's standard cake, local-first; a refusal puts it back and says so. Whoever may not write it is refused by the rules.
+  saveStandard(standard: CakeStandard): void;
 }
 
 export function readCakes(list: unknown): Cake[] {
@@ -66,11 +69,11 @@ export function readCakes(list: unknown): Cake[] {
   return out;
 }
 
-export function createCakesStore(source: CakesSource, deps: CakesDeps): CakesStore {
+export function createCakesStore(source: CakesSource, deps: CakesDeps, locationId: string): CakesStore {
   let cakes: readonly Cake[] = [];
   let cakesLoaded = false;
   let cakesFromServer = false;
-  let reference: ReferenceGrams | null = null;
+  let standard: CakeStandard | null = null;
   let referenceLoaded = false;
   let inFlight = 0;
 
@@ -81,7 +84,7 @@ export function createCakesStore(source: CakesSource, deps: CakesDeps): CakesSto
   let snapshot = build();
 
   function build(): CakesSnapshot {
-    return { cakes, cakesLoaded, cakesFromServer, reference, referenceLoaded, unsent: inFlight > 0 };
+    return { cakes, cakesLoaded, cakesFromServer, standard, referenceLoaded, unsent: inFlight > 0 };
   }
 
   function changed(): void {
@@ -92,9 +95,6 @@ export function createCakesStore(source: CakesSource, deps: CakesDeps): CakesSto
   function say(message: CakesMessage): void {
     for (const listener of [...messageListeners]) listener(message);
   }
-
-  const sameGrams = (a: ReferenceGrams | null, b: ReferenceGrams | null) =>
-    a === b || (!!a && !!b && JSON.stringify(a) === JSON.stringify(b));
 
   return {
     getSnapshot: () => snapshot,
@@ -133,8 +133,8 @@ export function createCakesStore(source: CakesSource, deps: CakesDeps): CakesSto
         // ⚠️ A «MISSING» FROM THIS PHONE'S OWN DATABASE IS NOT AN ANSWER: a device that never read the document has no copy of
         // it, and a cake started on «no reference» would copy nothing.
         if (!data && !meta.fromServer) return;
-        // The document is { bakery, grams, updatedAt }: the figures are its `grams`.
-        reference = normalizeReference(data ? data['grams'] : null);
+        // The document is { bakery, grams, rows, updatedAt } (no `rows` before the table existed).
+        standard = normalizeStandard(data);
         referenceLoaded = true;
         changed();
       }));
@@ -146,19 +146,19 @@ export function createCakesStore(source: CakesSource, deps: CakesDeps): CakesSto
       stops = [];
     },
 
-    saveReference(grams) {
-      const prev = reference;
-      const next = normalizeReference(grams);
-      if (!next) return;
-      reference = next;
+    saveStandard(next) {
+      const doc = toStandardDocument(next, locationId, new Date(deps.now()).toISOString());
+      if (!doc) return;
+      const prev = standard;
+      standard = next;
       changed();
       inFlight += 1;
       changed();
-      source.saveReference(next, new Date(deps.now()).toISOString()).then(() => undefined, err => {
-        deps.warn('The reference grams did not sync to Firestore:', err);
+      source.saveStandard(doc).then(() => undefined, err => {
+        deps.warn('The standard cake did not sync to Firestore:', err);
         // Only if nothing newer has arrived meanwhile (another save, or the listener).
-        if (sameGrams(reference, next)) {
-          reference = prev;
+        if (sameStandard(standard, next)) {
+          standard = prev;
           changed();
         }
         say({ kind: 'reference-not-saved' });

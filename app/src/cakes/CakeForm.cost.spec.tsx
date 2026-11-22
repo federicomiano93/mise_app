@@ -97,7 +97,7 @@ describe('the cost', () => {
     const cake = cakeDoc('c1', 'Plain', { ref: null, lines: [{ tier: 0, part: 'base', productId: 'SPONGE', grams: null }] });
     const { user } = await open(cake, { cakes: fakeCakesSource({ cakes: [cake], reference: null }) });
     const cost = await openCost(user);
-    expect(cost.getByText('1 line without grams: type the grams or fill in the reference cake in Settings.')).toBeInTheDocument();
+    expect(cost.getByText('1 line without grams: type the grams or fill in the standard cake in Settings.')).toBeInTheDocument();
     expect(cost.getByText('?')).toBeInTheDocument();
   });
 

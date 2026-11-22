@@ -19,7 +19,7 @@ export function CakesProvider({ children, deps }: { children: ReactNode; deps?: 
   const { locationId } = useSession();
   // Cakes are drawn only for a ready session (SectionRoute), so a venue is always open here.
   if (!locationId) throw new Error('Cakes need an open venue.');
-  const [store] = useState(() => createCakesStore(services.cakes(locationId), deps ?? browserCakesDeps()));
+  const [store] = useState(() => createCakesStore(services.cakes(locationId), deps ?? browserCakesDeps(), locationId));
 
   useEffect(() => {
     store.start();

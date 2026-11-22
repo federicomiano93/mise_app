@@ -9,8 +9,7 @@
 //
 // ⚠️ FIRESTORE COMES FROM THE SESSION'S BACKEND (`firestore()`), never from getFirestore() (src/firestore-access.spec.ts).
 
-import { REFERENCE_KEYS } from '@mise/shared/cake-model';
-import type { ReferenceGrams } from '@mise/shared/cake-model';
+import type { toStandardDocument } from '@mise/shared/cake-standard';
 import { buildPath } from '@mise/shared/location-id';
 import type { Query } from 'firebase/firestore';
 import type { StoredDoc } from '../foodcost/foodcostSource';
@@ -28,9 +27,12 @@ export interface CakesSource {
   // `cake-settings/reference`, live: its fields, or null when it does not exist OR cannot be read. A refusal counts as the
   // server's word, as the labour rate's does.
   watchReference(onChange: (data: Record<string, unknown> | null, meta: CakesMeta) => void): () => void;
-  // The reference grams, WHOLE, stamped for the venue. Resolves when the server has them (offline: later); rejects when refused.
-  saveReference(grams: ReferenceGrams, updatedAt: string): Promise<void>;
+  // The standard cake, WHOLE: exactly what toStandardDocument built (venue and stamp inside). Resolves when the server has it (offline:
+  // later); rejects when refused.
+  saveStandard(doc: StandardDocument): Promise<void>;
 }
+
+export type StandardDocument = NonNullable<ReturnType<typeof toStandardDocument>>;
 
 const CAKES = 'cakes';
 const SETTINGS = 'cake-settings';
@@ -89,13 +91,11 @@ export function createFirestoreCakesSource(
       },
     ), () => onChange(null, { fromServer: true })),
 
-    // ⚠️ WHOLE, NOT MERGED, AND ONLY THE EIGHT KEYS: the rules want exactly `bakery`, `grams`, `updatedAt` and exactly the eight
-    // figures inside `grams`; a stray key from a caller would be a refused save, so it is built here from the list.
-    async saveReference(grams, updatedAt) {
+    // ⚠️ WHOLE, NOT MERGED: setDoc of exactly what toStandardDocument returned (`bakery`, `grams`, `rows`, `updatedAt`, the keys the
+    // rules list). It is built in shared/, where a spec pins it; nothing is added or dropped here.
+    async saveStandard(doc) {
       const { fs, db } = await firestore();
-      const whole: Record<string, number> = {};
-      for (const key of REFERENCE_KEYS) whole[key] = grams[key];
-      await fs.setDoc(fs.doc(db, settingsPath, REFERENCE_DOC), { bakery: locationId, grams: whole, updatedAt });
+      await fs.setDoc(fs.doc(db, settingsPath, REFERENCE_DOC), doc);
     },
   };
 }

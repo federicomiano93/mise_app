@@ -17,6 +17,7 @@ import { marginPointFor } from '../foodcost/productEditorModel';
 import { PartBoundary } from '../errors/PartBoundary';
 import type { MessageKey } from '../i18n/en';
 import { useT } from '../i18n/useT';
+import { referenceFor } from '@mise/shared/cake-standard';
 import { markBusy } from '../session/busy';
 import { useSession } from '../session/SessionContext';
 import { useMoney } from '../session/useMoney';
@@ -26,7 +27,7 @@ import { FormBar } from '../ui/FormBar';
 import { useStatusMessage } from '../ui/StatusMessage';
 import { useConfirm } from '../ui/useConfirm';
 import {
-  costable, firstEmptyPack, isDirty, referenceChanged, setMeasure, setPrice, setTarget, setVat, takeReference, vatFromSelect, workingFrom,
+  costable, firstEmptyPack, followStandard, isDirty, NEW_DIAMETER_CM, referenceChanged, setMeasure, setPrice, setTarget, setVat, takeReference, vatFromSelect, workingFrom,
 } from './cakeEditorModel';
 import type { Selected } from './cakeEditorModel';
 import { CakeStage } from './CakeStage';
@@ -80,7 +81,7 @@ export function CakeForm({ id, cake, start = 'standard', titleRef, onSaved }: Pr
   const { t } = useT();
   const store = useFoodcostStore();
   const snap = useFoodcost();
-  const { reference, referenceLoaded } = useCakes();
+  const { standard, referenceLoaded } = useCakes();
   const { canManage, location } = useSession();
   const money = useMoney();
   const say = useStatusMessage();
@@ -99,7 +100,7 @@ export function CakeForm({ id, cake, start = 'standard', titleRef, onSaved }: Pr
   // ⚠️ «FROM SCRATCH» TAKES NO REFERENCE GRAMS: the cake starts with `ref: null`, so every line needs its grams typed, and the bands about
   // the venue's reference grams stay quiet for it (the person chose to ignore them).
   const [fromScratch] = useState(() => id === null && start === 'zero');
-  const [initial, setInitial] = useState<Cake>(() => workingFrom(cake, fromScratch ? null : reference, newId));
+  const [initial, setInitial] = useState<Cake>(() => workingFrom(cake, fromScratch ? null : referenceFor(standard, NEW_DIAMETER_CM), newId));
   const [working, setWorking] = useState<Cake>(initial);
   const [texts, setTexts] = useState<PriceTexts>(() => {
     const vat = vatSelection(initial.vatRate, country);
@@ -126,7 +127,7 @@ export function CakeForm({ id, cake, start = 'standard', titleRef, onSaved }: Pr
   const touched = useRef(false);
   const edit = (change: (current: Cake) => Cake) => {
     touched.current = true;
-    setWorking(change);
+    setWorking(current => followStandard(current, change(current), standard));
   };
   // Unsaved edits: a reload the app starts by itself waits (session/busy.ts).
   useEffect(() => (dirty ? markBusy() : undefined), [dirty]);
@@ -391,7 +392,7 @@ export function CakeForm({ id, cake, start = 'standard', titleRef, onSaved }: Pr
     total: hasParts ? t('cakes.stage.total', { cost: rawText }) : '',
   }), [t, money, working.tiers, working.discs, cardNames, figures, hasParts, rawText]);
 
-  const venueRef = reference;
+  const venueRef = referenceFor(standard, working.diameterCm);
   // ⚠️ A CAKE WITH NO REFERENCE OF ITS OWN IS «TYPED BY HAND» once the venue has reference grams: a saved «from scratch» cake (it keeps
   // `ref: null`) must not claim its grams were left out. With no venue reference at all it is the «no reference» case below.
   const typedByHand = fromScratch || (working.ref === null && venueRef !== null);

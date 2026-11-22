@@ -254,10 +254,10 @@ describe('the reference grams', () => {
     const older = cakeDoc('c1', 'Plain', { diameterCm: 22, discs: 3, ref: { ...REFERENCE, baseG: 200 } });
     const { user } = await open('/cakes/c1', older);
     await openStep(user, 'Base');
-    expect(screen.getByText('The reference grams have changed since this cake was made.')).toBeInTheDocument();
+    expect(screen.getByText('The standard cake has changed since this cake was made.')).toBeInTheDocument();
     expect(screen.getByText('200 g per disc × 3 discs, scaled to Ø 22')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Update this cake to the current reference grams' }));
-    expect(screen.queryByText('The reference grams have changed since this cake was made.')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Update this cake to the current standard cake' }));
+    expect(screen.queryByText('The standard cake has changed since this cake was made.')).not.toBeInTheDocument();
     expect(screen.getByText('300 g per disc × 3 discs, scaled to Ø 22')).toBeInTheDocument();
     // …which is a change: leaving asks.
     await user.click(screen.getByRole('button', { name: 'Back' }));
@@ -268,8 +268,8 @@ describe('the reference grams', () => {
     const typed = cakeDoc('c1', 'Plain', { diameterCm: 22, discs: 3, ref: null, lines: [{ tier: 0, part: 'base', productId: 'SPONGE', grams: 900 }] });
     const { user } = await open('/cakes/c1', typed);
     await openStep(user, 'Base');
-    expect(screen.queryByText('The reference grams have changed since this cake was made.')).not.toBeInTheDocument();
-    expect(screen.queryByText('There are no reference grams yet, so every line needs its grams typed by hand.')).not.toBeInTheDocument();
+    expect(screen.queryByText('The standard cake has changed since this cake was made.')).not.toBeInTheDocument();
+    expect(screen.queryByText('There is no standard cake yet, so every line needs its grams typed by hand.')).not.toBeInTheDocument();
     expect(screen.getByText('type the grams by hand')).toBeInTheDocument();
     expect(screen.getByText('you type the grams of every part')).toBeInTheDocument();
   });
@@ -277,7 +277,7 @@ describe('the reference grams', () => {
   it('a cake with no reference of its own and a line with no grams still offers the venue’s grams', async () => {
     const empty = cakeDoc('c1', 'Plain', { diameterCm: 22, discs: 3, ref: null, lines: [{ tier: 0, part: 'base', productId: 'SPONGE', grams: null }] });
     await open('/cakes/c1', empty);
-    expect(screen.getByText('The reference grams have changed since this cake was made.')).toBeInTheDocument();
+    expect(screen.getByText('The standard cake has changed since this cake was made.')).toBeInTheDocument();
   });
 
   it('with no reference grams anywhere, says every line needs its grams and links to the reference screen', async () => {
@@ -287,16 +287,43 @@ describe('the reference grams', () => {
     });
     await screen.findByRole('heading', { level: 2, name: 'Plain' }, LOAD);
     await openStep(view.user, 'Base');
-    expect(screen.getByText('There are no reference grams yet, so every line needs its grams typed by hand.')).toBeInTheDocument();
-    expect(screen.getAllByText('no reference grams yet: type the grams').length).toBeGreaterThan(0);
-    const band = screen.getByText('There are no reference grams yet, so every line needs its grams typed by hand.').parentElement as HTMLElement;
-    await view.user.click(within(band).getByRole('button', { name: 'Fill in the reference cake' }));
+    expect(screen.getByText('There is no standard cake yet, so every line needs its grams typed by hand.')).toBeInTheDocument();
+    expect(screen.getAllByText('no standard cake yet: type the grams').length).toBeGreaterThan(0);
+    const band = screen.getByText('There is no standard cake yet, so every line needs its grams typed by hand.').parentElement as HTMLElement;
+    await view.user.click(within(band).getByRole('button', { name: 'Fill in the standard cake' }));
     await waitFor(() => { expect(view.router.state.location.pathname).toBe('/cakes/reference'); });
+  });
+
+  describe('changing the diameter', () => {
+    const diameter = async (user: UserEvent, value: string) => {
+      const field = screen.getByRole('textbox', { name: 'Diameter in centimetres' });
+      await user.clear(field);
+      await user.type(field, `${value}{Enter}`);
+    };
+
+    it('a cake that follows the standard table keeps following it: the rule grams change with the diameter and no «changed» band appears', async () => {
+      const { user } = await open();
+      await openStep(user, 'Base');
+      expect(screen.getByText('300 g per disc × 3 discs, scaled to Ø 22')).toBeInTheDocument();
+      await diameter(user, '24');
+      // The legacy table types only 22 cm: 300 g × (24/22)² = 357 g, rounded to 360 g.
+      expect(await screen.findByText('360 g per disc × 3 discs, scaled to Ø 24')).toBeInTheDocument();
+      expect(screen.queryByText('The standard cake has changed since this cake was made.')).not.toBeInTheDocument();
+    });
+
+    it('a cake made from an older table does not follow: it keeps its grams and the band offers the update', async () => {
+      const older = cakeDoc('c1', 'Plain', { diameterCm: 22, discs: 3, ref: { ...REFERENCE, baseG: 200 } });
+      const { user } = await open('/cakes/c1', older);
+      await openStep(user, 'Base');
+      await diameter(user, '24');
+      expect(await screen.findByText('The standard cake has changed since this cake was made.')).toBeInTheDocument();
+      expect(screen.getByText('200 g per disc × 3 discs, scaled to Ø 24')).toBeInTheDocument();
+    });
   });
 
   it('a new cake with no reference grams anywhere starts with none', async () => {
     renderCakes('/cakes/new', { cakes: fakeCakesSource({ cakes: [], reference: null }), foodcost: foodcost() });
     await screen.findByRole('heading', { level: 2, name: 'New cake' }, LOAD);
-    expect(screen.getByText('There are no reference grams yet, so every line needs its grams typed by hand.')).toBeInTheDocument();
+    expect(screen.getByText('There is no standard cake yet, so every line needs its grams typed by hand.')).toBeInTheDocument();
   });
 });

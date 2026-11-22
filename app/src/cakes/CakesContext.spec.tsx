@@ -11,13 +11,13 @@ import { CakesProvider, useCakes, useCakesStore } from './CakesContext';
 const REF: ReferenceGrams = { diameterCm: 22, discs: 3, discHeightCm: 3, baseG: 300, soakG: 90, fillingG: 280, coatingG: 450, decorationG: 200 };
 
 function Probe() {
-  const { cakes, cakesLoaded, reference } = useCakes();
+  const { cakes, cakesLoaded, standard } = useCakes();
   const store = useCakesStore();
   return (
     <div>
       <p>{cakesLoaded ? `cakes: ${cakes.map(c => c.name).join(',')}` : 'loading'}</p>
-      <p>{reference ? `base ${reference.baseG}` : 'no reference'}</p>
-      <button type="button" onClick={() => store.saveReference({ ...REF, baseG: 350 })}>save</button>
+      <p>{standard ? `base ${standard.rows.find(r => r.diameterCm === 22)?.baseG}` : 'no reference'}</p>
+      <button type="button" onClick={() => store.saveStandard({ ...standard!, rows: standard!.rows.map(r => (r.diameterCm === 22 ? { ...r, baseG: 350 } : r)) })}>save</button>
     </div>
   );
 }

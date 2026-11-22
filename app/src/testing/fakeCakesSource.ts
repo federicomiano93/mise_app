@@ -1,5 +1,5 @@
 import { vi } from 'vitest';
-import type { CakesMeta, CakesSource } from '../cakes/cakesSource';
+import type { CakesMeta, CakesSource, StandardDocument } from '../cakes/cakesSource';
 import type { StoredDoc } from '../foodcost/foodcostSource';
 
 // A Cakes source for the specs of screens, in memory: the cakes and the reference grams are plain values, every answer comes from
@@ -18,8 +18,8 @@ export type FakeCakesSource = CakesSource & {
   reference: Record<string, unknown> | null;
   // The next reference save is refused (permission-denied).
   refuse: { reference: boolean };
-  // Every reference write that reached the source, in order.
-  saved: { grams: unknown; updatedAt: string }[];
+  // Every standard write that reached the source, in order.
+  saved: StandardDocument[];
   // The reference answers from this phone's own copy only (a first visit offline): a missing document is then NOT an answer.
   referenceOffline: boolean;
   // Tells every watcher again, as another phone's write would.
@@ -70,10 +70,10 @@ export function fakeCakesSource(seed: { cakes?: StoredDoc[]; reference?: Record<
       return () => { referenceWatchers.delete(onChange); };
     }),
 
-    saveReference: vi.fn<CakesSource['saveReference']>(async (grams, updatedAt) => {
+    saveStandard: vi.fn<CakesSource['saveStandard']>(async doc => {
       if (refuse.reference) throw refused();
-      saved.push({ grams, updatedAt });
-      fake.reference = { bakery: 'bakery', grams: { ...grams }, updatedAt };
+      saved.push(doc);
+      fake.reference = { ...doc };
       fake.push();
     }),
   };

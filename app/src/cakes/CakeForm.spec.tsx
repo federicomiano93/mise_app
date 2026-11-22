@@ -1,5 +1,6 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
+import { normalizeStandard, referenceFor } from '@mise/shared/cake-standard';
 import { fakeCakesSource } from '../testing/fakeCakesSource';
 import { REFERENCE, cakeDoc, renderCakes, storedReference } from '../testing/renderCakes';
 import { EMPLOYEE, LOAD } from '../testing/renderFoodcost';
@@ -108,7 +109,7 @@ describe('Save', () => {
     expect(foodcost.saved).toHaveLength(0);
   });
 
-  it('a new cake copies the venue’s reference grams, is saved under its own address and stays open, now «On the price list»', async () => {
+  it('a new cake takes the standard cake’s figures at its own diameter, is saved under its own address and stays open, now «On the price list»', async () => {
     const { user, foodcost, router } = await open('/cakes/new');
     await heading('New cake');
     await user.type(screen.getByRole('textbox', { name: 'Name' }), 'Torta di prova');
@@ -119,7 +120,10 @@ describe('Save', () => {
     const cakeId = (write?.companion as { id: string }).id;
     expect(write?.id).toBe(`cake-${cakeId}`);
     const data = (write?.companion as { data: Record<string, unknown> }).data;
-    expect(data).toMatchObject({ name: 'Torta di prova', tiers: 1, discs: 3, lines: [], ref: REFERENCE });
+    expect(data).toMatchObject({ name: 'Torta di prova', tiers: 1, discs: 3, lines: [] });
+    // 20 cm is not a typed row of the legacy table (22 cm is): the figures are the table's, scaled to 20 cm.
+    expect(data['ref']).toEqual(referenceFor(normalizeStandard(storedReference()), 20));
+    expect(data['ref']).toMatchObject({ diameterCm: 20, discs: 3, discHeightCm: 3, baseG: 250 });
     await waitFor(() => { expect(router.state.location.pathname).toBe(`/cakes/${cakeId}`); });
     expect(router.state.historyAction).toBe('REPLACE');
     // Its own address names it: the header says the name, no longer «New cake» (the form is kept, it is not remounted).

@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { CAKE_MODEL, MAX_CARDS_PER_PART, MAX_PACKAGING, cakeProductId } from '@mise/shared/cake-model';
 import type { Cake, ReferenceGrams } from '@mise/shared/cake-model';
+import { referenceFor } from '@mise/shared/cake-standard';
+import type { CakeStandard } from '@mise/shared/cake-standard';
 import {
-  addCard, addPack, canAddCard, cardsIn, firstEmptyPack, isDirty, referenceChanged, removeCard, removePack, resetGrams,
+  addCard, addPack, canAddCard, cardsIn, firstEmptyPack, followStandard, isDirty, referenceChanged, removeCard, removePack, resetGrams,
   setGrams, setMeasure, setName, setPackQty, setPrice, setTarget, setVat, takeReference, vatFromSelect, workingFrom,
 } from './cakeEditorModel';
 
@@ -214,5 +216,49 @@ describe('the reference grams', () => {
   it('hand-typed grams stay when the reference is taken', () => {
     const typed = setGrams(CAKE, 1, 'base', 'SPONGE', '400');
     expect(takeReference(typed, NEWER).lines[1]?.grams).toBe(400);
+  });
+});
+
+describe('followStandard', () => {
+  // Two typed rows: 20 cm and 28 cm; the other diameters are scaled from them.
+  const STANDARD: CakeStandard = {
+    discs: 3, discHeightCm: 3,
+    rows: [
+      { diameterCm: 20, baseG: 250, soakG: 80, fillingG: 240, coatingG: 400, decorationG: 180 },
+      { diameterCm: 28, baseG: 490, soakG: 160, fillingG: 470, coatingG: 700, decorationG: 250 },
+    ],
+  };
+  const following = (): Cake => ({ ...CAKE, diameterCm: 20, tiers: 1, ref: referenceFor(STANDARD, 20) });
+  const widened = (cake: Cake): Cake => ({ ...cake, diameterCm: 28 });
+
+  it('a cake that follows the table takes the table’s figures at its new diameter', () => {
+    const before = following();
+    const after = followStandard(before, widened(before), STANDARD);
+    expect(after.ref).toEqual(referenceFor(STANDARD, 28));
+    expect(after.ref?.baseG).toBe(490);
+    expect(after.diameterCm).toBe(28);
+  });
+
+  it('does not follow a cake made from scratch', () => {
+    const before = { ...following(), ref: null };
+    expect(followStandard(before, widened(before), STANDARD).ref).toBeNull();
+  });
+
+  it('does not follow a cake whose reference is from an older table', () => {
+    const before = { ...following(), ref: { ...(referenceFor(STANDARD, 20) as ReferenceGrams), baseG: 999 } };
+    const after = followStandard(before, widened(before), STANDARD);
+    expect(after.ref).toEqual(before.ref);
+  });
+
+  it('changes nothing when the diameter is the same', () => {
+    const before = following();
+    const after = { ...before, name: 'Other' };
+    expect(followStandard(before, after, STANDARD)).toBe(after);
+  });
+
+  it('changes nothing when the venue has no standard', () => {
+    const before = following();
+    const after = widened(before);
+    expect(followStandard(before, after, null)).toBe(after);
   });
 });
