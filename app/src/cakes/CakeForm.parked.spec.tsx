@@ -65,8 +65,8 @@ describe('«Open in Recipes»', () => {
     await waitFor(() => { expect(router.state.location.pathname).toBe(`/recipes/${recipeId}/edit`); });
     expect(screen.queryByRole('alertdialog', { name: 'Discard changes?' })).not.toBeInTheDocument();
     expect(await screen.findByRole('region', { name: 'Edit recipe' }, LOAD)).toBeInTheDocument();
-    // Parked, the copy is an unsaved edit: the app never reloads itself under it.
-    expect(isBusy()).toBe(true);
+    // ⚠️ A parked copy deliberately holds NO busy mark (session/busy.ts): only the recipe editor's own dirty state would.
+    expect(isBusy()).toBe(false);
   });
 
   it('Back from the editor brings the person to the SAME cake, as it was typed, and still unsaved', async () => {
@@ -129,38 +129,40 @@ describe('leaving the Recipes some other way', () => {
     await openInRecipes(view.user);
     await screen.findByRole('region', { name: 'Edit recipe' }, LOAD);
     await act(async () => { await view.router.navigate('/cakes'); });
-    await screen.findByText('There is an unsaved cake', undefined, LOAD);
+    await screen.findByText('Unsaved cake: Torta di prova', undefined, LOAD);
     return view;
   }
 
   it('the list says so at the top, with «Resume» and a low-key «Discard»', async () => {
     await leaveByTheRail();
-    const line = screen.getByRole('group', { name: 'There is an unsaved cake' });
+    const line = screen.getByRole('group', { name: 'Unsaved cake: Torta di prova' });
     expect(within(line).getAllByRole('button').map(button => button.textContent)).toEqual(['Resume', 'Discard']);
-    expect(isBusy()).toBe(true);
+    // The buttons say which cake they are about.
+    expect(within(line).getByRole('button', { name: 'Resume “Torta di prova”' })).toBeInTheDocument();
+    expect(within(line).getByRole('button', { name: 'Discard “Torta di prova”' })).toBeInTheDocument();
+    expect(isBusy()).toBe(false);
   });
 
   it('«Resume» opens the cake with the copy back, and the line is gone', async () => {
     const { user, router } = await leaveByTheRail();
-    await user.click(screen.getByRole('button', { name: 'Resume' }));
+    await user.click(screen.getByRole('button', { name: 'Resume “Torta di prova”' }));
     await waitFor(() => { expect(router.state.location.pathname).toBe('/cakes/new'); });
     expect(await screen.findByRole('textbox', { name: 'Tiramisu: grams' }, LOAD)).toBeInTheDocument();
     expect(screen.getByRole('textbox', { name: 'Name' })).toHaveValue('Torta di prova');
-    expect(screen.queryByText('There is an unsaved cake')).not.toBeInTheDocument();
+    expect(screen.queryByText('Unsaved cake: Torta di prova')).not.toBeInTheDocument();
   });
 
   it('«Discard» asks first; cancelling keeps the line, confirming drops it and lets the app reload again', async () => {
     const { user } = await leaveByTheRail();
-    await user.click(screen.getByRole('button', { name: 'Discard' }));
+    await user.click(screen.getByRole('button', { name: 'Discard “Torta di prova”' }));
     const question = await screen.findByRole('alertdialog', { name: 'Discard the unsaved cake?' });
+    expect(question).toHaveTextContent('The changes to “Torta di prova” that were not saved will be lost.');
     await user.click(within(question).getByRole('button', { name: 'Cancel' }));
-    expect(screen.getByText('There is an unsaved cake')).toBeInTheDocument();
-    expect(isBusy()).toBe(true);
+    expect(screen.getByText('Unsaved cake: Torta di prova')).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: 'Discard' }));
+    await user.click(screen.getByRole('button', { name: 'Discard “Torta di prova”' }));
     const again = await screen.findByRole('alertdialog', { name: 'Discard the unsaved cake?' });
     await user.click(within(again).getByRole('button', { name: 'Discard' }));
-    await waitFor(() => { expect(screen.queryByText('There is an unsaved cake')).not.toBeInTheDocument(); });
-    expect(isBusy()).toBe(false);
+    await waitFor(() => { expect(screen.queryByText('Unsaved cake: Torta di prova')).not.toBeInTheDocument(); });
   });
 });

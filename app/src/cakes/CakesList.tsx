@@ -52,9 +52,12 @@ export function CakesList({ onOpenCake, onOpenNew, onResume }: Props) {
   const newRef = useCallback((node: HTMLButtonElement | null) => { handBack.register(NEW_OPENER, node); }, [handBack]);
 
   // ⚠️ P20: A COPY SET ASIDE IS NEVER DROPPED WITHOUT ASKING.
+  // The cake's own name; a cake with none yet is «new cake» (the line says «Unsaved new cake» for it).
+  const nameOf = (copy: ParkedCake): string => copy.working.name.trim();
   const discard = async (copy: ParkedCake) => {
     const ok = await confirm({
       title: t('cakes.parked.discardQ'),
+      message: t('cakes.parked.discardBody', { name: nameOf(copy) === '' ? t('cakes.parked.blankName') : nameOf(copy) }),
       okLabel: t('cakes.parked.discard'),
       cancelLabel: t('common.cancel'),
       danger: true,
@@ -64,13 +67,18 @@ export function CakesList({ onOpenCake, onOpenNew, onResume }: Props) {
 
   return (
     <div className={styles.column}>
-      {parkedCakes.map(copy => (
-        <div key={copy.key} className={styles.parked} role="group" aria-label={t('cakes.parked.line')}>
-          <p>{t('cakes.parked.line')}</p>
-          <Button variant="primary" onPress={() => { onResume(copy); }}>{t('cakes.parked.resume')}</Button>
-          <Button variant="quiet" onPress={() => { void discard(copy); }}>{t('cakes.parked.discard')}</Button>
-        </div>
-      ))}
+      {parkedCakes.map(copy => {
+        const name = nameOf(copy);
+        const line = name === '' ? t('cakes.parked.lineBlank') : t('cakes.parked.lineNamed', { name });
+        const who = name === '' ? t('cakes.parked.blankName') : name;
+        return (
+          <div key={copy.key} className={styles.parked} role="group" aria-label={line}>
+            <p>{line}</p>
+            <Button variant="primary" aria-label={t('cakes.parked.resumeAria', { name: who })} onPress={() => { onResume(copy); }}>{t('cakes.parked.resume')}</Button>
+            <Button variant="quiet" aria-label={t('cakes.parked.discardAria', { name: who })} onPress={() => { void discard(copy); }}>{t('cakes.parked.discard')}</Button>
+          </div>
+        );
+      })}
       <div className={styles.actions}>
         <Button ref={newRef} variant="primary" className={styles.add} onPress={() => { setStarting(true); }}>
           <Plus aria-hidden="true" />
