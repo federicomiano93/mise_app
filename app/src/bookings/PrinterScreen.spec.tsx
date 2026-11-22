@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, screen, waitFor, within } from '@testing-library/react';
 import { todayISO } from '@mise/shared/day';
-import { isBusy } from '../session/busy';
+import { hasUnsavedWork, isBusy } from '../session/busy';
 import { bookingFixture, fakeBookingsSource } from '../testing/fakeBookingsSource';
 import { renderApp } from '../testing/renderApp';
 import { PRINTER_HOST_KEY, PRINTER_PLAIN_KEY } from './printerHost';
@@ -80,6 +80,12 @@ describe('the receipt printer screen', () => {
     expect(localStorage.getItem(PRINTER_HOST_KEY)).toBe('192.168.1.50');
     expect(localStorage.getItem(PRINTER_PLAIN_KEY)).toBe('1');
     expect(reloadPage).toHaveBeenCalledTimes(1);
+    // ⚠️ Saved means not dirty: the mark is let go, so the reload that follows meets no «leave this page?» question.
+    await waitFor(() => { expect(isBusy()).toBe(false); });
+    const event = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(event);
+    expect(hasUnsavedWork()).toBe(false);
+    expect(event.defaultPrevented).toBe(false);
   });
 
   it('leaving with an address typed and not saved asks; Cancel stays', async () => {

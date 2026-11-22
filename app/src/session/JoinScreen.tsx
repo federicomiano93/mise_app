@@ -12,7 +12,7 @@ import { Button } from '../ui/Button';
 import { useConfirm } from '../ui/useConfirm';
 import { authCodeOf, signInErrorKey } from './authErrors';
 import type { SessionUser } from './backend';
-import { markBusy } from './busy';
+import { markBusy, markLeavingOnPurpose } from './busy';
 import { GateScreen } from './GateScreen';
 import { InstallGuideLink } from './InstallGuideLink';
 import { joinRefusal } from './joinErrors';
@@ -280,6 +280,7 @@ export function JoinScreen() {
       // ⚠️ THE JOIN SUCCEEDED; only opening the venue on this page did not. Saying «could not check the code» now would be
       // false, and a retry would only be told «already in this business». A fresh page opens the venue the session finds.
       flowStore.finish();
+      markLeavingOnPurpose();
       window.location.reload();
     } finally {
       release();

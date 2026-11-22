@@ -39,9 +39,11 @@ export function StocktakeProvider({ children, deps }: { children: ReactNode; dep
 // ⚠️ A COUNT NOT YET CONFIRMED IS AN UNSAVED EDIT (architecture rule 2): the session's self-started
 // reload waits while one is waiting or in the air, so it never cuts a write short. Offline that can
 // be a long while — and offline there is no server copy to reload for either.
+// ⚠️ A QUIET HOLD: it keeps a self-started reload away, but a CLOSED window loses nothing (Firestore's offline cache keeps the write), so the
+// browser's «leave this page?» question ignores it (session/busy.ts).
 function BusyWhileUnsent() {
   const { unsent } = useStocktake();
-  useEffect(() => (unsent ? markBusy() : undefined), [unsent]);
+  useEffect(() => (unsent ? markBusy({ quiet: true }) : undefined), [unsent]);
   return null;
 }
 

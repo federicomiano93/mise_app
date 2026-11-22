@@ -1,5 +1,6 @@
 import { Button } from 'react-aria-components';
 import { useT } from '../i18n/useT';
+import { markLeavingOnPurpose } from '../session/busy';
 import styles from './RootError.module.css';
 
 // The whole-app error screen: what a person sees when the shell itself failed. It is the root
@@ -16,7 +17,7 @@ export function RootError() {
       <div className={styles.card}>
         <h1 className={styles.title}>{t('app.failed.title')}</h1>
         <p className={styles.body}>{t('app.failed.body')}</p>
-        <Button className={styles.reload} onPress={() => window.location.reload()}>
+        <Button className={styles.reload} onPress={() => { markLeavingOnPurpose(); window.location.reload(); }}>
           {t('app.failed.action')}
         </Button>
       </div>

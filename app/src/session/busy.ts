@@ -32,7 +32,7 @@
 // screen, possibly for ever; a hold for it would keep the device off every update and every rollback, and the person who left it may
 // never come back. Losing it to a reload the app starts by itself is still the price, but a forced close no longer loses it: while a cake form
 // is dirty a copy is also written on the device, and the list offers it again (the recipe editor it was parked for holds the mark while dirty).
-// ⚠️ THE BROWSER'S OWN QUESTION: while anything but the kiosk's rest holds the mark, closing or reloading the page makes the browser ask
+// ⚠️ THE BROWSER'S OWN QUESTION: while anything but a QUIET hold (the kiosk's rest, the offline «not sent yet» holds) holds the mark, closing or reloading the page makes the browser ask
 // «leave this page?» (shell/useLeaveWarning.ts), so every editor that holds the mark is protected from a closed window, not only from an update.
 // ⚠️ A HOLD MUST END: a screen left open with a hold that never lets go keeps that device off every update, and off the
 // way back after a revert. (Not the sign-in form for that reason: a browser's autofill or a half-typed address left on
@@ -46,22 +46,37 @@
 // Each hold is its own release function, so a holder can ask about everybody but itself.
 const holders = new Set<() => void>();
 
-// The kiosk's rest screen is a hold that means «nobody is looking», not «somebody has typed something»: it is marked as a REST hold, which
-// the browser's «leave this page?» question ignores (shell/useLeaveWarning.ts).
-const resting = new Set<() => void>();
+// A hold that must NOT make the browser ask «leave this page?» (shell/useLeaveWarning.ts) is marked QUIET: the kiosk's rest screen
+// («nobody is looking», not «somebody has typed something»), and the offline «not sent yet» holds, whose writes Firestore's own
+// offline cache keeps across a closed page. `isBusy()` (the update banner, a self-started reload) still counts them all.
+// `quiet` is `true`, or a function asked at the moment of closing («is there nothing to lose right now?»).
+const quiet = new Map<() => void, () => boolean>();
 
-export function markBusy(options: { rest?: boolean } = {}): () => void {
-  const release = () => { holders.delete(release); resting.delete(release); };
+export function markBusy(options: { quiet?: boolean | (() => boolean) } = {}): () => void {
+  const release = () => { holders.delete(release); quiet.delete(release); };
   holders.add(release);
-  if (options.rest === true) resting.add(release);
+  const q = options.quiet;
+  if (q === true) quiet.set(release, () => true);
+  else if (typeof q === 'function') quiet.set(release, q);
   return release;
 }
 
-// Is somebody holding something that is NOT the kiosk's rest? The browser asks «leave this page?» only then: a resting tablet has
-// written nothing that a closed window would lose.
+// The app's own deliberate reload or navigation away (a saved printer, a changed language, «Try again»): the page is going on purpose,
+// so the browser's question has nothing to ask. It lets go after a few seconds, so a navigation that never happened (a refused
+// address) cannot leave the page unprotected for good.
+const LEAVING_GRACE_MS = 5000;
+let leavingOnPurpose = false;
+export function markLeavingOnPurpose(): void {
+  leavingOnPurpose = true;
+  setTimeout(() => { leavingOnPurpose = false; }, LEAVING_GRACE_MS);
+}
+
+// Is somebody holding something that a closed window would LOSE? The browser asks «leave this page?» only then.
 export function hasUnsavedWork(): boolean {
+  if (leavingOnPurpose) return false;
   for (const holder of holders) {
-    if (!resting.has(holder)) return true;
+    const isQuiet = quiet.get(holder);
+    if (isQuiet === undefined || !isQuiet()) return true;
   }
   return false;
 }

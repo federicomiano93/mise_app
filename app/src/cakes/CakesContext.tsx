@@ -36,9 +36,11 @@ export function CakesProvider({ children, deps }: { children: ReactNode; deps?: 
 
 // ⚠️ A SAVE NOT YET ANSWERED IS AN UNSAVED EDIT (architecture rule 2), as in Food cost: no self-started reload while the reference
 // grams are still on their way to the server.
+// ⚠️ A QUIET HOLD: it keeps a self-started reload away, but a CLOSED window loses nothing (Firestore's offline cache keeps the write), so the
+// browser's «leave this page?» question ignores it (session/busy.ts).
 function BusyWhileUnsent() {
   const { unsent } = useCakes();
-  useEffect(() => (unsent ? markBusy() : undefined), [unsent]);
+  useEffect(() => (unsent ? markBusy({ quiet: true }) : undefined), [unsent]);
   return null;
 }
 

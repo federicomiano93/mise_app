@@ -3,6 +3,7 @@ import type { ErrorInfo, ReactNode, RefObject } from 'react';
 import { Button } from 'react-aria-components';
 import { CloudOff, RotateCw } from 'lucide-react';
 import { useT } from '../i18n/useT';
+import { markLeavingOnPurpose } from '../session/busy';
 import { Page } from '../shell/Page';
 import { usePageMounted } from '../shell/pageMounted';
 import { TITLE_SLOT_ATTRIBUTE } from '../shell/titleSlot';
@@ -84,6 +85,7 @@ export class PartBoundary extends Component<Props, State> {
   // Anything else gets the soft reset: a bug in a screen can pass.
   private reload = (): void => {
     if (this.state.pageReload) {
+      markLeavingOnPurpose();
       window.location.reload();
       return;
     }

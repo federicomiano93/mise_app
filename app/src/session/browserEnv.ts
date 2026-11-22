@@ -2,7 +2,7 @@
 
 import { loadLanguage } from '../i18n/i18n';
 import type { KeyValueStorage, SessionEnv } from './backend';
-import { isBusy } from './busy';
+import { isBusy, markLeavingOnPurpose } from './busy';
 
 // Reaching for localStorage can itself throw (blocked site data); such a phone simply remembers
 // nothing, which is the safe way to fail.
@@ -24,7 +24,7 @@ export function createBrowserEnv(): SessionEnv {
     local,
     session: storage(() => window.sessionStorage),
     localKeys: () => local.keys(),
-    reload: () => { window.location.reload(); },
+    reload: () => { markLeavingOnPurpose(); window.location.reload(); },
     now: () => Date.now(),
     setTimeout: (callback, ms) => window.setTimeout(callback, ms),
     isBusy,

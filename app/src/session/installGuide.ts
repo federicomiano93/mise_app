@@ -5,6 +5,7 @@
 // both (scripts/build-pages-site.mjs KEPT_PAGES; the service worker hands it to the network untouched). So the folder
 // `mise2/`, when the app is served from it, is stepped out of — as calculator/clientOrdersSource.ts does for order.html.
 
+import { markLeavingOnPurpose } from './busy';
 import { INSTALLED_DISPLAY_QUERY } from './displayMode';
 export function installGuideAddress(pageHref: string): string {
   const folder = new URL('.', pageHref);
@@ -25,6 +26,7 @@ export function runsInstalled(win: Pick<Window, 'matchMedia' | 'navigator'> = wi
 // Goes to the guide. An object, so a spec can spy on the navigation (jsdom cannot follow one), as settings' pageReload does.
 export const guidePage = {
   open(): void {
+    markLeavingOnPurpose();
     window.location.assign(installGuideAddress(window.location.href));
   },
 };

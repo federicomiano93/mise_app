@@ -43,9 +43,11 @@ export function FoodcostProvider({ children, deps }: { children: ReactNode; deps
 // browser's own database. The marker is held until the write is ANSWERED by the server — offline that
 // is until the section is left — which is broader than «handed over to the browser's database», but
 // safe: the app only waits longer to reload by itself.
+// ⚠️ A QUIET HOLD: it keeps a self-started reload away, but a CLOSED window loses nothing (Firestore's offline cache keeps the write), so the
+// browser's «leave this page?» question ignores it (session/busy.ts).
 function BusyWhileUnsent() {
   const { unsent } = useFoodcost();
-  useEffect(() => (unsent ? markBusy() : undefined), [unsent]);
+  useEffect(() => (unsent ? markBusy({ quiet: true }) : undefined), [unsent]);
   return null;
 }
 

@@ -1,5 +1,6 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, screen } from '@testing-library/react';
+import { reloadPage } from '../bookings/reloadPage';
 import { browserKioskEnv } from '../kiosk/kioskEnv';
 import { hasUnsavedWork, isBusy, markBusy } from '../session/busy';
 import { renderApp } from '../testing/renderApp';
@@ -48,5 +49,19 @@ describe('the browser\'s «leave this page?» question', () => {
     cleanup();
     hold(markBusy());
     expect(closeThePage()).toBe(false);
+  });
+});
+
+describe('the app’s own deliberate reloads', () => {
+  it('ask nothing, even with an editor still holding the marker', async () => {
+    // jsdom cannot reload and says so on the console; the reload is not the point here.
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    renderApp('/home');
+    await screen.findByRole('navigation', { name: 'All sections' });
+    hold(markBusy());
+    expect(closeThePage()).toBe(true);
+    reloadPage();
+    expect(closeThePage()).toBe(false);
+    vi.restoreAllMocks();
   });
 });

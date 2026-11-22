@@ -1,5 +1,5 @@
 import { BUSY_RETRY_MS } from '../session/session';
-import { isBusy } from '../session/busy';
+import { isBusy, markLeavingOnPurpose } from '../session/busy';
 
 // The one place Settings reloads the page. A screen that changes what EVERY screen reads (the venue's language) cannot repaint them
 // all — a reload is honest and takes a moment (the current app's language.js says the same). It is an object, not bare functions, so a
@@ -9,6 +9,7 @@ export const pageReload = {
   retryMs: BUSY_RETRY_MS,
 
   reload(): void {
+    markLeavingOnPurpose();
     window.location.reload();
   },
 

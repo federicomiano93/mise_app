@@ -4,6 +4,7 @@ import { Dialog as AriaDialog, Modal, ModalOverlay } from 'react-aria-components
 import type { Product } from '@mise/shared/foodcost-model';
 import { useT } from '../../i18n/useT';
 import { markBusy } from '../../session/busy';
+import { hasLabDraft } from '../../session/pendingLabWork';
 import { useSession } from '../../session/SessionContext';
 import { announceAction } from '../../telemetry/usage';
 import { Button } from '../../ui/Button';
@@ -114,12 +115,14 @@ export function LabMode({ productId, onClose }: Props) {
   useEffect(() => {
     if (phase !== 'flow') return undefined;
     acquireWakeLock(WAKE_OWNER);
-    const release = markBusy();
+    // QUIET unless a production is really in progress on this device (a draft is written only after «Inizia»): an open lab with nothing
+    // started loses nothing to a closed window. The hold itself stays whole for the self-started reloads.
+    const release = markBusy({ quiet: () => !hasLabDraft(locationId) });
     return () => {
       releaseWakeLock(WAKE_OWNER);
       release();
     };
-  }, [phase]);
+  }, [phase, locationId]);
 
   // Written at every change once the clock runs; never before «Inizia», never after the save cleared it.
   useEffect(() => {

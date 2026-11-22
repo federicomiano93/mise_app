@@ -35,7 +35,7 @@ export function PrinterScreen() {
   const { state } = useLocation();
   const ids = useId();
   const title = useRef<HTMLHeadingElement>(null);
-  const [stored] = useState(() => readPrinterSetting());
+  const [stored, setStored] = useState(() => readPrinterSetting());
   const [host, setHost] = useState(stored?.host ?? '');
   const [plain, setPlain] = useState(stored?.plain ?? false);
   const [wrong, setWrong] = useState(false);
@@ -97,6 +97,8 @@ export function PrinterScreen() {
       return;
     }
     leaving.current = true;
+    // What was typed is the saved setting now: the busy mark is let go (the browser's «leave?» question and the update wait both stop).
+    setStored(typed === '' ? null : { host: typed, plain });
     // ⚠️ THE PAGE LOADS AGAIN: its security policy names the printer only from a load that finds the address saved.
     reloadPage();
   }
