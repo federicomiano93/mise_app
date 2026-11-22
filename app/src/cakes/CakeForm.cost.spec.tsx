@@ -199,6 +199,13 @@ describe('the price', () => {
     expect(written.saved).toHaveLength(0);
   });
 
+  it('the price and target boxes take 40 characters at most, so the copy kept on the device is never refused for a long paste', async () => {
+    const { user } = await open();
+    await openCost(user);
+    expect(screen.getByRole('textbox', { name: PRICE })).toHaveAttribute('maxlength', '40');
+    expect(screen.getByRole('textbox', { name: /^Food cost target/ })).toHaveAttribute('maxlength', '40');
+  });
+
   it('the price, the VAT and the target travel with the cake (the category is Food cost’s «Cakes» group, never a choice here)', async () => {
     const { user, foodcost: written } = await open();
     await openCost(user);
@@ -273,7 +280,7 @@ describe('the measures', () => {
     expect(measures.getAllByText('cm')).toHaveLength(2);
     expect(measures.getByRole('textbox', { name: 'Tiers' })).toHaveValue('1');
     expect(measures.getByRole('textbox', { name: 'Discs' })).toHaveValue('2');
-    expect(measures.getByRole('textbox', { name: 'Height of one disc in centimetres' })).toHaveValue('3');
+    expect(measures.getByRole('textbox', { name: 'Height of one disc in centimetres' })).toHaveAttribute('placeholder', '3');
     expect(measures.queryByText('Slices')).not.toBeInTheDocument();
     expect(measures.queryByText('Assembly')).not.toBeInTheDocument();
   });

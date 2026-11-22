@@ -77,6 +77,8 @@ const MAX_DEVICE_COPIES = 20;
 const MAX_DEVICE_TEXT = 1_000_000;
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
+// The longest text the cost card's number boxes take (their maxLength), so a copy kept on the device is never refused for a long paste.
+export const TEXT_BOX_MAX = 40;
 const isText = (value: unknown, max = 200): value is string => typeof value === 'string' && value.length <= max;
 const isTierIndex = (value: unknown): value is number => typeof value === 'number' && Number.isInteger(value) && value >= 0 && value < MAX_TIERS;
 
@@ -96,7 +98,7 @@ export function readParkedCake(raw: unknown): ParkedCake | null {
   const { uid, locationId, key, savedId, texts, tier, openStepKey, selected, fromScratch } = raw;
   if (!isText(uid) || uid === '' || !isText(locationId) || locationId === '' || !isText(key) || key === '') return null;
   if (savedId !== null && (!isText(savedId) || savedId === '')) return null;
-  if (!isRecord(texts) || !isText(texts.price, 40) || !isText(texts.target, 40) || !isText(texts.vatSelect, 40) || !isText(texts.vatOther, 40)) return null;
+  if (!isRecord(texts) || !isText(texts.price, TEXT_BOX_MAX) || !isText(texts.target, TEXT_BOX_MAX) || !isText(texts.vatSelect, TEXT_BOX_MAX) || !isText(texts.vatOther, TEXT_BOX_MAX)) return null;
   if (!isTierIndex(tier)) return null;
   if (openStepKey !== null && !(STEP_KEYS as readonly unknown[]).includes(openStepKey)) return null;
   let chosen: Selected | null = null;
