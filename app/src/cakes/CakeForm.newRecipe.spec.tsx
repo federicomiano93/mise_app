@@ -83,7 +83,7 @@ describe('choosing it', () => {
     const [recipeId, recipe, productId, card] = source.createRecipeWithCard.mock.calls[0]!;
     expect(recipe).toEqual({ name: 'Tiramisu', ingredients: [] });
     expect(productId).toBe(`recipe-${recipeId}`);
-    expect(card).toMatchObject({ name: 'Tiramisu', kind: 'semi', model: 4, components: [{ recipeId, qtyKg: 0 }] });
+    expect(card).toMatchObject({ name: 'Tiramisu', kind: 'semi', model: 4, components: [{ recipeId, qtyKg: 1 }] });
     // Both are in the database's copy now, and nothing else was written.
     expect(source.recipes.get(recipeId)).toMatchObject({ name: 'Tiramisu' });
     expect(source.products.get(productId)).toMatchObject({ name: 'Tiramisu' });

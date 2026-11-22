@@ -505,8 +505,12 @@ export function createFoodcostStore(
     // be a half of something the database never held.
     createRecipeWithCard(recipeId, recipeData) {
       const recipe: StoredDoc = { ...recipeData, id: recipeId };
-      const card = productFromRecipe(recipe, 'semi') as unknown as Product | null;
-      if (!card) throw new Error('A recipe made from Cakes needs a name.');
+      const made = productFromRecipe(recipe, 'semi') as unknown as Product | null;
+      if (!made) throw new Error('A recipe made from Cakes needs a name.');
+      // ⚠️ ONE KILO OF THE RECIPE, NOT ITS WEIGHT TODAY: the recipe is empty now (0 kg), and nothing updates this card when the recipe is
+      // filled in later; a 0 kg line would read «no price» for ever. A kilo makes the card's price per kilo the recipe's raw price per
+      // kilo at any weight, and no weighing is claimed (a loss is set on the card by hand).
+      const card: Product = { ...made, components: [{ recipeId, qtyKg: 1 }], rawGrams: null, cookedGrams: null };
       const data = toProductDocument(card);
       recipes = { ...recipes, [recipeId]: recipe };
       writeJson(RECIPES_KEY, Object.values(recipes));

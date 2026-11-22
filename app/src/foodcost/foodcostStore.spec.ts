@@ -2,6 +2,8 @@ import { describe, expect, test, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { cakeLineCosts } from '@mise/shared/cake-model';
+import type { Cake } from '@mise/shared/cake-model';
 import { normalizeProduct } from '@mise/shared/foodcost-model';
 import { productFromRecipe } from '@mise/shared/from-recipes';
 import type { Product } from '@mise/shared/foodcost-model';
@@ -289,7 +291,7 @@ describe('the Food cost store', () => {
     expect(cardId).toBe('recipe-r1');
     const snap = store.getSnapshot();
     expect(snap.recipes['r1']).toMatchObject({ id: 'r1', name: 'Crema', ingredients: [] });
-    expect(snap.products.find(card => card.id === 'recipe-r1')).toMatchObject({ name: 'Crema', kind: 'semi', components: [{ recipeId: 'r1', qtyKg: 0 }] });
+    expect(snap.products.find(card => card.id === 'recipe-r1')).toMatchObject({ name: 'Crema', kind: 'semi', components: [{ recipeId: 'r1', qtyKg: 1 }] });
     expect(fake.writes).toHaveLength(1);
     expect(fake.writes[0]!.kind).toBe('new-recipe');
     const [recipeId, recipe, productId, card] = fake.writes[0]!.args as [string, Record<string, unknown>, string, Record<string, unknown>];
@@ -297,6 +299,55 @@ describe('the Food cost store', () => {
     expect(recipe).toEqual({ name: 'Crema', ingredients: [] });
     expect(card).toMatchObject({ name: 'Crema', kind: 'semi', model: 4 });
     expect(card).not.toHaveProperty('id');
+  });
+
+  // ⚠️ THE CARD IS ONE KILO OF THE RECIPE, so it prices itself the day the recipe is filled in (nothing updates the card later).
+  describe('the cost of a cake line made from a new recipe', () => {
+    const cake = (): Cake => ({
+      id: 'c1', name: 'Cake', diameterCm: 20, tiers: 1, discs: 2, slices: 8, packaging: [], assemblyMinutes: null, sellingPrice: null, vatRate: null,
+      foodCostTarget: null, categoryId: null, ref: null, model: 1,
+      lines: [{ tier: 0, part: 'base', productId: 'recipe-r1', grams: 400 }],
+    });
+
+    test('an empty recipe reads «no price» (incomplete), never a figure', () => {
+      const { fake, store } = setup();
+      store.start();
+      fake.products([]);
+      fake.recipes([]);
+      fake.ingredients([]);
+      store.createRecipeWithCard('r1', { name: 'Crema', ingredients: [] });
+      const [line] = cakeLineCosts(cake(), store.getSnapshot().tables);
+      expect(line!.materials).toBeNull();
+      expect(line!.reason).toBe('card-no-price');
+    });
+
+    test('once the recipe has priced ingredients the same line is costed, at the recipe’s price per kilo whatever it weighs', () => {
+      const { fake, store } = setup();
+      store.start();
+      fake.products([]);
+      fake.recipes([]);
+      fake.ingredients([{ id: 'flour', name: 'Flour', active: true, unit: 'kg', priceUnit: 'kg', pricePerUnit: 2 }]);
+      store.createRecipeWithCard('r1', { name: 'Crema', ingredients: [] });
+      // The Recipes fill it in (here with 500 g of flour: 2.00 a kilo): the card is NOT touched, and 400 g of it cost 0.80.
+      fake.recipes([{ id: 'r1', name: 'Crema', ingredients: [{ kind: 'ingredient', refId: 'flour', unit: 'g', grams: 500, label: 'Flour' }] }]);
+      const [line] = cakeLineCosts(cake(), store.getSnapshot().tables);
+      expect(line!.materials).toBe(0.8);
+      expect(line!.reason).toBeNull();
+      // ...and at another weight (a 3 kg batch of it) the price per kilo is the same.
+      fake.recipes([{ id: 'r1', name: 'Crema', ingredients: [{ kind: 'ingredient', refId: 'flour', unit: 'g', grams: 3000, label: 'Flour' }] }]);
+      expect(cakeLineCosts(cake(), store.getSnapshot().tables)[0]!.materials).toBe(0.8);
+    });
+
+    test('the card claims no weighing', () => {
+      const { fake, store } = setup();
+      store.start();
+      fake.products([]);
+      fake.recipes([]);
+      store.createRecipeWithCard('r1', { name: 'Crema', ingredients: [] });
+      const written = fake.writes[0]!.args[3] as Record<string, unknown>;
+      expect(written).not.toHaveProperty('rawGrams');
+      expect(written).not.toHaveProperty('cookedGrams');
+    });
   });
 
   test('⚠️ a refused recipe-with-its-card takes BOTH off again and says so', async () => {
