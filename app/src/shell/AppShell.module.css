@@ -1,6 +1,7 @@
 /* The frame of the app (values from the approved design, `mise2.css`). Phone first: the tab
    bar at the bottom, no rail, no top bar (except on the Home of a kiosk device, below). From 700px — tablets, portrait included — the rail
-   takes the left edge and the ONE top bar appears; a media query chooses, no script measures. */
+   takes the left edge and the ONE top bar appears; a media query chooses, no script measures — except
+   Page, which moves the section's title INTO the bar from 700px by script (shell/titleSlot.ts, ui/useMediaQuery.ts), the same 700px as here. */
 
 .shell {
   display: grid;

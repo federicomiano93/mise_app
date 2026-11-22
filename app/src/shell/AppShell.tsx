@@ -208,7 +208,7 @@ function TopBar({ kiosk, onHome, titleSlot }: { kiosk: boolean; onHome: boolean;
 
   return (
     <header className={styles.topbar}>
-      <div className={styles.barLeft} ref={titleSlot} />
+      <div className={styles.barLeft} ref={titleSlot} data-title-slot="" />
       <div className={styles.barMiddle}>
         <Venue switchable={onHome} />
         <p className={styles.date}>{today}</p>

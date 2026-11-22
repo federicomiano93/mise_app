@@ -5,6 +5,7 @@ import { useLocation, useNavigationType } from 'react-router';
 import { useT } from '../i18n/useT';
 import { useMediaQuery } from '../ui/useMediaQuery';
 import { OfflineBanner } from './OfflineBanner';
+import { PageMountedContext } from './pageMounted';
 import { useTitleSlot } from './titleSlot';
 import styles from './Page.module.css';
 
@@ -47,7 +48,8 @@ type Props = {
 // ⚠️ FROM 700px THE TITLE LIVES IN THE TOP BAR (the single bar, 22 Nov 2026): the page draws its title and its gear into the shell's title slot
 // (titleSlot.ts) through a portal, and the h1 is still ONE, still the element that takes the focus after a navigation. Two things must hold:
 // the choice is made by script (the same 700px as the stylesheets), so a Page outside the shell (no slot) or under 700px draws everything in
-// the page exactly as before; and only ONE Page is mounted at a time (two would put two titles in the same slot). No route mounts two.
+// the page exactly as before; and only ONE Page is mounted at a time (two would put two titles in the same slot). No ROUTE mounts two, and a
+// PartBoundary with a `title` inside a Page draws its notice without a Page of its own (pageMounted.ts).
 export function Page({ title, children, action, gear, band, stickyBand = false, bandWraps = false, ownHeading = false }: Props) {
   const { t } = useT();
   const location = useLocation();
@@ -72,53 +74,59 @@ export function Page({ title, children, action, gear, band, stickyBand = false, 
     headingRef.current?.focus();
   }, [location.key]);
 
-  const headingClass = wide && slot !== null ? `${styles.title} ${styles.barTitle}` : styles.title;
+  const bar = wide && slot !== null;
+  const headingClass = bar ? `${styles.title} ${styles.barTitle}` : styles.title;
   const heading = <h1 ref={headingRef} tabIndex={-1} className={headingClass}>{title}</h1>;
 
-  if (wide && slot !== null) {
+  // ⚠️ ONE RETURN, THE BODY ALWAYS THIRD: the page's content must keep its position in the tree when the window crosses 700px (a tablet turned,
+  // a window resized), or React unmounts it and mounts it again — an input half typed in, a list's scroll, an open editor would be thrown away.
+  // So the two layouts fill the same three places: [the title (a portal into the bar, or the page's own header)] [the row under it (Orders'
+  // other controls, Settings' action; or the offline strip)] [the body]. Page.bar.spec.tsx types into an input and flips the window.
+  let first: ReactNode = null;
+  let second: ReactNode = null;
+  if (bar && slot !== null) {
     // Under the bar: Orders' other controls as a white row, or Settings' action alone on a row at the right; nothing at all for a page with
     // neither (its content then starts a little lower: `.bodyTop`). A page that draws its own h1 has no row either, as on a phone.
-    let row: ReactNode = null;
+    first = createPortal(
+      <div className={styles.cluster}>
+        {/* A booking opened full screen has its own h1 (the customer's name): the section's name is then plain words, and no gear. */}
+        {ownHeading ? <p className={styles.barTitle}>{title}</p> : <>{heading}{gear ?? null}</>}
+      </div>,
+      slot,
+    );
     if (!ownHeading) {
       if (band !== undefined && band !== null) {
         const classes = [styles.barRow, bandWraps ? styles.barRowWraps : '', stickyBand ? styles.stickyBand : ''].filter(Boolean).join(' ');
-        row = <div className={classes}>{band}</div>;
+        second = <div className={classes}>{band}</div>;
       } else if (action) {
-        row = <div className={styles.actionRow}><div className={styles.action}>{action}</div></div>;
+        second = <div className={styles.actionRow}><div className={styles.action}>{action}</div></div>;
       }
     }
-    return (
-      <>
-        {createPortal(
-          <div className={styles.cluster}>
-            {/* A booking opened full screen has its own h1 (the customer's name): the section's name is then plain words, and no gear. */}
-            {ownHeading ? <p className={styles.barTitle}>{title}</p> : <>{heading}{gear ?? null}</>}
-          </div>,
-          slot,
-        )}
-        {row}
-        <div className={row === null ? `${styles.body} ${styles.bodyTop}` : styles.body}>{children}</div>
-      </>
-    );
-  }
-
-  const banded = band !== undefined || gear !== undefined;
-  const headClass = banded
-    ? `${styles.head} ${styles.band}${bandWraps ? ` ${styles.bandWraps}` : ''}${stickyBand ? ` ${styles.stickyBand}` : ''}`
-    : action ? `${styles.head} ${styles.withAction}` : styles.head;
-  return (
-    <>
-      {ownHeading ? null : (
+  } else {
+    const banded = band !== undefined || gear !== undefined;
+    const headClass = banded
+      ? `${styles.head} ${styles.band}${bandWraps ? ` ${styles.bandWraps}` : ''}${stickyBand ? ` ${styles.stickyBand}` : ''}${action ? ` ${styles.bandAction}` : ''}`
+      : action ? `${styles.head} ${styles.withAction}` : styles.head;
+    if (!ownHeading) {
+      first = (
         <header className={headClass}>
           {heading}
           {gear ?? null}
           {band ?? null}
-          {action && !banded ? <div className={styles.action}>{action}</div> : null}
+          {action ? <div className={styles.action}>{action}</div> : null}
         </header>
-      )}
-      {/* Under the title of every screen while the device is offline (from 700px the top bar says it instead; CSS hides the strip). */}
-      <OfflineBanner />
-      <div className={styles.body}>{children}</div>
-    </>
+      );
+    }
+    // Under the title of every screen while the device is offline (from 700px the top bar says it instead; CSS hides the strip).
+    second = <OfflineBanner />;
+  }
+  const bodyClass = bar && second === null ? `${styles.body} ${styles.bodyTop}` : styles.body;
+
+  return (
+    <PageMountedContext.Provider value>
+      {first}
+      {second}
+      <div className={bodyClass}>{children}</div>
+    </PageMountedContext.Provider>
   );
 }

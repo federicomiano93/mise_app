@@ -6,7 +6,8 @@ import { renderApp } from '../testing/renderApp';
 import shellCss from './AppShell.module.css?raw';
 
 // The top bar (venue · date · connection) is on EVERY section (Federico, 21 Nov 2026; it was the Home's only since 16 Nov): CSS shows it
-// from 700px. The kiosk pills (Standby / Exit) stay the Home's.
+// from 700px, and from 700px it also holds the section's title and gear and the account's letter (22 Nov 2026). The kiosk «Standby» pill stays the Home's;
+// «Exit» is in the account menu there.
 
 const css = shellCss.replace(/\/\*[\s\S]*?\*\//g, '');
 const ON = '{"enabled":true,"restMinutes":5,"nightHours":1}';

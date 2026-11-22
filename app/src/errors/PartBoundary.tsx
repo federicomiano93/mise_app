@@ -4,6 +4,8 @@ import { Button } from 'react-aria-components';
 import { CloudOff, RotateCw } from 'lucide-react';
 import { useT } from '../i18n/useT';
 import { Page } from '../shell/Page';
+import { usePageMounted } from '../shell/pageMounted';
+import { TITLE_SLOT_ATTRIBUTE } from '../shell/titleSlot';
 import { ScreenLoadError } from './ScreenLoadError';
 import styles from './PartBoundary.module.css';
 
@@ -73,7 +75,7 @@ export class PartBoundary extends Component<Props, State> {
     this.focusAfterReload = false;
     if (!previousState.failed) return;
     if (this.state.failed) this.fallback.current?.querySelector('button')?.focus();
-    else focusRestored(this.container.current);
+    else focusRestored(this.container.current, this.props.title !== undefined);
   }
 
   // ⚠️ A SCREEN THAT COULD NOT BE DOWNLOADED IS NOT FIXED BY DRAWING IT AGAIN: React.lazy and the
@@ -95,9 +97,12 @@ export class PartBoundary extends Component<Props, State> {
   }
 }
 
-function focusRestored(container: HTMLElement | null): void {
+// `guardsScreen`: this boundary was given a title, so what it guards is a SCREEN whose Page may have drawn its h1 in the top bar (from 700px,
+// outside this container, in the shell's title slot). A part inside a screen has no such h1 and keeps the container.
+function focusRestored(container: HTMLElement | null, guardsScreen: boolean): void {
   if (!container) return;
-  const heading = container.querySelector('h1');
+  const heading = container.querySelector('h1')
+    ?? (guardsScreen ? container.ownerDocument.querySelector(`[${TITLE_SLOT_ATTRIBUTE}] h1`) : null);
   if (!heading) {
     container.focus();
     return;
@@ -117,6 +122,9 @@ type FailedProps = {
 
 function PartFailed({ title, onReload, boxRef }: FailedProps) {
   const { t } = useT();
+  // ⚠️ A titled boundary INSIDE a Page (the Bookings card) is not a screen: a Page of its own would be a second title (two h1s, and two titles in
+  // the top bar's one slot), so it draws its notice alone, as a boundary with no title does.
+  const insidePage = usePageMounted();
   const box = (
     <div ref={boxRef} role="status" className={styles.failed}>
       <CloudOff className={styles.icon} aria-hidden="true" />
@@ -130,5 +138,5 @@ function PartFailed({ title, onReload, boxRef }: FailedProps) {
       </Button>
     </div>
   );
-  return title === undefined ? box : <Page title={title}>{box}</Page>;
+  return title === undefined || insidePage ? box : <Page title={title}>{box}</Page>;
 }

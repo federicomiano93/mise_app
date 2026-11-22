@@ -95,7 +95,10 @@
 }
 
 /* From tablet width the content also keeps clear of a notch on the right (see the rail in
-   AppShell.module.css for the left; below 700px nothing changes). */
+   AppShell.module.css for the left; below 700px nothing changes).
+   ⚠️ THE 700px RULES FOR `.head`, `.band` AND `.title` IN THIS BLOCK NOW SERVE ONLY A PAGE WITH NO TOP BAR TO DRAW INTO (a Page outside the
+   shell: no slot). In the shell, from 700px, Page draws the title and gear into the bar and uses `.barRow`, `.actionRow` and `.bodyTop` at the
+   end of this file; `.body` is the one rule here that both layouts use. */
 @media (min-width: 700px) {
   .head {
     padding: var(--s6) calc(var(--s8) + env(safe-area-inset-right)) var(--s4) var(--s8);
@@ -123,7 +126,7 @@
 
 /* ⚠️ A BAND IS ONE LINE HIGH on the split; it STICKS only where the section asks (`.stickyBand`: Orders), and only because nothing
    between it and the scroll area (the shell's main) clips. The other sections' panes stick at the top of the scroll area, so a band
-   that stuck would cover their first 56px. */
+   that stuck would cover their first --band-h (64px). */
 @media (min-width: 1000px) {
   /* Exactly --band-h tall: the parts that stick under it (Orders' search box and pane) read that token. */
   .band {
@@ -203,4 +206,13 @@
     height: var(--band-h);
     padding-block: 0;
   }
+}
+
+/* A phone's title bar with a gear AND an action: the action goes to the far right, on the same line, its failure message wrapping under it. */
+.bandAction {
+  flex-wrap: wrap;
+}
+
+.band .action > button {
+  margin-left: auto;
 }
