@@ -224,6 +224,16 @@ describe('the ✓ of a recipe row', () => {
     expect(step('Cost and price')).toHaveFocus();
   });
 
+  it('sits between the grams box and the ✕ in the DOM, which is the tab order and the tablet’s reading order', async () => {
+    const { user } = await openSaved();
+    await user.click(step('Base'));
+    const controls = within(screen.getByRole('group', { name: /^Base/ })).getAllByRole('button', { name: /^(Confirm Base|Remove )/ });
+    const grams = screen.getByRole('textbox', { name: /Sponge: grams/ });
+    const [tickButton, removeButton] = controls;
+    expect(grams.compareDocumentPosition(tickButton!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(tickButton!.compareDocumentPosition(removeButton!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it('is a 48px button named for the part, in Italian too', async () => {
     const cake = cakeDoc('c1', 'Torta', { diameterCm: 22, discs: 3, ref: REFERENCE, lines: [{ tier: 0, part: 'base', productId: 'SPONGE', grams: null }] });
     const view = renderCakes('/cakes/c1', { lang: 'it', cakes: fakeCakesSource({ cakes: [cake], reference: storedReference() }), foodcost: foodcost() });

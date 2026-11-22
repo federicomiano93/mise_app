@@ -456,14 +456,16 @@ function CakeLineRow({ idPrefix, cost, name, loss, registerBox, onGrams, partNam
         {cost.materials === null ? '—' : fcMoney(cost.materials, money)}
         {cost.materials === null ? null : <small>{t('cakes.row.materials')}</small>}
       </div>
+      {/* ⚠️ DOM ORDER = TAB ORDER = the wide reading order: name, grams, ✓, ✕. Narrow (≤360px) the ✕ sits beside the name, above the box, so
+          there the tab order still ends on it; the wide order was kept because it is the one the tablet, the main device, draws. */}
+      <Button variant="bare" className={styles.confirm} aria-label={t('cakes.row.confirmAria', { part: partName })} onPress={onConfirm}>
+        <Check aria-hidden="true" />
+      </Button>
       <div className={styles.actions}>
         <Button variant="bare" className={styles.icon} aria-label={t('cakes.row.removeAria', { name: label })} onPress={onRemove}>
           <X aria-hidden="true" />
         </Button>
       </div>
-      <Button variant="bare" className={styles.confirm} aria-label={t('cakes.row.confirmAria', { part: partName })} onPress={onConfirm}>
-        <Check aria-hidden="true" />
-      </Button>
     </div>
   );
 }
