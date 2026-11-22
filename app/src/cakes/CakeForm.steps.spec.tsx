@@ -52,18 +52,18 @@ describe('a new cake', () => {
     expect(panel.queryByRole('textbox', { name: /grams/ })).not.toBeInTheDocument();
   });
 
-  it('lists the five steps in the order a cake is built, then «Cost and price» under its own line', async () => {
+  it('lists the five steps in the order a cake is built, then the «Cost and price» card, with no «then» line between', async () => {
     await openNew();
     const expected = [...PARTS, 'Cost and price'];
     const steps = screen.getAllByRole('button', { name: /^(Base|Soak|Filling|Coating|Decoration|Cost and price)/ });
     expect(steps.map(button => expected.find(title => within(button).queryByText(title) !== null))).toEqual(expected);
-    expect(screen.getByText('Then, once the cake is composed')).toBeInTheDocument();
+    expect(screen.queryByText('Then, once the cake is composed')).not.toBeInTheDocument();
   });
 
   it('says the step that opened, once, for a screen reader', async () => {
     const { user } = await openNew();
     await user.click(step('Soak'));
-    await waitFor(() => { expect(screen.getByText('Step 2 of 6: Soak')).toHaveAttribute('role', 'status'); });
+    await waitFor(() => { expect(screen.getByText('Step 2 of 5: Soak')).toHaveAttribute('role', 'status'); });
   });
 });
 
@@ -200,14 +200,71 @@ describe('what the steps never do', () => {
   });
 });
 
-describe('«Done»', () => {
-  it('closes the cost step and hands the focus to its own button, as a secondary button', async () => {
+describe('the ✓ of a recipe row', () => {
+  const tick = (part: string) => screen.getByRole('button', { name: `Confirm ${part}` });
+
+  it('closes the step and opens the next one, whose title takes the focus', async () => {
     const { user } = await openSaved();
-    await user.click(step('Cost and price'));
-    const done = screen.getByRole('button', { name: 'Done' });
-    await user.click(done);
+    await user.click(step('Base'));
+    await user.click(tick('Base'));
+    expect(expanded('Base')).toBe('false');
+    expect(expanded('Soak')).toBe('true');
+    expect(step('Soak')).toHaveFocus();
+  });
+
+  it('on the last part opens the Cost and price card and moves the focus to it, closing every step', async () => {
+    const cake = cakeDoc('c1', 'Plain', { diameterCm: 22, discs: 3, ref: REFERENCE, lines: [{ tier: 0, part: 'decoration', productId: 'CREAM', grams: 20 }] });
+    const view = renderCakes('/cakes/c1', { cakes: fakeCakesSource({ cakes: [cake], reference: storedReference() }), foodcost: foodcost() });
+    await screen.findByRole('heading', { level: 2, name: 'Plain' }, LOAD);
+    await view.user.click(step('Decoration'));
     expect(expanded('Cost and price')).toBe('false');
+    await view.user.click(tick('Decoration'));
+    expect(expanded('Decoration')).toBe('false');
+    expect(expanded('Cost and price')).toBe('true');
     expect(step('Cost and price')).toHaveFocus();
+  });
+
+  it('is a 48px button named for the part, in Italian too', async () => {
+    const cake = cakeDoc('c1', 'Torta', { diameterCm: 22, discs: 3, ref: REFERENCE, lines: [{ tier: 0, part: 'base', productId: 'SPONGE', grams: null }] });
+    const view = renderCakes('/cakes/c1', { lang: 'it', cakes: fakeCakesSource({ cakes: [cake], reference: storedReference() }), foodcost: foodcost() });
+    await screen.findByRole('heading', { level: 2, name: 'Torta' }, LOAD);
+    await view.user.click(screen.getByRole('button', { name: /^Base/ }));
+    expect(screen.getByRole('button', { name: 'Conferma Base' })).toBeInTheDocument();
+  });
+});
+
+describe('the parts and cost cards fold', () => {
+  const parts = () => screen.getByRole('button', { name: /^Parts of the cake/ });
+
+  it('the Parts card starts open; folded it says which parts hold a recipe and how many of five', async () => {
+    const { user } = await openSaved();
+    expect(parts()).toHaveAttribute('aria-expanded', 'true');
+    await user.click(parts());
+    expect(parts()).toHaveAttribute('aria-expanded', 'false');
+    expect(parts()).toHaveTextContent('Base, Soak · 2 of 5 parts');
+    expect(screen.queryByRole('button', { name: /^Base/ })).not.toBeInTheDocument();
+    await user.click(parts());
+    expect(step('Base')).toBeInTheDocument();
+  });
+
+  it('a card with no recipe says so when folded', async () => {
+    const { user } = await openNew();
+    await user.click(parts());
+    expect(parts()).toHaveTextContent('No part yet · 0 of 5 parts');
+  });
+
+  it('the Cost and price card starts folded with its summary; once a price is set the summary says it', async () => {
+    const cake = cakeDoc('c1', 'Plain', { diameterCm: 22, discs: 3, ref: REFERENCE, sellingPrice: 24, lines: [{ tier: 0, part: 'base', productId: 'SPONGE', grams: null }] });
+    const view = renderCakes('/cakes/c1', { cakes: fakeCakesSource({ cakes: [cake], reference: storedReference() }), foodcost: foodcost() });
+    await screen.findByRole('heading', { level: 2, name: 'Plain' }, LOAD);
+    const cost = step('Cost and price');
+    expect(cost).toHaveAttribute('aria-expanded', 'false');
+    expect(cost).toHaveTextContent(/raw materials · price £24\.00$/);
+    await view.user.click(cost);
+    expect(cost).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('group', { name: 'Cost and price' })).toBeInTheDocument();
+    await view.user.click(cost);
+    expect(cost).toHaveAttribute('aria-expanded', 'false');
   });
 });
 
@@ -217,6 +274,6 @@ describe('in Italian', () => {
     await screen.findByRole('heading', { level: 2, name: 'Nuova torta' }, LOAD);
     expect(screen.getByRole('combobox', { name: 'Cerca una ricetta per Base' })).toHaveAttribute('placeholder', 'Cerca una ricetta…');
     for (const title of ['Base', 'Bagna', 'Farcitura', 'Copertura', 'Decorazione', 'Costo e prezzo']) expect(screen.getByRole('button', { name: new RegExp(`^${title}`) })).toBeInTheDocument();
-    expect(screen.getByText('Poi, quando la torta è composta')).toBeInTheDocument();
+    expect(screen.queryByText('Poi, quando la torta è composta')).not.toBeInTheDocument();
   });
 });

@@ -47,7 +47,7 @@ describe('a stored cake', () => {
     expect(screen.getByRole('button', { name: /^Base/ })).toHaveTextContent(/Sponge · 1,?000 g/);
     await user.click(screen.getByRole('button', { name: /^Base/ }));
     expect(screen.getByRole('textbox', { name: 'Sponge: grams' })).toHaveValue('1000');
-    expect(screen.getByText('adjusted by hand · the rule says 600 g')).toBeInTheDocument();
+    expect(screen.queryByText(/adjusted by hand/)).not.toBeInTheDocument();
   });
 
   it('says «This cake no longer exists.» only once the server has answered', async () => {

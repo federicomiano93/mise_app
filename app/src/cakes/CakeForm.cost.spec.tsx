@@ -218,34 +218,34 @@ describe('the price', () => {
   });
 });
 
-describe('the cost step', () => {
-  it('closes with «Done», and its closed row says the raw materials', async () => {
+describe('the cost card', () => {
+  it('folds again by its title, and its folded line says the raw materials', async () => {
     const { user } = await open();
     const step = screen.getByRole('button', { name: COST });
     expect(step).toHaveAttribute('aria-expanded', 'false');
     expect(step).toHaveTextContent('£2.00 raw materials');
     await openCost(user);
     expect(step).toHaveAttribute('aria-expanded', 'true');
-    await user.click(screen.getByRole('button', { name: 'Done' }));
+    await user.click(step);
     expect(step).toHaveAttribute('aria-expanded', 'false');
     expect(screen.queryByRole('textbox', { name: PRICE })).not.toBeInTheDocument();
   });
 
-  it('comes after the five parts, under «Then, once the cake is composed»', async () => {
+  it('comes after the five parts, in a card of its own', async () => {
     await open();
-    expect(screen.getByText('Then, once the cake is composed')).toBeInTheDocument();
+    expect(screen.queryByText('Then, once the cake is composed')).not.toBeInTheDocument();
     const titles = ['Base', 'Soak', 'Filling', 'Coating', 'Decoration', 'Cost and price'];
     const steps = screen.getAllByRole('button', { name: /^(Base|Soak|Filling|Coating|Decoration|Cost and price)/ });
     expect(steps.map(button => titles.find(title => within(button).queryByText(title) !== null))).toEqual(titles);
   });
 
-  it('a price that Save refuses opens the step again, even when «Done» had closed it, and the box takes the focus', async () => {
+  it('a price that Save refuses opens the card again, even when it was folded, and the box takes the focus', async () => {
     const { user, foodcost: written } = await open();
     await openCost(user);
     const typed = screen.getByRole('textbox', { name: PRICE });
     await user.clear(typed);
     await user.type(typed, 'abc');
-    await user.click(screen.getByRole('button', { name: 'Done' }));
+    await user.click(screen.getByRole('button', { name: COST }));
     expect(screen.queryByRole('textbox', { name: PRICE })).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Save to the price list' }));
     const box = await screen.findByRole('textbox', { name: PRICE });
@@ -365,7 +365,6 @@ describe('in Italian', () => {
     expect(screen.getByRole('heading', { level: 3, name: 'Misure' })).toBeInTheDocument();
     expect(screen.getByRole('textbox', { name: 'Dischi' })).toBeInTheDocument();
     expect(screen.getByRole('textbox', { name: 'Diametro in centimetri' })).toBeInTheDocument();
-    expect(screen.getByText('Poi, quando la torta è composta')).toBeInTheDocument();
     expect(screen.getByText('Materie prime')).toBeInTheDocument();
     expect(screen.getByText('A fetta, su 8 fette')).toBeInTheDocument();
     expect(await screen.findByText('Costo totale', undefined, LOAD)).toBeInTheDocument();

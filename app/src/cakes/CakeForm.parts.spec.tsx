@@ -56,17 +56,25 @@ describe('the cards in a part', () => {
     expect(screen.getByText('300 g per disc × 3 discs, scaled to Ø 22')).toBeInTheDocument();
   });
 
-  it('typing grams is «adjusted by hand», with the rule’s figure beside it, and ↺ gives the rule back', async () => {
+  it('typing grams says nothing more about it: no «adjusted by hand» line and no ↺ button, and the «ready» note goes', async () => {
     const { user } = await open();
     await openStep(user, 'Base');
     const box = screen.getByRole('textbox', { name: 'Sponge: grams' });
     await user.type(box, '700');
     expect(box).toHaveValue('700');
-    expect(screen.getByText('adjusted by hand · the rule says 900 g')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Back to the rule: Sponge' }));
-    expect(box).toHaveValue('');
     expect(screen.queryByText(/adjusted by hand/)).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Back to the rule: Sponge' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/typed by hand/)).not.toBeInTheDocument();
+    expect(screen.queryByText('ready')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Back to the rule/ })).not.toBeInTheDocument();
+  });
+
+  it('a row says no «cost incomplete» and no «type the grams» under its name', async () => {
+    const { user } = await open('/cakes/c1', cakeDoc('c1', 'Plain', { diameterCm: 22, discs: 3, ref: null, lines: [{ tier: 0, part: 'base', productId: 'GHOST', grams: null }] }));
+    await openStep(user, 'Base');
+    const row = screen.getByRole('textbox', { name: /grams/ }).closest('div[class*="line"]') as HTMLElement;
+    expect(within(row).queryByText(/cost incomplete/i)).not.toBeInTheDocument();
+    expect(within(row).queryByText(/type the grams/i)).not.toBeInTheDocument();
+    expect(row.querySelector('small')).toBeNull();
   });
 
   it('adds another card from the search box, which lists the cards the part already holds and cannot pick them', async () => {
@@ -199,13 +207,6 @@ describe('the focus is never dropped on the page', () => {
     expect(screen.getByRole('textbox', { name: 'Sponge: grams' })).toHaveFocus();
   });
 
-  it('going back to the rule keeps the focus in the grams box of the same row', async () => {
-    const { user } = await open('/cakes/c1', TWO);
-    await openStep(user, 'Base');
-    await user.click(screen.getByRole('button', { name: 'Back to the rule: Cream' }));
-    expect(screen.getByRole('textbox', { name: 'Cream: grams' })).toHaveFocus();
-  });
-
   it('removing the last piece of packaging hands the focus to «Add packaging»', async () => {
     const { user } = await open('/cakes/c1', TWO);
     await user.click(screen.getByRole('button', { name: 'Remove Box' }));
@@ -271,8 +272,8 @@ describe('the reference grams', () => {
     await openStep(user, 'Base');
     expect(screen.queryByText('The standard cake has changed since this cake was made.')).not.toBeInTheDocument();
     expect(screen.queryByText('There is no standard cake yet, so every line needs its grams typed by hand.')).not.toBeInTheDocument();
-    expect(screen.getByText('type the grams by hand')).toBeInTheDocument();
-    expect(screen.getByText('you type the grams of every part')).toBeInTheDocument();
+    expect(screen.queryByText('type the grams by hand')).not.toBeInTheDocument();
+    expect(screen.queryByText('you type the grams of every part')).not.toBeInTheDocument();
   });
 
   it('a cake with no reference of its own and a line with no grams still offers the venue’s grams', async () => {

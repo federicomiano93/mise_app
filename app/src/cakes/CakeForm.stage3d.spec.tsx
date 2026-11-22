@@ -72,8 +72,25 @@ describe('the 3D view’s taps', () => {
     await user.click(screen.getByRole('button', { name: 'second tap on base' }));
     expect(screen.getByRole('button', { name: /^Base/, hidden: true })).toHaveAttribute('aria-expanded', 'true');
     expect(screen.getByRole('button', { name: /^Filling/, hidden: true })).toHaveAttribute('aria-expanded', 'false');
-    // The base already holds the sponge, which the search box lists as taken.
-    expect(await screen.findByRole('option', { name: /Sponge/ }, LOAD)).toHaveAttribute('aria-disabled', 'true');
+    // The base already holds the sponge: the cursor goes to its grams box, not to the search box.
+    await waitFor(() => { expect(screen.getByRole('textbox', { name: 'Sponge: grams' })).toHaveFocus(); });
+  });
+
+  it('a second tap on a part that has a recipe puts the cursor in its first grams box', async () => {
+    const { user } = await open(3);
+    await user.click(await screen.findByRole('button', { name: 'second tap on base' }));
+    const box = await screen.findByRole('textbox', { name: 'Sponge: grams' });
+    await waitFor(() => { expect(box).toHaveFocus(); });
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+  });
+
+  it('a second tap while the Parts card is folded unfolds it first', async () => {
+    const { user } = await open(3);
+    await user.click(screen.getByRole('button', { name: /^Parts of the cake/ }));
+    expect(screen.getByRole('button', { name: /^Parts of the cake/ })).toHaveAttribute('aria-expanded', 'false');
+    await user.click(screen.getByRole('button', { name: 'second tap on base' }));
+    expect(screen.getByRole('button', { name: /^Parts of the cake/ })).toHaveAttribute('aria-expanded', 'true');
+    expect(await screen.findByRole('textbox', { name: 'Sponge: grams' })).toBeInTheDocument();
   });
 
   it('opens the step but no search box for a part with no layer to fill (filling with one disc)', async () => {

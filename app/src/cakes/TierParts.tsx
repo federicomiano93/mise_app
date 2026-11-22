@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { ReactNode } from 'react';
-import { Check, Plus, RotateCcw, X } from 'lucide-react';
+import { Check, Plus, X } from 'lucide-react';
 import { MAX_CARDS_PER_PART, cakeLineCosts, cakeProductId, tierDiameters } from '@mise/shared/cake-model';
 import type { Cake, CakeLineCost, CakePart, ResolvedLine } from '@mise/shared/cake-model';
 import type { CostTables } from '@mise/shared/foodcost-model';
@@ -15,10 +14,9 @@ import { useSemiRows } from '../foodcost/useSemiRows';
 import { useT } from '../i18n/useT';
 import { useMoney } from '../session/useMoney';
 import { Button } from '../ui/Button';
-import { addCard, cardsIn, removeCard, removePack, resetGrams, setGrams, setPackQty, addPack } from './cakeEditorModel';
+import { addCard, cardsIn, removeCard, removePack, setGrams, setPackQty, addPack } from './cakeEditorModel';
 import type { Selected } from './cakeEditorModel';
-import { STEP_PARTS, partFigures, partKey, stepNumber, toggleStep } from './cakeStepsModel';
-import type { StepKey } from './cakeStepsModel';
+import { STEP_PARTS, partFigures, partKey, stepNumber } from './cakeStepsModel';
 import { RecipeCombo } from './RecipeCombo';
 import type { ComboOption } from './RecipeCombo';
 import { useSpoken } from './useSpoken';
@@ -44,17 +42,16 @@ type Props = {
   // Called once the request has been acted on (or turned down), so the form drops it: a remount never reopens an old step.
   onOpenHandled?: () => void;
   // The step that is open (UI state kept by the form, never saved), and its move.
-  open: StepKey | null;
-  onOpen: (next: StepKey | null) => void;
+  open: CakePart | null;
+  onOpen: (next: CakePart | null) => void;
+  // The ✓ of the last part (the decoration): the form opens its «Cost and price» card and moves the focus there.
+  onOpenCost: () => void;
   // «+ New recipe “…”» chosen in a step's search box (only passed to someone who may make recipes): the form makes the recipe and its
   // card and puts the card on that part. Left out, the option is not offered.
   onNewRecipe?: ((name: string, part: CakePart) => void) | undefined;
   // A typed name that is a recipe of the Recipes whose Food cost card is missing offers «+ “…” from Recipes» instead: the form makes the
   // card only (never a second recipe) and says whether it was made; the card then goes on the part like any chosen one. Passed with onNewRecipe.
   onCardFromBook?: ((recipeId: string) => Promise<boolean>) | undefined;
-  // The sixth step, «Cost and price»: what its closed row says, and what it shows when open (the form owns the numbers).
-  costSummary: string;
-  costBody: ReactNode;
 };
 
 // `productId`: the card just put on the part (a recipe made from its search box) takes the cursor, the way a picked card does.
@@ -66,15 +63,15 @@ const packKey = (ingredientId: string): string => `pack|${ingredientId}`;
 
 const lineKey = (line: { tier: number; part: CakePart; productId: string }): string => `${line.tier}|${line.part}|${line.productId}`;
 
-// The guided steps of one tier — base, soak, filling, coating, decoration — then the packaging of the whole cake, then «Cost and price».
+// The guided steps of one tier — base, soak, filling, coating, decoration — then the packaging of the whole cake. «Cost and price» is a
+// card of its own in the form; the ✓ of the last step opens it.
 //
 // ⚠️ ONE STEP IS OPEN AT A TIME, the rest show their title and what they hold. An open step shows ONLY a search box over the venue's
 // semi-finished cards, and the cards chosen with their grams. A closed step is a button (aria-expanded) that opens it.
 // ⚠️ A GRAMS BOX IS EMPTY WHILE THE RULE DECIDES: its placeholder is the rule's figure, and typing a number is «corrected by hand»
-// (the line says so, with the rule's figure beside it, and a ↺ puts the rule back). A cake typed by hand has no rule: the
-// placeholder is 0 and every line says «type the grams».
+// (the line says so, with the rule's figure beside it). A cake typed by hand has no rule: the placeholder is 0.
 export function TierParts({
-  cake, typedByHand = false, edit, tier, onTier, selected, onSelect, registerPack, openRequest = null, onOpenHandled, open, onOpen, costSummary, costBody, onNewRecipe, onCardFromBook,
+  cake, typedByHand = false, edit, tier, onTier, selected, onSelect, registerPack, openRequest = null, onOpenHandled, open, onOpen, onOpenCost, onNewRecipe, onCardFromBook,
 }: Props) {
   const { t } = useT();
   const money = useMoney();
@@ -85,7 +82,7 @@ export function TierParts({
   const diameters = tierDiameters(cake.diameterCm, cake.tiers);
 
   // The cards the open step lists: Food cost's semi-finished cards, the same rows its chooser offers (useSemiRows).
-  const openPart = open !== null && open !== 'cost' ? open : null;
+  const openPart = open;
   // Keyed on the ids as ONE string (a document id never holds «/»), so typing grams elsewhere does not rebuild the rows.
   const usedKey = openPart === null ? '' : cardsIn(cake, shown, openPart).map(line => line.productId).join('/');
   const used = useMemo(() => (usedKey === '' ? [] : usedKey.split('/')), [usedKey]);
@@ -106,6 +103,9 @@ export function TierParts({
     onOpenHandled?.();
     onOpen(part);
     if (productId !== undefined) { focusNext.current = lineKey({ tier: shown, part, productId }); return; }
+    // A part that already has a recipe puts the cursor in its first grams box, not in the search box.
+    const first = cardsIn(cake, shown, part)[0];
+    if (first !== undefined) { focusNext.current = lineKey({ tier: shown, part, productId: first.productId }); return; }
     if (part === 'filling' && cake.discs < 2) return;
     if (cardsIn(cake, shown, part).length >= MAX_CARDS_PER_PART) return;
     focusCombo.current = part;
@@ -128,8 +128,7 @@ export function TierParts({
   const stepButtons = useRef(new Map<CakePart, HTMLButtonElement>());
   const combos = useRef(new Map<CakePart, HTMLInputElement>());
   const addPackButton = useRef<HTMLButtonElement | null>(null);
-  const costButton = useRef<HTMLButtonElement | null>(null);
-  const focusStep = useRef<CakePart | typeof PACK_ADD | 'cost' | null>(null);
+  const focusStep = useRef<CakePart | typeof PACK_ADD | null>(null);
   useLayoutEffect(() => {
     const key = focusNext.current;
     if (key !== null) {
@@ -149,7 +148,7 @@ export function TierParts({
     }
     const step = focusStep.current;
     if (step === null) return;
-    const node = step === PACK_ADD ? addPackButton.current : step === 'cost' ? costButton.current : stepButtons.current.get(step);
+    const node = step === PACK_ADD ? addPackButton.current : stepButtons.current.get(step);
     if (!node) return;
     focusStep.current = null;
     node.focus();
@@ -174,7 +173,7 @@ export function TierParts({
   // The rule in a sentence: the reference grams the cake took, scaled to this tier.
   const ruleSentence = (part: CakePart): string => {
     const ref = cake.ref;
-    if (ref === null) return t(typedByHand ? 'cakes.rule.typed' : 'cakes.rule.none');
+    if (ref === null) return typedByHand ? '' : t('cakes.rule.none');
     const d = diameters[shown] ?? cake.diameterCm;
     switch (part) {
       case 'base': return t('cakes.rule.base', { g: ref.baseG, n: cake.discs, d });
@@ -213,7 +212,7 @@ export function TierParts({
 
   const packLoaded = { recipes: recipesLoaded, ingredients: ingredientsLoaded };
   const said = useSpoken(open === null ? '' : t('cakes.steps.opened', {
-    n: stepNumber(open), total: STEP_PARTS.length + 1, part: open === 'cost' ? t('cakes.cost.title') : t(`cakes.part.${open}`),
+    n: stepNumber(open), total: STEP_PARTS.length, part: t(`cakes.part.${open}`),
   }));
 
   // What a closed step says under its title: each card's name with its grams (or that the grams are still to be typed).
@@ -226,7 +225,7 @@ export function TierParts({
   });
 
   const header = (
-    key: StepKey, title: string, summary: string[], hasCard: boolean, todo: boolean, onPress: () => void,
+    key: CakePart, title: string, summary: string[], hasCard: boolean, todo: boolean, onPress: () => void,
     ref?: (node: HTMLButtonElement | null) => void,
   ) => {
     const isOpen = open === key;
@@ -286,7 +285,7 @@ export function TierParts({
           return (
             <li key={part} className={styles.step} data-open={isOpen} data-selected={isSelected}>
               {header(part, partName, closedLines(part), lines.length > 0, todo, () => {
-                onOpen(toggleStep(open, part));
+                onOpen(open === part ? null : part);
                 onSelect({ tier: shown, part });
               }, node => { if (node) stepButtons.current.set(part, node); else stepButtons.current.delete(part); })}
 
@@ -318,9 +317,14 @@ export function TierParts({
                       loss={lossOf(tables.products, cost.line.productId)}
                       registerBox={registerBox}
                       onGrams={text => { edit(current => setGrams(current, shown, part, cost.line.productId, text)); }}
-                      onReset={() => {
-                        focusNext.current = lineKey(cost.line);
-                        edit(current => resetGrams(current, shown, part, cost.line.productId));
+                      partName={partName}
+                      onConfirm={() => {
+                        // ✓ closes this step and opens the next; the title of the step just opened takes the focus (the row pressed is gone).
+                        const next = STEP_PARTS[STEP_PARTS.indexOf(part) + 1];
+                        if (next === undefined) { onOpenCost(); return; }
+                        focusStep.current = next;
+                        onOpen(next);
+                        onSelect({ tier: shown, part: next });
                       }}
                       onRemove={() => {
                         handFocusOn(lines, lines.findIndex(line => line.productId === cost.line.productId), part);
@@ -384,22 +388,6 @@ export function TierParts({
         </Button>
       </section>
 
-      <p className={styles.divider}>{t('cakes.steps.then')}</p>
-      <ol className={styles.steps} start={STEP_PARTS.length + 1}>
-        <li className={styles.step} data-open={open === 'cost'}>
-          {header('cost', t('cakes.cost.title'), costSummary === '' ? [] : [costSummary], false, false, () => { onOpen(toggleStep(open, 'cost')); }, node => { costButton.current = node; })}
-          {open === 'cost' ? (
-            <div id={`${ids}-panel-cost`} className={styles.stepBody} role="group" aria-labelledby={`${ids}-step-cost`}>
-              {costBody}
-              <Button className={styles.finish} variant="secondary" onPress={() => { focusStep.current = 'cost'; onOpen(null); }}>
-                <Check aria-hidden="true" />
-                {t('cakes.steps.finish')}
-              </Button>
-            </div>
-          ) : null}
-        </li>
-      </ol>
-
       {pickingPack ? (
         <PickDialog
           mode="packaging"
@@ -429,27 +417,28 @@ type RowProps = {
   loss: number | null;
   registerBox: (key: string, node: HTMLInputElement | null) => void;
   onGrams: (text: string) => void;
-  onReset: () => void;
+  // The step's name, for the ✓'s label.
+  partName: string;
+  onConfirm: () => void;
   onRemove: () => void;
 };
 
-// One card of the open step: its name and how its grams are decided, the grams box, what the card costs, ↺ and ✕.
-function CakeLineRow({ idPrefix, cost, name, loss, registerBox, onGrams, onReset, onRemove }: RowProps) {
+// One card of the open step: its name, the grams box, ✓ (next step) and ✕, and under the name what the card costs. The note under the
+// name only says the card is ready (or loses weight in the oven); a line with typed or missing grams has none.
+function CakeLineRow({ idPrefix, cost, name, loss, registerBox, onGrams, partName, onConfirm, onRemove }: RowProps) {
   const { t } = useT();
   const money = useMoney();
   const line: ResolvedLine = cost.line;
   const key = lineKey(line);
-  const note = line.manual
-    ? (line.share === null ? t('cakes.row.manualNoRule') : t('cakes.row.manual', { g: line.share }))
-    : line.missing
-      ? t('cakes.row.typeGrams')
-      : loss === null ? t('cakes.row.ready') : t('cakes.row.readyLoss', { n: loss });
+  const note = line.manual || line.missing
+    ? ''
+    : loss === null ? t('cakes.row.ready') : t('cakes.row.readyLoss', { n: loss });
   const label = name.text === '' ? t('fc.thisCardNoLonger') : name.text;
   return (
-    <div className={styles.line}>
+    <div className={`${styles.line} ${styles.lineConfirm}`}>
       <div className={styles.what}>
         <span data-missing={name.missing}>{label}</span>
-        <small data-manual={line.manual} data-todo={!line.manual && line.missing}>{note}</small>
+        {note !== '' ? <small>{note}</small> : null}
       </div>
       <div className={styles.qty}>
         <NumberBox
@@ -465,18 +454,16 @@ function CakeLineRow({ idPrefix, cost, name, loss, registerBox, onGrams, onReset
       </div>
       <div className={styles.money} data-missing={cost.materials === null}>
         {cost.materials === null ? '—' : fcMoney(cost.materials, money)}
-        <small>{cost.materials === null ? t('cakes.row.incomplete') : t('cakes.row.materials')}</small>
+        {cost.materials === null ? null : <small>{t('cakes.row.materials')}</small>}
       </div>
       <div className={styles.actions}>
-        {line.manual ? (
-          <Button variant="bare" className={styles.icon} aria-label={t('cakes.row.resetAria', { name: label })} onPress={onReset}>
-            <RotateCcw aria-hidden="true" />
-          </Button>
-        ) : null}
         <Button variant="bare" className={styles.icon} aria-label={t('cakes.row.removeAria', { name: label })} onPress={onRemove}>
           <X aria-hidden="true" />
         </Button>
       </div>
+      <Button variant="bare" className={styles.confirm} aria-label={t('cakes.row.confirmAria', { part: partName })} onPress={onConfirm}>
+        <Check aria-hidden="true" />
+      </Button>
     </div>
   );
 }
