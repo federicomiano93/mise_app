@@ -123,7 +123,7 @@ describe('Save', () => {
     expect(data).toMatchObject({ name: 'Torta di prova', tiers: 1, discs: 3, lines: [] });
     // 20 cm is not a typed row of the legacy table (22 cm is): the figures are the table's, scaled to 20 cm.
     expect(data['ref']).toEqual(referenceFor(normalizeStandard(storedReference()), 20));
-    expect(data['ref']).toMatchObject({ diameterCm: 20, discs: 3, discHeightCm: 3, baseG: 250 });
+    expect(data['ref']).toMatchObject({ diameterCm: 20, discs: 3, discHeightCm: 3, baseG: 248 });
     await waitFor(() => { expect(router.state.location.pathname).toBe(`/cakes/${cakeId}`); });
     expect(router.state.historyAction).toBe('REPLACE');
     // Its own address names it: the header says the name, no longer «New cake» (the form is kept, it is not remounted).

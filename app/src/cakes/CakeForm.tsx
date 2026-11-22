@@ -17,7 +17,7 @@ import { marginPointFor } from '../foodcost/productEditorModel';
 import { PartBoundary } from '../errors/PartBoundary';
 import type { MessageKey } from '../i18n/en';
 import { useT } from '../i18n/useT';
-import { referenceFor } from '@mise/shared/cake-standard';
+import { referenceFor, refIsCurrent } from '@mise/shared/cake-standard';
 import { markBusy } from '../session/busy';
 import { useSession } from '../session/SessionContext';
 import { useMoney } from '../session/useMoney';
@@ -397,7 +397,10 @@ export function CakeForm({ id, cake, start = 'standard', titleRef, onSaved }: Pr
   // `ref: null`) must not claim its grams were left out. With no venue reference at all it is the «no reference» case below.
   const typedByHand = fromScratch || (working.ref === null && venueRef !== null);
   // «The reference changed → update» is useful to a cake with no reference of its own only while some line has no grams at all.
-  const refDiffers = !fromScratch && referenceChanged(working, venueRef) && (working.ref !== null || working.lines.some(line => line.grams === null));
+  // ⚠️ A cake WITH a reference differs only when it is not the table's figures at the reference's own diameter (refIsCurrent).
+  const refDiffers = !fromScratch && venueRef !== null && (working.ref !== null
+    ? !refIsCurrent(working.ref, standard)
+    : referenceChanged(working, venueRef) && working.lines.some(line => line.grams === null));
   // An existing cake with none of its own does not claim «no reference» before the venue's has answered.
   const noReference = !fromScratch && working.ref === null && venueRef === null && (id === null || referenceLoaded);
 

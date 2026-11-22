@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CAKE_MODEL, MAX_CARDS_PER_PART, MAX_PACKAGING, cakeProductId } from '@mise/shared/cake-model';
 import type { Cake, ReferenceGrams } from '@mise/shared/cake-model';
-import { referenceFor } from '@mise/shared/cake-standard';
+import { normalizeStandard, referenceFor } from '@mise/shared/cake-standard';
 import type { CakeStandard } from '@mise/shared/cake-standard';
 import {
   addCard, addPack, canAddCard, cardsIn, firstEmptyPack, followStandard, isDirty, referenceChanged, removeCard, removePack, resetGrams,
@@ -237,6 +237,14 @@ describe('followStandard', () => {
     expect(after.ref).toEqual(referenceFor(STANDARD, 28));
     expect(after.ref?.baseG).toBe(490);
     expect(after.diameterCm).toBe(28);
+  });
+
+  it('a cake saved with the old single 22 cm reference follows a legacy table when its diameter changes', () => {
+    const legacy = normalizeStandard({ bakery: 'x', grams: { diameterCm: 22, discs: 3, discHeightCm: 3, baseG: 300, soakG: 90, fillingG: 280, coatingG: 450, decorationG: 200 }, updatedAt: '' });
+    const before: Cake = { ...CAKE, diameterCm: 20, tiers: 1, ref: referenceFor(legacy, 22) };
+    const after = followStandard(before, { ...before, diameterCm: 24 }, legacy);
+    expect(after.ref).toEqual(referenceFor(legacy, 24));
+    expect(after.ref?.diameterCm).toBe(24);
   });
 
   it('does not follow a cake made from scratch', () => {

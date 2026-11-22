@@ -306,9 +306,29 @@ describe('the reference grams', () => {
       await openStep(user, 'Base');
       expect(screen.getByText('300 g per disc × 3 discs, scaled to Ø 22')).toBeInTheDocument();
       await diameter(user, '24');
-      // The legacy table types only 22 cm: 300 g × (24/22)² = 357 g, rounded to 360 g.
-      expect(await screen.findByText('360 g per disc × 3 discs, scaled to Ø 24')).toBeInTheDocument();
+      // The legacy table types only 22 cm: 300 g × (24/22)² = 357 g, a cake copies it to the whole gram.
+      expect(await screen.findByText('357 g per disc × 3 discs, scaled to Ø 24')).toBeInTheDocument();
       expect(screen.queryByText('The standard cake has changed since this cake was made.')).not.toBeInTheDocument();
+    });
+
+    it('a cake saved with the old single 22 cm reference, at 20 cm, shows no «changed» band and keeps its grams; it follows when its diameter changes', async () => {
+      const old = cakeDoc('c1', 'Plain', { diameterCm: 20, discs: 3, ref: REFERENCE });
+      const { user } = await open('/cakes/c1', old);
+      await openStep(user, 'Base');
+      expect(screen.getByText('300 g per disc × 3 discs, scaled to Ø 20')).toBeInTheDocument();
+      expect(screen.queryByText('The standard cake has changed since this cake was made.')).not.toBeInTheDocument();
+      await diameter(user, '24');
+      expect(await screen.findByText('357 g per disc × 3 discs, scaled to Ø 24')).toBeInTheDocument();
+      expect(screen.queryByText('The standard cake has changed since this cake was made.')).not.toBeInTheDocument();
+    });
+
+    it('the same cake gets the band once the table’s 22 cm row changes', async () => {
+      const old = cakeDoc('c1', 'Plain', { diameterCm: 20, discs: 3, ref: REFERENCE });
+      const { user } = await open('/cakes/c1', old, {
+        cakes: fakeCakesSource({ cakes: [old], reference: storedReference({ ...REFERENCE, baseG: 320 }) }),
+      });
+      await openStep(user, 'Base');
+      expect(await screen.findByText('The standard cake has changed since this cake was made.')).toBeInTheDocument();
     });
 
     it('a cake made from an older table does not follow: it keeps its grams and the band offers the update', async () => {

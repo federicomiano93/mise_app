@@ -7,7 +7,7 @@
 //   - base and soak (per disc) and filling (per layer): by AREA, (d / from)²;
 //   - coating (the whole cake): by the surface it covers, top + side, S(d) = π(d/2)² + π·d·H with H = discs × disc height;
 //   - decoration (on top, along the edge): by EDGE LENGTH, d / from.
-// A scaled figure is rounded to 10 g; a typed one is kept as typed.
+// A scaled figure is shown rounded to 10 g (a cake copies it to 1 g, so a small figure never collapses to 0); a typed one is kept as typed.
 //
 // ⚠️ A CAKE STILL CARRIES ONE ReferenceGrams (`cake.ref`), now taken AT ITS OWN DIAMETER (referenceFor): the cake document, its rules and
 // ruleGrams do not change, and its upper tiers are scaled from that row by area as before.
@@ -16,23 +16,24 @@
 // table's figures at 22 cm (LEGACY_DIAMETER_CM), so such a phone keeps starting cakes from sensible numbers. A document with no valid
 // `rows` (every document written before this step) is read as a table holding its one reference row among the default diameters.
 
-import { MAX_DIAMETER_CM, MAX_DISCS, MAX_LINE_GRAMS, MIN_DISCS, MIN_TIER_CM, normalizeReference } from './cake-model';
+import { MAX_DIAMETER_CM, MAX_DISCS, MAX_LINE_GRAMS, MIN_DISCS, MIN_TIER_CM, normalizeReference, sameReference } from './cake-model';
 import type { ReferenceGrams } from './cake-model';
 
 // The five figures of a row, in the order a cake is built (the screen's columns).
 export const STANDARD_COLUMNS = Object.freeze(['baseG', 'soakG', 'fillingG', 'coatingG', 'decorationG'] as const);
 export type StandardColumn = (typeof STANDARD_COLUMNS)[number];
 
-// The keys of one row; the rules' isStandardRow lists exactly these (pinned in cake-standard.spec.ts).
+// The keys of one row: exactly what toStandardDocument writes. The rules judge `rows` by type and count only (see isStandardRows), so a
+// stray key is not refused there; the list is pinned in cake-standard.spec.ts.
 export const STANDARD_ROW_KEYS = Object.freeze(['diameterCm', ...STANDARD_COLUMNS] as const);
 
 // The diameters a venue with no table yet starts from.
 export const DEFAULT_DIAMETERS = Object.freeze([16, 18, 20, 22, 24, 26, 28]);
-// The rules check every row one by one, written out (rules cannot loop): this is their count.
+// The rules' ceiling on the number of rows (pinned in cake-standard.spec.ts).
 export const MAX_STANDARD_ROWS = 20;
 // The diameter whose figures are also written as the old single reference (`grams`), for phones not yet updated.
 export const LEGACY_DIAMETER_CM = 22;
-// A scaled figure is rounded to this.
+// A scaled figure SHOWN in the table is rounded to this; a cake copies the same figure to the whole gram (referenceFor).
 export const SCALED_STEP_G = 10;
 
 export interface StandardRow {
@@ -148,6 +149,15 @@ export function standardCell(
   column: StandardColumn,
   diameterCm: number,
 ): StandardCell | null {
+  return cellRounded(standard, column, diameterCm, SCALED_STEP_G);
+}
+
+function cellRounded(
+  standard: Pick<CakeStandard, 'discs' | 'discHeightCm'> & { rows: readonly StandardRow[] },
+  column: StandardColumn,
+  diameterCm: number,
+  stepG: number,
+): StandardCell | null {
   let best: StandardRow | null = null;
   for (const row of standard.rows) {
     if (row[column] === null) continue;
@@ -159,22 +169,29 @@ export function standardCell(
   }
   if (best === null) return null;
   const raw = (best[column] as number) * scaleFactor(column, best.diameterCm, diameterCm, standard.discs, standard.discHeightCm);
-  const grams = Math.min(MAX_LINE_GRAMS, Math.max(0, Math.round(raw / SCALED_STEP_G) * SCALED_STEP_G));
+  const grams = Math.min(MAX_LINE_GRAMS, Math.max(0, Math.round(raw / stepG) * stepG));
   return { grams, typed: false, fromCm: best.diameterCm };
 }
 
-// The single reference a cake of this diameter takes (copied into `cake.ref`): the table's figures at that diameter. null with no standard,
-// or while a column has nothing typed.
+// The single reference a cake of this diameter takes (copied into `cake.ref`): the table's figures at that diameter, a scaled one rounded to
+// the WHOLE gram (the screen shows 10 g; a small figure such as 20 g of soak at 10 cm must not become 0). null with no standard, or while a
+// column has nothing typed.
 export function referenceFor(standard: CakeStandard | null, diameterCm: number): ReferenceGrams | null {
   if (!standard) return null;
   const at = Math.min(MAX_DIAMETER_CM, Math.max(MIN_TIER_CM, diameterCm));
   const figures: Partial<Record<StandardColumn, number>> = {};
   for (const column of STANDARD_COLUMNS) {
-    const cell = standardCell(standard, column, at);
+    const cell = cellRounded(standard, column, at, 1);
     if (!cell) return null;
     figures[column] = cell.grams;
   }
   return normalizeReference({ diameterCm: at, discs: standard.discs, discHeightCm: standard.discHeightCm, ...figures });
+}
+
+// ⚠️ A cake's `ref` is «current» when it equals the table AT THE REF'S OWN DIAMETER: a cake saved before the table (one reference, at any
+// diameter) is not «changed» just because its diameter is not the old 22 cm, and its grams stay as they were.
+export function refIsCurrent(ref: ReferenceGrams | null, standard: CakeStandard | null): boolean {
+  return ref !== null && standard !== null && sameReference(ref, referenceFor(standard, ref.diameterCm));
 }
 
 // What `cake-settings/reference` is written as: WHOLE, exactly the keys the rules list. null while the table cannot be a standard (Save

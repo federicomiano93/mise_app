@@ -11,7 +11,7 @@ import { REFERENCE_KEYS, normalizeReference, ruleGrams } from './cake-model';
 import type { ReferenceGrams } from './cake-model';
 import {
   DEFAULT_DIAMETERS, LEGACY_DIAMETER_CM, MAX_STANDARD_ROWS, STANDARD_ROW_KEYS, emptyRow, everyColumnTyped, normalizeStandard,
-  referenceFor, sameStandard, scaleFactor, standardCell, standardFromReference, tidyRows, toStandardDocument,
+  referenceFor, refIsCurrent, sameStandard, scaleFactor, standardCell, standardFromReference, tidyRows, toStandardDocument,
 } from './cake-standard';
 import type { CakeStandard, StandardRow } from './cake-standard';
 
@@ -90,16 +90,27 @@ describe('referenceFor — the single reference a cake takes', () => {
     expect(referenceFor(standard, 22)).toEqual({ ...REF });
     const at26 = referenceFor(standard, 26) as ReferenceGrams;
     expect(at26.diameterCm).toBe(26);
-    expect(at26.baseG).toBe(310);
-    expect(at26.decorationG).toBe(140);
+    // A cake copies the scaled figure to the WHOLE gram (the table shows 10 g): 220 × (26/22)² = 307.2, 120 × 26/22 = 141.8.
+    expect(at26.baseG).toBe(307);
+    expect(at26.decorationG).toBe(142);
     expect(at26.discs).toBe(3);
     expect(at26.discHeightCm).toBe(2);
   });
 
   test('a cake of that diameter then gets exactly the row\'s figures through ruleGrams', () => {
     const at26 = referenceFor(standard, 26);
-    expect(ruleGrams(at26, 'base', 26, 3)).toBe(310 * 3);
-    expect(ruleGrams(at26, 'decoration', 26, 3)).toBe(140);
+    expect(ruleGrams(at26, 'base', 26, 3)).toBe(307 * 3);
+    expect(ruleGrams(at26, 'decoration', 26, 3)).toBe(142);
+  });
+
+  test('a small figure never collapses to 0 g: 20 g of soak at 22 cm is 4 g at 10 cm, while the table shows 0', () => {
+    const small = table([{ ...ROW22, soakG: 20 }]);
+    expect(referenceFor(small, 10)?.soakG).toBe(4);
+    expect(standardCell(small, 'soakG', 10)?.grams).toBe(0);
+  });
+
+  test('a typed row is exact, whole or not', () => {
+    expect(referenceFor(table([{ ...ROW22, baseG: 221.5 }]), 22)?.baseG).toBe(221.5);
   });
 
   test('a diameter between rows, or not whole, is filled in the same way', () => {
@@ -114,6 +125,28 @@ describe('referenceFor — the single reference a cake takes', () => {
   test('null with no standard or a column with nothing typed', () => {
     expect(referenceFor(null, 22)).toBeNull();
     expect(referenceFor(table([{ ...ROW22, soakG: null }]), 22)).toBeNull();
+  });
+});
+
+describe('refIsCurrent — a cake’s reference against the table at the reference’s own diameter', () => {
+  const legacy = normalizeStandard({ bakery: 'x', grams: REF, updatedAt: '' });
+
+  test('the old single reference (22 cm) is current against the legacy table, whatever the cake’s own diameter', () => {
+    expect(refIsCurrent(REF, legacy)).toBe(true);
+  });
+
+  test('not current once the table’s row at the reference’s diameter changes', () => {
+    const changed = normalizeStandard({ bakery: 'x', grams: { ...REF, baseG: 250 }, updatedAt: '' });
+    expect(refIsCurrent(REF, changed)).toBe(false);
+  });
+
+  test('a reference taken at another diameter is current while it matches the table there', () => {
+    expect(refIsCurrent(referenceFor(legacy, 20), legacy)).toBe(true);
+  });
+
+  test('false with no reference or no standard', () => {
+    expect(refIsCurrent(null, legacy)).toBe(false);
+    expect(refIsCurrent(REF, null)).toBe(false);
   });
 });
 

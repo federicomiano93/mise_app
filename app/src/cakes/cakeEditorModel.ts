@@ -15,7 +15,7 @@ import {
   sameReference, toCakeDocument,
 } from '@mise/shared/cake-model';
 import type { Cake, CakeLine, CakePart, ReferenceGrams } from '@mise/shared/cake-model';
-import { referenceFor } from '@mise/shared/cake-standard';
+import { referenceFor, refIsCurrent } from '@mise/shared/cake-standard';
 import type { CakeStandard } from '@mise/shared/cake-standard';
 import { readNumber } from '../foodcost/productEditorModel';
 
@@ -194,12 +194,12 @@ export function referenceChanged(cake: Cake, venueRef: ReferenceGrams | null): b
 }
 
 // ⚠️ A CAKE THAT FOLLOWS THE STANDARD TABLE KEEPS FOLLOWING IT WHEN ITS DIAMETER CHANGES: `before` carries exactly the figures the table gives
-// at its own diameter, so at the new diameter it takes the table's figures there, and no «the standard changed» band is raised for a
+// at the reference's own diameter, so at the new diameter it takes the table's figures there, and no «the standard changed» band is raised for a
 // change the person made themselves. A cake with no reference (from scratch) or with one taken from an older table is left alone: the
 // existing band then offers the update. Lines with grams typed by hand never read `ref`, so they are untouched.
 export function followStandard(before: Cake, after: Cake, standard: CakeStandard | null): Cake {
   if (after.diameterCm === before.diameterCm || before.ref === null) return after;
-  if (!sameReference(before.ref, referenceFor(standard, before.diameterCm))) return after;
+  if (!refIsCurrent(before.ref, standard)) return after;
   return { ...after, ref: referenceFor(standard, after.diameterCm) };
 }
 
