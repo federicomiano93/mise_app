@@ -1004,3 +1004,32 @@
     white-space: nowrap;
   }
 }
+
+/* ⚠️ THE INSTALLED PC APP WITH ITS TITLE BAR FOLDED INTO THE PAGE (Window Controls Overlay): Lab mode covers the whole window, shell bar included,
+   so it must be a drag region itself and keep its top-right content (the clock) clear of the window buttons — the same right inset as the shell's
+   top bar (shell/AppShell.module.css). Only under this media query. macOS puts its buttons at the LEFT, over «Esci»: left as it is, the strip
+   still drags and a Mac user has the pointer a few pixels lower. */
+@media (display-mode: window-controls-overlay) {
+  .overlay::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: env(titlebar-area-height, 0px);
+    -webkit-app-region: drag;
+    app-region: drag;
+  }
+
+  .overlay .top {
+    padding-right: calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw) + var(--s3));
+  }
+
+  .overlay button,
+  .overlay a,
+  .overlay input,
+  .overlay [role="button"] {
+    -webkit-app-region: no-drag;
+    app-region: no-drag;
+  }
+}
