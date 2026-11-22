@@ -3,7 +3,7 @@ import { cleanup, screen, waitFor, within } from '@testing-library/react';
 import { keysToClear } from '@mise/shared/local-data';
 import type { Cake } from '@mise/shared/cake-model';
 import { fakeCakesSource } from '../testing/fakeCakesSource';
-import { renderCakes, storedReference } from '../testing/renderCakes';
+import { cakeDoc, renderCakes, storedReference } from '../testing/renderCakes';
 import { LOAD } from '../testing/renderFoodcost';
 import {
   REMEMBER_DELAY_MS, UNSAVED_CAKES_KEY, clearParkedCakes, discardParked, flushRemembered, forgetCake, parkCake, peekParked, readParkedCake,
@@ -159,6 +159,41 @@ describe('in the cake form', () => {
     await user.click(await discardButton());
     await waitFor(() => { expect(stored()).toBeNull(); });
     expect(screen.queryByText('Unsaved cake: Sacher')).not.toBeInTheDocument();
+  });
+
+  const seed = (...copies: ParkedCake[]) => {
+    window.localStorage.setItem(UNSAVED_CAKES_KEY, JSON.stringify({ v: 1, copies: JSON.parse(JSON.stringify(copies)) as unknown[] }));
+  };
+
+  it('a restart on the new-cake address (no history key to find its copy by) shows the list, where the copy is offered', async () => {
+    seed(copy('a', 'Sacher'));
+    const { router } = renderCakes('/cakes/new', { cakes: source() });
+    expect(await screen.findByText('Unsaved cake: Sacher', undefined, LOAD)).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe('/cakes');
+    expect(screen.queryByRole('textbox', { name: 'Name' })).not.toBeInTheDocument();
+  });
+
+  it('a restart on the new-cake address with nothing on the device stays on the empty form', async () => {
+    const { router } = renderCakes('/cakes/new', { cakes: source() });
+    expect(await screen.findByRole('textbox', { name: 'Name' }, LOAD)).toHaveValue('');
+    expect(router.state.location.pathname).toBe('/cakes/new');
+  });
+
+  it('a restart on a saved cake finds its copy, and saving removes it from the device AND the shelf', async () => {
+    const saved = cakeDoc('c1', 'Plain', { diameterCm: 20, discs: 2 });
+    seed({ ...copy('c1', 'Plain edited'), savedId: 'c1' });
+    const { user } = renderCakes('/cakes/c1', { cakes: fakeCakesSource({ cakes: [saved], reference: storedReference() }) });
+    expect(await screen.findByText(/^Plain edited · 20 cm/, undefined, LOAD)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /^Save/ }));
+    await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Save' }));
+    await waitFor(() => { expect(stored()).toBeNull(); });
+    expect(peekParked('c1', MINE)).toBeNull();
+  });
+
+  it('a copy that reached the shelf after a clean form opened cannot outlive that cake’s save', () => {
+    parkCake(copy('c1'));
+    forgetCake('c1');
+    expect(peekParked('c1', MINE)).toBeNull();
   });
 
   async function discardButton(): Promise<HTMLElement> {

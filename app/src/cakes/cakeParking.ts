@@ -196,8 +196,11 @@ export function rememberCake(copy: ParkedCake): void {
   timer = setTimeout(flushRemembered, REMEMBER_DELAY_MS);
 }
 
-// Saved, discarded, deleted, or clean again: nothing of this cake stays on the device, and nothing waiting is written later.
+// Saved, discarded, deleted, or clean again: nothing of this cake stays on the device or on the shelf, and nothing waiting is written later.
+// ⚠️ THE SHELF TOO: a copy restored onto it after a form had opened clean (or one the form never took) must not survive that cake's save
+// and be offered again as «Unsaved cake».
 export function forgetCake(key: string): void {
+  if (parked.delete(key)) changed();
   pending.delete(key);
   if (pending.size === 0 && timer !== null) {
     clearTimeout(timer);
@@ -210,15 +213,17 @@ export function forgetCake(key: string): void {
 
 // Cakes opens: this person's copies on the device in this venue are put on the shelf, where the list offers them. They stay on the device
 // until they are saved or discarded. A copy already on the shelf is not replaced.
-export function restoreCakesFromDevice(owner: ParkingOwner | null): void {
-  if (owner === null) return;
-  let added = false;
+// Returns the copies it put on the shelf.
+export function restoreCakesFromDevice(owner: ParkingOwner | null): ParkedCake[] {
+  if (owner === null) return [];
+  const added: ParkedCake[] = [];
   for (const copy of readDevice()) {
     if (!isOwnedBy(copy, owner) || parked.has(copy.key)) continue;
     parked.set(copy.key, copy);
-    added = true;
+    added.push(copy);
   }
-  if (added) changed();
+  if (added.length > 0) changed();
+  return added;
 }
 
 // ── The shelf ─────────────────────────────────────────────────────────────────────────────────

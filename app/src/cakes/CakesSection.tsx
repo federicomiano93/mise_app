@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { FoodcostProvider, useFoodcostStore } from '../foodcost/FoodcostContext';
 import { messageText } from '../foodcost/foodcostMessages';
@@ -12,7 +12,7 @@ import { useOwnScrollArea } from '../shell/scrollArea';
 import { useCoverBar } from '../shell/useCoverBar';
 import { CakeHeadingLevel } from './headingLevel';
 import { StatusMessageProvider, useStatusMessage } from '../ui/StatusMessage';
-import { restoreCakesFromDevice, useParkingOwner } from './cakeParking';
+import { parkedKeyOf, restoreCakesFromDevice, useParkingOwner } from './cakeParking';
 import type { ParkedCake } from './cakeParking';
 import { CakesProvider, useCakesStore } from './CakesContext';
 import { CakesDetail } from './CakesDetail';
@@ -71,8 +71,17 @@ function CakesLayout({ view }: { view: CakesView }) {
   const scrollArea = useOwnScrollArea();
   // ⚠️ COPIES LEFT ON THIS DEVICE BY A CLOSE NOBODY COULD STOP (cakeParking.ts) come back onto the shelf as Cakes opens, so the list offers
   // «Unsaved cake: …». Only this person's, in this venue's.
+  // ⚠️ BEFORE ANYTHING IS DRAWN: a cake's form reads the shelf as it is made (its copy is found by the cake's id), so the restore happens in
+  // a layout effect that holds the first drawing back (no paint in between). A restart on the NEW-cake address, which has no history key to
+  // find its copy by, goes to the list instead, where «Unsaved cake: …» (Resume / Discard) is on offer rather than an empty form.
   const owner = useParkingOwner();
-  useLayoutEffect(() => { restoreCakesFromDevice(owner); }, [owner]);
+  const { state } = useLocation();
+  const [restored, setRestored] = useState(false);
+  useLayoutEffect(() => {
+    const brought = restoreCakesFromDevice(owner);
+    if (view.kind === 'new' && parkedKeyOf(state) === null && brought.some(copy => copy.savedId === null)) void navigate(CAKES_PATH, { replace: true });
+    setRestored(true);
+  }, [owner]);
   // The open cake is a layer over the whole column from 700px (CakesSection.module.css), with a scroll of its own.
   const detail = useRef<HTMLDivElement>(null);
   const covering = view.kind === 'new' || view.kind === 'cake';
@@ -144,18 +153,20 @@ function CakesLayout({ view }: { view: CakesView }) {
         ownHeading={coversBar}
       >
         <CakeHeadingLevel.Provider value={coversBar ? 1 : 2}>
-          <div className={styles.layout} data-view={view.kind === 'list' ? 'list' : 'detail'} data-cover={covering ? 'true' : undefined}>
-            <div className={styles.list}>
-              <PartBoundary>
-                <CakesList onOpenCake={openCake} onOpenNew={openNew} onResume={resume} />
-              </PartBoundary>
+          {restored ? (
+            <div className={styles.layout} data-view={view.kind === 'list' ? 'list' : 'detail'} data-cover={covering ? 'true' : undefined}>
+              <div className={styles.list}>
+                <PartBoundary>
+                  <CakesList onOpenCake={openCake} onOpenNew={openNew} onResume={resume} />
+                </PartBoundary>
+              </div>
+              <div ref={detail} className={styles.detail}>
+                <PartBoundary resetKey={pathname}>
+                  <CakesDetail view={view} />
+                </PartBoundary>
+              </div>
             </div>
-            <div ref={detail} className={styles.detail}>
-              <PartBoundary resetKey={pathname}>
-                <CakesDetail view={view} />
-              </PartBoundary>
-            </div>
-          </div>
+          ) : null}
         </CakeHeadingLevel.Provider>
       </Page>
     </HandBackProvider>
