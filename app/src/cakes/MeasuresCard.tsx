@@ -1,5 +1,4 @@
 import { useId, useState } from 'react';
-import { ChevronDown } from 'lucide-react';
 import type { Ref } from 'react';
 import { MAX_TIERS, MIN_TIER_CM, discHeightOf, maxTiersFor, tierDiameters } from '@mise/shared/cake-model';
 import type { Cake } from '@mise/shared/cake-model';
@@ -8,6 +7,7 @@ import { useT } from '../i18n/useT';
 import { useMoney } from '../session/useMoney';
 import { Button } from '../ui/Button';
 import { setMeasure, setName } from './cakeEditorModel';
+import { FoldTitle } from './FoldTitle';
 import { useStepFocus } from './useStepFocus';
 import styles from './MeasuresCard.module.css';
 
@@ -146,13 +146,7 @@ export function MeasuresCard({ cake, edit, nameRef, nameInvalid, open, onToggle 
   return (
     <section className={styles.card} aria-labelledby={`${ids}-title`}>
       <h3 id={`${ids}-title`} className={styles.title}>
-        <button type="button" className={styles.fold} aria-expanded={open} aria-controls={`${ids}-body`} onClick={() => { onToggle(!open); }}>
-          <span className={styles.foldText}>
-            <span>{t('cakes.measures.title')}</span>
-            {open ? null : <small className={styles.foldSummary}>{summary}</small>}
-          </span>
-          <ChevronDown aria-hidden="true" className={styles.chevron} data-open={open} />
-        </button>
+        <FoldTitle title={t('cakes.measures.title')} summary={summary} open={open} onToggle={onToggle} bodyId={`${ids}-body`} />
       </h3>
 
       {open ? <div id={`${ids}-body`}>
