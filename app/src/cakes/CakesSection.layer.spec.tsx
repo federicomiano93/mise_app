@@ -19,6 +19,9 @@ const source = () => fakeCakesSource({ cakes: [SACHER], reference: storedReferen
 const layout = () => document.querySelector('[data-view]');
 const bar = () => document.querySelector('header [role="status"]')?.closest('header') as HTMLElement;
 
+// jsdom has no matchMedia: the width the bar's reach is decided at (700px, as in the stylesheet).
+const atWidth = (wide: boolean) => { vi.stubGlobal('matchMedia', (query: string) => ({ matches: wide && query.includes('(min-width: 700px)'), addEventListener: vi.fn(), removeEventListener: vi.fn() })); };
+
 const bare = (css: string): string => css.replace(/\/\*[\s\S]*?\*\//g, '');
 
 describe('the layer', () => {
@@ -69,6 +72,7 @@ describe('the layer', () => {
 
 describe('the bar under the layer', () => {
   it('is out of reach of a screen reader and the tab order while a cake is open, and back as it was on the list', async () => {
+    atWidth(true);
     const { user } = renderCakes('/cakes', { cakes: source() });
     await screen.findByRole('button', { name: /^Sacher/ }, LOAD);
     const header = bar();
@@ -80,15 +84,19 @@ describe('the bar under the layer', () => {
     await screen.findByRole('heading', { level: 2, name: 'Sacher' }, LOAD);
     // jsdom has no `inert`: the old browsers' way, aria-hidden and every control out of the tab order.
     expect(header).toHaveAttribute('aria-hidden', 'true');
-    for (const control of controls) expect(control).toHaveAttribute('tabindex', '-1');
+    // (The section's own gear, drawn into the bar by Page at this width, is made anew when the cake opens: only the bar's own stay.)
+    const kept = controls.filter(control => header.contains(control));
+    expect(kept.length).toBeGreaterThan(0);
+    for (const control of kept) expect(control).toHaveAttribute('tabindex', '-1');
 
     await user.click(screen.getByRole('button', { name: 'Back' }));
     await screen.findByRole('button', { name: 'New cake' }, LOAD);
     expect(header).not.toHaveAttribute('aria-hidden');
-    for (const control of controls) expect(control).not.toHaveAttribute('tabindex', '-1');
+    for (const control of header.querySelectorAll('a, button')) expect(control).not.toHaveAttribute('tabindex', '-1');
   });
 
   it('is made inert where the browser has it, and given back', async () => {
+    atWidth(true);
     Object.defineProperty(HTMLElement.prototype, 'inert', { configurable: true, writable: true, value: false });
     try {
       const { user } = renderCakes('/cakes', { cakes: source() });
@@ -104,6 +112,15 @@ describe('the bar under the layer', () => {
     } finally {
       Reflect.deleteProperty(HTMLElement.prototype, 'inert');
     }
+  });
+
+  it('is left alone on a phone, where the bar is not shown', async () => {
+    atWidth(false);
+    const { user } = renderCakes('/cakes', { cakes: source() });
+    await user.click(await screen.findByRole('button', { name: /^Sacher/ }, LOAD));
+    await screen.findByRole('heading', { level: 2, name: 'Sacher' }, LOAD);
+    expect(bar()).not.toHaveAttribute('aria-hidden');
+    for (const control of bar().querySelectorAll('a, button')) expect(control).not.toHaveAttribute('tabindex', '-1');
   });
 
   it('moves the focus into the card when a cake opens from the list, not onto the covered title', async () => {

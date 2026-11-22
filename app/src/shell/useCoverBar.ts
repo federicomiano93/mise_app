@@ -1,4 +1,5 @@
 import { useLayoutEffect } from 'react';
+import { useMediaQuery } from '../ui/useMediaQuery';
 import { useTitleSlot } from './titleSlot';
 
 // A section's own full-screen layer (Cakes' open cake, from 700px) is drawn over the shell's top bar. Drawn over is not enough: the bar, with
@@ -9,15 +10,18 @@ import { useTitleSlot } from './titleSlot';
 // ⚠️ THE LAB TABLET'S CHROME 101 HAS NO `inert` (Chrome 102+): there the bar gets `aria-hidden` AND every control in it leaves the tab order
 // (tabindex -1, the old value remembered and put back). Only for what is in the bar when the layer opens: a control that appears in it while
 // the layer is up (a kiosk pill) is reachable on such a browser until the layer closes.
+// ⚠️ ONLY WHERE THE LAYER REALLY COVERS THE BAR: below 700px the bar is not shown at all (the tab bar takes over), so nothing is made
+// unreachable there. The 700px is CakesSection.module.css's and shell/Page's.
 // ⚠️ WITHOUT A SLOT (a spec drawing a section alone, outside the shell) THERE IS NO BAR, and nothing is done.
 export function useCoverBar(covered: boolean): void {
   const slot = useTitleSlot();
+  const wide = useMediaQuery('(min-width: 700px)');
 
   useLayoutEffect(() => {
     const bar = slot?.closest('header') ?? null;
-    if (!covered || bar === null) return undefined;
+    if (!covered || !wide || bar === null) return undefined;
     return makeUnreachable(bar);
-  }, [covered, slot]);
+  }, [covered, wide, slot]);
 }
 
 type MaybeInert = HTMLElement & { inert?: boolean };
