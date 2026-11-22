@@ -45,6 +45,7 @@ function fakeSource() {
     watchSettings: vi.fn(onChange => { settings = onChange; return () => stopped.push('settings'); }),
     saveProduct: (id, data, snapshot, companion) => write('product', id, data, snapshot, companion),
     createProductIfAbsent: (id, data) => new Promise<boolean>((resolve, reject) => { creates.push({ id, data, resolve, reject }); }),
+    createRecipeWithCard: (recipeId, recipe, productId, product) => write('new-recipe', recipeId, recipe, productId, product),
     saveRecipeLoss: (id: string, patch: RecipeLossPatch) => write('loss', id, patch),
     removeProduct: (id, companion) => write('remove', id, companion),
     getProductHistory: vi.fn(async () => [{ id: 'h1', foodCostPct: 30 }]),
@@ -276,6 +277,40 @@ describe('the Food cost store', () => {
     expect(store.getSnapshot().tables).not.toBe(withProducts);
     expect(store.getSnapshot().tables.recipes).toBe(store.getSnapshot().recipes);
     expect(store.getSnapshot().recipes.r1!.name).toBe('Dough');
+  });
+
+  // Cakes' «+ New recipe» (22 Nov 2026).
+  test('⚠️ a recipe made from Cakes is on screen at once with its semi card, and ONE batch is written', () => {
+    const { fake, store } = setup();
+    store.start();
+    fake.products([]);
+    fake.recipes([]);
+    const cardId = store.createRecipeWithCard('r1', { name: 'Crema', ingredients: [] });
+    expect(cardId).toBe('recipe-r1');
+    const snap = store.getSnapshot();
+    expect(snap.recipes['r1']).toMatchObject({ id: 'r1', name: 'Crema', ingredients: [] });
+    expect(snap.products.find(card => card.id === 'recipe-r1')).toMatchObject({ name: 'Crema', kind: 'semi', components: [{ recipeId: 'r1', qtyKg: 0 }] });
+    expect(fake.writes).toHaveLength(1);
+    expect(fake.writes[0]!.kind).toBe('new-recipe');
+    const [recipeId, recipe, productId, card] = fake.writes[0]!.args as [string, Record<string, unknown>, string, Record<string, unknown>];
+    expect([recipeId, productId]).toEqual(['r1', 'recipe-r1']);
+    expect(recipe).toEqual({ name: 'Crema', ingredients: [] });
+    expect(card).toMatchObject({ name: 'Crema', kind: 'semi', model: 4 });
+    expect(card).not.toHaveProperty('id');
+  });
+
+  test('⚠️ a refused recipe-with-its-card takes BOTH off again and says so', async () => {
+    const { fake, store, messages } = setup();
+    store.start();
+    fake.products([]);
+    fake.recipes([]);
+    store.createRecipeWithCard('r1', { name: 'Crema', ingredients: [] });
+    fake.writes[0]!.pending.reject(new Error('permission-denied'));
+    await settle();
+    const snap = store.getSnapshot();
+    expect(snap.recipes['r1']).toBeUndefined();
+    expect(snap.products.some(card => card.id === 'recipe-r1')).toBe(false);
+    expect(messages).toEqual([{ kind: 'recipe-not-created', name: 'Crema', productId: 'recipe-r1' }]);
   });
 
   test('⚠️ a save is local-first: on screen at once under the id made on the phone, the SAME id written', () => {
