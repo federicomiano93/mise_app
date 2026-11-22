@@ -4,7 +4,7 @@ import type { Cake, ReferenceGrams } from '@mise/shared/cake-model';
 import { normalizeStandard, referenceFor } from '@mise/shared/cake-standard';
 import type { CakeStandard } from '@mise/shared/cake-standard';
 import {
-  addCard, addPack, canAddCard, cardsIn, clearDiscHeight, firstEmptyPack, followStandard, isDirty, referenceChanged, removeCard, removePack, resetGrams,
+  addCard, addPack, canAddCard, cardsIn, clearDiscHeight, firstEmptyPack, followStandard, isDirty, referenceChanged, removeCard, removePack,
   setGrams, setMeasure, setName, setPackQty, setPrice, setTarget, setVat, takeReference, vatFromSelect, withoutMissingRecipeCards, workingFrom,
 } from './cakeEditorModel';
 
@@ -194,7 +194,6 @@ describe('grams', () => {
     const typed = setGrams(CAKE, 0, 'base', 'SPONGE', '650');
     expect(typed.lines[0]?.grams).toBe(650);
     expect(setGrams(typed, 0, 'base', 'SPONGE', '').lines[0]?.grams).toBeNull();
-    expect(resetGrams(typed, 0, 'base', 'SPONGE').lines[0]?.grams).toBeNull();
   });
 
   it('0 is a real answer, whole grams, never above what the rules accept', () => {

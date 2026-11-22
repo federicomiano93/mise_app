@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { CakeLineCost } from '@mise/shared/cake-model';
-import { STEP_KEYS, STEP_PARTS, filterByName, matchSpans, partFigures, partKey, startStep, stepNumber, toggleStep } from './cakeStepsModel';
+import { STEP_KEYS, STEP_PARTS, filterByName, matchSpans, partFigures, partKey, startStep, stepNumber } from './cakeStepsModel';
 
 describe('the order of the steps', () => {
   it('runs base, soak, filling, coating, decoration, then the cost', () => {
@@ -14,13 +14,6 @@ describe('the order of the steps', () => {
   it('opens the first step on a new cake and none on a saved one', () => {
     expect(startStep(false)).toBe('base');
     expect(startStep(true)).toBeNull();
-  });
-
-  it('opens one step at a time: a tap opens it, a tap on the open one closes it', () => {
-    expect(toggleStep(null, 'soak')).toBe('soak');
-    expect(toggleStep('base', 'soak')).toBe('soak');
-    expect(toggleStep('soak', 'soak')).toBeNull();
-    expect(toggleStep('cost', 'base')).toBe('base');
   });
 });
 

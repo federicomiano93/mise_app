@@ -173,10 +173,6 @@ export function setGrams(cake: Cake, tier: number, part: CakePart, productId: st
   return { ...cake, lines: cake.lines.map(line => (same(line) ? { ...line, grams } : line)) };
 }
 
-export function resetGrams(cake: Cake, tier: number, part: CakePart, productId: string): Cake {
-  return setGrams(cake, tier, part, productId, '');
-}
-
 // Packaging for the whole cake, counted in pieces. One line per ingredient; MAX_PACKAGING lines.
 export function addPack(cake: Cake, ingredientId: string): Cake {
   if (ingredientId === '' || cake.packaging.length >= MAX_PACKAGING || cake.packaging.some(line => line.ingredientId === ingredientId)) return cake;
