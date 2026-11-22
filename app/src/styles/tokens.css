@@ -25,8 +25,8 @@
   --rail-ink-strong: oklch(0.985 0.004 85);
   /* The thin line above Settings in the rail (22 Nov 2026): white at 16% over the rail ground. */
   --rail-rule: oklch(1 0 0 / 0.16);
-  /* Frosted dark glass over the 3D picture (the view buttons): the rail's colour at 55%. */
-  --glass-dark: oklch(0.225 0.012 60 / 0.55);
+  /* Frosted dark glass over the 3D picture (the view buttons): the rail's colour at 72%: the light text on it holds about 6:1 even over a pure white picture (at 55% it measured 3.7:1). */
+  --glass-dark: oklch(0.225 0.012 60 / 0.72);
   --glass-hover: oklch(1 0 0 / 0.14);
 
   /* Accent: cobalt — selection and the one primary action per screen */

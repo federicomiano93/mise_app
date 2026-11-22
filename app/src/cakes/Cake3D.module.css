@@ -31,7 +31,7 @@
 .views {
   display: flex;
   gap: 2px;
-  padding: var(--s1);
+  padding: 2px;
   border-radius: var(--r-pill);
   background: var(--glass-dark);
   -webkit-backdrop-filter: blur(10px);
@@ -56,14 +56,14 @@
   -webkit-tap-highlight-color: transparent;
 }
 
-/* The pill is 40px tall; its tap target is the 48px the app asks for (the extra 4px above and below belong to the pill's padding). */
+/* Each option is a real 44px box in a 2px-padded pill (48px tall, as tall as the Home button beside it); the ::after brings the tap area to 48px at the pill's own edge. */
 .view {
-  min-height: 40px;
+  min-height: 44px;
 }
 
 .view::after {
   position: absolute;
-  inset: calc(-1 * var(--s1)) 0;
+  inset: -2px 0;
   content: "";
 }
 
