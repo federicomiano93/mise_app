@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import type { Ref } from 'react';
 import { Button, ComboBox, Input, ListBox, ListBoxItem, Popover } from 'react-aria-components';
 import { ChevronDown, Search } from 'lucide-react';
+import { normalizeSearchText } from '@mise/shared/catalogue-model';
 import { filterByName, matchSpans } from './cakeStepsModel';
 import styles from './RecipeCombo.module.css';
 
@@ -14,6 +15,17 @@ export type ComboOption = {
   off: boolean;
 };
 
+// «+ New recipe “…”», the last option of the list: offered only for a typed name that no card has already.
+export type NewRecipeOption = {
+  // The option's words for what was typed.
+  label: (typed: string) => string;
+  // Chosen: the typed name, trimmed.
+  onCreate: (name: string) => void;
+};
+
+// The id of that option. Not a document id (those are letters and digits), so it can never be taken for a card.
+const NEW_RECIPE_KEY = '+new-recipe';
+
 type Props = {
   // The box's name for a screen reader («Search a recipe for Base»).
   label: string;
@@ -23,6 +35,7 @@ type Props = {
   emptyText: string;
   openLabel: string;
   onPick: (id: string) => void;
+  newRecipe?: NewRecipeOption | undefined;
   inputRef?: Ref<HTMLInputElement>;
 };
 
@@ -38,12 +51,15 @@ function Highlighted({ name, query }: { name: string; query: string }) {
 // A search box with a list under it (React Aria's combo box: arrows, Enter, Escape, the list is named and announced). A tap opens
 // every option, typing narrows them, and choosing one hands its id up and EMPTIES the box: what was chosen is shown by the row that
 // appears, never by the box.
-export function RecipeCombo({ label, placeholder, options, emptyText, openLabel, onPick, inputRef }: Props) {
+export function RecipeCombo({ label, placeholder, options, emptyText, openLabel, onPick, newRecipe, inputRef }: Props) {
   const [text, setText] = useState('');
   // ⚠️ React Aria writes the chosen option's name into the box when a choice is made; the box must stay empty, whichever of the two
   // events (the text change, the choice) arrives first.
   const justPicked = useRef(false);
   const shown = filterByName(options, text);
+  // ⚠️ A NAME THAT A CARD ALREADY HAS IS NEVER OFFERED AGAIN (capitals and accents ignored, as the search is): the card is in the list.
+  const typed = text.trim();
+  const offerNew = newRecipe !== undefined && typed !== '' && !options.some(option => normalizeSearchText(option.name) === normalizeSearchText(typed));
 
   return (
     <ComboBox
@@ -58,7 +74,7 @@ export function RecipeCombo({ label, placeholder, options, emptyText, openLabel,
         justPicked.current = true;
         setTimeout(() => { justPicked.current = false; }, 0);
         setText('');
-        onPick(String(key));
+        if (key === NEW_RECIPE_KEY) newRecipe?.onCreate(typed); else onPick(String(key));
       }}
       menuTrigger="focus"
       allowsEmptyCollection
@@ -79,6 +95,11 @@ export function RecipeCombo({ label, placeholder, options, emptyText, openLabel,
               {option.sub === '' ? null : <span className={styles.sub}>{option.sub}</span>}
             </ListBoxItem>
           ))}
+          {newRecipe !== undefined && offerNew ? (
+            <ListBoxItem key={NEW_RECIPE_KEY} id={NEW_RECIPE_KEY} textValue={newRecipe.label(typed)} className={`${styles.item} ${styles.create}`}>
+              <span className={styles.name}>{newRecipe.label(typed)}</span>
+            </ListBoxItem>
+          ) : null}
         </ListBox>
       </Popover>
     </ComboBox>

@@ -112,6 +112,14 @@
   overflow-wrap: anywhere;
 }
 
+/* «+ New recipe “…”»: the last option, set apart from the cards by a line and a heavier word. */
+.create {
+  margin-top: var(--s1);
+  border-top: 1px solid var(--line);
+  border-radius: 0 0 var(--r-sm) var(--r-sm);
+  font-weight: 600;
+}
+
 /* The typed letters inside a name. */
 .mark {
   padding: 0 1px;

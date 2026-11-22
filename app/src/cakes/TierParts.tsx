@@ -45,6 +45,9 @@ type Props = {
   // The step that is open (UI state kept by the form, never saved), and its move.
   open: StepKey | null;
   onOpen: (next: StepKey | null) => void;
+  // «+ New recipe “…”» chosen in a step's search box (only passed to someone who may make recipes): the form makes the recipe and its
+  // card and puts the card on that part. Left out, the option is not offered.
+  onNewRecipe?: ((name: string, part: CakePart) => void) | undefined;
   // The sixth step, «Cost and price»: what its closed row says, and what it shows when open (the form owns the numbers).
   costSummary: string;
   costBody: ReactNode;
@@ -66,7 +69,7 @@ const lineKey = (line: { tier: number; part: CakePart; productId: string }): str
 // (the line says so, with the rule's figure beside it, and a ↺ puts the rule back). A cake typed by hand has no rule: the
 // placeholder is 0 and every line says «type the grams».
 export function TierParts({
-  cake, typedByHand = false, edit, tier, onTier, selected, onSelect, registerPack, openRequest = null, onOpenHandled, open, onOpen, costSummary, costBody,
+  cake, typedByHand = false, edit, tier, onTier, selected, onSelect, registerPack, openRequest = null, onOpenHandled, open, onOpen, costSummary, costBody, onNewRecipe,
 }: Props) {
   const { t } = useT();
   const money = useMoney();
@@ -275,6 +278,10 @@ export function TierParts({
                       openLabel={t('cakes.combo.open')}
                       inputRef={node => { if (node) combos.current.set(part, node); else combos.current.delete(part); }}
                       onPick={id => { pick(part, id); }}
+                      newRecipe={onNewRecipe === undefined ? undefined : {
+                        label: typed => t('cakes.newRecipe.option', { q: typed }),
+                        onCreate: name => { onNewRecipe(name, part); },
+                      }}
                     />
                   )}
 

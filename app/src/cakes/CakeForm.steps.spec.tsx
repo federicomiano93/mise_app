@@ -23,8 +23,8 @@ const foodcost = () => fakeFoodcostSource({
   prices: { ...FLOUR_PRICES, ...PACKAGING_PRICES },
 });
 
-const openNew = async () => {
-  const view = renderCakes('/cakes/new', { cakes: fakeCakesSource({ cakes: [], reference: storedReference() }), foodcost: foodcost() });
+const openNew = async (options: Omit<NonNullable<Parameters<typeof renderCakes>[1]>, 'cakes' | 'foodcost'> = {}) => {
+  const view = renderCakes('/cakes/new', { cakes: fakeCakesSource({ cakes: [], reference: storedReference() }), foodcost: foodcost(), ...options });
   await screen.findByRole('heading', { level: 2, name: 'New cake' }, LOAD);
   return view;
 };
@@ -111,14 +111,15 @@ describe('the search box', () => {
     await user.click(search);
     expect(await screen.findAllByRole('option', undefined, LOAD)).toHaveLength(4);
     await user.type(search, 'CR');
-    const options = screen.getAllByRole('option');
+    // The list ENDS with «+ New recipe “…”» (the owner may make recipes): the cards are the options before it.
+    const options = screen.getAllByRole('option').slice(0, -1);
     // Capitals do not matter, and the letters are marked wherever they fall in each name.
     expect(options.map(option => option.querySelector('mark')?.textContent)).toEqual(['cr', 'Cr']);
     expect(options.map(option => option.textContent)).toEqual([expect.stringContaining('Cocoa crumble'), expect.stringContaining('Cream')]);
   });
 
-  it('says so when nothing matches', async () => {
-    const { user } = await openNew();
+  it('says so when nothing matches, for someone who cannot make recipes (the venue has no Recipes)', async () => {
+    const { user } = await openNew({ session: { location: { sections: { catalogue: false } } } });
     await user.type(screen.getByRole('combobox', { name: 'Search a recipe for Base' }), 'zzz');
     expect(await screen.findByText('No recipe matches.')).toBeInTheDocument();
   });

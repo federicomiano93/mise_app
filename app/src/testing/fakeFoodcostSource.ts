@@ -1,4 +1,5 @@
 import { vi } from 'vitest';
+import type { Mock } from 'vitest';
 import { withPrices } from '@mise/shared/price-model';
 import type { FoodcostSource, ProductsMeta, RecipeLossPatch, StoredDoc } from '../foodcost/foodcostSource';
 
@@ -39,6 +40,8 @@ export type FakeFoodcostSource = FoodcostSource & {
   // `companion` is the cake that travelled in the same batch (Cakes); the fake also keeps it in `cakes`.
   saved: { kind: 'product' | 'create' | 'new-recipe' | 'loss' | 'remove' | 'rate' | 'category' | 'category-remove'; id?: string; data?: unknown; snapshot?: unknown; companion?: unknown }[];
   cakes: Map<string, StoredDoc>;
+  // The recipe-with-its-card batch, as a mock (what it was called with).
+  createRecipeWithCard: Mock<FoodcostSource['createRecipeWithCard']>;
   // Tells every watcher again (as another phone's write would).
   push(): void;
   // Holds back the first answer of the products until release() (Firestore still loading).
