@@ -1,7 +1,7 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
 import { fakeCakesSource } from '../testing/fakeCakesSource';
-import { renderCakes, storedReference } from '../testing/renderCakes';
+import { REFERENCE, renderCakes, storedReference } from '../testing/renderCakes';
 import { LOAD } from '../testing/renderFoodcost';
 
 // The standard cake: a table of grams per diameter. Plain text for whoever may not change it, a form with the settings pattern for
@@ -20,8 +20,12 @@ const EMPLOYEE = { canManage: false, isOwner: false, role: 'staff' as const, loc
 // A document written before the table existed: its one cake (22 cm, 3 discs of 3 cm), read as a table with that row typed.
 const withReference = () => fakeCakesSource({ reference: storedReference() });
 
+const BIG = storedReference({ ...REFERENCE, baseG: 1050 });
 const box = (name: string) => screen.findByRole('textbox', { name: new RegExp(`^${name}`) }, LOAD);
 const saveBar = () => screen.getByRole('button', { name: 'Save' });
+// What a screen reader reads after a box's name: the text of every element its aria-describedby points at.
+const described = (node: HTMLElement) => (node.getAttribute('aria-describedby') ?? '').split(' ').filter(Boolean)
+  .map(id => document.getElementById(id)?.textContent ?? '').join(' | ');
 const question = () => screen.findByRole('alertdialog', undefined, LOAD);
 
 async function openForm(cakes = withReference(), options = {}) {
@@ -67,10 +71,9 @@ describe('the form of whoever runs the place', () => {
     const grey = await box('Base at 20 cm');
     expect(grey).toHaveValue('');
     expect(grey).toHaveAttribute('placeholder', '250');
-    const description = grey.getAttribute('aria-describedby');
-    expect(description).toBeTruthy();
-    expect(document.getElementById(description as string)).toHaveTextContent('worked out from 22 cm: 250 g');
-    expect(typed).not.toHaveAttribute('aria-describedby');
+    // The column's note first, then where the grey figure comes from; the name stays «Base at 20 cm».
+    expect(described(grey)).toBe('g per disc | worked out from 22 cm: 250 g');
+    expect(described(typed)).toBe('g per disc');
     expect(screen.getByText(/The coating is approximate/)).toBeInTheDocument();
     expect(screen.queryByRole('region', { name: /Try it/ })).not.toBeInTheDocument();
   });
@@ -91,10 +94,10 @@ describe('the form of whoever runs the place', () => {
     const twenty = await box('Base at 20 cm');
     await user.type(twenty, '260');
     expect(twenty).toHaveValue('260');
-    expect(twenty).not.toHaveAttribute('aria-describedby');
+    expect(described(twenty)).toBe('g per disc');
     // 18 cm is now nearest to 20 cm: 260 g × (18/20)² = 210.6 g, rounded to 210 g.
     expect(near).toHaveAttribute('placeholder', '210');
-    expect(document.getElementById(near.getAttribute('aria-describedby') as string)).toHaveTextContent('worked out from 20 cm: 210 g');
+    expect(described(near)).toBe('g per disc | worked out from 20 cm: 210 g');
     await user.clear(twenty);
     expect(near).toHaveAttribute('placeholder', '200');
   });
@@ -121,8 +124,10 @@ describe('the diameters', () => {
     const add = await box('New diameter');
     await user.type(add, '9');
     await user.click(screen.getByRole('button', { name: /Add diameter/ }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('A diameter between 10 and 60 cm.');
+    expect(await screen.findByRole('alert')).toHaveTextContent('A whole diameter between 10 and 60 cm.');
     expect(add).toHaveAttribute('aria-invalid', 'true');
+    // The error is announced: the box points at it.
+    expect(described(add)).toBe('A whole diameter between 10 and 60 cm.');
     expect(add).toHaveFocus();
     await user.clear(add);
     expect(add).not.toHaveAttribute('aria-invalid');
@@ -144,6 +149,44 @@ describe('the diameters', () => {
     await waitFor(() => { expect(screen.getByRole('button', { name: 'Remove 26 cm' })).toHaveFocus(); });
     for (const d of [16, 18, 22, 24]) await user.click(screen.getByRole('button', { name: `Remove ${d} cm` }));
     expect(screen.getByRole('button', { name: 'Remove 26 cm' })).toBeDisabled();
+  });
+
+  it('a diameter that is not whole is refused, never rounded', async () => {
+    const { user } = await openForm();
+    const add = await box('New diameter');
+    await user.type(add, '22.5{Enter}');
+    expect(await screen.findByRole('alert')).toHaveTextContent('A whole diameter between 10 and 60 cm.');
+    expect(screen.queryByRole('textbox', { name: /^Base at 23 cm/ })).not.toBeInTheDocument();
+  });
+
+  it('when the removal leaves ONE row (its × disabled), the focus goes to that row’s first box, never to the page', async () => {
+    const { user } = await openForm();
+    for (const d of [16, 18, 20, 24, 26]) await user.click(screen.getByRole('button', { name: `Remove ${d} cm` }));
+    await user.click(screen.getByRole('button', { name: 'Remove 28 cm' }));
+    await waitFor(() => { expect(screen.getByRole('textbox', { name: /^Base at 22 cm/ })).toHaveFocus(); });
+    expect(document.body).not.toHaveFocus();
+  });
+
+  it('has a Plus icon beside «Add diameter», not a typed «+»', async () => {
+    await openForm();
+    const button = await screen.findByRole('button', { name: 'Add diameter' }, LOAD);
+    expect(button.textContent).toBe('Add diameter');
+    expect(button.querySelector('svg')).toHaveAttribute('aria-hidden', 'true');
+  });
+
+  it('the grey figures are plain digits: 1050, never 1.050 or 1,050', async () => {
+    await openForm(fakeCakesSource({ reference: BIG }));
+    expect(await box('Base at 22 cm')).toHaveValue('1050');
+    // 1050 g × (24/22)² = 1249.6 g, shown to 10 g.
+    const grey = await box('Base at 24 cm');
+    expect(grey).toHaveAttribute('placeholder', '1250');
+    expect(described(grey)).toBe('g per disc | worked out from 22 cm: 1250 g');
+  });
+
+  it('the read-only figures are plain digits too', async () => {
+    renderCakes('/cakes/reference', { cakes: fakeCakesSource({ reference: BIG }), session: EMPLOYEE });
+    expect(within(await screen.findByRole('group', { name: '22 cm' }, LOAD)).getByText(/^1050 g$/)).toBeInTheDocument();
+    expect(within(screen.getByRole('group', { name: '24 cm' })).getByText(/^1250 g/)).toBeInTheDocument();
   });
 });
 

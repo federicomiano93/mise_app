@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import type { Ref } from 'react';
-import { Check, X } from 'lucide-react';
+import { Check, Plus, X } from 'lucide-react';
 import { useBlocker, useLocation } from 'react-router';
 import type { BlockerFunction } from 'react-router';
 import { MAX_STANDARD_ROWS, standardCell } from '@mise/shared/cake-standard';
@@ -71,7 +71,9 @@ function ReferenceRead() {
     if (cameFromList(state)) title.current?.focus();
   }, []);
 
-  const grams = (value: number) => t('cakes.grams', { g: localNumber(String(value), money) });
+  // ⚠️ PLAIN DIGITS (1050, never 1.050 / 1,050): the boxes read a dot or a comma as a decimal point, so the figures beside them must not
+  // teach the other reading.
+  const grams = (value: number) => t('cakes.grams', { g: String(value) });
 
   return (
     <section className={styles.screen} aria-labelledby={titleId}>
@@ -106,7 +108,7 @@ function ReferenceRead() {
                           {cell ? (
                             <p className={cell.typed ? styles.figure : `${styles.figure} ${styles.figureComputed}`}>
                               {grams(cell.grams)}
-                              {!cell.typed && <span className={styles.srOnly}> {t('cakes.ref.computed')}</span>}
+                              {!cell.typed && <span className="visually-hidden"> {t('cakes.ref.computed')}</span>}
                             </p>
                           ) : <p className={styles.figure}>—</p>}
                         </div>
@@ -149,16 +151,21 @@ type BoxProps = {
   unit: string;
   invalid: boolean;
   inputMode: 'decimal' | 'numeric';
-  // Read aloud after the name (a grey figure's «worked out from 22 cm: 310 g»).
+  // Read aloud after the name: the column's note («g per disc») and a grey figure's «worked out from 22 cm: 310 g».
   hint?: string;
+  note?: string;
+  // The id of an element outside the box that also describes it (the «New diameter» error).
+  describedBy?: string;
   inputRef?: Ref<HTMLInputElement>;
   onChange: (text: string) => void;
   onEnter?: () => void;
 };
 
 // A number typed into a plain text box. ⚠️ A COMMA TYPED IS A DECIMAL POINT (referenceModel.readNumber): the text is kept as typed.
-function Box({ id, label, value, placeholder, unit, invalid, inputMode, hint, inputRef, onChange, onEnter }: BoxProps) {
+function Box({ id, label, value, placeholder, unit, invalid, inputMode, hint, note, describedBy, inputRef, onChange, onEnter }: BoxProps) {
   const hintId = `${id}-hint`;
+  const noteId = `${id}-note`;
+  const described = [note ? noteId : null, hint ? hintId : null, describedBy ?? null].filter(Boolean).join(' ');
   return (
     <span className={styles.box} data-invalid={invalid}>
       <input
@@ -169,7 +176,7 @@ function Box({ id, label, value, placeholder, unit, invalid, inputMode, hint, in
         autoComplete="off"
         className={styles.input}
         aria-label={label}
-        aria-describedby={hint ? hintId : undefined}
+        aria-describedby={described === '' ? undefined : described}
         aria-invalid={invalid ? true : undefined}
         placeholder={placeholder}
         value={value}
@@ -182,7 +189,8 @@ function Box({ id, label, value, placeholder, unit, invalid, inputMode, hint, in
         } : undefined}
       />
       {unit !== '' && <span className={styles.unit} aria-hidden="true">{unit}</span>}
-      {hint && <span id={hintId} className={styles.srOnly}>{hint}</span>}
+      {note && <span id={noteId} className="visually-hidden">{note}</span>}
+      {hint && <span id={hintId} className="visually-hidden">{hint}</span>}
     </span>
   );
 }
@@ -313,6 +321,8 @@ function ReferenceForm() {
     return t('cakes.ref.cellName', { part: t(words ? words.label : 'cakes.part.base'), d: diameterCm });
   };
   const thousands = (value: number) => localNumber(String(value), money);
+  // The grey figures: plain digits, see ReferenceRead.
+  const plain = (value: number) => String(value);
 
   async function save() {
     if (asking.current || askingLeave.current) return;
@@ -392,10 +402,12 @@ function ReferenceForm() {
   function remove(diameterCm: number) {
     if (text.rows.length <= 1) return;
     const index = text.rows.findIndex(row => row.diameterCm === diameterCm);
-    // The next row's ×, else the previous one's, else the add box.
+    // The next row's ×, else the previous one's. ⚠️ When only ONE row is left its × is disabled and cannot take the focus: its first box
+    // does, so the focus never falls to the page.
     const neighbour = text.rows[index + 1] ?? text.rows[index - 1];
     change(removeDiameter(text, diameterCm));
-    setFocusKey(neighbour ? `remove:${neighbour.diameterCm}` : 'add');
+    if (!neighbour) setFocusKey('add');
+    else setFocusKey(text.rows.length <= 2 ? cellKey(neighbour.diameterCm, 'baseG') : `remove:${neighbour.diameterCm}`);
   }
 
   const preview = previewOf(text);
@@ -462,8 +474,9 @@ function ReferenceForm() {
                           id={id}
                           label={names(row.diameterCm, words.column)}
                           value={value}
-                          placeholder={cell ? thousands(cell.grams) : '—'}
-                          hint={cell ? t('cakes.ref.cellFrom', { d: cell.fromCm, g: t('cakes.grams', { g: thousands(cell.grams) }) }) : undefined}
+                          placeholder={cell ? plain(cell.grams) : '—'}
+                          note={t(words.sub)}
+                          hint={cell ? t('cakes.ref.cellFrom', { d: cell.fromCm, g: t('cakes.grams', { g: plain(cell.grams) }) }) : undefined}
                           unit={t('cakes.ref.unitG')}
                           invalid={invalid?.kind === 'cell' && invalid.diameterCm === row.diameterCm && invalid.column === words.column}
                           inputMode="decimal"
@@ -498,6 +511,7 @@ function ReferenceForm() {
                 placeholder={t('cakes.ref.newDiameterHint')}
                 unit={t('cakes.ref.unitCm')}
                 invalid={addInvalid}
+                describedBy={addError ? `${ids}-add-error` : undefined}
                 inputMode="numeric"
                 inputRef={register('add')}
                 onChange={value => {
@@ -508,9 +522,12 @@ function ReferenceForm() {
                 onEnter={add}
               />
             </div>
-            <Button isDisabled={full} onPress={add}>{`+ ${t('cakes.ref.add')}`}</Button>
+            <Button isDisabled={full} onPress={add}>
+              <Plus aria-hidden="true" />
+              {t('cakes.ref.add')}
+            </Button>
           </div>
-          <p role="alert" className={styles.error}>{addError ?? ''}</p>
+          <p id={`${ids}-add-error`} role="alert" className={styles.error}>{addError ?? ''}</p>
           {full && <p className={styles.hint}>{t('cakes.ref.maxRows', { n: MAX_STANDARD_ROWS })}</p>}
 
           <p className={styles.hint}>{t('cakes.ref.howScales')}</p>

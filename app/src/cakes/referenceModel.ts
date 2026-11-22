@@ -169,11 +169,13 @@ export type AddResult =
   | { ok: true; text: TableText; diameterCm: number }
   | { ok: false; error: 'range' | 'duplicate' | 'full'; diameterCm: number | null };
 
-// A new diameter from what was typed in the «New diameter» box: whole centimetres in the rules' bounds, not there already, room left.
+// A new diameter from what was typed in the «New diameter» box: whole centimetres, in the rules' bounds, not there already, room left.
 export function addDiameter(text: TableText, raw: string): AddResult {
   const value = readNumber(raw);
   if (value === null || !Number.isFinite(value)) return { ok: false, error: 'range', diameterCm: null };
-  const diameterCm = Math.round(value);
+  // ⚠️ A diameter that is not whole is refused, never rounded silently.
+  if (!Number.isInteger(value)) return { ok: false, error: 'range', diameterCm: null };
+  const diameterCm = value;
   if (diameterCm < DIAMETER_MIN || diameterCm > DIAMETER_MAX) return { ok: false, error: 'range', diameterCm };
   if (text.rows.some(row => row.diameterCm === diameterCm)) return { ok: false, error: 'duplicate', diameterCm };
   if (text.rows.length >= MAX_STANDARD_ROWS) return { ok: false, error: 'full', diameterCm };

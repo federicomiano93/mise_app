@@ -571,7 +571,7 @@ export const it: Messages = {
   'cakes.ref.newDiameter': 'Nuovo diametro',
   'cakes.ref.newDiameterHint': 'es. 30',
   'cakes.ref.add': 'Aggiungi diametro',
-  'cakes.ref.diameterRange': 'Un diametro tra {min} e {max} cm.',
+  'cakes.ref.diameterRange': 'Un diametro intero tra {min} e {max} cm.',
   'cakes.ref.diameterDup': '{d} cm c’è già.',
   'cakes.ref.maxRows': 'Al massimo {n} diametri.',
   'cakes.ref.columnEmpty': 'Scrivi almeno un numero in «{field}»: gli altri si calcolano da lì.',

@@ -614,7 +614,7 @@ export const en = {
   'cakes.ref.newDiameter': 'New diameter',
   'cakes.ref.newDiameterHint': 'e.g. 30',
   'cakes.ref.add': 'Add diameter',
-  'cakes.ref.diameterRange': 'A diameter between {min} and {max} cm.',
+  'cakes.ref.diameterRange': 'A whole diameter between {min} and {max} cm.',
   'cakes.ref.diameterDup': '{d} cm is already there.',
   'cakes.ref.maxRows': 'At most {n} diameters.',
   'cakes.ref.columnEmpty': 'Write at least one number in “{field}”: the others are worked out from it.',
