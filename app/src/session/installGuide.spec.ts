@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import { installGuideAddress, runsInstalled } from './installGuide';
+import { INSTALLED_DISPLAY_QUERY } from './displayMode';
 
 // The install guide stays the current app's own page, at the site's root (staff slice 2).
 describe('installGuideAddress', () => {
@@ -20,7 +21,7 @@ describe('installGuideAddress', () => {
 
 describe('runsInstalled', () => {
   const win = (standaloneQuery: boolean, iosFlag?: boolean) => ({
-    matchMedia: (query: string) => ({ matches: standaloneQuery && query === '(display-mode: standalone)' }) as MediaQueryList,
+    matchMedia: (query: string) => ({ matches: standaloneQuery && /display-mode: standalone/.test(query) }) as MediaQueryList,
     navigator: (iosFlag === undefined ? {} : { standalone: iosFlag }) as Navigator,
   });
 
@@ -29,6 +30,13 @@ describe('runsInstalled', () => {
     expect(runsInstalled(win(false, true))).toBe(true);
     expect(runsInstalled(win(false, false))).toBe(false);
     expect(runsInstalled(win(false))).toBe(false);
+  });
+
+  test('the PC app with its title bar folded into the page (window-controls-overlay) counts as installed', () => {
+    const overlay = { matchMedia: (query: string) => ({ matches: /display-mode: window-controls-overlay/.test(query) }) as MediaQueryList, navigator: {} as Navigator };
+    expect(runsInstalled(overlay)).toBe(true);
+    expect(INSTALLED_DISPLAY_QUERY).toContain('(display-mode: standalone)');
+    expect(INSTALLED_DISPLAY_QUERY).toContain('(display-mode: window-controls-overlay)');
   });
 
   test('a matchMedia that throws is not a crash', () => {

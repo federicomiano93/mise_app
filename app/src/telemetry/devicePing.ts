@@ -21,6 +21,7 @@
 // sign-out and a venue switch. Wiped, one phone would count again on every switch.
 // ⚠️ THE DAY IS STAMPED WHEN THE WRITE IS HANDED OVER, not when it is confirmed (see pingIfDue).
 
+import { INSTALLED_DISPLAY_QUERY } from '../session/displayMode';
 import {
   newDeviceId, isValidDeviceId, dueToday, localDayKey, devicePayload, sameSession,
   type DeviceKind, type DevicePayload,
@@ -142,7 +143,7 @@ export function browserPingDeps(send: PingDeps['send']): PingDeps {
     randomBytes: () => crypto.getRandomValues(new Uint8Array(64)),
     now: () => new Date(),
     kind: browserDeviceKind,
-    installed: () => window.matchMedia('(display-mode: standalone)').matches
+    installed: () => window.matchMedia(INSTALLED_DISPLAY_QUERY).matches
       || (navigator as Navigator & { standalone?: boolean }).standalone === true,
     version: () => MISE2_VERSION,
     send,

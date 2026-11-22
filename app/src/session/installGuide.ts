@@ -5,6 +5,7 @@
 // both (scripts/build-pages-site.mjs KEPT_PAGES; the service worker hands it to the network untouched). So the folder
 // `mise2/`, when the app is served from it, is stepped out of — as calculator/clientOrdersSource.ts does for order.html.
 
+import { INSTALLED_DISPLAY_QUERY } from './displayMode';
 export function installGuideAddress(pageHref: string): string {
   const folder = new URL('.', pageHref);
   const root = folder.pathname.endsWith('/mise2/') ? new URL('..', folder) : folder;
@@ -16,7 +17,7 @@ export function installGuideAddress(pageHref: string): string {
 // navigator.standalone and nothing else.
 export function runsInstalled(win: Pick<Window, 'matchMedia' | 'navigator'> = window): boolean {
   try {
-    if (typeof win.matchMedia === 'function' && win.matchMedia('(display-mode: standalone)').matches) return true;
+    if (typeof win.matchMedia === 'function' && win.matchMedia(INSTALLED_DISPLAY_QUERY).matches) return true;
   } catch { /* an old engine: fall through to the iOS flag */ }
   return (win.navigator as Navigator & { standalone?: boolean }).standalone === true;
 }

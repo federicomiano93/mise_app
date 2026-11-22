@@ -285,13 +285,18 @@ describe('browserPingDeps', () => {
     let standalone = false;
     vi.stubGlobal('screen', { width: 820, height: 1180 });
     vi.stubGlobal('matchMedia', (query: string) => ({
-      matches: query === '(pointer: coarse)' ? true : query === '(display-mode: standalone)' ? standalone : false,
+      matches: query === '(pointer: coarse)' ? true : /display-mode: standalone/.test(query) ? standalone : false,
     }));
     const d = browserPingDeps(async () => {});
     expect(d.kind()).toBe('tablet');
     expect(d.installed()).toBe(false);
     standalone = true;
     expect(d.installed()).toBe(true);
+  });
+
+  test('the PC app with its title bar folded into the page (window-controls-overlay) counts as installed too', () => {
+    vi.stubGlobal('matchMedia', (query: string) => ({ matches: /display-mode: window-controls-overlay/.test(query) }));
+    expect(browserPingDeps(async () => {}).installed()).toBe(true);
   });
 
   test('an iPhone home-screen app counts as installed through navigator.standalone', () => {
