@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode, RefObject } from 'react';
 import { Navigate, useLocation, useNavigate, useNavigationType } from 'react-router';
 import { todayISO } from '@mise/shared/day';
@@ -6,6 +6,7 @@ import { mayEditRecords } from '@mise/shared/records';
 import { PartBoundary } from '../errors/PartBoundary';
 import { useT } from '../i18n/useT';
 import { KEEP_FOCUS, Page } from '../shell/Page';
+import { SettingsGear } from '../shell/SettingsGear';
 import { useOwnScrollArea } from '../shell/scrollArea';
 import { useOnline } from '../shell/useOnline';
 import { useSession } from '../session/SessionContext';
@@ -489,6 +490,10 @@ function OrdersLayout({ view }: { view: ShownView }) {
     if (!handBack.focus(door)) handBack.focus(target.kind === 'name' && target.in === 'flat' ? SEARCH_BOX : SUPPLIER_TITLE);
   }, [ready]);
 
+  // The settings gear beside the title (in the top bar from 700px): Back from the settings hands the focus to it.
+  // ⚠️ ABOVE THE EARLY RETURN BELOW: a hook after it is skipped on the redirect and React throws.
+  const gearNode = useCallback((node: HTMLButtonElement | null) => { handBack.register(SETTINGS_OPENER, node); }, [handBack]);
+
   // ⚠️ WITH THE VENUE'S SWITCH OFF the three delivery addresses do not exist (decision F4): a bookmark, or a phone that was on
   // Incoming when somebody turned it off, goes to the list. Only once config/orders has answered (before that the switch reads on).
   const deliveryAddress = view.kind === 'incoming' || view.kind === 'incoming-missing' || view.kind === 'reorder';
@@ -534,7 +539,9 @@ function OrdersLayout({ view }: { view: ShownView }) {
         // The title band (the redesign of 16 Nov 2026, item 3): white, sticky on the split, the tools after the title.
         stickyBand
         bandWraps
-        band={<OrdersBand onSettings={openSettings} onHistory={openHistory} onLists={openLists} onSend={openSend} showSend={showSend} />}
+        // Always there, even with no supplier yet: the settings are not about the suppliers.
+        gear={<SettingsGear ref={gearNode} label={t('ord.settings.open')} onPress={openSettings} />}
+        band={<OrdersBand onHistory={openHistory} onLists={openLists} onSend={openSend} showSend={showSend} />}
       >
         <StatusLine />
         <OrdersGrid

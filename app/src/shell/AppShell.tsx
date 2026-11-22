@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { MouseEvent, RefObject } from 'react';
 import { ChevronDown, Ellipsis } from 'lucide-react';
 import { Link, NavLink, Outlet, useHref, useLocation, useNavigate } from 'react-router';
@@ -12,27 +12,31 @@ import { AwayProvider } from './away/AwayContext';
 import { announceScreen } from '../telemetry/usage';
 import { AwayReminder } from './AwayReminder';
 import { AwayRefusalAlert } from './away/AwayRefusalAlert';
-import { MORE, moreIsCurrent, screenNameFor, sectionById, titleKeyFor } from './sections';
+import { MORE, moreIsCurrent, screenNameFor, titleKeyFor } from './sections';
 import type { Section } from './sections';
 import { useOnline } from './useOnline';
 import { useToday } from './useToday';
 import { ScrollAreaContext, useScrollAreaState } from './scrollArea';
 import { useVisibleSections } from './useVisibleSections';
 import { useKioskSettings } from '../kiosk/kioskSettings';
+import { AccountMenu } from './AccountMenu';
 import { KioskPills } from './KioskPills';
+import { TitleSlotContext } from './titleSlot';
 import styles from './AppShell.module.css';
 
 // The section an address belongs to: its first segment («stocktake» for /stocktake/2026-10).
 const sectionOf = (pathname: string): string => pathname.split('/')[1] ?? '';
 
-// The frame around every screen: a rail on a tablet, a tab bar on a phone, a top bar on a
-// tablet's every section (and on a kiosk phone's Home, for «Standby» and «Exit»), and the section itself in the middle.
+// The frame around every screen: a rail on a tablet, a tab bar on a phone, ONE top bar on a tablet's every section (the section's title and
+// gear, the venue and the date, «Standby» on a kiosk Home, the connection and the account's letter; and on a kiosk phone's Home, for «Standby»
+// and the account menu), and the section itself in the middle.
 //
 // ⚠️ BOTH NAVIGATIONS ARE ALWAYS IN THE DOM; CSS MEDIA QUERIES DECIDE WHICH ONE SHOWS. No
 // script measures the width or the height: a tablet turned from landscape to portrait, or a window resized,
-// changes the layout with no render at all, and `display: none` keeps the hidden one out of the
-// tab order and away from screen readers. The same goes for the rail's «More» item: the data says which links CAN spill
-// (`data-spill`, and `data-items` on the rail), the stylesheet decides WHEN, by window height.
+// changes the layout with no render at all, and `display: none` keeps the hidden one out of the tab order and away from screen readers. The same
+// goes for the rail's «More» item: the data says which links CAN spill
+// (`data-spill`, and `data-items` on the rail), the stylesheet decides WHEN, by window height. (The one script choice is Page's: from 700px the
+// title is drawn into the bar's slot, see titleSlot.ts.)
 // This person's holiday is held here, at the venue level, so the Home's band, Settings' row and the once-a-day reminder agree.
 export function AppShell() {
   return (
@@ -54,15 +58,18 @@ function ShellFrame() {
   const contentRef = useRef<HTMLElement>(null);
   const { area, isOwned } = useScrollAreaState(contentRef);
   const lastPathname = useRef<string | null>(null);
-  // ⚠️ THE TOP BAR (venue, date, connection) IS ON EVERY SECTION from 700px (Federico, 21 Nov 2026: the bar everywhere). On 16 Nov
-  // it was the Home's only («too many elements» on the lab tablet); his later word wins, so the lab tablet loses 60px of height
-  // in every section again — his choice. The offline strip under a title (Page) is hidden from 700px for the same reason: the bar says it.
-  // On a phone the bar stays hidden, except on a kiosk device's Home (below).
+  // ⚠️ THE TOP BAR IS ON EVERY SECTION from 700px (Federico, 21 Nov 2026: the bar everywhere), and since 22 Nov 2026 it is the ONLY bar: the section's
+  // title and gear sit in it too. On 16 Nov it was the Home's only («too many elements» on the lab tablet); his later word wins, so the lab tablet
+  // loses 60px of height in every section again — his choice. The offline strip under a title (Page) is hidden from 700px for the same reason: the
+  // bar says it. On a phone the bar stays hidden, except on a kiosk device's Home (below).
   const onHome = sectionOf(pathname) === 'home';
-  // On a kiosk device the Home's bar also carries «Standby» and «Exit», so on a phone (where the bar is otherwise hidden) it shows too.
-  // Only the Home: the kiosk pills never appear on the other sections, and a kiosk phone shows no bar there.
+  // On a kiosk device the Home's bar also carries «Standby» and the account menu (with «Exit»), so on a phone (where the bar is otherwise hidden) it
+  // shows too. Only the Home: the kiosk controls never appear on the other sections, and a kiosk phone shows no bar there.
   const kioskOn = useKioskSettings().enabled;
   const kioskBar = onHome && kioskOn;
+  // The cell at the left of the bar where a Page draws its title (titleSlot.ts). A state, not a ref object: a Page that mounts in the same render as
+  // the bar has to hear when the cell arrives.
+  const [titleSlot, setTitleSlot] = useState<HTMLElement | null>(null);
 
   // One scroll area serves every section, so without this a long Orders list scrolled to the
   // bottom would open Recipes halfway down.
@@ -94,29 +101,31 @@ function ShellFrame() {
         <SkipLink target={contentRef} />
         <Rail />
         <div className={styles.main}>
-          <TopBar kiosk={kioskBar} onHome={onHome} />
-          <main id="main" ref={contentRef} tabIndex={-1} className={styles.content}>
-            {/* ⚠️ The holiday reminder and refusal live HERE, not straight under the shell: each boundary is a <div>, and
-                a <div> under the shell's grid takes a cell — the rail and the screen sat low and jumped when the holiday
-                data landed (drive of 9 Nov 2026). Both only open dialogs, drawn over the page from <body>, so here they are
-                0px tall; a part that fails to draw shows its notice at the top of the content, covering nothing. Outside the
-                section's boundary, so moving section does not ask again. */}
-            <PartBoundary>
-              <AwayReminder />
-            </PartBoundary>
-            {/* Its own boundary: a reminder that fails to draw must not take the one «Not saved» of the holiday with it. */}
-            <PartBoundary>
-              <AwayRefusalAlert />
-            </PartBoundary>
-            {/* Keyed on the section, so moving to another one clears a failure. A section that
-                fails never got to print its own title, so the shell names it from the address:
-                the fallback then has an h1 and the tab title of the screen it replaces. */}
-            <PartBoundary resetKey={sectionOf(pathname)} title={t(titleKeyFor(pathname))}>
-              <ScrollAreaContext.Provider value={area}>
-                <Outlet />
-              </ScrollAreaContext.Provider>
-            </PartBoundary>
-          </main>
+          <TitleSlotContext.Provider value={titleSlot}>
+            <TopBar kiosk={kioskBar} onHome={onHome} titleSlot={setTitleSlot} />
+            <main id="main" ref={contentRef} tabIndex={-1} className={styles.content}>
+              {/* ⚠️ The holiday reminder and refusal live HERE, not straight under the shell: each boundary is a <div>, and
+                  a <div> under the shell's grid takes a cell — the rail and the screen sat low and jumped when the holiday
+                  data landed (drive of 9 Nov 2026). Both only open dialogs, drawn over the page from <body>, so here they are
+                  0px tall; a part that fails to draw shows its notice at the top of the content, covering nothing. Outside the
+                  section's boundary, so moving section does not ask again. */}
+              <PartBoundary>
+                <AwayReminder />
+              </PartBoundary>
+              {/* Its own boundary: a reminder that fails to draw must not take the one «Not saved» of the holiday with it. */}
+              <PartBoundary>
+                <AwayRefusalAlert />
+              </PartBoundary>
+              {/* Keyed on the section, so moving to another one clears a failure. A section that
+                  fails never got to print its own title, so the shell names it from the address:
+                  the fallback then has an h1 and the tab title of the screen it replaces. */}
+              <PartBoundary resetKey={sectionOf(pathname)} title={t(titleKeyFor(pathname))}>
+                <ScrollAreaContext.Provider value={area}>
+                  <Outlet />
+                </ScrollAreaContext.Provider>
+              </PartBoundary>
+            </main>
+          </TitleSlotContext.Provider>
         </div>
         <TabBar pathname={pathname} />
       </div>
@@ -143,11 +152,8 @@ function SkipLink({ target }: { target: RefObject<HTMLElement | null> }) {
   );
 }
 
-// The rail is a plain box holding TWO things: the navigation (sections only) and, under it, the
-// account's avatar. The avatar is a link to the person's account but not one of the app's
-// sections, so it sits OUTSIDE the «All sections» landmark — a screen reader announces that one
-// with exactly the sections in it — and in a small landmark of its own, «Account», because content
-// outside every landmark is skipped by people who move from landmark to landmark (axe «region»).
+// The rail is a plain box holding the navigation: the sections, evenly spread over its height, then a thin rule and Settings at the foot. The
+// account's letter is no longer here (22 Nov 2026): it is the last thing of the top bar, and the rail holds sections only.
 function Rail() {
   const { t } = useT();
   const { pathname } = useLocation();
@@ -156,41 +162,27 @@ function Rail() {
   return (
     <div className={styles.rail} data-items={railTop.length + railBottom.length}>
       <nav className={styles.railNav} aria-label={t('nav.rail')}>
-        <div className={styles.mark} aria-hidden="true">{t('app.name').charAt(0)}</div>
-        {railTop.map(section => <RailLink key={section.id} section={section} spill={railSpill.includes(section)} />)}
-        {/* Hidden by CSS until a short window hides the spilled links (AppShell.module.css, the last step). A plain Link: «More»
-            also stands for every section it holds here. */}
-        {railSpill.length === 0 ? null : (
-          <Link
-            to={MORE.path}
-            className={`${styles.railItem} ${styles.railMore}`}
-            aria-current={moreIsCurrent(pathname, railSpill) ? 'page' : undefined}
-          >
-            <Ellipsis className={styles.railIcon} />
-            <span>{t(MORE.label)}</span>
-          </Link>
-        )}
-        <div className={styles.spacer} />
+        {/* The places spread over the height that is left (space-between), so a tall window has even gaps and a short one sits at its minimum. */}
+        <div className={styles.railGroup}>
+          {railTop.map(section => <RailLink key={section.id} section={section} spill={railSpill.includes(section)} />)}
+          {/* Hidden by CSS until a short window hides the spilled links (AppShell.module.css, the last step). A plain Link: «More»
+              also stands for every section it holds here. */}
+          {railSpill.length === 0 ? null : (
+            <Link
+              to={MORE.path}
+              className={`${styles.railItem} ${styles.railMore}`}
+              aria-current={moreIsCurrent(pathname, railSpill) ? 'page' : undefined}
+            >
+              <Ellipsis className={styles.railIcon} />
+              <span>{t(MORE.label)}</span>
+            </Link>
+          )}
+        </div>
+        {/* A divider above Settings: decoration only. */}
+        <div className={styles.railRule} aria-hidden="true" />
         {railBottom.map(section => <RailLink key={section.id} section={section} spill={false} />)}
       </nav>
-      <AccountAvatar />
     </div>
-  );
-}
-
-// Who is signed in, as the first letter of their email, under Settings. It leads to the Account
-// card in Settings, so the name is «Account», not the letter (which is decoration).
-function AccountAvatar() {
-  const { t } = useT();
-  const { user } = useSession();
-  const letter = Array.from(user?.email || user?.uid || '?')[0]?.toUpperCase();
-  // The link is 48px so a finger finds it; the circle inside is 40px.
-  return (
-    <nav aria-label={t('account.title')}>
-      <Link to={sectionById('settings').path} className={styles.avatarLink} aria-label={t('account.title')}>
-        <span className={styles.avatar} aria-hidden="true">{letter}</span>
-      </Link>
-    </nav>
   );
 }
 
@@ -206,43 +198,43 @@ function RailLink({ section, spill }: { section: Section; spill: boolean }) {
   );
 }
 
-function TopBar({ kiosk, onHome }: { kiosk: boolean; onHome: boolean }) {
+// The ONE bar, left to right: [the section's title and gear (a Page draws them into the slot, from 700px)] · [venue and date, centred] ·
+// [«Standby» on a kiosk Home] [connection] [the account's letter]. A grid with a `1fr` cell at each side, so the middle is truly centred when
+// there is room and shifts, never overlaps, when a long title needs more (AppShell.module.css).
+function TopBar({ kiosk, onHome, titleSlot }: { kiosk: boolean; onHome: boolean; titleSlot: (node: HTMLElement | null) => void }) {
   const { t, locale } = useT();
   const today = useToday(locale);
   const online = useOnline();
 
   return (
     <header className={styles.topbar}>
-      <Venue switchable={onHome} />
-      <p className={styles.date}>{today}</p>
-      <div className={styles.grow} />
-      {/* The Home's kiosk pills only; in its own part, so a failure there cannot break the bar. */}
-      {kiosk ? <PartBoundary><KioskPills /></PartBoundary> : null}
-      <p className={styles.sync} role="status">
-        {/* The dot is decoration: the words carry the meaning, so colour is never the only signal. */}
-        <span className={styles.dot} data-online={online} aria-hidden="true" />
-        <span className={styles.syncText}>{online ? t('status.online') : t('status.offline')}</span>
-      </p>
+      <div className={styles.barLeft} ref={titleSlot} />
+      <div className={styles.barMiddle}>
+        <Venue switchable={onHome} />
+        <p className={styles.date}>{today}</p>
+      </div>
+      <div className={styles.barRight}>
+        {/* The Home's kiosk pill only; in its own part, so a failure there cannot break the bar. */}
+        {kiosk ? <PartBoundary><KioskPills /></PartBoundary> : null}
+        <p className={styles.sync} role="status">
+          {/* The dot is decoration: the words carry the meaning, so colour is never the only signal. */}
+          <span className={styles.dot} data-online={online} aria-hidden="true" />
+          <span className={styles.syncText}>{online ? t('status.online') : t('status.offline')}</span>
+        </p>
+        <PartBoundary><AccountMenu kiosk={kiosk} /></PartBoundary>
+      </div>
     </header>
   );
 }
 
-// The venue this person is working on, left of the date. ⚠️ A SWITCH IS A HOME (AND SETTINGS) ACTION ONLY: it reloads the app, and an editor open
+// The venue this person is working on, in the middle of the bar. ⚠️ A SWITCH IS A HOME (AND SETTINGS) ACTION ONLY: it reloads the app, and an editor open
 // in another section would lose its unsaved edits without the router ever asking (the blocker never sees a reload). So off the Home it is the name alone.
 // On the Home, with more than one venue it is a button
 // that opens the list of the others; with one it is just its name.
 function Venue({ switchable }: { switchable: boolean }) {
   const { t } = useT();
   const { name, options } = useSession();
-  // The first letter, by code point: a name that starts with an emoji or an accented capital
-  // must not be cut in half.
-  const initial = Array.from(name)[0]?.toUpperCase() ?? '';
-  const label = (
-    <>
-      <span className={styles.venueDot} aria-hidden="true">{initial}</span>
-      <span className={styles.venueName}>{name}</span>
-    </>
-  );
+  const label = <span className={styles.venueName}>{name}</span>;
 
   if (options.length < 2 || !switchable) return <p className={styles.venueStatic}>{label}</p>;
 

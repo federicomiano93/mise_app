@@ -126,7 +126,7 @@ function CakesLayout({ view }: { view: CakesView }) {
     <HandBackProvider value={handBack}>
       <Page
         title={t('section.cakes')}
-        band={view.kind === 'list' ? <SettingsGear ref={gearNode} onPress={openReference} /> : null}
+        gear={view.kind === 'list' ? <SettingsGear ref={gearNode} onPress={openReference} /> : null}
       >
         <div className={styles.layout} data-view={view.kind === 'list' ? 'list' : 'detail'}>
           <div className={styles.list}>

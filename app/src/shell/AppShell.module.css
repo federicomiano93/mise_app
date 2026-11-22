@@ -1,6 +1,6 @@
 /* The frame of the app (values from the approved design, `mise2.css`). Phone first: the tab
    bar at the bottom, no rail, no top bar (except on the Home of a kiosk device, below). From 700px — tablets, portrait included — the rail
-   takes the left edge and the top bar appears; a media query chooses, no script measures. */
+   takes the left edge and the ONE top bar appears; a media query chooses, no script measures. */
 
 .shell {
   display: grid;
@@ -41,7 +41,8 @@
   box-shadow: var(--shadow-2);
 }
 
-/* The rail (tablet): a column holding the navigation, then the account's avatar under it. */
+/* The rail (tablet): one column holding the sections, spread over its height, then a thin rule and Settings at the foot. It carries neither a
+   brand letter nor the account any more (22 Nov 2026): the account's letter is at the right end of the top bar. */
 
 /* ⚠️ index.html says viewport-fit=cover, so the page reaches under the notch: an iPhone held in
    landscape (or a tablet with a camera cut-out) would cover the left of the rail. The shell
@@ -50,7 +51,6 @@
 .rail {
   display: none;
   flex-direction: column;
-  gap: var(--s1);
   padding: var(--s4) var(--s2) var(--s4) calc(var(--s2) + env(safe-area-inset-left));
   /* A landscape phone is 700px wide yet only about 390px tall. */
   overflow-y: auto;
@@ -65,23 +65,24 @@
   gap: var(--s1);
 }
 
-.mark {
-  display: grid;
-  place-items: center;
-  flex: none;
-  align-self: center;
-  width: 44px;
-  height: 44px;
-  margin-bottom: var(--s4);
-  border-radius: var(--r-md);
-  background: var(--rail-ink-strong);
-  color: var(--rail);
-  font-size: 20px;
-  font-weight: 700;
+/* ⚠️ THE PLACES SPREAD OVER THE WHOLE HEIGHT: this group (every section but Settings, and «More») takes what the nav has left and spaces its items
+   evenly, so a tall window has even gaps and a short one sits at the minimum (`gap`). It never shrinks under its content (`flex: 1 0 auto`), or a
+   short window would stack the items over the rule: the rail scrolls instead, as it always did. */
+.railGroup {
+  display: flex;
+  flex: 1 0 auto;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: var(--s1);
+  min-height: 0;
 }
 
-.spacer {
-  flex: 1;
+/* The light line above Settings: 1px, 16px of margin around it, so 17px of height in every sum of railHeight.spec.ts. */
+.railRule {
+  flex: none;
+  height: 1px;
+  margin: 8px 14px;
+  background: var(--rail-rule);
 }
 
 /* Icon above label, centred. Hover is qualified so it outranks base.css's link hover colour.
@@ -105,15 +106,14 @@
   text-decoration: none;
 }
 
-/* ⚠️ A SHORT WINDOW GETS SHORTER ITEMS, NOT A SCROLLING RAIL. The lab tablet in landscape shows 648px under Chrome's
-   bars, and the rail at 64px an item needed 700: the account at its foot was cut and the rail grew a scrollbar
-   (driven 13 Oct 2026). Since «Bookings» (18 Nov 2026) an owner sees ELEVEN items. With the bigger icon and label (16 Nov
-   2026) an item's content is 27 + gap + 15.5 + padding, so each step shrinks the padding with the height: up to 903px of
-   height 56px an item (the rail needs 816), up to 815px 52px without the brand letter at the top, which is only
-   decoration (it needs 712), and up to 715px 49px with the rail's own padding and gaps tightened (it needs 637 — the lab
-   tablet's 648 fits, Settings and the account included). The items never go below the 48px touch target.
-   railHeight.spec.ts adds it up. */
-@media (max-height: 903px) {
+/* ⚠️ A SHORT WINDOW GETS SHORTER ITEMS, NOT A SCROLLING RAIL. The lab tablet in landscape shows 648px under Chrome's bars (driven 13 Oct 2026).
+   The rail needs   padding (32, or 16 tightened) + places × (item + gap) + 17 (the rule with its margins),   gap being 4px, or 2px tightened.
+   Each step below starts exactly one pixel under what the rail needs at the step before it, and the items never go under the 48px touch
+   target. For a rail of up to 11 places (this set; the 11 places are everything an owner sees but the newest section): 64px needs 797, so
+   from 796px of height down 56px an item (it needs 709); from 708px 52px (665); from 664px 49px with the rail's own padding and gaps
+   tightened (594); from 593px 48px (583). The lab tablet's 648 gets 49px.
+   The fullest rail (12 places) has its own, one item earlier, in the next block. railHeight.spec.ts adds it all up. */
+@media (max-height: 796px) {
   .railItem {
     min-height: 56px;
     padding: 4px 0;
@@ -121,26 +121,22 @@
   }
 }
 
-@media (max-height: 815px) {
+@media (max-height: 708px) {
   .railItem {
     min-height: 52px;
     padding: 3px 0;
     gap: 2px;
   }
-
-  .mark {
-    display: none;
-  }
 }
 
-@media (max-height: 715px) {
+@media (max-height: 664px) {
   .rail {
-    gap: 2px;
     padding-top: var(--s2);
     padding-bottom: var(--s2);
   }
 
-  .railNav {
+  .railNav,
+  .railGroup {
     gap: 2px;
   }
 
@@ -151,17 +147,24 @@
   }
 }
 
-/* ⚠️ TWELVE PLACES (Cakes, 20 Nov 2026): the fullest rail holds 12, and the steps above (written for 11) are one item short, so a rail
-   marked `data-items="12"` (AppShell.tsx) steps up one item earlier: 64px up to 971px of height (it needs 972), 56px up to 875px (876),
-   52px without the brand letter up to 767px (768), 49px tightened up to 687px (688). Below that THE LAST TWO SECTIONS (`data-spill`: the
-   ones arrangeSections puts in railSpill) go under «More» and the rail holds 11 places, which need 637: the lab tablet's 648 fits. A rail
-   of 11 or fewer carries `data-items="11"` (its own count), which no step below matches (they match only "12"), so it keeps the steps above exactly. The data says which links CAN spill; these queries
-   decide WHEN. Qualified by the attribute, so they outrank the unqualified steps. railHeight.spec.ts adds it up. */
+@media (max-height: 593px) {
+  .railItem {
+    min-height: 48px;
+  }
+}
+
+/* ⚠️ TWELVE PLACES (Cakes, 20 Nov 2026): the fullest rail holds 12, one item more than the steps above were written for, so a rail marked
+   `data-items="12"` (AppShell.tsx) steps down one item earlier. Same sums with 12 places: 64px needs 865, so 56px from 864px of height (769);
+   52px from 768px (721); 49px tightened from 720px (645); 48px from 644px (633). THE LAB TABLET'S 648px SHOWS ALL 12, SETTINGS INCLUDED, AT 49px,
+   AND NO «MORE». Only below what 12 places need at 48px (633px) THE LAST TWO SECTIONS (`data-spill`: the ones arrangeSections puts in
+   railSpill) go under «More», and the rail holds 11 places, which need 583. A rail of 11 or fewer carries `data-items="11"` (its own count), which no
+   rule below matches (they match only "12"), so it keeps the steps above exactly. The data says which links CAN spill; these queries decide
+   WHEN. Qualified by the attribute, so they outrank the unqualified steps (whose heights are all lower). railHeight.spec.ts adds it up. */
 .railItem.railMore {
   display: none;
 }
 
-@media (max-height: 971px) {
+@media (max-height: 864px) {
   .rail[data-items="12"] .railItem {
     min-height: 56px;
     padding: 4px 0;
@@ -169,26 +172,22 @@
   }
 }
 
-@media (max-height: 875px) {
+@media (max-height: 768px) {
   .rail[data-items="12"] .railItem {
     min-height: 52px;
     padding: 3px 0;
     gap: 2px;
   }
-
-  .rail[data-items="12"] .mark {
-    display: none;
-  }
 }
 
-@media (max-height: 767px) {
+@media (max-height: 720px) {
   .rail[data-items="12"] {
-    gap: 2px;
     padding-top: var(--s2);
     padding-bottom: var(--s2);
   }
 
-  .rail[data-items="12"] .railNav {
+  .rail[data-items="12"] .railNav,
+  .rail[data-items="12"] .railGroup {
     gap: 2px;
   }
 
@@ -199,7 +198,13 @@
   }
 }
 
-@media (max-height: 687px) {
+@media (max-height: 644px) {
+  .rail[data-items="12"] .railItem {
+    min-height: 48px;
+  }
+}
+
+@media (max-height: 632px) {
   .rail[data-items="12"] .railItem[data-spill] {
     display: none;
   }
@@ -236,41 +241,6 @@
   outline-color: var(--rail-ink-strong);
 }
 
-/* The account's avatar, under Settings. The link is a 48px touch target; the circle in it is 40px. */
-.avatarLink {
-  display: grid;
-  flex: none;
-  place-items: center;
-  align-self: center;
-  width: var(--hit);
-  height: var(--hit);
-  margin-top: var(--s2);
-  border-radius: var(--r-pill);
-}
-
-.avatarLink:focus-visible {
-  outline-color: var(--rail-ink-strong);
-}
-
-.avatar {
-  display: grid;
-  place-items: center;
-  width: 40px;
-  height: 40px;
-  border-radius: var(--r-pill);
-  background: var(--rail-hover);
-  color: var(--rail-ink-strong);
-  font-size: var(--fs-sm);
-  font-weight: 600;
-}
-
-@media (hover: hover) {
-  .avatarLink:hover .avatar {
-    background: var(--rail-ink);
-    color: var(--rail);
-  }
-}
-
 /* The main column */
 
 .main {
@@ -291,8 +261,9 @@
   outline: none;
 }
 
-/* The top bar (tablet) */
-
+/* The top bar (tablet): ONE white bar, left to right — the section's title and gear (`.barLeft`, an empty cell a Page draws into), the venue and
+   the date (`.barMiddle`, centred), then «Standby» on a kiosk Home, the connection and the account's letter (`.barRight`). A phone shows it only on
+   a kiosk device's Home (below), with the left cell empty and gone. */
 .topbar {
   display: none;
   align-items: center;
@@ -302,21 +273,45 @@
   /* ⚠️ Without it the bar's longest content (a long venue name) sets the width of .main's column: on a phone in kiosk mode the
      whole page grew to 477px at 360 and the browser zoomed it out (20 Nov 2026, found by the kiosk driver). */
   min-width: 0;
-  /* The right inset keeps the connection status clear of a notch on that side. */
+  /* The right inset keeps the account's letter clear of a notch on that side. */
   padding: 0 calc(var(--s6) + env(safe-area-inset-right)) 0 var(--s6);
   border-bottom: 1px solid var(--line);
   background: var(--surface);
 }
 
+/* Only a phone's kiosk Home shows the bar below 700px, and the title is then in the page, so this cell is empty and takes no room. */
+.barLeft {
+  display: none;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.barMiddle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s4);
+  min-width: 0;
+}
+
+.barRight {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--s3);
+}
+
+/* The date is for a wide window only: under 1000px the bar needs the room for the title and the venue. */
 .date {
+  display: none;
   color: var(--ink-2);
   font-size: var(--fs-sm);
 }
 
-/* The venue (the design's `.venue`), left of the date: a name with its first letter in a small
-   square. With several venues it is a button — 48px tall, a finger's size, where the design drew
-   40 — and with one it is the same name without the box. Several properties are repeated
-   between the two on purpose: the button is `bare`, so everything about how it looks is here. */
+/* The venue (the design's `.venue`), in the middle: its name, 600 weight, shortening with dots when the bar is tight. With several venues, on the
+   Home, it is a button — 48px tall, a finger's size — with a chevron; with one it is the same name without the box. Several properties are
+   repeated between the two on purpose: the button is `bare`, so everything about how it looks is here. */
 .venue,
 .venueStatic {
   display: inline-flex;
@@ -352,25 +347,8 @@
   white-space: nowrap;
 }
 
-.venueDot {
-  display: grid;
-  flex: none;
-  place-items: center;
-  width: 24px;
-  height: 24px;
-  border-radius: var(--r-sm);
-  background: var(--sunken);
-  color: var(--ink-2);
-  font-size: var(--fs-xs);
-  font-weight: 700;
-}
-
 .venue .venueChevron {
   color: var(--ink-3);
-}
-
-.grow {
-  flex: 1;
 }
 
 .sync {
@@ -400,9 +378,26 @@
   white-space: nowrap;
 }
 
-/* A phone on kiosk mode: the bar is hidden on a phone, but «Standby» and «Exit» live in it, so it shows there too — the venue, the two
-   round buttons and the connection (its dot alone, below); the date has no room. The pills never shrink; the venue gives way (its name
-   shortens with dots, then the box itself clips). From 700px the rules below take over. */
+/* Under 800px the connection is its dot alone: the word costs the venue its name (a long name at 360 and 296, 20 Nov 2026, and the title and the
+   letter beside it from 700px). The words stay for a screen reader — the status is still announced — and a lost connection is also said in words
+   by the offline strip under every phone title (OfflineBanner). */
+@media (max-width: 799.98px) {
+  .syncText {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+/* A phone on kiosk mode: the bar is hidden on a phone, but «Standby» and the account menu (with «Exit») live in it, so it shows there too — the
+   venue, the round Standby button, the connection (its dot alone, above) and the account's letter; the date has no room. The right side never
+   shrinks; the venue gives way (its name shortens with dots, then the box itself clips). From 700px the rules below take over. */
 .shell[data-kiosk="on"] .main {
   grid-template-rows: auto minmax(0, 1fr);
 }
@@ -411,10 +406,6 @@
   display: flex;
   gap: var(--s3);
   padding: 0 calc(var(--s3) + env(safe-area-inset-right)) 0 var(--s3);
-}
-
-.shell[data-kiosk="on"] .date {
-  display: none;
 }
 
 .shell[data-kiosk="on"] .venue,
@@ -428,24 +419,16 @@
   min-width: 0;
 }
 
-/* On a kiosk PHONE the connection is the dot alone: its words, even «Online», cost the venue its name (measured at 360 and 296,
-   20 Nov 2026), and on a phone a lost connection is already said in words by the offline strip under every title (OfflineBanner). The words stay
-   for a screen reader (the status is still announced). */
 @media (max-width: 699.98px) {
-  .shell[data-kiosk="on"] .sync {
-    flex: none;
+  .shell[data-kiosk="on"] .barMiddle {
+    flex: 0 100 auto;
+    justify-content: flex-start;
+    margin-right: auto;
+    overflow: hidden;
   }
 
-  .shell[data-kiosk="on"] .syncText {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    margin: -1px;
-    padding: 0;
-    overflow: hidden;
-    clip: rect(0 0 0 0);
-    clip-path: inset(50%);
-    white-space: nowrap;
+  .shell[data-kiosk="on"] .sync {
+    flex: none;
   }
 }
 
@@ -525,21 +508,56 @@
     grid-template-rows: auto minmax(0, 1fr);
   }
 
-  .topbar {
-    display: flex;
-  }
-
+  /* ⚠️ THE MIDDLE IS TRULY CENTRED, AND NEVER OVERLAPS: the two sides are `1fr` columns, whose minimum is their content (a grid track's `auto`
+     minimum), and the middle may shrink to nothing (`minmax(0, auto)`; the venue's name then ends in dots). So with room to spare the venue sits
+     in the middle of the bar; when a long title with its gear («Ingredienti e fornitori») needs more than its half, the left column grows and the
+     middle moves right instead of running under it. The title itself never truncates. */
+  .topbar,
   .shell[data-kiosk="on"] .topbar {
+    display: grid;
+    grid-template-columns: 1fr minmax(0, auto) 1fr;
     gap: var(--s4);
     padding: 0 calc(var(--s6) + env(safe-area-inset-right)) 0 var(--s6);
   }
 
-  .shell[data-kiosk="on"] .date {
-    display: block;
-    flex: none;
+  .barLeft {
+    display: flex;
+  }
+
+  .barRight {
+    gap: var(--s4);
   }
 
   .tabbar {
     display: none;
+  }
+}
+
+@media (min-width: 1000px) {
+  .date {
+    display: block;
+    flex: none;
+    white-space: nowrap;
+  }
+}
+
+/* ⚠️ THE INSTALLED PC APP WITH ITS TITLE BAR FOLDED INTO THE PAGE (Window Controls Overlay, manifest.json's display_override): the window buttons
+   sit ON the top bar's right end, so the bar's right padding grows by their width (what is right of the title bar area), the bar becomes the
+   place to drag the window by, and everything pressable in it opts out of dragging. Nothing outside this media query changes: a browser tab and a
+   phone never match it. The kiosk selector is listed too — it is more specific than `.topbar` and would otherwise keep the narrow padding. */
+@media (display-mode: window-controls-overlay) {
+  .topbar,
+  .shell[data-kiosk="on"] .topbar {
+    padding-right: calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw) + var(--s6));
+    -webkit-app-region: drag;
+    app-region: drag;
+  }
+
+  .topbar a,
+  .topbar button,
+  .topbar [role="button"],
+  .topbar input {
+    -webkit-app-region: no-drag;
+    app-region: no-drag;
   }
 }

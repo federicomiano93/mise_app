@@ -60,7 +60,37 @@ describe('the top bar', () => {
     expect(css).toMatch(/\.topbar\s*\{[^}]*min-width:\s*0/);
     expect(css).toMatch(/\.shell\[data-kiosk="on"\] \.venueStatic\s*\{[^}]*flex:\s*0 100 auto;[^}]*overflow:\s*hidden/);
     expect(css).toMatch(/\.shell\[data-kiosk="on"\] \.sync\s*\{[^}]*min-width:\s*0/);
-    // On a kiosk phone the connection's words are kept for a screen reader but not drawn.
-    expect(css).toMatch(/@media \(max-width: 699\.98px\)\s*\{[^@]*\.shell\[data-kiosk="on"\] \.syncText\s*\{[^}]*clip-path:\s*inset\(50%\)/);
+    // Under 800px (a kiosk phone included) the connection's words are kept for a screen reader but not drawn.
+    expect(css).toMatch(/@media \(max-width: 799\.98px\)\s*\{[^@]*\.syncText\s*\{[^}]*clip-path:\s*inset\(50%\)/);
+    // On the kiosk phone the venue's box (not the page) gives way, and the right side never shrinks.
+    expect(css).toMatch(/@media \(max-width: 699\.98px\)\s*\{[^@]*\.shell\[data-kiosk="on"\] \.barMiddle\s*\{[^}]*flex:\s*0 100 auto/);
+  });
+
+  it('is ONE grid from 700px: a 1fr cell at each side so the venue is truly centred, and it gives way instead of overlapping', () => {
+    expect(css).toMatch(/@media \(min-width: 700px\)\s*\{[^@]*\.topbar,\s*\.shell\[data-kiosk="on"\] \.topbar\s*\{[^}]*grid-template-columns:\s*1fr minmax\(0, auto\) 1fr/);
+    // The sides keep their content as a minimum (no min-width: 0 on them) and the middle may shrink.
+    expect(css).not.toMatch(/\.barLeft\s*\{[^}]*min-width:\s*0/);
+    expect(css).not.toMatch(/\.barRight\s*\{[^}]*min-width:\s*0/);
+    expect(css).toMatch(/\.barMiddle\s*\{[^}]*min-width:\s*0/);
+    expect(css).toMatch(/\.venueName\s*\{[^}]*text-overflow:\s*ellipsis/);
+  });
+
+  it('hides the date under 1000px and the word «Online» under 800px, and keeps the venue at 600 weight', () => {
+    expect(css).toMatch(/\.date\s*\{\s*display:\s*none;/);
+    expect(css).toMatch(/@media \(min-width: 1000px\)\s*\{\s*\.date\s*\{\s*display:\s*block/);
+    expect(css).toMatch(/\.venueStatic\s*\{[^}]*font:\s*600 var\(--fs-md\)/);
+  });
+
+  it('draws no initial square beside the venue', () => {
+    expect(css).not.toContain('venueDot');
+  });
+
+  it('clears the window buttons and is a drag region only in the PC app\'s overlay mode, every control opting out', () => {
+    const overlay = /@media \(display-mode: window-controls-overlay\)\s*\{([\s\S]*)$/.exec(css)?.[1] ?? '';
+    expect(overlay).toMatch(/padding-right:\s*calc\(100vw - env\(titlebar-area-x, 0px\) - env\(titlebar-area-width, 100vw\) \+ var\(--s6\)\)/);
+    expect(overlay).toMatch(/-webkit-app-region:\s*drag;\s*app-region:\s*drag/);
+    expect(overlay).toMatch(/\.topbar a,\s*\.topbar button,\s*\.topbar \[role="button"\],\s*\.topbar input\s*\{[^}]*-webkit-app-region:\s*no-drag;\s*app-region:\s*no-drag/);
+    // Nothing of it outside the media query.
+    expect(css.replace(/@media \(display-mode: window-controls-overlay\)[\s\S]*$/, '')).not.toMatch(/app-region/);
   });
 });

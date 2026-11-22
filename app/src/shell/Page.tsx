@@ -1,8 +1,11 @@
 import { useEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { useLocation, useNavigationType } from 'react-router';
 import { useT } from '../i18n/useT';
+import { useMediaQuery } from '../ui/useMediaQuery';
 import { OfflineBanner } from './OfflineBanner';
+import { useTitleSlot } from './titleSlot';
 import styles from './Page.module.css';
 
 // Put in a navigation's `state` to say «this move is the app arranging itself, not the person
@@ -16,29 +19,42 @@ function keepsFocus(state: unknown): boolean {
 type Props = {
   title: string;
   children: ReactNode;
-  // A small control on the title's own line, at the far right (Settings' «Log out»).
+  // A small control on the title's own line, at the far right (Settings' «Log out»). From 700px, with the title in the top bar, it stays in
+  // the page, on a row of its own at the right, above the content.
   action?: ReactNode;
-  // A section's own title BAND (Orders, 16 Nov 2026): the controls drawn right after the title on its line, the bar white, with no
-  // line under it, and stuck to the top of the scroll area on the split. Instead of `action`, never with it.
+  // The ONE control that sits right beside the title: a section's settings gear. From 700px it moves into the top bar with the title; on a
+  // phone it is drawn after the title, in the title bar. `null` (not `undefined`) says «a gear that is not shown now» and keeps the phone's
+  // title bar the same white band without it.
+  gear?: ReactNode;
+  // A section's own title BAND (Orders, 16 Nov 2026): the OTHER controls of the title line — History, the bell, the lists, send. On a phone they
+  // follow the title (and the gear) on its line, the bar white, with no line under it, and stuck to the top of the scroll area on the split. From
+  // 700px, with the title in the top bar, they are a white row under it. Instead of `action`, never with it.
   band?: ReactNode;
   // The band sticks to the top of the scroll area on the split (Orders, whose pane and search box stick under it). The other
   // sections' bands scroll away: their panes stick at the very top, and a stuck band would cover them.
   stickyBand?: boolean;
   // The band's controls drop to a line of their own on a narrow phone (Orders: five of them do not fit beside «Orders» at 296px).
-  // Every other band holds one gear: it stays beside the title, and a long title («Ingredienti e fornitori») wraps on itself.
+  // Every other title bar holds one gear: it stays beside the title, and a long title («Ingredienti e fornitori») wraps on itself.
   bandWraps?: boolean;
   // The screen draws its OWN h1 (a booking, whose h1 is the customer's name: bookings rebuild step 3) and moves the focus to it
-  // itself: the page then draws no title bar, and `title` names only the browser tab.
+  // itself: the page then draws no title bar, and `title` names only the browser tab (and, from 700px, the plain words in the top bar).
   ownHeading?: boolean;
 };
 
 // Every screen is a Page: one h1 (the screen's name), the browser tab's title, and the
 // focus moved onto the new screen after a client-side navigation.
-export function Page({ title, children, action, band, stickyBand = false, bandWraps = false, ownHeading = false }: Props) {
+//
+// ⚠️ FROM 700px THE TITLE LIVES IN THE TOP BAR (the single bar, 22 Nov 2026): the page draws its title and its gear into the shell's title slot
+// (titleSlot.ts) through a portal, and the h1 is still ONE, still the element that takes the focus after a navigation. Two things must hold:
+// the choice is made by script (the same 700px as the stylesheets), so a Page outside the shell (no slot) or under 700px draws everything in
+// the page exactly as before; and only ONE Page is mounted at a time (two would put two titles in the same slot). No route mounts two.
+export function Page({ title, children, action, gear, band, stickyBand = false, bandWraps = false, ownHeading = false }: Props) {
   const { t } = useT();
   const location = useLocation();
   const navigationType = useNavigationType();
   const headingRef = useRef<HTMLHeadingElement>(null);
+  const slot = useTitleSlot();
+  const wide = useMediaQuery('(min-width: 700px)');
 
   useEffect(() => {
     document.title = t('page.title', { title });
@@ -56,14 +72,48 @@ export function Page({ title, children, action, band, stickyBand = false, bandWr
     headingRef.current?.focus();
   }, [location.key]);
 
-  const headClass = band !== undefined ? `${styles.head} ${styles.band}${bandWraps ? ` ${styles.bandWraps}` : ''}${stickyBand ? ` ${styles.stickyBand}` : ''}` : action ? `${styles.head} ${styles.withAction}` : styles.head;
+  const headingClass = wide && slot !== null ? `${styles.title} ${styles.barTitle}` : styles.title;
+  const heading = <h1 ref={headingRef} tabIndex={-1} className={headingClass}>{title}</h1>;
+
+  if (wide && slot !== null) {
+    // Under the bar: Orders' other controls as a white row, or Settings' action alone on a row at the right; nothing at all for a page with
+    // neither (its content then starts a little lower: `.bodyTop`). A page that draws its own h1 has no row either, as on a phone.
+    let row: ReactNode = null;
+    if (!ownHeading) {
+      if (band !== undefined && band !== null) {
+        const classes = [styles.barRow, bandWraps ? styles.barRowWraps : '', stickyBand ? styles.stickyBand : ''].filter(Boolean).join(' ');
+        row = <div className={classes}>{band}</div>;
+      } else if (action) {
+        row = <div className={styles.actionRow}><div className={styles.action}>{action}</div></div>;
+      }
+    }
+    return (
+      <>
+        {createPortal(
+          <div className={styles.cluster}>
+            {/* A booking opened full screen has its own h1 (the customer's name): the section's name is then plain words, and no gear. */}
+            {ownHeading ? <p className={styles.barTitle}>{title}</p> : <>{heading}{gear ?? null}</>}
+          </div>,
+          slot,
+        )}
+        {row}
+        <div className={row === null ? `${styles.body} ${styles.bodyTop}` : styles.body}>{children}</div>
+      </>
+    );
+  }
+
+  const banded = band !== undefined || gear !== undefined;
+  const headClass = banded
+    ? `${styles.head} ${styles.band}${bandWraps ? ` ${styles.bandWraps}` : ''}${stickyBand ? ` ${styles.stickyBand}` : ''}`
+    : action ? `${styles.head} ${styles.withAction}` : styles.head;
   return (
     <>
       {ownHeading ? null : (
         <header className={headClass}>
-          <h1 ref={headingRef} tabIndex={-1} className={styles.title}>{title}</h1>
+          {heading}
+          {gear ?? null}
           {band ?? null}
-          {action && band === undefined ? <div className={styles.action}>{action}</div> : null}
+          {action && !banded ? <div className={styles.action}>{action}</div> : null}
         </header>
       )}
       {/* Under the title of every screen while the device is offline (from 700px the top bar says it instead; CSS hides the strip). */}

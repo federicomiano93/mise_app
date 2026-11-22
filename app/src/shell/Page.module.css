@@ -138,3 +138,67 @@
     z-index: 5;
   }
 }
+
+/* ⚠️ THE SINGLE BAR (22 Nov 2026): from 700px, with the shell's top bar to draw into (Page.tsx), the title and its gear are NOT in the page: the
+   rules above for `.head` and `.band` are then only the fallback of a Page with no bar (and the phone's). What the page still draws:
+   - `.barRow`: Orders' other controls, a white row under the bar. 1px line under it, 8px above and below (a 48px control, so 64px = --band-h);
+     sticky on the split exactly as the old band was, wrapping below 1000px as the old one did.
+   - `.actionRow`: Settings' «Log out», alone on a row, at the right.
+   - `.bodyTop`: a page with neither row has no header at all, and its content starts 24px under the bar. */
+.cluster {
+  display: flex;
+  flex: none;
+  align-items: center;
+  /* The gear sits 10px after the title. */
+  gap: 10px;
+}
+
+/* In the bar the title is 700-weight, tight, and NEVER truncated: the bar's left cell grows for it (AppShell.module.css). */
+.barTitle {
+  margin: 0;
+  font-size: var(--fs-2xl);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+.barRow {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: var(--s2);
+  padding: var(--s2) calc(var(--s6) + env(safe-area-inset-right)) var(--s2) var(--s6);
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.barRowWraps {
+  flex-wrap: wrap;
+}
+
+.actionRow {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  padding: var(--s6) calc(var(--s8) + env(safe-area-inset-right)) var(--s2) var(--s8);
+}
+
+/* The wrapper steps aside (see `.action`), so «Log out» and its failure message are children of the row; the phone's negative margin goes. */
+.actionRow .action > button {
+  margin-block: 0;
+}
+
+@media (min-width: 700px) {
+  .bodyTop {
+    padding-top: var(--s6);
+  }
+}
+
+@media (min-width: 1000px) {
+  /* Exactly --band-h (64px) tall, as the old band was: the parts that stick under it read that token. */
+  .barRow {
+    flex-wrap: nowrap;
+    height: var(--band-h);
+    padding-block: 0;
+  }
+}

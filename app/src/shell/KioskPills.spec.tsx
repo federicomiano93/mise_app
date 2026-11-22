@@ -1,5 +1,6 @@
-// «Standby» and «Exit» in the Home's top bar (staff slice 6, D8; moved from the Home's content on 19 Nov 2026): only on a kiosk device,
-// only on the Home, to every role; Standby asks the kiosk to cover the screen, Exit closes the page or says how to.
+// «Standby» in the Home's top bar (staff slice 6, D8; moved from the Home's content on 19 Nov 2026): only on a kiosk device, only on the
+// Home, to every role; it asks the kiosk to cover the screen. «Exit» moved on 22 Nov 2026 into the menu under the account's letter, in the same
+// bar: it closes the page or says how to.
 
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import { act, screen, within } from '@testing-library/react';
@@ -25,12 +26,13 @@ describe('the kiosk pills in the top bar', () => {
     expect(band()).not.toBeInTheDocument();
   });
 
-  test('an employee on a kiosk device sees Standby and Exit in the top bar, before «Online»', async () => {
+  test('an employee on a kiosk device sees Standby alone in the pills, before «Online», and no Exit button in the bar', async () => {
     localStorage.setItem(KIOSK_STORAGE_KEY, ON);
     renderApp('/home', { session: EMPLOYEE });
     const found = await screen.findByRole('group', { name: 'Kiosk mode' });
     expect(within(found).getByRole('button', { name: 'Standby' })).toBeInTheDocument();
-    expect(within(found).getByRole('button', { name: 'Exit' })).toBeInTheDocument();
+    expect(within(found).getAllByRole('button')).toHaveLength(1);
+    expect(screen.queryByRole('button', { name: 'Exit' })).not.toBeInTheDocument();
     const bar = found.closest('header') as HTMLElement;
     expect(bar).not.toBeNull();
     const online = screen.getByText('Online');
@@ -74,12 +76,33 @@ describe('the kiosk pills in the top bar', () => {
     }
   });
 
+  test('the account’s letter opens a menu with Account and Exit on the kiosk Home; Account leads to Settings', async () => {
+    localStorage.setItem(KIOSK_STORAGE_KEY, ON);
+    const { user, router } = renderApp('/home');
+    const letter = await screen.findByRole('button', { name: 'Account' });
+    expect(screen.queryByRole('link', { name: 'Account' })).not.toBeInTheDocument();
+    expect(letter.closest('header')).not.toBeNull();
+    await user.click(letter);
+    const menu = await screen.findByRole('menu', { name: 'Account' });
+    expect(within(menu).getAllByRole('menuitem').map(item => item.textContent)).toEqual(['Account', 'Exit']);
+    await user.click(within(menu).getByRole('menuitem', { name: 'Account' }));
+    expect(await screen.findByRole('heading', { level: 1, name: 'Settings' })).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe('/settings');
+  });
+
+  test('off the kiosk Home the letter is a plain link to Settings, with no menu', async () => {
+    renderApp('/home');
+    expect(await screen.findByRole('link', { name: 'Account' })).toHaveAttribute('href', '/settings');
+    expect(screen.queryByRole('button', { name: 'Account' })).not.toBeInTheDocument();
+  });
+
   test('Exit closes the page; a tablet that refuses is told how to close it by hand', async () => {
     localStorage.setItem(KIOSK_STORAGE_KEY, ON);
     const close = vi.spyOn(window, 'close').mockImplementation(() => {});
     vi.useFakeTimers({ shouldAdvanceTime: true });
     const { user } = renderApp('/home');
-    await user.click(await screen.findByRole('button', { name: 'Exit' }));
+    await user.click(await screen.findByRole('button', { name: 'Account' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Exit' }));
     expect(close).toHaveBeenCalledTimes(1);
     await act(async () => { await vi.advanceTimersByTimeAsync(EXIT_CHECK_MS); });
     const dialog = await screen.findByRole('alertdialog');
@@ -88,9 +111,10 @@ describe('the kiosk pills in the top bar', () => {
 
   test('in Italian', async () => {
     localStorage.setItem(KIOSK_STORAGE_KEY, ON);
-    renderApp('/home', { lang: 'it', session: { language: 'it' } });
+    const { user } = renderApp('/home', { lang: 'it', session: { language: 'it' } });
     const found = await screen.findByRole('group', { name: 'Modalità chiosco' });
     expect(within(found).getByRole('button', { name: 'Standby' })).toBeInTheDocument();
-    expect(within(found).getByRole('button', { name: 'Esci' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Account' }));
+    expect(await screen.findByRole('menuitem', { name: 'Esci' })).toBeInTheDocument();
   });
 });

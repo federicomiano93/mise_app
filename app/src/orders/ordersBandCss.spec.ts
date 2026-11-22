@@ -36,9 +36,17 @@ describe('the title band', () => {
     expect(after(pageCss, '@media (min-width: 700px)')).toMatch(/\.band:not\(\.bandWraps\) > :not\(\.title\)\s*\{[^}]*margin-block:\s*0/);
   });
 
-  it('is 72px on the split and nothing on a phone, where it scrolls away', () => {
+  it('is 64px on the split (a 48px control with 8px above and below) and nothing on a phone, where it scrolls away', () => {
     expect(bare(tokensCss)).toMatch(/--band-h:\s*0px;/);
-    expect(after(tokensCss, '@media (min-width: 1000px)')).toMatch(/--band-h:\s*72px;/);
+    expect(after(tokensCss, '@media (min-width: 1000px)')).toMatch(/--band-h:\s*64px;/);
+  });
+
+  it('from 700px, with the title in the top bar, is a white row under it: 8px above and below, a 1px line, exactly --band-h tall on the split', () => {
+    const row = /\.barRow\s*\{([^}]*)\}/.exec(bare(pageCss))?.[1] ?? '';
+    expect(row).toMatch(/padding:\s*var\(--s2\) calc\(var\(--s6\) \+ env\(safe-area-inset-right\)\) var\(--s2\) var\(--s6\)/);
+    expect(row).toMatch(/border-bottom:\s*1px solid var\(--line\)/);
+    expect(row).toMatch(/background:\s*var\(--surface\)/);
+    expect(after(pageCss, '@media (min-width: 1000px)')).toMatch(/\.barRow\s*\{[^}]*height:\s*var\(--band-h\);[^}]*padding-block:\s*0/);
   });
 
   it('is what the search box and the open pane stick under', () => {
