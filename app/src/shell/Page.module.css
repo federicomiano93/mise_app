@@ -153,10 +153,12 @@
   gap: 10px;
 }
 
-/* In the bar the title is 700-weight, tight, and NEVER truncated: the bar's left cell grows for it (AppShell.module.css). */
+/* In the bar the title is 700-weight, tight, and NEVER truncated: the bar's left cell grows for it (AppShell.module.css).
+   --fs-xl, not the page title's --fs-2xl: the approved mockup drew it at 24px inside the 60px bar, and 28px crowded the bar;
+   22px is the nearest size in the tokens. */
 .barTitle {
   margin: 0;
-  font-size: var(--fs-2xl);
+  font-size: var(--fs-xl);
   font-weight: 700;
   letter-spacing: -0.01em;
   white-space: nowrap;
