@@ -9,7 +9,9 @@ import { useT } from '../i18n/useT';
 import { Page } from '../shell/Page';
 import { SettingsGear } from '../shell/SettingsGear';
 import { useOwnScrollArea } from '../shell/scrollArea';
+import { useCoverBar } from '../shell/useCoverBar';
 import { StatusMessageProvider, useStatusMessage } from '../ui/StatusMessage';
+import { restoreCakesFromDevice, useParkingOwner } from './cakeParking';
 import type { ParkedCake } from './cakeParking';
 import { CakesProvider, useCakesStore } from './CakesContext';
 import { CakesDetail } from './CakesDetail';
@@ -66,6 +68,14 @@ function CakesLayout({ view }: { view: CakesView }) {
   // addresses, and the shell's reset to the top at every address would bring Back to the top of the list while the focus went to a
   // row far below. The effects below handle every move.
   const scrollArea = useOwnScrollArea();
+  // ⚠️ COPIES LEFT ON THIS DEVICE BY A CLOSE NOBODY COULD STOP (cakeParking.ts) come back onto the shelf as Cakes opens, so the list offers
+  // «Unsaved cake: …». Only this person's, in this venue's.
+  const owner = useParkingOwner();
+  useLayoutEffect(() => { restoreCakesFromDevice(owner); }, [owner]);
+  // The open cake is a layer over the whole column from 700px (CakesSection.module.css), with a scroll of its own.
+  const detail = useRef<HTMLDivElement>(null);
+  const covering = view.kind === 'new' || view.kind === 'cake';
+  useCoverBar(covering);
   // Where the list was scrolled to when a screen opened over it, until Back restores it.
   const listTop = useRef<number | null>(null);
 
@@ -104,6 +114,9 @@ function CakesLayout({ view }: { view: CakesView }) {
     const before = shown.current;
     shown.current = { place: pathname, kind: view.kind };
     const area = scrollArea();
+    // ⚠️ A screen that opens from the list starts at the top of its own scroll (the layer was hidden, so it lost its place anyway); a new
+    // cake that is saved for the first time (its own address) keeps the place it was at.
+    if (before !== null && before.kind === 'list' && view.kind !== 'list' && detail.current !== null) detail.current.scrollTop = 0;
     if (before === null || before.place === pathname || area === null) return;
     if (view.kind === 'list' && before.kind !== 'list' && listTop.current !== null) {
       area.scrollTop = listTop.current;
@@ -128,13 +141,13 @@ function CakesLayout({ view }: { view: CakesView }) {
         title={t('section.cakes')}
         gear={view.kind === 'list' ? <SettingsGear ref={gearNode} onPress={openReference} /> : null}
       >
-        <div className={styles.layout} data-view={view.kind === 'list' ? 'list' : 'detail'}>
+        <div className={styles.layout} data-view={view.kind === 'list' ? 'list' : 'detail'} data-cover={covering ? 'true' : undefined}>
           <div className={styles.list}>
             <PartBoundary>
               <CakesList onOpenCake={openCake} onOpenNew={openNew} onResume={resume} />
             </PartBoundary>
           </div>
-          <div className={styles.detail}>
+          <div ref={detail} className={styles.detail}>
             <PartBoundary resetKey={pathname}>
               <CakesDetail view={view} />
             </PartBoundary>
