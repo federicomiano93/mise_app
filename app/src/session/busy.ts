@@ -30,7 +30,10 @@
 // they opened on (bookings/BookingSettingsScreen.tsx).
 // ⚠️ DELIBERATELY NOT A HOLDER: an unsaved cake set aside for the Recipes (cakes/cakeParking.ts). It sits in memory with nobody on its
 // screen, possibly for ever; a hold for it would keep the device off every update and every rollback, and the person who left it may
-// never come back. Losing it to a reload is the accepted price (the recipe editor it was parked for holds the mark while it is dirty).
+// never come back. Losing it to a reload the app starts by itself is still the price, but a forced close no longer loses it: while a cake form
+// is dirty a copy is also written on the device, and the list offers it again (the recipe editor it was parked for holds the mark while dirty).
+// ⚠️ THE BROWSER'S OWN QUESTION: while anything but the kiosk's rest holds the mark, closing or reloading the page makes the browser ask
+// «leave this page?» (shell/useLeaveWarning.ts), so every editor that holds the mark is protected from a closed window, not only from an update.
 // ⚠️ A HOLD MUST END: a screen left open with a hold that never lets go keeps that device off every update, and off the
 // way back after a revert. (Not the sign-in form for that reason: a browser's autofill or a half-typed address left on
 // a shared tablet would block it for days, for a box that takes seconds to retype.) Each new editor adds itself here.
@@ -43,10 +46,24 @@
 // Each hold is its own release function, so a holder can ask about everybody but itself.
 const holders = new Set<() => void>();
 
-export function markBusy(): () => void {
-  const release = () => { holders.delete(release); };
+// The kiosk's rest screen is a hold that means «nobody is looking», not «somebody has typed something»: it is marked as a REST hold, which
+// the browser's «leave this page?» question ignores (shell/useLeaveWarning.ts).
+const resting = new Set<() => void>();
+
+export function markBusy(options: { rest?: boolean } = {}): () => void {
+  const release = () => { holders.delete(release); resting.delete(release); };
   holders.add(release);
+  if (options.rest === true) resting.add(release);
   return release;
+}
+
+// Is somebody holding something that is NOT the kiosk's rest? The browser asks «leave this page?» only then: a resting tablet has
+// written nothing that a closed window would lose.
+export function hasUnsavedWork(): boolean {
+  for (const holder of holders) {
+    if (!resting.has(holder)) return true;
+  }
+  return false;
 }
 
 export function isBusy(): boolean {

@@ -15,6 +15,7 @@ import { AwayRefusalAlert } from './away/AwayRefusalAlert';
 import { MORE, moreIsCurrent, screenNameFor, titleKeyFor } from './sections';
 import type { Section } from './sections';
 import { useOnline } from './useOnline';
+import { useLeaveWarning } from './useLeaveWarning';
 import { useToday } from './useToday';
 import { ScrollAreaContext, useScrollAreaState } from './scrollArea';
 import { useVisibleSections } from './useVisibleSections';
@@ -53,6 +54,8 @@ function ShellFrame() {
   // goes away because the session left the ready state — the shelf is emptied. A sign-out or a venue switch does not always reload the page.
   const uid = user?.uid ?? null;
   useEffect(() => () => { clearParkedCakes(); }, [uid, locationId]);
+  // Closing or reloading the page with unsaved edits in any editor: the browser asks first.
+  useLeaveWarning();
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const contentRef = useRef<HTMLElement>(null);

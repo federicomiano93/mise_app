@@ -24,7 +24,8 @@ export function browserKioskEnv(): KioskEnv {
     acquireWakeLock,
     releaseWakeLock,
     refreshWakeLock,
-    markBusy,
+    // The rest screen's hold means «nobody is looking»: the browser's «leave this page?» question ignores it (session/busy.ts).
+    markBusy: () => markBusy({ rest: true }),
     isBusyApartFrom,
   };
 }
