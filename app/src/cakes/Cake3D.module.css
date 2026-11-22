@@ -2,41 +2,76 @@
    lines. The cake's own colours are the --cake-* tokens, read by the scene; everything here is the neutrals. */
 
 .stage {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--s2);
   min-width: 0;
 }
 
+/* The buttons float inside the picture, top left and right, as frosted dark glass in the rail's tone. The bar itself takes no taps. */
 .bar {
+  position: absolute;
+  top: var(--s3);
+  right: var(--s3);
+  left: var(--s3);
+  z-index: 3;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: var(--s2);
+  pointer-events: none;
+}
+
+.bar > * {
+  pointer-events: auto;
 }
 
 .views {
   display: flex;
-  gap: var(--s2);
+  gap: 2px;
+  padding: var(--s1);
+  border-radius: var(--r-pill);
+  background: var(--glass-dark);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
 }
 
 .view,
 .home {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: var(--s2);
-  min-height: var(--hit);
   padding: 0 var(--s4);
-  border: 1px solid var(--line);
-  border-radius: var(--r-md);
-  background: var(--surface);
-  color: var(--ink);
+  border: 0;
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--rail-ink-strong);
   font: inherit;
   font-weight: 600;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
+}
+
+/* The pill is 40px tall; its tap target is the 48px the app asks for (the extra 4px above and below belong to the pill's padding). */
+.view {
+  min-height: 40px;
+}
+
+.view::after {
+  position: absolute;
+  inset: calc(-1 * var(--s1)) 0;
+  content: "";
+}
+
+.home {
+  min-height: var(--hit);
+  background: var(--glass-dark);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
 }
 
 .home svg {
@@ -45,6 +80,7 @@
   height: 18px;
 }
 
+/* The ring stays outside the pill, over the light picture, where the cobalt reads. */
 .view:focus-visible,
 .home:focus-visible {
   outline: 3px solid var(--accent);
@@ -52,15 +88,14 @@
 }
 
 .view[aria-checked="true"] {
-  border-color: var(--accent);
-  background: var(--accent-tint);
-  color: var(--accent-ink);
+  background: var(--surface);
+  color: var(--ink);
 }
 
 @media (hover: hover) {
   .view[aria-checked="false"]:hover,
   .home:hover {
-    background: var(--sunken);
+    background: var(--glass-hover);
   }
 }
 

@@ -172,3 +172,10 @@
   font-size: var(--fs-lg);
 }
 
+/* The 3D picture stands on its own, with no card around it. */
+.card.stage {
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+}

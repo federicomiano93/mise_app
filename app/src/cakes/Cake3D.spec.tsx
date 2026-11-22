@@ -312,3 +312,52 @@ describe('the callouts', () => {
     expect(screen.getByText('Raw materials so far: £1.00').closest('[aria-hidden="true"]')).not.toBeNull();
   });
 });
+
+describe('one tap on a name box', () => {
+  const size = (width: number, height: number) => {
+    vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(width);
+    vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(height);
+  };
+
+  it('chooses the part AND opens its step, with no second tap (a label beside the cake)', async () => {
+    size(900, 500);
+    world.anchors = [{ key: 'base', x: 300, y: 300 }];
+    const onSelect = vi.fn();
+    const onOpenPart = vi.fn();
+    const { container } = render(<Cake3D {...props({ onSelect, onOpenPart })} />);
+    await settled();
+    await waitFor(() => { expect(container.querySelector('[data-part="base"]')).not.toBeNull(); });
+    await userEvent.click(container.querySelector('[data-part="base"]') as HTMLElement);
+    expect(onSelect).toHaveBeenCalledWith({ tier: 0, part: 'base' });
+    expect(onOpenPart).toHaveBeenCalledTimes(1);
+    expect(onOpenPart).toHaveBeenCalledWith({ tier: 0, part: 'base' });
+    expect(screen.getByRole('img', STAGE)).toHaveFocus();
+  });
+
+  it('does the same for a note under a stage too narrow for labels', async () => {
+    size(300, 400);
+    world.anchors = [{ key: 'base', x: 150, y: 300 }];
+    const onSelect = vi.fn();
+    const onOpenPart = vi.fn();
+    const { container } = render(<Cake3D {...props({ onSelect, onOpenPart })} />);
+    await settled();
+    await waitFor(() => { expect(container.querySelector('[data-part="base"]')).not.toBeNull(); });
+    await userEvent.click(container.querySelector('[data-part="base"]') as HTMLElement);
+    expect(onSelect).toHaveBeenCalledWith({ tier: 0, part: 'base' });
+    expect(onOpenPart).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('the view buttons', () => {
+  it('stand inside the stage, over the picture, each with its name', async () => {
+    const { container } = render(<Cake3D {...props()} />);
+    await settled();
+    const stage = container.firstElementChild as HTMLElement;
+    const viewport = screen.getByRole('img', STAGE);
+    for (const button of [screen.getByRole('radio', { name: 'Cut-away' }), screen.getByRole('radio', { name: 'Whole' }), screen.getByRole('button', { name: /initial view/i })]) {
+      expect(stage).toContainElement(button);
+      expect(viewport).not.toContainElement(button);
+    }
+  });
+});
+

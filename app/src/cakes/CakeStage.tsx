@@ -85,7 +85,7 @@ export function CakeStage(props: CakeStageProps) {
           </Suspense>
         </Cake3DBoundary>
       ) : (
-        <CakeSection2D {...flat} />
+        <div className={styles.flatGround}><CakeSection2D {...flat} /></div>
       )}
     </div>
   );
