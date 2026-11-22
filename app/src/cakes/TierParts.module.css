@@ -203,7 +203,7 @@
 }
 
 /* One card of a step: name, grams box and ✕ on one line, the cost under the name. A recipe row (.lineConfirm) has the ✓ between the box
-   and the ✕. Narrow (a phone, 296px included): the name takes a line of its own over the box, ✓ and ✕. */
+   and the ✕. Narrow (a phone, 296px included): the box takes a line of its own, with the name and the ✕ above it and the cost and the ✓ below. */
 .line {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
@@ -314,16 +314,17 @@
   }
 }
 
+/* ⚠️ At 296px a card has only about 144px inside it: the name, the box, ✓ and ✕ cannot share a line without squeezing the box to 26px, where
+   «9999» does not fit. So the box takes a line of its own, the full width of the card, and the ✕ moves up beside the name. */
 @media (max-width: 360px) {
   .line {
     column-gap: var(--s1);
-    grid-template-columns: minmax(0, 1fr) auto auto;
-    grid-template-areas: "what what what" "qty qty actions" "money money money";
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "what actions" "qty qty" "money money";
   }
 
   .lineConfirm {
-    grid-template-columns: minmax(0, 1fr) auto auto;
-    grid-template-areas: "what what what" "qty confirm actions" "money money money";
+    grid-template-areas: "what actions" "qty qty" "money confirm";
   }
 
   .qty {
