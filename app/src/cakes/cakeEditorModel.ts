@@ -138,6 +138,14 @@ export function addCard(cake: Cake, tier: number, part: CakePart, productId: str
   return { ...cake, lines: [...cake.lines, { tier, part, productId, grams: null }] };
 }
 
+// ⚠️ A RESTORED COPY MAY HOLD A RECIPE'S CARD THAT NO LONGER EXISTS: «+ New recipe» made the card, the cake was set aside, and the
+// database refused the pair while nobody was looking (the card was taken off this phone). Only a line whose card id starts with
+// `recipe-` and is not among the cards goes; every other line is the person's and stays, even when its card is missing.
+export function withoutMissingRecipeCards(cake: Cake, cardExists: (productId: string) => boolean): Cake {
+  const kept = cake.lines.filter(line => !line.productId.startsWith('recipe-') || cardExists(line.productId));
+  return kept.length === cake.lines.length ? cake : { ...cake, lines: kept };
+}
+
 export function removeCard(cake: Cake, tier: number, part: CakePart, productId: string): Cake {
   const same = sameLine(tier, part, productId);
   return cake.lines.some(same) ? { ...cake, lines: cake.lines.filter(line => !same(line)) } : cake;

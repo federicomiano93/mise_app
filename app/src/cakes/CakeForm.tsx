@@ -34,10 +34,11 @@ import { FormBar } from '../ui/FormBar';
 import { useStatusMessage } from '../ui/StatusMessage';
 import { useConfirm } from '../ui/useConfirm';
 import {
-  addCard, costable, firstEmptyPack, followStandard, isDirty, NEW_DIAMETER_CM, referenceChanged, removeCard, setMeasure, setPrice, setTarget, setVat, takeReference, vatFromSelect, workingFrom,
+  addCard, costable, firstEmptyPack, followStandard, isDirty, NEW_DIAMETER_CM, referenceChanged, removeCard, setMeasure, setPrice, setTarget, setVat, takeReference, vatFromSelect,
+  withoutMissingRecipeCards, workingFrom,
 } from './cakeEditorModel';
 import type { Selected } from './cakeEditorModel';
-import { dropParked, parkCake, parkedKeyOf, peekParked } from './cakeParking';
+import { dropParked, parkCake, parkedKeyOf, peekParked, useParkingOwner } from './cakeParking';
 import { CakeStage } from './CakeStage';
 import type { StageLabels } from './CakeStage';
 import { useCakes } from './CakesContext';
@@ -63,6 +64,9 @@ type Props = {
   titleRef: Ref<HTMLHeadingElement>;
   // Saved: the editor has nothing more to say (a new cake gets its own address).
   onSaved: (id: string) => void;
+  // This form is about to set its own copy aside and mark its own history entry with the copy's key: the editor must not take that mark
+  // for a «Resume» of some other copy (which remounts the form).
+  onParking?: (key: string) => void;
 };
 
 // What each refused number is called, for «Check “…”».
@@ -85,7 +89,7 @@ const textOf = (value: number | null): string => (value === null || !Number.isFi
 //
 // ⚠️ SAVE IS ONE WRITE: the cake and its Food cost card travel in the same batch (saveProduct with a companion), so a cake and its card
 // can never be saved apart; Delete removes both the same way.
-export function CakeForm({ id, cake, start = 'standard', titleRef, onSaved }: Props) {
+export function CakeForm({ id, cake, start = 'standard', titleRef, onSaved, onParking }: Props) {
   const { t } = useT();
   const store = useFoodcostStore();
   const snap = useFoodcost();
@@ -100,12 +104,12 @@ export function CakeForm({ id, cake, start = 'standard', titleRef, onSaved }: Pr
   const ids = useId();
   const titleId = `${ids}-title`;
   const country = countryOf(location);
+  const owner = useParkingOwner();
 
-  // A new cake's id is made here, once, and kept by the form for as long as it lives: the same id from the first keystroke to the save.
   // ⚠️ A COPY SET ASIDE BY «OPEN IN RECIPES» (cakeParking.ts) COMES BACK WHOLE: the cake as it was typed, what «dirty» is measured
   // against, the price boxes' texts, the open step and the chosen part. It is found by the cake's id; a NEW cake's id travels in the
   // history entry's state. Read here without taking it (React may make this state twice); it is dropped once the form is on screen.
-  const [parked] = useState(() => peekParked(id ?? parkedKeyOf(state)));
+  const [parked] = useState(() => peekParked(id ?? parkedKeyOf(state), owner));
 
   // A new cake's id is made here, once, and kept by the form for as long as it lives: the same id from the first keystroke to the save.
   const [newId] = useState(() => (id === null ? parked?.key ?? store.newProductId() : ''));
@@ -116,7 +120,8 @@ export function CakeForm({ id, cake, start = 'standard', titleRef, onSaved }: Pr
   // the venue's reference grams stay quiet for it (the person chose to ignore them).
   const [fromScratch] = useState(() => parked?.fromScratch ?? (id === null && start === 'zero'));
   const [initial, setInitial] = useState<Cake>(() => parked?.initial ?? workingFrom(cake, fromScratch ? null : referenceFor(standard, NEW_DIAMETER_CM), newId));
-  const [working, setWorking] = useState<Cake>(() => parked?.working ?? initial);
+  // A line pointing at a recipe card that has been taken off since (a refusal that arrived while the cake was set aside) does not come back.
+  const [working, setWorking] = useState<Cake>(() => (parked ? withoutMissingRecipeCards(parked.working, cardId => snap.products.some(card => card.id === cardId)) : initial));
   const [texts, setTexts] = useState<PriceTexts>(() => {
     if (parked) return parked.texts;
     const vat = vatSelection(initial.vatRate, country);
@@ -146,7 +151,7 @@ export function CakeForm({ id, cake, start = 'standard', titleRef, onSaved }: Pr
   useEffect(() => {
     if (parked) dropParked(parked.key);
   }, [parked]);
-  const edit =(change: (current: Cake) => Cake) => {
+  const edit = (change: (current: Cake) => Cake) => {
     touched.current = true;
     setWorking(current => followStandard(current, change(current), standard));
   };
@@ -192,10 +197,14 @@ export function CakeForm({ id, cake, start = 'standard', titleRef, onSaved }: Pr
 
   // ⚠️ EVERY WAY OUT GOES THROUGH THE ROUTER'S BLOCKER, not through the Back button: the browser's Back, the rail and the tab bar
   // all navigate. Staying on the same address is never blocked.
-  const shouldBlock = useCallback<BlockerFunction>(
-    ({ currentLocation, nextLocation }) => !parkedAway.current && dirtyRef.current && currentLocation.pathname !== nextLocation.pathname,
-    [],
-  );
+  // ⚠️ ALSO A MOVE TO THE SAME ADDRESS THAT ASKS FOR ANOTHER SET-ASIDE COPY (the list's «Resume» while this new cake is open: both are
+  // /cakes/new): the editor remounts the form for it, which would throw this cake's edits away unasked.
+  const ownKey = useRef(cakeId);
+  const shouldBlock = useCallback<BlockerFunction>(({ currentLocation, nextLocation }) => {
+    if (parkedAway.current || !dirtyRef.current) return false;
+    const asked = parkedKeyOf(nextLocation.state);
+    return currentLocation.pathname !== nextLocation.pathname || (asked !== null && asked !== ownKey.current);
+  }, []);
   const blocker = useBlocker(shouldBlock);
   const latestBlocker = useRef(blocker);
   useEffect(() => {
@@ -400,6 +409,21 @@ export function CakeForm({ id, cake, start = 'standard', titleRef, onSaved }: Pr
     latestEdit.current(current => removeCard(current, placed.tier, placed.part, message.productId));
   }), [store]);
 
+  // «+ “…” from Recipes»: the recipe exists and has no Food cost card, so only the card is made (never a second recipe). The card of a
+  // recipe with real ingredients carries its real weight, exactly as Food cost's «Cards from the Recipes» makes it. Server-checked, so
+  // offline it fails and says so; the part takes the card only once it exists.
+  async function cardFromBook(recipeId: string): Promise<boolean> {
+    const recipe = snap.recipes[recipeId];
+    if (!recipe) return false;
+    const result = await store.createProductsFromRecipes([recipe], { [recipeId]: 'semi' });
+    if (!mounted.current) return false;
+    if (result.failed > 0) {
+      say(t('cakes.newRecipe.bookFailed', { name: String(recipe.name ?? '').trim() }));
+      return false;
+    }
+    return true;
+  }
+
   // The recipe's name is bounded by the rules (under 200 characters).
   const MAX_RECIPE_NAME = 199;
 
@@ -438,8 +462,10 @@ export function CakeForm({ id, cake, start = 'standard', titleRef, onSaved }: Pr
   // address, replaced, so nothing is blocked) because /cakes/new alone cannot tell which copy is meant.
   async function openInRecipes(recipeId: string) {
     // ⚠️ READ FROM THE REF: this runs after a dialog was answered, from the closure of the render that opened it, which does not have the card just added.
+    if (owner === null) return;
     parkedAway.current = true;
-    parkCake({ key: cakeId, savedId: id, ...onScreen.current, fromScratch });
+    parkCake({ uid: owner.uid, locationId: owner.locationId, key: cakeId, savedId: id, ...onScreen.current, fromScratch });
+    onParking?.(cakeId);
     await navigate(pathname, { replace: true, state: { ...(state as object | null), parkedCake: cakeId } });
     await navigate(editPath(recipeId), { state: FROM_CAKE });
   }
@@ -565,6 +591,7 @@ export function CakeForm({ id, cake, start = 'standard', titleRef, onSaved }: Pr
                   registerPack={registerPack}
                   openRequest={openRequest}
                   onNewRecipe={mayMakeRecipes ? (name, part) => { void newRecipe(name, part); } : undefined}
+                  onCardFromBook={mayMakeRecipes ? cardFromBook : undefined}
                   onOpenHandled={() => { setOpenRequest(null); }}
                   open={openStepKey}
                   onOpen={setOpenStepKey}

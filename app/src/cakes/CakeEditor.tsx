@@ -8,6 +8,7 @@ import { cameFromFoodcost, cameFromList, useLeave } from '../foodcost/foodcostNa
 import { NEW_OPENER, productOpener, useHandBack } from '../foodcost/handBack';
 import { useT } from '../i18n/useT';
 import { FormBar } from '../ui/FormBar';
+import { parkedKeyOf } from './cakeParking';
 import { CakeForm } from './CakeForm';
 import { useCakes } from './CakesContext';
 import { CAKES_PATH, cakePath, startOf } from './cakesPath';
@@ -51,10 +52,18 @@ export function CakeEditor({ id }: { id: string | null }) {
 
   // The form is keyed on the id, except that a new cake saved by it keeps its form when its address arrives.
   const [justSaved, setJustSaved] = useState<string | null>(null);
-  const [shown, setShown] = useState({ id, serial: 0 });
-  if (shown.id !== id) {
-    setShown({ id, serial: id !== null && id === justSaved ? shown.serial : shown.serial + 1 });
-    if (id !== justSaved) setJustSaved(null);
+  // ⚠️ AND REMOUNTED WHEN THE LIST'S «RESUME» ASKS FOR ANOTHER SET-ASIDE COPY at the same address (a new cake is always /cakes/new, so with
+  // one open in the split view the id does not change): a form copies its cake once, when it mounts. The mark a form puts on its OWN
+  // history entry when it sets itself aside is not such a request (`ownParking`). A dirty form is protected by the form's own blocker.
+  const parkedKey = parkedKeyOf(state);
+  const ownParking = useRef<string | null>(null);
+  const onParking = useCallback((key: string) => { ownParking.current = key; }, []);
+  const [shown, setShown] = useState({ id, serial: 0, parked: parkedKey });
+  if (shown.id !== id || shown.parked !== parkedKey) {
+    const resumed = shown.id === id && parkedKey !== null && parkedKey !== ownParking.current;
+    const sameForm = shown.id === id ? !resumed : id !== null && id === justSaved;
+    setShown({ id, parked: parkedKey, serial: sameForm ? shown.serial : shown.serial + 1 });
+    if (shown.id !== id && id !== justSaved) setJustSaved(null);
   }
   const mine = id !== null && id === justSaved;
 
@@ -91,7 +100,7 @@ export function CakeEditor({ id }: { id: string | null }) {
       </section>
     );
   }
-  return <CakeForm key={shown.serial} id={id} cake={cake} start={startOf(state)} titleRef={title} onSaved={saved} />;
+  return <CakeForm key={shown.serial} id={id} cake={cake} start={startOf(state)} titleRef={title} onSaved={saved} onParking={onParking} />;
 }
 
 // A cake address whose cake is not among the cakes, once the server has said so.

@@ -5,7 +5,7 @@ import { normalizeStandard, referenceFor } from '@mise/shared/cake-standard';
 import type { CakeStandard } from '@mise/shared/cake-standard';
 import {
   addCard, addPack, canAddCard, cardsIn, firstEmptyPack, followStandard, isDirty, referenceChanged, removeCard, removePack, resetGrams,
-  setGrams, setMeasure, setName, setPackQty, setPrice, setTarget, setVat, takeReference, vatFromSelect, workingFrom,
+  setGrams, setMeasure, setName, setPackQty, setPrice, setTarget, setVat, takeReference, vatFromSelect, withoutMissingRecipeCards, workingFrom,
 } from './cakeEditorModel';
 
 const REF: ReferenceGrams = { diameterCm: 22, discs: 3, discHeightCm: 3, baseG: 300, soakG: 90, fillingG: 280, coatingG: 450, decorationG: 200 };
@@ -150,6 +150,24 @@ describe('cards', () => {
     const next = removeCard(both, 0, 'base', 'SPONGE');
     expect(next.lines.map(line => `${line.tier}.${line.part}`)).toEqual(['1.base', '0.soak']);
     expect(removeCard(next, 0, 'base', 'SPONGE')).toBe(next);
+  });
+});
+
+describe('withoutMissingRecipeCards', () => {
+  const held = { ...CAKE, lines: [
+    { tier: 0, part: 'base' as const, productId: 'recipe-gone', grams: 100 },
+    { tier: 0, part: 'soak' as const, productId: 'recipe-here', grams: null },
+    { tier: 0, part: 'filling' as const, productId: 'ghost-card', grams: null },
+  ] };
+  const exists = (id: string) => id === 'recipe-here';
+
+  it('drops only a line whose recipe- card is not among the cards', () => {
+    expect(withoutMissingRecipeCards(held, exists).lines.map(line => line.productId)).toEqual(['recipe-here', 'ghost-card']);
+  });
+
+  it('leaves every other line alone, a card that is missing included, and returns the same cake when nothing goes', () => {
+    expect(withoutMissingRecipeCards(CAKE, () => false)).toBe(CAKE);
+    expect(withoutMissingRecipeCards(held, () => true)).toBe(held);
   });
 });
 
