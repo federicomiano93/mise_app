@@ -10,6 +10,7 @@ import { Page } from '../shell/Page';
 import { SettingsGear } from '../shell/SettingsGear';
 import { useOwnScrollArea } from '../shell/scrollArea';
 import { useCoverBar } from '../shell/useCoverBar';
+import { CakeHeadingLevel } from './headingLevel';
 import { StatusMessageProvider, useStatusMessage } from '../ui/StatusMessage';
 import { restoreCakesFromDevice, useParkingOwner } from './cakeParking';
 import type { ParkedCake } from './cakeParking';
@@ -75,7 +76,7 @@ function CakesLayout({ view }: { view: CakesView }) {
   // The open cake is a layer over the whole column from 700px (CakesSection.module.css), with a scroll of its own.
   const detail = useRef<HTMLDivElement>(null);
   const covering = view.kind === 'new' || view.kind === 'cake';
-  useCoverBar(covering);
+  const coversBar = useCoverBar(covering);
   // Where the list was scrolled to when a screen opened over it, until Back restores it.
   const listTop = useRef<number | null>(null);
 
@@ -140,19 +141,22 @@ function CakesLayout({ view }: { view: CakesView }) {
       <Page
         title={t('section.cakes')}
         gear={view.kind === 'list' ? <SettingsGear ref={gearNode} onPress={openReference} /> : null}
+        ownHeading={coversBar}
       >
-        <div className={styles.layout} data-view={view.kind === 'list' ? 'list' : 'detail'} data-cover={covering ? 'true' : undefined}>
-          <div className={styles.list}>
-            <PartBoundary>
-              <CakesList onOpenCake={openCake} onOpenNew={openNew} onResume={resume} />
-            </PartBoundary>
+        <CakeHeadingLevel.Provider value={coversBar ? 1 : 2}>
+          <div className={styles.layout} data-view={view.kind === 'list' ? 'list' : 'detail'} data-cover={covering ? 'true' : undefined}>
+            <div className={styles.list}>
+              <PartBoundary>
+                <CakesList onOpenCake={openCake} onOpenNew={openNew} onResume={resume} />
+              </PartBoundary>
+            </div>
+            <div ref={detail} className={styles.detail}>
+              <PartBoundary resetKey={pathname}>
+                <CakesDetail view={view} />
+              </PartBoundary>
+            </div>
           </div>
-          <div ref={detail} className={styles.detail}>
-            <PartBoundary resetKey={pathname}>
-              <CakesDetail view={view} />
-            </PartBoundary>
-          </div>
-        </div>
+        </CakeHeadingLevel.Provider>
       </Page>
     </HandBackProvider>
   );

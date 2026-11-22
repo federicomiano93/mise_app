@@ -13,15 +13,19 @@ import { useTitleSlot } from './titleSlot';
 // ⚠️ ONLY WHERE THE LAYER REALLY COVERS THE BAR: below 700px the bar is not shown at all (the tab bar takes over), so nothing is made
 // unreachable there. The 700px is CakesSection.module.css's and shell/Page's.
 // ⚠️ WITHOUT A SLOT (a spec drawing a section alone, outside the shell) THERE IS NO BAR, and nothing is done.
-export function useCoverBar(covered: boolean): void {
+// Returns whether the bar is covered RIGHT NOW (the layer is up, from 700px, over a real bar): the caller then owns the page's one reachable h1.
+export function useCoverBar(covered: boolean): boolean {
   const slot = useTitleSlot();
   const wide = useMediaQuery('(min-width: 700px)');
+  const hasBar = slot !== null && slot.closest('header') !== null;
 
   useLayoutEffect(() => {
     const bar = slot?.closest('header') ?? null;
     if (!covered || !wide || bar === null) return undefined;
     return makeUnreachable(bar);
   }, [covered, wide, slot]);
+
+  return covered && wide && hasBar;
 }
 
 type MaybeInert = HTMLElement & { inert?: boolean };

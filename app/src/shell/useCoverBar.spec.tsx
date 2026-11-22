@@ -1,11 +1,11 @@
-import { render } from '@testing-library/react';
+import { cleanup, render } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useCoverBar } from './useCoverBar';
 import { TitleSlotContext } from './titleSlot';
 
 function Covering({ covered }: { covered: boolean }) {
-  useCoverBar(covered);
-  return null;
+  const covers = useCoverBar(covered);
+  return <p>{covers ? 'covers' : 'free'}</p>;
 }
 
 function mount(covered: boolean) {
@@ -50,5 +50,21 @@ describe('useCoverBar', () => {
     const header = mount(false) as HTMLElement & { inert?: boolean };
     expect(header.inert === true).toBe(false);
     expect(header.hasAttribute('aria-hidden')).toBe(false);
+  });
+
+  it('gives the bar back when the section goes away, and says whether it covers it', () => {
+    width(true);
+    const header = mount(true) as HTMLElement & { inert?: boolean };
+    expect(document.body.textContent).toContain('covers');
+    expect(header.inert === true || header.getAttribute('aria-hidden') === 'true').toBe(true);
+    cleanup();
+    expect(header.inert === true).toBe(false);
+    expect(header.hasAttribute('aria-hidden')).toBe(false);
+  });
+
+  it('says it covers nothing below 700px', () => {
+    width(false);
+    mount(true);
+    expect(document.body.textContent).toContain('free');
   });
 });

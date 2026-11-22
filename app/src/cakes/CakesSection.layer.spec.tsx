@@ -81,7 +81,7 @@ describe('the bar under the layer', () => {
     expect(controls.length).toBeGreaterThan(0);
 
     await user.click(screen.getByRole('button', { name: /^Sacher/ }));
-    await screen.findByRole('heading', { level: 2, name: 'Sacher' }, LOAD);
+    await screen.findByRole('heading', { level: 1, name: 'Sacher' }, LOAD);
     // jsdom has no `inert`: the old browsers' way, aria-hidden and every control out of the tab order.
     expect(header).toHaveAttribute('aria-hidden', 'true');
     // (The section's own gear, drawn into the bar by Page at this width, is made anew when the cake opens: only the bar's own stay.)
@@ -103,7 +103,7 @@ describe('the bar under the layer', () => {
       await screen.findByRole('button', { name: /^Sacher/ }, LOAD);
       const header = bar() as HTMLElement & { inert: boolean };
       await user.click(screen.getByRole('button', { name: /^Sacher/ }));
-      await screen.findByRole('heading', { level: 2, name: 'Sacher' }, LOAD);
+      await screen.findByRole('heading', { level: 1, name: 'Sacher' }, LOAD);
       expect(header.inert).toBe(true);
       expect(header).not.toHaveAttribute('aria-hidden');
       await user.click(screen.getByRole('button', { name: 'Back' }));
@@ -124,10 +124,25 @@ describe('the bar under the layer', () => {
   });
 
   it('moves the focus into the card when a cake opens from the list, not onto the covered title', async () => {
+    atWidth(true);
     const { user } = renderCakes('/cakes', { cakes: source() });
     await user.click(await screen.findByRole('button', { name: /^Sacher/ }, LOAD));
-    const title = await screen.findByRole('heading', { level: 2, name: 'Sacher' }, LOAD);
+    const title = await screen.findByRole('heading', { level: 1, name: 'Sacher' }, LOAD);
     expect(title).toHaveFocus();
     expect(bar().contains(document.activeElement)).toBe(false);
+  });
+
+  it('leaves exactly one reachable h1: the open cake’s own title from 700px (the page’s is under the layer), the page’s on a phone', async () => {
+    atWidth(true);
+    renderCakes('/cakes/c1', { cakes: source() });
+    await screen.findByRole('heading', { level: 1, name: 'Sacher' }, LOAD);
+    expect(screen.getAllByRole('heading', { level: 1 }).map(h => h.textContent)).toEqual(['Sacher']);
+    expect(screen.queryByRole('heading', { level: 2, name: 'Sacher' })).not.toBeInTheDocument();
+    cleanup();
+
+    atWidth(false);
+    renderCakes('/cakes/c1', { cakes: source() });
+    await screen.findByRole('heading', { level: 2, name: 'Sacher' }, LOAD);
+    expect(screen.getAllByRole('heading', { level: 1 }).map(h => h.textContent)).toEqual(['Cakes']);
   });
 });

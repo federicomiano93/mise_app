@@ -31,6 +31,7 @@ import { useMoney } from '../session/useMoney';
 import { announceAction } from '../telemetry/usage';
 import { Button } from '../ui/Button';
 import { FormBar } from '../ui/FormBar';
+import { useCakeHeadingLevel } from './headingLevel';
 import { useStatusMessage } from '../ui/StatusMessage';
 import { useConfirm } from '../ui/useConfirm';
 import {
@@ -96,6 +97,7 @@ const textOf = (value: number | null): string => (value === null || !Number.isFi
 // ⚠️ SAVE IS ONE WRITE: the cake and its Food cost card travel in the same batch (saveProduct with a companion), so a cake and its card
 // can never be saved apart; Delete removes both the same way.
 export function CakeForm({ id, cake, start = 'standard', titleRef, onSaved, onParking }: Props) {
+  const headingLevel = useCakeHeadingLevel();
   const { t } = useT();
   const store = useFoodcostStore();
   const snap = useFoodcost();
@@ -594,6 +596,7 @@ export function CakeForm({ id, cake, start = 'standard', titleRef, onSaved, onPa
   return (
     <section className={styles.editor} aria-labelledby={titleId}>
       <FormBar
+        level={headingLevel}
         backLabel={t('ui.back')}
         onBack={() => { void back(); }}
         title={heading}
