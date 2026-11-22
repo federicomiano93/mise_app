@@ -57,7 +57,8 @@ type Props = {
   costBody: ReactNode;
 };
 
-export interface OpenRequest { part: CakePart }
+// `productId`: the card just put on the part (a recipe made from its search box) takes the cursor, the way a picked card does.
+export interface OpenRequest { part: CakePart; productId?: string }
 
 // Key of the focus hand-over that is not a card line: the packaging's «Add» button.
 const PACK_ADD = 'pack-add';
@@ -101,9 +102,10 @@ export function TierParts({
   const focusCombo = useRef<CakePart | null>(null);
   useEffect(() => {
     if (openRequest === null) return;
-    const { part } = openRequest;
+    const { part, productId } = openRequest;
     onOpenHandled?.();
     onOpen(part);
+    if (productId !== undefined) { focusNext.current = lineKey({ tier: shown, part, productId }); return; }
     if (part === 'filling' && cake.discs < 2) return;
     if (cardsIn(cake, shown, part).length >= MAX_CARDS_PER_PART) return;
     focusCombo.current = part;

@@ -97,7 +97,7 @@ describe('choosing it', () => {
     expect(search()).toHaveValue('');
   });
 
-  it('says so in a dialog with two buttons: «Continue the cake» is the one with the focus, and puts the cursor back in the step’s search box', async () => {
+  it('says so in a dialog with two buttons: «Continue the cake» is the one with the focus, and puts the cursor in the new card’s grams, as a pick does (never the search box: its list would open over the line)', async () => {
     const { user } = await choose();
     const dialog = screen.getByRole('alertdialog', { name: 'Recipe created' });
     expect(dialog).toHaveTextContent('“Tiramisu” is in the Recipes and in Food cost, but it is still empty: add its ingredients in the Recipes. Until then the cake’s cost is incomplete.');
@@ -105,22 +105,25 @@ describe('choosing it', () => {
     expect(within(dialog).getByRole('button', { name: 'Continue the cake' })).toHaveFocus();
     await user.click(within(dialog).getByRole('button', { name: 'Continue the cake' }));
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
-    await waitFor(() => { expect(search()).toHaveFocus(); }, LOAD);
+    await waitFor(() => { expect(screen.getByRole('textbox', { name: 'Tiramisu: grams' })).toHaveFocus(); }, LOAD);
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
   });
 
   it('Escape means «Continue the cake»', async () => {
     const { user } = await choose();
     await user.keyboard('{Escape}');
     await waitFor(() => { expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument(); }, LOAD);
-    expect(await screen.findByRole('textbox', { name: 'Tiramisu: grams' })).toBeInTheDocument();
-    await waitFor(() => { expect(search()).toHaveFocus(); }, LOAD);
+    await waitFor(() => { expect(screen.getByRole('textbox', { name: 'Tiramisu: grams' })).toHaveFocus(); }, LOAD);
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
   });
 
   it('the cake’s cost says «incomplete» for it, in the cost step (the callout is in CakeForm.newRecipeCallout.spec.tsx)', async () => {
     const { user } = await choose();
     await user.click(screen.getByRole('button', { name: 'Continue the cake' }));
-    await screen.findByRole('textbox', { name: 'Tiramisu: grams' });
-    await user.click(screen.getByRole('button', { name: /^Cost and price/ }));
+    // under a loaded run the dialog is still leaving (the page behind it is hidden from the roles until it has gone): wait for both
+    await waitFor(() => { expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument(); }, LOAD);
+    await screen.findByRole('textbox', { name: 'Tiramisu: grams' }, LOAD);
+    await user.click(await screen.findByRole('button', { name: /^Cost and price/ }, LOAD));
     expect(await screen.findByText('Cost incomplete: Tiramisu has no price yet on its Food cost card. The real cost is higher.', undefined, LOAD)).toBeInTheDocument();
   });
 

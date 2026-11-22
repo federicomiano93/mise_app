@@ -453,8 +453,9 @@ export function CakeForm({ id, cake, start = 'standard', titleRef, onSaved, onPa
       await openInRecipes(recipeId);
       return;
     }
-    // After the dialog's own focus restore (it runs on the next frame), the step's search box has the last word.
-    requestAnimationFrame(() => { requestAnimationFrame(() => { if (mounted.current) setOpenRequest({ part }); }); });
+    // After the dialog's own focus restore (it runs on the next frame), the new card's grams box has the last word, as after any pick.
+    // ⚠️ NOT THE SEARCH BOX: it opens its list on focus (menuTrigger "focus"), and the list would cover the line just added.
+    requestAnimationFrame(() => { requestAnimationFrame(() => { if (mounted.current) setOpenRequest({ part, productId: cardId }); }); });
   }
 
   // ⚠️ THE UNSAVED COPY IS SET ASIDE, NOT ASKED ABOUT: it is parked in memory (cakeParking.ts) and the move is not blocked, so the
