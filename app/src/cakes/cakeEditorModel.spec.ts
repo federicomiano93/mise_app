@@ -4,7 +4,7 @@ import type { Cake, ReferenceGrams } from '@mise/shared/cake-model';
 import { normalizeStandard, referenceFor } from '@mise/shared/cake-standard';
 import type { CakeStandard } from '@mise/shared/cake-standard';
 import {
-  addCard, addPack, canAddCard, cardsIn, firstEmptyPack, followStandard, isDirty, referenceChanged, removeCard, removePack, resetGrams,
+  addCard, addPack, canAddCard, cardsIn, clearDiscHeight, firstEmptyPack, followStandard, isDirty, referenceChanged, removeCard, removePack, resetGrams,
   setGrams, setMeasure, setName, setPackQty, setPrice, setTarget, setVat, takeReference, vatFromSelect, withoutMissingRecipeCards, workingFrom,
 } from './cakeEditorModel';
 
@@ -90,6 +90,13 @@ describe('setMeasure', () => {
     expect(setMeasure(own, 'discHeightCm', -3)).toBe(own);
     expect(setMeasure(own, 'discHeightCm', Number.NaN)).toBe(own);
     expect(setMeasure(own, 'discHeightCm', 4.5)).toBe(own);
+  });
+
+  it('clearing the disc height makes the cake follow its reference again, and does nothing when it already does', () => {
+    const own = { ...CAKE, discHeightCm: 4.5 };
+    expect(clearDiscHeight(own).discHeightCm).toBeNull();
+    expect(clearDiscHeight(CAKE)).toBe(CAKE);
+    expect(isDirty(clearDiscHeight(own), own)).toBe(true);
   });
 
   it('assembly minutes above 0, or none', () => {

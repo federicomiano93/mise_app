@@ -78,10 +78,26 @@ describe('the fold', () => {
 });
 
 describe('the disc height box', () => {
-  it('shows the reference’s height for a cake with none of its own', async () => {
+  it('is EMPTY for a cake with none of its own, the reference’s height greyed as its placeholder, and the folded line says it', async () => {
     const { user } = await open('/cakes/c1', {}, { ...SACHER, ref: { ...REFERENCE, discHeightCm: 4 } });
+    expect(fold()).toHaveTextContent('discs of 4 cm');
     await openMeasures(user);
-    expect(box('Height of one disc in centimetres')).toHaveValue('4');
+    expect(box('Height of one disc in centimetres')).toHaveValue('');
+    expect(box('Height of one disc in centimetres')).toHaveAttribute('placeholder', '4');
+  });
+
+  it('emptying the box of a cake with its own height makes it follow the reference again; typing the reference’s own value pins it', async () => {
+    const { user } = await open('/cakes/c1', {}, { ...SACHER, discHeightCm: 5.5, ref: { ...REFERENCE, discHeightCm: 4 } });
+    await openMeasures(user);
+    const height = box('Height of one disc in centimetres');
+    expect(height).toHaveValue('5.5');
+    await user.clear(height);
+    await user.tab();
+    expect(height).toHaveValue('');
+    expect(height).toHaveAttribute('placeholder', '4');
+    await user.type(height, '4');
+    await user.tab();
+    expect(height).toHaveValue('4');
   });
 
   it('shows the cake’s own height when it has one', async () => {
@@ -94,7 +110,8 @@ describe('the disc height box', () => {
     const { user } = await open('/cakes/c1', { lang: 'it', session: { location: { country: 'IT' } } });
     await openMeasures(user);
     const height = box('Altezza di un disco in centimetri');
-    expect(height).toHaveValue('3');
+    expect(height).toHaveValue('');
+    expect(height).toHaveAttribute('placeholder', '3');
     expect(height).toHaveAttribute('inputmode', 'decimal');
     await user.clear(height);
     await user.type(height, '4,5');

@@ -85,7 +85,7 @@ export function setMeasure(cake: Cake, measure: Measure, value: number): Cake {
       return discs === cake.discs ? cake : { ...cake, discs };
     }
     case 'discHeightCm': {
-      // Junk and non-positive values are ignored: the box shows the height again instead of dropping the cake's own back to the reference's.
+      // Junk and non-positive values are ignored: the box shows what the cake has again. Following the reference again is clearDiscHeight's.
       const discHeightCm = normalizeDiscHeight(value);
       return discHeightCm === null || discHeightCm === cake.discHeightCm ? cake : { ...cake, discHeightCm };
     }
@@ -98,6 +98,12 @@ export function setMeasure(cake: Cake, measure: Measure, value: number): Cake {
       return assemblyMinutes === cake.assemblyMinutes ? cake : { ...cake, assemblyMinutes };
     }
   }
+}
+
+// The height box emptied: the cake has no height of its own again and follows its reference's (a typed value, even the reference's own,
+// is an explicit pin and stays).
+export function clearDiscHeight(cake: Cake): Cake {
+  return cake.discHeightCm === null ? cake : { ...cake, discHeightCm: null };
 }
 
 export function setName(cake: Cake, name: string): Cake {

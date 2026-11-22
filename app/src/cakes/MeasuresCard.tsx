@@ -6,7 +6,7 @@ import { localNumber } from '@mise/shared/currency';
 import { useT } from '../i18n/useT';
 import { useMoney } from '../session/useMoney';
 import { Button } from '../ui/Button';
-import { setMeasure, setName } from './cakeEditorModel';
+import { clearDiscHeight, setMeasure, setName } from './cakeEditorModel';
 import { FoldTitle } from './FoldTitle';
 import { useStepFocus } from './useStepFocus';
 import styles from './MeasuresCard.module.css';
@@ -79,18 +79,23 @@ type MeasureBoxProps = {
   inputMode?: 'numeric' | 'decimal';
   // What the box shows when nothing is being typed (default: the plain number); a decimal box passes the venue's separator.
   display?: string;
+  // Greyed in an empty box (the height a cake follows from its reference).
+  placeholder?: string;
   onCommit: (value: number) => void;
+  // The box was emptied and left: the measure goes back to following something else. Without it an empty box is put back as it was.
+  onClear?: () => void;
 };
 
 // A number typed into a small box: the text stays as typed until the person leaves the box (or presses Enter), then it is handed up and
 // the box shows what the cake took (the cake clamps it: a diameter to what its tiers need, the discs to 1–5).
 // ⚠️ NOT PER KEYSTROKE: «2» on the way to «22» would be clamped to the smallest diameter at once.
-function MeasureBox({ id, label, ariaLabel, value, unit, inputMode = 'numeric', display, onCommit }: MeasureBoxProps) {
+function MeasureBox({ id, label, ariaLabel, value, unit, inputMode = 'numeric', display, placeholder, onCommit, onClear }: MeasureBoxProps) {
   const [typed, setTyped] = useState<string | null>(null);
   const commit = () => {
     if (typed === null) return;
     const number = Number(typed.replace(',', '.'));
-    if (typed.trim() !== '' && Number.isFinite(number)) onCommit(number);
+    if (typed.trim() === '') onClear?.();
+    else if (Number.isFinite(number)) onCommit(number);
     setTyped(null);
   };
   return (
@@ -105,6 +110,7 @@ function MeasureBox({ id, label, ariaLabel, value, unit, inputMode = 'numeric', 
           className={styles.input}
           data-unit={unit !== undefined}
           {...(ariaLabel === undefined ? {} : { 'aria-label': ariaLabel })}
+          {...(placeholder === undefined ? {} : { placeholder })}
           value={typed ?? display ?? String(value)}
           onChange={event => { setTyped(event.target.value); }}
           onBlur={commit}
@@ -133,8 +139,11 @@ export function MeasuresCard({ cake, edit, nameRef, nameInvalid, open, onToggle 
     : undefined;
 
   // The height as the venue writes numbers («4,5» in Italy, «4.5» in the UK), the same way the reference screen says it.
+  // ⚠️ The EFFECTIVE height (the cake's own, else its reference's) goes in the folded line; the box shows only a height the cake has OF ITS OWN
+  // and greys the reference's as its placeholder, so a cake that follows its reference can be seen to, and be put back to it by emptying the box.
   const height = discHeightOf(cake);
   const heightText = localNumber(String(height), money, false);
+  const ownHeight = cake.discHeightCm !== null;
   // Folded, the measures read as one line under the title.
   const summary = [
     cake.name.trim() === '' ? t('cakes.measures.summaryUntitled') : cake.name.trim(),
@@ -181,10 +190,12 @@ export function MeasuresCard({ cake, edit, nameRef, nameInvalid, open, onToggle 
           label={t('cakes.measure.discHeight')}
           ariaLabel={t('cakes.measure.discHeightAria')}
           value={height}
-          display={heightText}
+          display={ownHeight ? heightText : ''}
+          placeholder={heightText}
           unit={t('cakes.ref.unitCm')}
           inputMode="decimal"
           onCommit={value => { move('discHeightCm', value); }}
+          onClear={() => { edit(clearDiscHeight); }}
         />
       </div>
       {tiersNote === undefined ? null : <p className={styles.limit}>{tiersNote}</p>}
