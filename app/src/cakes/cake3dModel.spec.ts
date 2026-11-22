@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { cakeGeometry } from '@mise/shared/cake-model';
 import type { Cake } from '@mise/shared/cake-model';
 import {
-  appearedParts, CUT_ANGLE, DISC_GAP_SHARE, SLOT_SPREAD_PX, TIER_BOARD_CM, cakeLayout, cakeShare, homeView, labelBoxFor, leaderPath, leadersCross, partAnchors, pickedPart, placeLabels,
+  appearedParts, BAR_BAND, CUT_ANGLE, DISC_GAP_SHARE, SLOT_SPREAD_PX, TIER_BOARD_CM, cakeLayout, cakeShare, homeView, labelBoxFor, leaderPath, leadersCross, partAnchors, pickedPart, placeLabels,
   glowSource, highlightLevel, HIGHLIGHT_CHOSEN, HIGHLIGHT_HOVER, sceneSignature, slotHeights, stageDecision, tapAction, webglAvailable,
 } from './cake3dModel';
 import type { Anchor, LabelBox, PlacedLabel } from './cake3dModel';
@@ -227,6 +227,17 @@ describe('the labels', () => {
   it('leaves the strip along the bottom free for the total: no label reaches into it', () => {
     const placed = placeLabels([0, 1, 2, 3].map(i => ({ key: `p${String(i)}`, x: 300, y: 500 + i })), wide);
     for (const label of placed) expect(label.slot.y + wide.labelHeight / 2).toBeLessThanOrEqual(wide.height - wide.foot);
+  });
+
+  it('keeps the band of the view buttons free at the top: no label reaches into it, at any width', () => {
+    const random = seeded(11);
+    for (const width of [330, 400, 560, 800, 900, 1100, 1440]) {
+      const box = labelBoxFor(width, Math.min(600, Math.max(380, width * 0.4)));
+      for (let trial = 0; trial < 100; trial += 1) {
+        const placed = placeLabels(anchorsOf(random, 1 + (trial % 5), box).map(a => ({ ...a, y: a.y * 0.2 })), box);
+        for (const label of placed) expect(label.slot.y - box.labelHeight / 2).toBeGreaterThanOrEqual(BAR_BAND);
+      }
+    }
   });
 
   it('draws each leader as one smooth curve from the label to the point, with no dashes', () => {
