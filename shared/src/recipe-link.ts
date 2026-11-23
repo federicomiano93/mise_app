@@ -91,6 +91,14 @@ export function ordersForIngredientPath(supplierId: unknown, recipeId: unknown, 
   return `/orders/supplier/${encodeURIComponent(supplier)}?recipe=${encodeURIComponent(recipe)}&ingredient=${encodeURIComponent(ingredient)}`;
 }
 
+// An ingredient's card in «Ingredients & suppliers», or null for an id that cannot be one (23 Nov 2026: a gap of a recipe's allergen
+// card opens it). Recipes may not import suppliers/ (RecipesSection.createIngredient.spec.tsx guards it), so the address is spelled
+// here, and app/src/suppliers/suppliersPath.spec.ts pins it against `ingredientPath`, the section's own.
+export function ingredientCardAddress(ingredientId: unknown): string | null {
+  const id = cleanId(ingredientId);
+  return id && id !== 'new' ? `/suppliers/ingredient/${encodeURIComponent(id)}` : null;
+}
+
 // The recipe's own address, or null for an id that cannot be one.
 export function recipeAddress(recipeId: unknown): string | null {
   const id = cleanId(recipeId);

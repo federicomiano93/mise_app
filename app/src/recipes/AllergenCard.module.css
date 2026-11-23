@@ -110,18 +110,96 @@
   font-weight: 600;
 }
 
-.gaps {
+/* The gaps, every one of them, in two groups: a small bold title with its count, then rows (no bullets, a hairline between). */
+.group {
   margin: 0 0 var(--s3);
-  padding-left: var(--s5);
 }
 
-.gaps li {
-  margin-bottom: var(--s1);
+.groupTitle {
+  margin: 0 0 var(--s1);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+}
+
+.hint {
+  margin: 0 0 var(--s2);
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.gaps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.gapItem {
+  border-bottom: 1px solid var(--line);
+}
+
+/* A row is a full-width button (or, for somebody who cannot go where it leads, the same row as plain text without the chevron). */
+.gapRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  box-sizing: border-box;
+  width: 100%;
+  min-height: var(--hit);
+  padding: var(--s2) 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button.gapRow {
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  button.gapRow:hover {
+    background: var(--sunken);
+  }
+}
+
+button.gapRow:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
+}
+
+.gapRow svg {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  color: var(--ink-3);
+}
+
+.gapWords {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.gapLabel {
+  font-weight: 600;
   overflow-wrap: anywhere;
 }
 
-.more {
+.gapReason {
   color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+/* The ingredients sit in two columns once there is room for them. */
+@media (min-width: 700px) {
+  .twoColumns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    column-gap: var(--s5);
+  }
 }
 
 .soFar {

@@ -21,7 +21,7 @@ import { createContext, useContext } from 'react';
 
 export interface RecipeReturn {
   // «Make a label» (or «Edit», `origin` 'edit') of this recipe is about to open: write down where the screen is.
-  // `trip`: only for 'order' — the row key that opened the menu and the keys of the rows split in two.
+  // `trip`: only for 'order' — the row key that opened the menu and the keys of the rows split in two; for 'gap' its `row` is the gap's key.
   remember(recipeId: string, origin?: Origin, trip?: OrderTrip): void;
   // Is this recipe being returned to from its label? Read while drawing; it changes nothing.
   pending(recipeId: string): boolean;
@@ -38,6 +38,9 @@ export interface RecipeReturn {
   // Is this recipe being returned to from Orders (a row's «Order»)? The row that opened the menu and the rows split in two, or null.
   // Read while drawing; it changes nothing.
   pendingOrder(recipeId: string): OrderTrip | null;
+  // Is this recipe being returned to from one of its allergen card's gaps (an ingredient's card in Suppliers, a sub-recipe, its editor)?
+  // The key of the gap row that was tapped (allergenGaps.ts), or null. Read while drawing; it changes nothing.
+  pendingGap(recipeId: string): string | null;
   // Put the scroll area (and the split's right-hand side) back where `remember` found them. The recipe screen asks once its
   // page is drawn, because a scroll box cannot be scrolled past the content that is not there yet.
   restoreScroll(recipeId: string): void;
@@ -47,7 +50,7 @@ export interface RecipeReturn {
 }
 
 // What the person pressed to leave the recipe.
-export type Origin = 'label' | 'edit' | 'steps' | 'mix' | 'cost' | 'duplicate' | 'order';
+export type Origin = 'label' | 'edit' | 'steps' | 'mix' | 'cost' | 'duplicate' | 'order' | 'gap';
 
 // What a trip to Orders must bring back: the row (shared/row-actions-model `rowKeysOf`) whose menu was opened, and the rows split in two.
 export interface OrderTrip {
@@ -64,6 +67,7 @@ const NOTHING: RecipeReturn = {
   pendingMix: () => false,
   pendingCost: () => false,
   pendingOrder: () => null,
+  pendingGap: () => null,
   restoreScroll() { /* ditto */ },
   markDelivered() { /* ditto */ },
   wasDelivered: () => false,

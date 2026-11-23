@@ -123,15 +123,16 @@ describe('the allergen card of an incomplete recipe', () => {
     expect(screen.getByText(/This is NOT the full list/)).not.toBeVisible();
   });
 
-  it('opens on the sentence, the first eight rows with their reason, «and N more», and what is known so far', async () => {
+  it('opens on the sentence, EVERY row with its reason under a titled group with its count, and what is known so far', async () => {
     const { user } = await open([MANY], [FLOUR], 'many');
     await user.click(await screen.findByRole('button', { name: 'Allergens not declared' }));
     expect(screen.getByText('10 ingredients are not declared — no label can be made')).toBeVisible();
-    for (let n = 1; n <= 8; n += 1) {
-      expect(screen.getByText(`Thing ${n} — not linked to an ingredient`)).toBeVisible();
+    expect(screen.getByRole('heading', { level: 4, name: 'Rows to fix in the recipe · 10' })).toBeVisible();
+    const list = within(screen.getByRole('list', { name: 'Rows to fix in the recipe · 10' }));
+    for (let n = 1; n <= 10; n += 1) {
+      expect(list.getByRole('button', { name: `Thing ${n} not linked to an ingredient` })).toBeVisible();
     }
-    expect(algCard().queryByText(/Thing 9/)).not.toBeInTheDocument();
-    expect(screen.getByText('…and 2 more')).toBeVisible();
+    expect(screen.queryByText(/and d+ more/)).not.toBeInTheDocument();
     expect(screen.getByText('So far, from the rows that are declared: Wheat. This is NOT the full list.')).toBeVisible();
   });
 
@@ -145,7 +146,8 @@ describe('the allergen card of an incomplete recipe', () => {
   it('⚠️ an ingredient nobody has checked is NEVER «None of the 14»', async () => {
     const { user } = await open([recipeDoc('y', 'Y', [row('Yeast', 'yeast', 10), row('Salt', 'salt', 10)])], [YEAST, SALT], 'y');
     await user.click(await screen.findByRole('button', { name: 'Allergens not declared' }));
-    expect(screen.getByText('Yeast — the linked ingredient has no allergen information yet')).toBeVisible();
+    expect(screen.getByRole('heading', { level: 4, name: 'Ingredient without allergens · 1' })).toBeVisible();
+    expect(within(screen.getByRole('list', { name: 'Ingredient without allergens · 1' })).getByRole('button', { name: 'Yeast' })).toBeVisible();
     expect(screen.queryByText('None of the 14')).not.toBeInTheDocument();
   });
 
@@ -158,8 +160,8 @@ describe('the allergen card of an incomplete recipe', () => {
     ]);
     const { user } = await open([TOP, SUB], [SALT], 'top');
     await user.click(await screen.findByRole('button', { name: 'Allergens not declared' }));
-    expect(screen.getByText('Gone — linked to an ingredient that no longer exists')).toBeVisible();
-    expect(screen.getByText('Filling — the linked recipe is not fully declared')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Gone linked to an ingredient that no longer exists' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Filling the linked recipe is not fully declared' })).toBeVisible();
   });
 
   it('reads a sub-recipe that is fully declared into the recipe above it', async () => {
@@ -359,7 +361,7 @@ describe('the cards follow the live data', () => {
     const { user } = await open([], [], 'cake', { source });
     await user.click(await screen.findByRole('button', { name: 'Allergens not declared' }));
     expect(algButton()).toHaveFocus();
-    expect(screen.getByText('Yeast — the linked ingredient has no allergen information yet')).toBeVisible();
+    expect(within(screen.getByRole('list', { name: 'Ingredient without allergens · 1' })).getByRole('button', { name: 'Yeast' })).toBeVisible();
 
     source.ingredients.set('yeast', declared('yeast', ['sesame']));
     act(() => { source.push(); });

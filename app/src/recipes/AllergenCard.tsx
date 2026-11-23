@@ -1,24 +1,25 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
-import { useNavigate } from 'react-router';
+import { useLocation, useNavigate } from 'react-router';
 import { allergenName, outputLanguage } from '@mise/shared/market';
 import { ALLERGEN_REASON_TEXT, recipeAllergens, rowState } from '@mise/shared/recipe-allergen-model';
 import type { RecipeAllergens } from '@mise/shared/recipe-allergen-model';
 import type { CatalogueRecipe } from '@mise/shared/catalogue-model';
+import { ingredientCardAddress } from '@mise/shared/recipe-link';
 import { allergensOn } from '@mise/shared/venue-features';
 import { useT } from '../i18n/useT';
 import { useSession } from '../session/SessionContext';
+import { visibleSectionIds } from '../session/visibility';
+import { gapEntries } from './allergenGaps';
+import type { GapEntry } from './allergenGaps';
 import { useAllergenTables } from './allergenTables';
 import { incompleteSentence } from './allergenText';
 import { useRecipes } from './RecipesContext';
 import { useRecipeReturn } from './recipeReturn';
-import { FROM_RECIPE } from './recipesNav';
-import { labelPath } from './recipesPath';
+import { FROM_GAP, FROM_RECIPE, TO_INGREDIENT_CARD, cameFromIngredients, cameFromList, cameFromSheet } from './recipesNav';
+import { editPath, labelPath, recipePath } from './recipesPath';
 import { useStillWaiting } from './useStillWaiting';
 import styles from './AllergenCard.module.css';
-
-// How many undeclared rows the card names; the rest are «and N more».
-const GAPS_SHOWN = 8;
 
 // What a recipe contains, for somebody at the counter being asked.
 //
@@ -30,6 +31,10 @@ const GAPS_SHOWN = 8;
 // ⚠️ THE WHOLE CARD GOES WHEN THE VENUE HAS ALLERGENS SWITCHED OFF, read here on every render. The venue
 // document is read ONCE, when the venue opens, and is not live in Mise 2: a switch thrown on another phone
 // is seen after a reload, like the rest of Mise 2.
+//
+// ⚠️ EVERY GAP IS NAMED, in two groups, and each is a door to where it is put right (23 Nov 2026). The ingredients nobody has declared
+// open their card in Suppliers (Back, Save and Delete come back here with ONE history step, the gap row owed the focus); the rows to fix
+// in the recipe itself open its editor, or an incomplete sub-recipe's own screen. Who cannot open Suppliers sees the names as plain text.
 //
 // ⚠️ NO COUNTRY: this card still shows the names (in English), as the current app does on purpose — it is
 // the on-screen reading at the counter. What is COPIED or SENT is the declaration card's job, and that one
@@ -54,7 +59,8 @@ const GAPS_SHOWN = 8;
 // around them («not declared», «May contain») are interface text.
 export function AllergenCard({ recipe }: { recipe: CatalogueRecipe }) {
   const { t } = useT();
-  const { location } = useSession();
+  const { location, canManage, role } = useSession();
+  const { state } = useLocation();
   const { recipes, ingredients, ingredientsLoaded, ingredientsUnreadable } = useRecipes();
   const tables = useAllergenTables(recipes, ingredients);
   const navigate = useNavigate();
@@ -62,9 +68,17 @@ export function AllergenCard({ recipe }: { recipe: CatalogueRecipe }) {
   // ⚠️ BACK FROM THIS RECIPE'S LABEL the fold is open again (the button is inside it) and the focus is on the button,
   // as when the person left. Read while drawing the first time; opened afresh, the card still opens closed.
   const [returning] = useState(() => recipeReturn.pending(recipe.id));
-  const [open, setOpen] = useState(returning);
+  // ⚠️ BACK FROM ONE OF THIS RECIPE'S GAPS (an ingredient's card, a sub-recipe, the editor) the fold is open again and the focus is on the
+  // gap row that was tapped; if that row is gone (the ingredient was fixed) it is on the card's own toggle, never the page body.
+  const [gapBack] = useState(() => recipeReturn.pendingGap(recipe.id));
+  const [open, setOpen] = useState(returning || gapBack !== null);
   const labelButton = useRef<HTMLButtonElement>(null);
+  const toggle = useRef<HTMLButtonElement>(null);
+  const gapButtons = useRef(new Map<string, HTMLButtonElement>());
+  const gapDelivered = useRef(false);
   const headId = useId();
+  const ingredientsTitleId = useId();
+  const rowsTitleId = useId();
   const bodyId = useId();
   const stillWaiting = useStillWaiting(!ingredientsLoaded);
 
@@ -74,13 +88,36 @@ export function AllergenCard({ recipe }: { recipe: CatalogueRecipe }) {
     recipeReturn.markDelivered();
   }, []);
 
+  // Once the ingredients are in (a cold phone draws the card before them, with no rows to focus), once.
+  useEffect(() => {
+    if (gapBack === null || gapDelivered.current || !ingredientsLoaded) return;
+    gapDelivered.current = true;
+    recipeReturn.restoreScroll(recipe.id);
+    const target = gapButtons.current.get(gapBack) ?? toggle.current;
+    if (target === null) return;
+    target.focus({ preventScroll: true });
+    recipeReturn.markDelivered();
+    // Again after the shell's own scroll reset, which runs after this card's effects (as the Food cost card does).
+    queueMicrotask(() => { recipeReturn.restoreScroll(recipe.id); });
+  }, [ingredientsLoaded]);
+
+  // ⚠️ A GAP ROW THAT HAS THE FOCUS AND THEN GOES (the ingredient was declared, and the live list says so a moment after the card came
+  // back) would drop the focus on the page body: it goes to the card's toggle instead. Asked after every draw, cheaply.
+  const focusedGap = useRef<string | null>(null);
+  useEffect(() => {
+    const key = focusedGap.current;
+    if (key === null || gapButtons.current.has(key)) return;
+    focusedGap.current = null;
+    if (document.activeElement === document.body || document.activeElement === null) toggle.current?.focus({ preventScroll: true });
+  });
+
   if (!allergensOn(location)) return null;
   const lang = outputLanguage(location);
 
   const result = recipeAllergens(recipe, tables);
-  const state = rowState(result);
+  const verdict = rowState(result);
   // A recipe with no rows stays silent: there is nothing to declare and nothing to go and fix.
-  if (state === 'nothing-yet') return null;
+  if (verdict === 'nothing-yet') return null;
 
   if (!ingredientsLoaded) {
     return (
@@ -92,13 +129,62 @@ export function AllergenCard({ recipe }: { recipe: CatalogueRecipe }) {
     );
   }
 
-  const incomplete = state === 'not-declared';
+  const incomplete = verdict === 'not-declared';
+  // ⚠️ ONLY WHO MAY OPEN SUPPLIERS GETS A DOOR TO IT: the section is off for the venue, or the role is kept out of it, and the same
+  // question the rail asks (session/visibility.ts) answers it. Editing a recipe is for everybody who sees the section (RecipeView).
+  const mayOpenSuppliers = visibleSectionIds(location, canManage, role).has('suppliers');
+  const gaps = gapEntries(recipe.ingredients, result.rows);
+  const ingredientGaps = gaps.filter(gap => gap.reason === 'not-declared');
+  const rowGaps = gaps.filter(gap => gap.reason !== 'not-declared');
+  const openGap = (gap: GapEntry) => {
+    recipeReturn.remember(recipe.id, 'gap', { row: gap.key, split: [] });
+    if (gap.target.kind === 'ingredient') {
+      const address = ingredientCardAddress(gap.target.refId);
+      if (address !== null) void navigate(address, { state: TO_INGREDIENT_CARD });
+    } else if (gap.target.kind === 'recipe') {
+      void navigate(recipePath(gap.target.refId), { state: FROM_GAP });
+    } else {
+      void navigate(editPath(recipe.id), { state: { ...FROM_RECIPE, recipeFromList: cameFromList(state) && !cameFromSheet(state) && !cameFromIngredients(state) } });
+    }
+  };
+  const gapRow = (gap: GapEntry, withReason: boolean, tappable: boolean) => {
+    const words = (
+      <span className={styles.gapWords}>
+        <span className={styles.gapLabel}>{gap.label}</span>
+        {/* A space, or the accessible name of the row reads «Flourthe linked…». */}
+        {withReason ? ' ' : null}
+        {withReason ? <span className={styles.gapReason}>{t(ALLERGEN_REASON_TEXT[gap.reason])}</span> : null}
+      </span>
+    );
+    return (
+      <li key={gap.key} className={styles.gapItem}>
+        {tappable ? (
+          <button
+            type="button"
+            className={styles.gapRow}
+            ref={node => {
+              if (node === null) gapButtons.current.delete(gap.key);
+              else gapButtons.current.set(gap.key, node);
+            }}
+            onFocus={() => { focusedGap.current = gap.key; }}
+            onClick={() => { openGap(gap); }}
+          >
+            {words}
+            <ChevronRight aria-hidden="true" />
+          </button>
+        ) : (
+          <div className={styles.gapRow}>{words}</div>
+        )}
+      </li>
+    );
+  };
   const names = (codes: RecipeAllergens['allergens']) => codes.map(code => allergenName(code, lang)).join(', ');
 
   return (
     <section className={styles.card} aria-labelledby={headId}>
       <h3 id={headId} className={styles.heading}>
         <button
+          ref={toggle}
           type="button"
           className={styles.toggle}
           aria-expanded={open}
@@ -119,8 +205,8 @@ export function AllergenCard({ recipe }: { recipe: CatalogueRecipe }) {
         </button>
       </h3>
 
-      {state === 'declared-listed' ? <p className={styles.answer}>{names(result.allergens)}</p> : null}
-      {state === 'declared-none' ? <p className={styles.answer}>{t('cat.noneOfThe14')}</p> : null}
+      {verdict === 'declared-listed' ? <p className={styles.answer}>{names(result.allergens)}</p> : null}
+      {verdict === 'declared-none' ? <p className={styles.answer}>{t('cat.noneOfThe14')}</p> : null}
 
       <div id={bodyId} hidden={!open} className={styles.body}>
         {incomplete ? (
@@ -131,16 +217,25 @@ export function AllergenCard({ recipe }: { recipe: CatalogueRecipe }) {
             {ingredientsUnreadable ? (
               <p className={styles.warn}>{t('cat.alg.unreadable')}</p>
             ) : (
-              <ul className={styles.gaps}>
-                {result.gaps.slice(0, GAPS_SHOWN).map((gap, index) => (
-                  <li key={index}>
-                    {gap.reason === null ? gap.label : `${gap.label} — ${t(ALLERGEN_REASON_TEXT[gap.reason])}`}
-                  </li>
-                ))}
-                {result.gaps.length > GAPS_SHOWN ? (
-                  <li className={styles.more}>{t('cat.alg.andMore', { n: result.gaps.length - GAPS_SHOWN })}</li>
+              <>
+                {ingredientGaps.length > 0 ? (
+                  <div className={styles.group}>
+                    <h4 id={ingredientsTitleId} className={styles.groupTitle}>{t('cat.alg.groupIngredients', { n: ingredientGaps.length })}</h4>
+                    {mayOpenSuppliers ? <p className={styles.hint}>{t('cat.alg.groupIngredientsHint')}</p> : null}
+                    <ul className={`${styles.gaps} ${styles.twoColumns}`} aria-labelledby={ingredientsTitleId}>
+                      {ingredientGaps.map(gap => gapRow(gap, false, mayOpenSuppliers))}
+                    </ul>
+                  </div>
                 ) : null}
-              </ul>
+                {rowGaps.length > 0 ? (
+                  <div className={styles.group}>
+                    <h4 id={rowsTitleId} className={styles.groupTitle}>{t('cat.alg.groupRows', { n: rowGaps.length })}</h4>
+                    <ul className={styles.gaps} aria-labelledby={rowsTitleId}>
+                      {rowGaps.map(gap => gapRow(gap, true, true))}
+                    </ul>
+                  </div>
+                ) : null}
+              </>
             )}
             {/* What IS known so far, marked as explicitly NOT an answer. */}
             {result.allergens.length > 0 ? (

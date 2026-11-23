@@ -13,6 +13,21 @@ export const FROM_LIST = { ...KEEP_FOCUS, fromList: true } as const;
 // sheet's row rather than the list's.
 export const FROM_SHEET = { ...FROM_LIST, fromSheet: true } as const;
 
+// A gap of the recipe's allergen card (23 Nov 2026), two ways out of the recipe:
+//   * an incomplete SUB-RECIPE opens its own screen one level above this one: it carries `fromList` so its Back is the browser's Back,
+//     which lands on the recipe that was left (the entry behind it), and `fromGap` so that Back hands the focus to nothing in the
+//     list — the recipe's own gap row is owed it instead (recipeReturn.ts).
+//   * an undeclared INGREDIENT opens its card in Suppliers, ANOTHER section, with `fromElsewhere` (read by suppliers/suppliersNav.ts,
+//     a copy of the word, never an import): the card's Back and its leave after a Save or a Delete are the browser's Back, which
+//     lands here. KEEP_FOCUS so the page leaves the focus to the card's own title.
+export const FROM_GAP = { ...FROM_LIST, fromGap: true } as const;
+
+export function cameFromGap(state: unknown): boolean {
+  return typeof state === 'object' && state !== null && 'fromGap' in state;
+}
+
+export const TO_INGREDIENT_CARD = { ...KEEP_FOCUS, fromElsewhere: true } as const;
+
 // The same, from a recipe to its label (step 3d-3): Back from the label is the browser's Back, and the label opens
 // beside nothing of the list's. Deliberately NOT `fromList`: picking another recipe in the list beside an open label
 // REPLACES the label's entry with the recipe, and that entry must not claim the list is one step behind it.

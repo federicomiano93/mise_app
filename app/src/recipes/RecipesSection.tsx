@@ -124,11 +124,12 @@ function RecipesLayout({ view }: { view: ShownView }) {
   const recipeReturn = useMemo<RecipeReturn>(() => ({
     remember(recipeId, origin = 'label', trip) {
       place.current = { id: recipeId, origin, area: scrollArea()?.scrollTop ?? null, detail: detail.current?.scrollTop ?? null, delivered: false, ...(trip === undefined ? {} : { trip }) };
-      // Food cost and Orders are other SECTIONS: this one is unmounted while the person is there.
-      if (origin === 'cost' || origin === 'order') carryPlace(place.current);
+      // Food cost, Orders and Suppliers (an allergen gap's ingredient card) are other SECTIONS: this one is unmounted while the person is there.
+      if (origin === 'cost' || origin === 'order' || origin === 'gap') carryPlace(place.current);
     },
     pendingCost: recipeId => place.current !== null && place.current.id === recipeId && place.current.origin === 'cost',
     pendingOrder: recipeId => (place.current !== null && place.current.id === recipeId && place.current.origin === 'order' ? place.current.trip ?? null : null),
+    pendingGap: recipeId => (place.current !== null && place.current.id === recipeId && place.current.origin === 'gap' ? place.current.trip?.row ?? null : null),
     restoreScroll(recipeId) {
       const written = place.current;
       if (written === null || written.id !== recipeId) return;
@@ -256,10 +257,10 @@ function RecipesLayout({ view }: { view: ShownView }) {
   //  - On a phone, Back to the list restores the place written down when a recipe opened; any other
   //    move is a new screen and starts at the top.
   //  - The first render does nothing: the shell reset the area when the section was entered.
-  const shown = useRef<{ pathname: string; kind: ShownView['kind'] } | null>(null);
+  const shown = useRef<{ pathname: string; kind: ShownView['kind']; id: string | null } | null>(null);
   useLayoutEffect(() => {
     const before = shown.current;
-    shown.current = { pathname, kind: view.kind };
+    shown.current = { pathname, kind: view.kind, id: 'id' in view ? view.id : null };
     const area = scrollArea();
     // The same address twice is StrictMode running the effect again, not a move.
     backFromLabel.current = null;
@@ -267,9 +268,14 @@ function RecipesLayout({ view }: { view: ShownView }) {
     // Back from a label (or an editor) to its recipe keeps the place written down when it opened. Any other move forgets it
     // (the opening move itself, recipe → label or recipe → editor, is the one that must not).
     const written = place.current;
-    const returning = (before.kind === 'label' || before.kind === 'new' || before.kind === 'edit' || before.kind === 'steps' || before.kind === 'mix') && view.kind === 'recipe' && written !== null && written.id === view.id;
+    // A gap's incomplete SUB-RECIPE opens over the recipe (recipe → recipe) and Back comes back to it: the place written down is kept
+    // on the way there and is the return on the way back.
+    const gapTrip = written !== null && written.origin === 'gap' && before.kind === 'recipe' && view.kind === 'recipe';
+    const toSub = gapTrip && before.id === written.id && view.id !== written.id;
+    const backFromSub = gapTrip && before.id !== written.id && view.id === written.id;
+    const returning = backFromSub || (before.kind === 'label' || before.kind === 'new' || before.kind === 'edit' || before.kind === 'steps' || before.kind === 'mix') && view.kind === 'recipe' && written !== null && written.id === view.id;
     if (returning) backFromLabel.current = written;
-    else if (view.kind !== 'label' && view.kind !== 'new' && view.kind !== 'edit' && view.kind !== 'steps' && view.kind !== 'mix') place.current = null;
+    else if (!toSub && view.kind !== 'label' && view.kind !== 'new' && view.kind !== 'edit' && view.kind !== 'steps' && view.kind !== 'mix') place.current = null;
     if (area === null) return;
     if (split) {
       listTop.current = null;
