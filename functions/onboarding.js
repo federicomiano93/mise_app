@@ -25,6 +25,7 @@
 
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import { getAuth } from 'firebase-admin/auth';
 import { logger } from 'firebase-functions';
 import { createHash, randomInt, randomBytes } from 'node:crypto';
 
@@ -146,6 +147,29 @@ async function requireOwner(uid, locationId) {
 // whether to draw the entry at all. Nobody may write one, nobody may read
 // somebody else's, and nobody may list the collection. This check is the real
 // gate and never trusts anything the caller sends.
+// ⚠️ A NEW ACCOUNT MUST HAVE CONFIRMED ITS EMAIL BEFORE A CODE LETS IT IN (Federico's decision, 22 Nov 2026).
+// Only accounts created from EMAIL_CHECK_SINCE (23 Nov 2026, the night it was built) on: everybody already inside keeps working, and «everybody confirms»
+// is a later, separate step of his. Without it, anybody could sign up with somebody else's address, open an
+// invitation sent to that person, and sit in the business under their name.
+//
+// The token's `email_verified` is checked first because it is free; a token minted before the person tapped the
+// link still says false, so the account record is read before refusing (the app also refreshes its token after
+// «Ho confermato»). An account whose creation time cannot be read counts as NEW: the uncertain answer is the
+// closed one. Refused BEFORE a try is charged, so confirming late costs no attempts.
+const EMAIL_CHECK_SINCE = Date.UTC(2026, 10, 23);
+
+async function requireConfirmedEmail(request, uid) {
+  if (request.auth && request.auth.token && request.auth.token.email_verified === true) return;
+  const account = await getAuth().getUser(uid);
+  if (account.emailVerified === true) return;
+  const created = Date.parse((account.metadata && account.metadata.creationTime) || '');
+  if (Number.isFinite(created) && created < EMAIL_CHECK_SINCE) return;
+  logger.info('Redeem refused', { uid, reason: 'email-unverified' });
+  throw new HttpsError('failed-precondition',
+    'Confirm your email address first: open the email we sent you and tap the link in it.',
+    { reason: 'email-unverified' });
+}
+
 async function requireAppAdmin(uid) {
   const snap = await db().doc(`admins/${uid}`).get();
   if (!snap.exists) throw new HttpsError('permission-denied', 'Not allowed.');
@@ -612,6 +636,8 @@ export const redeemJoinCode = onCall(CALL, async (request) => {
   const uid = requireAuth(request);
   const kind = (request.data && request.data.kind) === 'link' ? 'link' : 'digits';
   const code = String((request.data && request.data.code) || '');
+
+  await requireConfirmedEmail(request, uid);
 
   // ⚠️ A PAUSE IS ANSWERED BEFORE THE ACCOUNT IS CHARGED (code review, 23 Sep 2026).
   // While six-digit codes are paused for everybody, a real person trying theirs would
