@@ -6,7 +6,7 @@
 // ones the invitation form uses.
 //
 // ⚠️ THE PAGE LOADS js/reset-password-boot.js, NOT THIS FILE. The boot file draws the card at
-// once, hands every email action that is not `resetPassword` on to Firebase's own page, and
+// once, hands every email action it does not handle itself (`resetPassword` and `verifyEmail`) on to Firebase's own page, and
 // loads this module dynamically so that ANY failure here (an old cached dictionary, a missing
 // export, a rejected start) ends in a «update the app and tap the link again» message instead
 // of a blank page. It does NOT forward a failed reset to Firebase's page: that page calls the

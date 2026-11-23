@@ -499,10 +499,10 @@
       }
     },
     "dist/i18n.js": {
-      "sha": "954bff6915de761d",
-      "mapSha": "598eddfccc684d85",
+      "sha": "0bbf51a75aa1020f",
+      "mapSha": "ae44080bc50a622b",
       "inputs": {
-        "js/i18n.js": "9451830141b7b600"
+        "js/i18n.js": "ef5fa016054643a5"
       }
     },
     "dist/index.js": {

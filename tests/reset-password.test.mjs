@@ -602,9 +602,9 @@ test('verifyEmail: in Italian, by the phone', async () => {
 test('the words of the confirmation page, word for word', () => {
   const d = _dictionaries();
   assert.equal(d.en['verifyEmail.badTitle'], 'This link no longer works');
-  assert.equal(d.en['verifyEmail.badBody'], 'It has expired or was already used. Go back to Mise and tap “Send it again”.');
+  assert.equal(d.en['verifyEmail.badBody'], 'It has expired or was already used. Go back to Mise and tap “Send it again”. If you’ve already confirmed it, go back to Mise and tap “I’ve confirmed”.');
   assert.equal(d.it['verifyEmail.badTitle'], 'Il link non funziona più');
-  assert.equal(d.it['verifyEmail.badBody'], 'È scaduto o è già stato usato. Torna su Mise e tocca «Mandala di nuovo».');
+  assert.equal(d.it['verifyEmail.badBody'], 'È scaduto o è già stato usato. Torna su Mise e tocca «Mandala di nuovo». Se l’hai già confermata, torna su Mise e tocca «Ho confermato».');
   // The buttons it names are the ones the app really has.
   assert.ok(d.en['verifyEmail.doneBack'].includes('“I’ve confirmed”'));
   assert.ok(d.it['verifyEmail.doneBack'].includes('«Ho confermato»'));
@@ -624,7 +624,7 @@ for (const code of ['auth/expired-action-code', 'auth/invalid-action-code']) {
     const { doc } = await openVerify({ fb });
     assert.equal(heading(doc).textContent, 'This link no longer works');
     assert.equal(doc.title, 'This link no longer works · Mise');
-    assert.ok(withText(doc, 'It has expired or was already used. Go back to Mise and tap “Send it again”.'));
+    assert.ok(withText(doc, 'It has expired or was already used. Go back to Mise and tap “Send it again”. If you’ve already confirmed it, go back to Mise and tap “I’ve confirmed”.'));
     assert.deepEqual(applied, []);
     assert.equal(find(doc, n => n.getAttribute('role') === 'status'), undefined);
   });
