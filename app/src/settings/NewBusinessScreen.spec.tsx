@@ -677,7 +677,9 @@ describe('leaving a form with something typed or chosen', () => {
     void router.navigate('/');
     const question = await screen.findByRole('alertdialog');
     await user.click(within(question).getByRole('button', { name: 'Leave anyway' }));
-    await waitFor(() => { expect(router.state.location.pathname).toBe('/'); });
+    // '/' redirects on to the Home at its own pace: on a slow runner the first look already sees '/home', so the test asks only
+    // that the settings screen was left.
+    await waitFor(() => { expect(router.state.location.pathname).not.toMatch(/^\/settings/); });
     await waitFor(() => { expect(screen.queryByRole('textbox', { name: 'Name' })).not.toBeInTheDocument(); });
     source.answerBusiness();
     await waitFor(() => { expect(isBusy()).toBe(false); });
