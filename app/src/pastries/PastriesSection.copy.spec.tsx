@@ -475,19 +475,21 @@ describe('Copy day: the request is spent by the opening that reads it', () => {
     await pickTarget(user);
     await user.click(within(await dialog('Replace the list of Friday?')).getByRole('button', { name: 'Replace' }));
     await user.click(within(await dialog('Edit Friday?')).getByRole('button', { name: 'Edit' }));
-    await screen.findByRole('heading', { level: 2, name: 'Edit Friday' });
-    await waitFor(() => { expect(router.state.location.state).toEqual({ keepFocus: true, fromDay: true }); });
+    // Every wait below is a route change or a store read that a loaded CI runner can stretch past the 1 s default of
+    // waitFor / findBy, so they carry LOAD; the rows are read in a waitFor because the heading shows before the list does.
+    await screen.findByRole('heading', { level: 2, name: 'Edit Friday' }, LOAD);
+    await waitFor(() => { expect(router.state.location.state).toEqual({ keepFocus: true, fromDay: true }); }, LOAD);
 
     await user.click(screen.getByRole('button', { name: 'Back' }));
     await user.click(within(await dialog('Discard changes?')).getByRole('button', { name: 'Discard' }));
-    await waitFor(() => { expect(router.state.location.pathname).toBe('/pastries/Thursday'); });
+    await waitFor(() => { expect(router.state.location.pathname).toBe('/pastries/Thursday'); }, LOAD);
 
     act(() => { void router.navigate(1); });
-    await waitFor(() => { expect(router.state.location.pathname).toBe('/pastries/Friday/edit'); });
+    await waitFor(() => { expect(router.state.location.pathname).toBe('/pastries/Friday/edit'); }, LOAD);
     // Recorded and not granted: the question comes back, and Edit then shows Friday's own list.
     await user.click(within(await dialog('Edit Friday?')).getByRole('button', { name: 'Edit' }));
-    await screen.findByRole('heading', { level: 2, name: 'Edit Friday' });
-    expect(rowsShown().map(([name]) => name)).toEqual(['Brioche', 'Bomboloni']);
+    await screen.findByRole('heading', { level: 2, name: 'Edit Friday' }, LOAD);
+    await waitFor(() => { expect(rowsShown().map(([name]) => name)).toEqual(['Brioche', 'Bomboloni']); }, LOAD);
     expect(screen.queryByText(COPIED)).not.toBeInTheDocument();
     expect(source.saveDay).not.toHaveBeenCalled();
   });
