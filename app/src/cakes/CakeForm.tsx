@@ -100,6 +100,14 @@ const textOf = (value: number | null): string => (value === null || !Number.isFi
 //
 // ⚠️ SAVE IS ONE WRITE: the cake and its Food cost card travel in the same batch (saveProduct with a companion), so a cake and its card
 // can never be saved apart; Delete removes both the same way.
+// The label view's flag in the location state.
+const LABEL_STATE = 'cakeLabel';
+const labelOpenIn = (state: unknown): boolean => typeof state === 'object' && state !== null && (state as Record<string, unknown>)[LABEL_STATE] === true;
+function withoutLabel(state: unknown): object {
+  const { [LABEL_STATE]: _flag, ...rest } = (typeof state === 'object' && state !== null ? state : {}) as Record<string, unknown>;
+  return rest;
+}
+
 export function CakeForm({ id, cake, start = 'standard', titleRef, onSaved, onParking }: Props) {
   const headingLevel = useCakeHeadingLevel();
   const { t } = useT();
@@ -156,9 +164,12 @@ export function CakeForm({ id, cake, start = 'standard', titleRef, onSaved, onPa
   const [needsOpen, setNeedsOpen] = useState(false);
   // The button that opened «What you need»: the focus goes back to it on close (the dialog is opened by state, so nothing else would).
   const needsOpener = useRef<HTMLElement | null>(null);
-  // The cake's label is a full-screen view INSIDE this form (state, not a route): the form stays mounted behind it, only hidden, so nothing
-  // typed is lost and nothing is remounted. Back and Escape close it and the focus returns to the row that opened it, where the page was.
-  const [labelOpen, setLabelOpen] = useState(false);
+  // The cake's label is a full-screen view INSIDE this form: the form stays mounted behind it, only hidden, so nothing typed is lost and
+  // nothing is remounted. ⚠️ IT LIVES IN THE ROUTER'S LOCATION STATE (`cakeLabel`), on a history entry of its own at the same address, so
+  // the phone's Back gesture closes the VIEW and not the cake (one level at a time). The view's Back and Escape step that entry back; the
+  // focus returns to the row that opened it, where the page was, whichever way it closed.
+  const labelOpen = labelOpenIn(state);
+  const openedHere = useRef(false);
   const editorRef = useRef<HTMLElement>(null);
   const labelButton = useRef<HTMLButtonElement>(null);
   const labelPlaces = useRef<{ node: HTMLElement; top: number }[] | null>(null);
@@ -545,7 +556,7 @@ export function CakeForm({ id, cake, start = 'standard', titleRef, onSaved, onPa
     parkedAway.current = true;
     parkCake({ uid: owner.uid, locationId: owner.locationId, key: cakeId, savedId: id, ...onScreen.current, fromScratch });
     onParking?.(cakeId);
-    await navigate(pathname, { replace: true, state: { ...(state as object | null), parkedCake: cakeId } });
+    await navigate(pathname, { replace: true, state: { ...withoutLabel(state), parkedCake: cakeId } });
     await navigate(path, { state: to });
   }
 
@@ -570,7 +581,13 @@ export function CakeForm({ id, cake, start = 'standard', titleRef, onSaved, onPa
       if (overflow === 'auto' || overflow === 'scroll') places.push({ node, top: node.scrollTop });
     }
     labelPlaces.current = places;
-    setLabelOpen(true);
+    openedHere.current = true;
+    void navigate(pathname, { state: { ...(state as object | null), ...KEEP_FOCUS, [LABEL_STATE]: true } });
+  };
+  // A view that is open on an entry this form did not push (the page was reloaded onto it) has no entry under it to step back to.
+  const closeLabel = () => {
+    if (openedHere.current) void navigate(-1);
+    else void navigate(pathname, { replace: true, state: withoutLabel(state) });
   };
   const wasLabelOpen = useRef(false);
   useLayoutEffect(() => {
@@ -581,6 +598,7 @@ export function CakeForm({ id, cake, start = 'standard', titleRef, onSaved, onPa
     }
     if (!wasLabelOpen.current) return;
     wasLabelOpen.current = false;
+    openedHere.current = false;
     labelPlaces.current?.forEach(place => { place.node.scrollTop = place.top; });
     labelPlaces.current = null;
     labelButton.current?.focus({ preventScroll: true });
@@ -791,7 +809,7 @@ export function CakeForm({ id, cake, start = 'standard', titleRef, onSaved, onPa
     {labelOpen ? (
       <CakeLabelView
         cake={working}
-        onBack={() => { setLabelOpen(false); }}
+        onBack={closeLabel}
         onOpenIngredient={mayOpenIngredients ? ingredientId => { void openIngredient(ingredientId); } : undefined}
         onOpenRecipe={mayMakeRecipes ? recipeId => { void openInRecipes(recipeId); } : undefined}
       />
