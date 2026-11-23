@@ -33,7 +33,8 @@ const LABEL_FILES: readonly string[] = [
   './recipes/AllergenCard.tsx', // what a recipe contains, on the recipe screen
   './recipes/DeclarationCard.tsx', // the ingredient declaration: Contains / May contain, and the text sent or copied
   './recipes/AllergenSheet.tsx', // the law card (the fourteen groups) and what each recipe contains
-  './recipes/LabelScreen.tsx', // the label screen: the refusals, the notes, the date, Copy and Send (the text of the whole label)
+  './recipes/LabelBody.tsx', // the label body (a recipe's screen and the whole cake's share it): the refusals, the notes, the date, Copy and Send (the text of the whole label)
+  './cakes/CakeLabelRow.tsx', // the cake editor's «Cake label» row: Contains, with the allergen names in the venue's country's words
   './recipes/HaccpLabelBody.tsx', // the HACCP label: its captions and values in the country's words, the allergens' names
   './recipes/ImageLabelBody.tsx', // the «with logo» image label: PRODOTTO IL, the allergen name in the text check, the typed ingredients
   './recipes/LabelCard.tsx', // the label as words: the ingredients, Contains, May contain and the nutrition table

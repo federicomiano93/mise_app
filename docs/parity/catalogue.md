@@ -1390,8 +1390,8 @@ allergen state with an `if` of its own. What differs from the current app, and w
   switched off (or a country being set) on another phone is seen after a reload, like the rest of Mise 2 — the current app
   redraws from its own snapshot. The cards and the sheet still read it on every render.
 - **The allergen card.** Absent when allergens are off and for a recipe with no rows. Incomplete: the head reads
-  «Allergens · not declared» (the state is a WORD in the button), folded body with the sentence, the first eight rows as
-  `label — reason`, «and N more» and what is known so far marked NOT an answer. Complete: «fully declared» in the head and
+  «Allergens · not declared» (the state is a WORD in the button), folded body with the sentence, EVERY gap in two titled
+  groups (see «Allergen card gaps as built», 23 Nov 2026) and what is known so far marked NOT an answer. Complete: «fully declared» in the head and
   the allergens (or «None of the 14») OUTSIDE the fold; folded: the traces, the caveat. Both heads are real `h3`s holding
   the disclosure button (`aria-expanded`, `aria-controls`); it opens CLOSED for every recipe opened, keeps its state
   through a live redraw of the same recipe, and the focus stays where it is. **No «Make a label» button yet**: the label
@@ -2255,3 +2255,20 @@ cancelled and a fresh `…-r{time}` id is booked, with the same late-answer chec
 id is remembered so Done or leaving still cancels it. A page discarded AFTER a resume booking leaves that booking uncancellable (accepted
 edge). Leaving the screen cancels. (6) a booking the time limit cut off still answers its id, so it can be cancelled; every booking remembers
 its venue, and one made while the person or venue changed is cancelled at once.
+
+## Allergen card gaps as built (23 Nov 2026) — differs from the current app ON PURPOSE
+
+The card no longer stops at eight rows with «and N more»: it names EVERY gap, in two groups with a bold title carrying the count
+(plural-aware), and each row is a door to where it is put right. The current app keeps its plain list.
+
+- **«Ingredients with no allergen information · N»**: gaps with reason `not-declared`, under a hint line. One row button each (weight 600,
+  a chevron, 48px, a hairline between), in two columns from 700px. Tap: the ingredient's card in Suppliers (`ingredientCardAddress`,
+  pinned equal to `ingredientPath`), opened with `fromElsewhere` so the card's Back, Save and Delete are ONE `navigate(-1)` back to the
+  recipe. Back: the card open, the focus on the tapped row (the toggle if the row is gone), the row scrolled into view if off screen.
+- **«Rows to fix in the recipe · N»**: every other reason, the label with the existing reason text under it. Tap: an incomplete
+  sub-recipe (`sub-incomplete`) opens that recipe (`fromGap`, no `fromList`: Back is one step to the parent; its editor's Save steps back
+  to it only, its Delete to the parent); anything else opens this recipe's editor.
+- Whoever cannot open Suppliers (section off for the venue, the role kept out) sees the ingredient names as plain text, no hint.
+- The target of each gap is worked out in the app (`allergenGaps.ts`: `rows` is one per recipe row in order, `gaps` is the model's own
+  filter of it); the shared model's output is unchanged. The gap rows tapped live in a stack of their own in the recipes section
+  (`rememberGap`), carried across sections only for the Suppliers trip.

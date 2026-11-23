@@ -1,0 +1,38 @@
+.line {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+/* Nothing to say: it takes no room in the dialog's gap, but is never taken out of the page (display: none would drop the live
+   region from the accessibility tree, and the sentence would arrive already filled in). */
+.line:empty {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  clip-path: inset(50%);
+}
+
+.spinner {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: none;
+  }
+}

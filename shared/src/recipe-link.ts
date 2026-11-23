@@ -15,6 +15,7 @@
 // characters is no id at all.
 //
 // NEW IN MISE 2, NO ORIGINAL: `foodCostForRecipePath`, `ordersForIngredientPath`, `recipeAddress`, `recipeIdParam` and
+// `ingredientCardAddress` (23 Nov 2026: a gap of the allergen card opens that ingredient in Suppliers; recipes/ may not import suppliers/) and
 // `FROM_RECIPE_LINK`.
 // Mise 2 is one page with real routes, so a recipe's Food cost is `/food-cost?recipe=<id>` (a query, not the
 // fragment the current app needs for its service worker's sake: Mise 2's router owns the address) and the way
@@ -89,6 +90,14 @@ export function ordersForIngredientPath(supplierId: unknown, recipeId: unknown, 
   const ingredient = cleanId(ingredientId);
   if (!supplier || !recipe || !ingredient) return null;
   return `/orders/supplier/${encodeURIComponent(supplier)}?recipe=${encodeURIComponent(recipe)}&ingredient=${encodeURIComponent(ingredient)}`;
+}
+
+// An ingredient's card in «Ingredients & suppliers», or null for an id that cannot be one (23 Nov 2026: a gap of a recipe's allergen
+// card opens it). Recipes may not import suppliers/ (RecipesSection.createIngredient.spec.tsx guards it), so the address is spelled
+// here, and app/src/suppliers/suppliersPath.spec.ts pins it against `ingredientPath`, the section's own.
+export function ingredientCardAddress(ingredientId: unknown): string | null {
+  const id = cleanId(ingredientId);
+  return id && id !== 'new' ? `/suppliers/ingredient/${encodeURIComponent(id)}` : null;
 }
 
 // The recipe's own address, or null for an id that cannot be one.

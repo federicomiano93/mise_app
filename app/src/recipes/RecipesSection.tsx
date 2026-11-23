@@ -20,7 +20,8 @@ import { LabelShowsProvider } from './labelShows';
 import { createRecipeDeletions, RecipeDeletionsProvider } from './recipeDeletions';
 import { recipePhotoOn } from './photoGate';
 import { messageText } from './recipesMessages';
-import { RecipeReturnProvider, carriedPlace, carryPlace, forgetCarriedPlace } from './recipeReturn';
+import { RecipeReturnProvider, carriedGaps, carriedPlace, carryGaps, carryPlace, forgetCarriedGaps, forgetCarriedPlace } from './recipeReturn';
+import type { GapPlace } from './recipeReturn';
 import type { Place, RecipeReturn } from './recipeReturn';
 import { FROM_HACCP, FROM_LIST, FROM_SHEET, cameFromIngredients, cameFromList, fromIngredients } from './recipesNav';
 import { ALLERGENS_PATH, HACCP_PATH, INGREDIENTS_PATH, NEW_PATH, RECIPES_PATH, SETTINGS_PATH, haccpPath, recipePath, resolveRecipesPath } from './recipesPath';
@@ -119,19 +120,33 @@ function RecipesLayout({ view }: { view: ShownView }) {
 
   // Where a recipe was when its label opened, until the move after Back (recipeReturn.ts).
   // Back (a POP) from Food cost brings the place written before the trip, which the section that wrote it took away with it.
-  const place = useRef<Place | null>(useNavigationType() === 'POP' ? carriedPlace() : null);
-  useEffect(() => { forgetCarriedPlace(); }, []);
+  const arrivedBy = useNavigationType();
+  const place = useRef<Place | null>(arrivedBy === 'POP' ? carriedPlace() : null);
+  // The gap rows tapped on the way (recipeReturn.ts `rememberGap`); Back from Suppliers brings the stack written before the trip.
+  const gaps = useRef<readonly GapPlace[]>(arrivedBy === 'POP' ? carriedGaps() : []);
+  useEffect(() => { forgetCarriedPlace(); forgetCarriedGaps(); }, []);
+  // ⚠️ A gap row has taken the focus on a return (the gap stack has no `place` to carry the flag): the recipe screen must not move it to
+  // its title. Cleared at every move, so it only ever speaks for the move that set it.
+  const gapDelivered = useRef(false);
   const recipeReturn = useMemo<RecipeReturn>(() => ({
     remember(recipeId, origin = 'label', trip) {
       place.current = { id: recipeId, origin, area: scrollArea()?.scrollTop ?? null, detail: detail.current?.scrollTop ?? null, delivered: false, ...(trip === undefined ? {} : { trip }) };
       // Food cost and Orders are other SECTIONS: this one is unmounted while the person is there.
       if (origin === 'cost' || origin === 'order') carryPlace(place.current);
     },
+    rememberGap(recipeId, row, carry) {
+      // This recipe's own earlier entry (and anything deeper) is stale: its row is the one tapped now.
+      const at = gaps.current.findIndex(entry => entry.id === recipeId);
+      const kept = at < 0 ? gaps.current : gaps.current.slice(0, at);
+      gaps.current = [...kept, { id: recipeId, row, area: scrollArea()?.scrollTop ?? null, detail: detail.current?.scrollTop ?? null }];
+      if (carry) carryGaps(gaps.current);
+    },
+    pendingGap: recipeId => gaps.current.find(entry => entry.id === recipeId)?.row ?? null,
     pendingCost: recipeId => place.current !== null && place.current.id === recipeId && place.current.origin === 'cost',
     pendingOrder: recipeId => (place.current !== null && place.current.id === recipeId && place.current.origin === 'order' ? place.current.trip ?? null : null),
     restoreScroll(recipeId) {
-      const written = place.current;
-      if (written === null || written.id !== recipeId) return;
+      const written = place.current !== null && place.current.id === recipeId ? place.current : gaps.current.find(entry => entry.id === recipeId) ?? null;
+      if (written === null) return;
       const area = scrollArea();
       if (area !== null && written.area !== null) area.scrollTop = written.area;
       if (detail.current !== null && written.detail !== null) detail.current.scrollTop = written.detail;
@@ -141,8 +156,11 @@ function RecipesLayout({ view }: { view: ShownView }) {
     pendingDuplicate: recipeId => place.current !== null && place.current.id === recipeId && place.current.origin === 'duplicate',
     pendingSteps: recipeId => place.current !== null && place.current.id === recipeId && place.current.origin === 'steps',
     pendingMix: recipeId => place.current !== null && place.current.id === recipeId && place.current.origin === 'mix',
-    markDelivered() { if (place.current !== null) place.current.delivered = true; },
-    wasDelivered: () => place.current?.delivered === true,
+    markDelivered() {
+      if (place.current !== null) place.current.delivered = true;
+      gapDelivered.current = true;
+    },
+    wasDelivered: () => place.current?.delivered === true || gapDelivered.current,
   }), [scrollArea]);
   // Set by the scroll effect below for the detail effect after it: this move is Back from a label (or the editor) to its recipe.
   const backFromLabel = useRef<Place | null>(null);
@@ -256,10 +274,11 @@ function RecipesLayout({ view }: { view: ShownView }) {
   //  - On a phone, Back to the list restores the place written down when a recipe opened; any other
   //    move is a new screen and starts at the top.
   //  - The first render does nothing: the shell reset the area when the section was entered.
-  const shown = useRef<{ pathname: string; kind: ShownView['kind'] } | null>(null);
+  const shown = useRef<{ pathname: string; kind: ShownView['kind']; id: string | null } | null>(null);
   useLayoutEffect(() => {
     const before = shown.current;
-    shown.current = { pathname, kind: view.kind };
+    shown.current = { pathname, kind: view.kind, id: 'id' in view ? view.id : null };
+    gapDelivered.current = false;
     const area = scrollArea();
     // The same address twice is StrictMode running the effect again, not a move.
     backFromLabel.current = null;
@@ -267,6 +286,14 @@ function RecipesLayout({ view }: { view: ShownView }) {
     // Back from a label (or an editor) to its recipe keeps the place written down when it opened. Any other move forgets it
     // (the opening move itself, recipe → label or recipe → editor, is the one that must not).
     const written = place.current;
+    // ⚠️ THE GAP STACK: a recipe opened afresh (any move but Back) has no gap row owed, and neither has anything deeper; Back to a recipe
+    // drops what was opened above it (a sub-recipe's own gap); the list drops all. A stale entry must never fire on a later, unrelated open.
+    if (view.kind === 'list') {
+      gaps.current = [];
+    } else if (view.kind === 'recipe') {
+      const at = gaps.current.findIndex(entry => entry.id === view.id);
+      if (at >= 0) gaps.current = gaps.current.slice(0, arrivedBy === 'POP' ? at + 1 : at);
+    }
     const returning = (before.kind === 'label' || before.kind === 'new' || before.kind === 'edit' || before.kind === 'steps' || before.kind === 'mix') && view.kind === 'recipe' && written !== null && written.id === view.id;
     if (returning) backFromLabel.current = written;
     else if (view.kind !== 'label' && view.kind !== 'new' && view.kind !== 'edit' && view.kind !== 'steps' && view.kind !== 'mix') place.current = null;

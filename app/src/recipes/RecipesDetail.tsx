@@ -16,7 +16,7 @@ import { GuidedRunScreen } from './GuidedRunScreen';
 import { StepsEditorScreen } from './StepsEditorScreen';
 import { useRecipes } from './RecipesContext';
 import { RecipeView } from './RecipeView';
-import { cameFromList, cameFromRecipe, cameFromSheet, ingredientRowOf, useLeave } from './recipesNav';
+import { cameFromGap, cameFromList, cameFromRecipe, cameFromSheet, ingredientRowOf, useLeave } from './recipesNav';
 import { RECIPES_PATH, recipePath } from './recipesPath';
 import type { ShownView } from './recipesPath';
 import { ALLERGENS_OPENER, HACCP_OPENER, INGREDIENTS_OPENER, SETTINGS_OPENER, recipeOpener, sheetOpener, useHandBack } from './handBack';
@@ -29,6 +29,9 @@ import styles from './RecipesDetail.module.css';
 //
 // (No `key` on the recipe screen here: the section keeps one screen from one recipe to the next on
 // the split, so the focus stays on the row that was pressed.)
+// Back is the browser's Back when the entry behind is the list OR the recipe whose gap opened this one.
+const cameFromListOrGap = (state: unknown): boolean => cameFromList(state) || cameFromGap(state);
+
 export function RecipesDetail({ view, onOpenFromSheet, onOpenFromHaccp, onOpenFromIngredients }: {
   view: ShownView;
   onOpenFromSheet: (id: string) => void;
@@ -180,7 +183,12 @@ function RecipeScreen({ id, label }: { id: string; label: boolean }) {
   // A recipe opened from the Allergen sheet gives the focus back to the sheet's row, not the list's.
   // Back hands the focus to whatever opened the recipe: a row of the Allergen sheet, a link of the ingredient book, or the list's row.
   const fromBook = ingredientRowOf(state);
-  const leave = useLeave(RECIPES_PATH, () => { handBack.expect(fromBook ?? (cameFromSheet(state) ? sheetOpener(id) : recipeOpener(id))); });
+  // A sub-recipe opened from a gap of its parent's allergen card goes back to that parent, not to a list row: the parent is owed the
+  // focus on its gap row (recipeReturn.ts), and what the list was owed when the parent opened stays owed.
+  const leave = useLeave(RECIPES_PATH, () => {
+    if (cameFromGap(state)) return;
+    handBack.expect(fromBook ?? (cameFromSheet(state) ? sheetOpener(id) : recipeOpener(id)));
+  }, cameFromListOrGap);
   // The label steps up ONE level, to its recipe (the browser's Back when the recipe is the entry behind it).
   const leaveLabel = useLeave(recipePath(id), () => undefined, cameFromRecipe);
 
@@ -212,6 +220,11 @@ function RecipeScreen({ id, label }: { id: string; label: boolean }) {
     if (!label && recipeReturn.wasDelivered()) return;
     if (label ? cameFromRecipe(state) && navigationType !== 'POP' : cameFromList(state)) title.current?.focus();
   }, [shown]);
+  // A sub-recipe opened from a gap replaces the recipe on THIS same screen (the effect above ran once, for the first), so its title takes
+  // the focus here. Not on Back (POP): the parent's gap row is owed it.
+  useEffect(() => {
+    if (shown && !label && cameFromGap(state) && navigationType !== 'POP') title.current?.focus();
+  }, [id]);
 
   if (recipe !== null && label) {
     return <LabelScreen key={recipe.id} recipe={recipe} titleRef={title} onBack={leaveLabel} />;

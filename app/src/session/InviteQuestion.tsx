@@ -64,7 +64,7 @@ export function InviteQuestion() {
         <>
           <Button key="cancel" autoFocus onPress={notNow}>{t('invite.cancel')}</Button>
           <Button key="ok" variant="primary" isPending={flow.checking} onPress={() => { void flow.proceed(); }}>
-            {t('invite.ok')}
+            {flow.checking ? t('leave.checking.button') : t('invite.ok')}
           </Button>
         </>
       }

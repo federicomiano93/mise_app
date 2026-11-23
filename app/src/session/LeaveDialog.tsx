@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { useT } from '../i18n/useT';
 import { Button } from '../ui/Button';
 import { Dialog } from '../ui/Dialog';
+import { LeaveChecking } from './LeaveChecking';
 import type { LeaveStep } from './useLeaveFlow';
 
 type Props = {
@@ -66,6 +67,7 @@ export function LeaveDialog({ flow, role, title, message, children, actions }: P
       actions={actions}
     >
       {children}
+      <LeaveChecking checking={flow.checking} />
     </Dialog>
   );
 }

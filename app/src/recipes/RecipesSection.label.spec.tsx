@@ -727,8 +727,8 @@ describe('the paper: measured, scaled, and the Print button that obeys it', () =
 // the shop computer is silent). The first half reads the file as text; the second proves, on a drawn screen, that a fresh
 // heartbeat really does open the agent road — the text alone could be satisfied by dead code.
 describe('3d-4: the label screen asks the real questions', () => {
-  it('LabelScreen.tsx has neither the `zplFits: () => true` stub nor the `printerReady: false` stub', () => {
-    const text = readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'LabelScreen.tsx'), 'utf8');
+  it('LabelBody.tsx (the body LabelScreen draws) has neither the `zplFits: () => true` stub nor the `printerReady: false` stub', () => {
+    const text = readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'LabelBody.tsx'), 'utf8');
     expect(text).toContain('roadsFor(');
     expect(text).not.toMatch(/zplFits\s*:\s*\(\s*\)\s*=>\s*true/);
     expect(text).not.toMatch(/printerReady\s*:\s*false/);

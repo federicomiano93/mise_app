@@ -1,10 +1,12 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { hasLabDraft } from './pendingLabWork';
 import { useSession, useSessionStore } from './SessionContext';
 
 // What LeaveDialog needs to draw the flow; the rest of the hook's result is for the caller.
 export interface LeaveStep {
   readonly step: 'closed' | 'ask' | 'unsent' | 'lab';
+  // The answer to «is anything still waiting?» has not come yet.
+  readonly checking: boolean;
   close(): void;
   // «Go on anyway», on the «Not sent yet» step.
   goOn(): void;
@@ -35,6 +37,11 @@ export function useLeaveFlow<Arg = void>(leave: (value: Arg) => void | Promise<v
   // Bumped whenever the dialog is closed, so an answer that arrives after the person pressed
   // Cancel or Escape does not open the dialog again.
   const generation = useRef(0);
+  // ⚠️ LEAVING THE SCREEN DURING THE CHECK CANCELS IT: a late «nothing is waiting» must not wipe and reload this phone into
+  // another venue after the person has already walked away («Done» on New business).
+  useEffect(() => () => { generation.current += 1; }, []);
+  // ⚠️ ONE CHECK AT A TIME, read at once: a second press before the first answer must not start a second one.
+  const running = useRef(false);
 
   // A failed sign-out or switch must not become an unhandled rejection.
   async function run(value: Arg): Promise<void> {
@@ -49,18 +56,22 @@ export function useLeaveFlow<Arg = void>(leave: (value: Arg) => void | Promise<v
   function close() {
     generation.current += 1;
     setStep('closed');
+    running.current = false;
     setChecking(false);
   }
 
   // The person said yes to the first question. If something is still waiting to be sent they
   // are told; otherwise they leave.
   async function proceed(value: Arg): Promise<void> {
+    if (running.current) return;
+    running.current = true;
     const asked = generation.current;
     setChecking(true);
     // ⚠️ A QUESTION THAT CANNOT BE ANSWERED IS "YES, SOMETHING MAY BE WAITING": asking once too
     // often costs a tap, guessing wrong costs the person's work.
     const waiting = await store.changesStillWaiting().catch(() => true);
     if (asked !== generation.current) return;
+    running.current = false;
     setChecking(false);
     if (waiting) {
       setTarget({ value });
