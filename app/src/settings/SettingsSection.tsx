@@ -3,6 +3,7 @@ import { Navigate, useLocation } from 'react-router';
 import { useSession } from '../session/SessionContext';
 import { KEEP_FOCUS } from '../shell/Page';
 import { LanguageScreen } from './LanguageScreen';
+import { NewBusinessScreen } from './NewBusinessScreen';
 import { PeopleScreen } from './PeopleScreen';
 import { SettingsPage } from './SettingsPage';
 import { HandBackContext } from './settingsHandBack';
@@ -20,9 +21,12 @@ import { StaffSectionsScreen } from './StaffSectionsScreen';
 // ⚠️ «WHO CAN GET IN» IS FOR THE FULL OWNER ONLY (`isOwner`: the value exactly 'owner'; decisions D1 and D3 of
 // docs/parity/staff-plan.md). Not a manager, not a head chef, and not a sales or kitchen owner: a partial owner who could hire could
 // make a second account of their own the full owner. The same replacement by the page, and the same server refusal behind it.
+//
+// ⚠️ «NEW BUSINESS» IS FOR THE APP'S ADMINISTRATOR ONLY (`isAppAdmin`: an `admins/{uid}` document), which is NOT a role in any venue: an owner
+// who is not an administrator is replaced by the page, and `createWorkspace` checks `admins/{uid}` itself.
 export function SettingsSection() {
   const { pathname } = useLocation();
-  const { canManageVenue, isOwner } = useSession();
+  const { canManageVenue, isOwner, isAppAdmin } = useSession();
   const screen = settingsScreenOf(pathname);
   // The door whose screen is open, for the page to give the focus back to (settingsHandBack.ts). Lives as long as Settings does.
   const pending: PendingDoor = useRef(null);
@@ -32,5 +36,6 @@ export function SettingsSection() {
   if (canManageVenue && screen === 'language') shown = <LanguageScreen />;
   if (canManageVenue && screen === 'sections') shown = <StaffSectionsScreen />;
   if (isOwner && screen === 'people') shown = <PeopleScreen />;
+  if (isAppAdmin && screen === 'new-business') shown = <NewBusinessScreen />;
   return <HandBackContext.Provider value={pending}>{shown}</HandBackContext.Provider>;
 }
