@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { hasLabDraft } from './pendingLabWork';
 import { useSession, useSessionStore } from './SessionContext';
 
@@ -37,6 +37,9 @@ export function useLeaveFlow<Arg = void>(leave: (value: Arg) => void | Promise<v
   // Bumped whenever the dialog is closed, so an answer that arrives after the person pressed
   // Cancel or Escape does not open the dialog again.
   const generation = useRef(0);
+  // ⚠️ LEAVING THE SCREEN DURING THE CHECK CANCELS IT: a late «nothing is waiting» must not wipe and reload this phone into
+  // another venue after the person has already walked away («Done» on New business).
+  useEffect(() => () => { generation.current += 1; }, []);
   // ⚠️ ONE CHECK AT A TIME, read at once: a second press before the first answer must not start a second one.
   const running = useRef(false);
 

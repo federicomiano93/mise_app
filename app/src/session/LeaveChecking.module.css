@@ -6,9 +6,16 @@
   font-size: var(--fs-sm);
 }
 
-/* Nothing to say: no empty row in the dialog's gap. */
+/* Nothing to say: it takes no room in the dialog's gap, but is never taken out of the page (display: none would drop the live
+   region from the accessibility tree, and the sentence would arrive already filled in). */
 .line:empty {
-  display: none;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  clip-path: inset(50%);
 }
 
 .spinner {
