@@ -35,7 +35,8 @@ async function open(path: string, recipes: StoredDoc[] = [TART, CUSTARD, SAUCE, 
   const recipeSource = fakeRecipesSource({ recipes, ingredients });
   const supplierSource = fakeSuppliersSource({ ingredients });
   const view = renderApp(path, { data: { recipes: () => recipeSource, suppliers: () => supplierSource } });
-  await screen.findByRole('table', undefined, LOAD);
+  if (path === '/recipes') await screen.findByRole('button', { name: 'Tart' }, LOAD);
+  else await screen.findByRole('table', undefined, LOAD);
   return { ...view, recipeSource, supplierSource };
 }
 
@@ -186,6 +187,35 @@ describe('coming back from the ingredient card', () => {
     await screen.findByRole('table', undefined, LOAD);
     expect(toggle()).toHaveAttribute('aria-expanded', 'true');
     expect(await entriesBehind(router)).toBe(0);
+  });
+
+  // ⚠️ THE RECIPE OPENED FROM THE LIST (its entry says «from the list»), as on a phone: the recipe screen puts the focus on its title when
+  // it first appears, and the gap row must still win. A spec that opens the recipe by its address has no such state and cannot see this.
+  it('the focus lands on the tapped row, not the recipe’s title, when the recipe was opened from the list', async () => {
+    const { user, router } = await open('/recipes');
+    await user.click(await screen.findByRole('button', { name: 'Tart' }, LOAD));
+    await screen.findByRole('table', undefined, LOAD);
+    await user.click(toggle());
+    await user.click(gap('Yeast'));
+    const card = within(await screen.findByRole('region', { name: 'Edit ingredient' }, LOAD));
+    await user.click(card.getByRole('button', { name: 'Back' }));
+    await screen.findByRole('table', undefined, LOAD);
+    await waitFor(() => { expect(gap('Yeast')).toHaveFocus(); });
+    await new Promise(resolve => { setTimeout(resolve, 100); });
+    expect(gap('Yeast')).toHaveFocus();
+    expect(where(router)).toBe('/recipes/tart');
+  });
+
+  it('the same for a row to fix opened from the list: the editor’s Back lands on the row', async () => {
+    const { user } = await open('/recipes');
+    await user.click(await screen.findByRole('button', { name: 'Custard' }, LOAD));
+    await screen.findByRole('table', undefined, LOAD);
+    await user.click(toggle());
+    await user.click(gap(MYSTERY));
+    await user.click(await screen.findByRole('button', { name: 'Back' }));
+    await screen.findByRole('table', undefined, LOAD);
+    await new Promise(resolve => { setTimeout(resolve, 100); });
+    expect(gap(MYSTERY)).toHaveFocus();
   });
 
   it('8: brings the focused row into view when it is outside the visible area', async () => {

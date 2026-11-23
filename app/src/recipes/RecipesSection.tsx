@@ -125,6 +125,9 @@ function RecipesLayout({ view }: { view: ShownView }) {
   // The gap rows tapped on the way (recipeReturn.ts `rememberGap`); Back from Suppliers brings the stack written before the trip.
   const gaps = useRef<readonly GapPlace[]>(arrivedBy === 'POP' ? carriedGaps() : []);
   useEffect(() => { forgetCarriedPlace(); forgetCarriedGaps(); }, []);
+  // ⚠️ A gap row has taken the focus on a return (the gap stack has no `place` to carry the flag): the recipe screen must not move it to
+  // its title. Cleared at every move, so it only ever speaks for the move that set it.
+  const gapDelivered = useRef(false);
   const recipeReturn = useMemo<RecipeReturn>(() => ({
     remember(recipeId, origin = 'label', trip) {
       place.current = { id: recipeId, origin, area: scrollArea()?.scrollTop ?? null, detail: detail.current?.scrollTop ?? null, delivered: false, ...(trip === undefined ? {} : { trip }) };
@@ -153,8 +156,11 @@ function RecipesLayout({ view }: { view: ShownView }) {
     pendingDuplicate: recipeId => place.current !== null && place.current.id === recipeId && place.current.origin === 'duplicate',
     pendingSteps: recipeId => place.current !== null && place.current.id === recipeId && place.current.origin === 'steps',
     pendingMix: recipeId => place.current !== null && place.current.id === recipeId && place.current.origin === 'mix',
-    markDelivered() { if (place.current !== null) place.current.delivered = true; },
-    wasDelivered: () => place.current?.delivered === true,
+    markDelivered() {
+      if (place.current !== null) place.current.delivered = true;
+      gapDelivered.current = true;
+    },
+    wasDelivered: () => place.current?.delivered === true || gapDelivered.current,
   }), [scrollArea]);
   // Set by the scroll effect below for the detail effect after it: this move is Back from a label (or the editor) to its recipe.
   const backFromLabel = useRef<Place | null>(null);
@@ -272,6 +278,7 @@ function RecipesLayout({ view }: { view: ShownView }) {
   useLayoutEffect(() => {
     const before = shown.current;
     shown.current = { pathname, kind: view.kind, id: 'id' in view ? view.id : null };
+    gapDelivered.current = false;
     const area = scrollArea();
     // The same address twice is StrictMode running the effect again, not a move.
     backFromLabel.current = null;
