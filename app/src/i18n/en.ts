@@ -1023,6 +1023,8 @@ export const en = {
   'unsent.message': 'Some changes made on this phone have not reached the server yet — usually because there is no signal. If you go on now, they will be lost.',
   'unsent.leave': 'Go on anyway',
   'unsent.stay': 'Stay',
+  'leave.checking': 'Checking everything has reached the server…',
+  'leave.checking.button': 'Checking…',
 
   'account.title': 'Account',
   'account.signedInAs': 'Signed in as {email}',

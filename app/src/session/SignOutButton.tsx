@@ -59,7 +59,7 @@ export function SignOutButton({ variant = 'secondary', label, isDisabled = false
           <>
             <Button key="cancel" autoFocus onPress={flow.close}>{t('common.cancel')}</Button>
             <Button key="confirm" variant="primary" isPending={flow.checking} onPress={() => { void flow.proceed(); }}>
-              {t('auth.logOut')}
+              {flow.checking ? t('leave.checking.button') : t('auth.logOut')}
             </Button>
           </>
         }

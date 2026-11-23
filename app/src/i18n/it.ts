@@ -958,6 +958,8 @@ export const it: Messages = {
   'unsent.message': 'Alcune modifiche fatte su questo telefono non sono ancora arrivate al server, di solito perché manca la rete. Se continui adesso, andranno perse.',
   'unsent.leave': 'Continua lo stesso',
   'unsent.stay': 'Resta qui',
+  'leave.checking': 'Controllo che tutto sia arrivato al server…',
+  'leave.checking.button': 'Controllo…',
 
   'account.title': 'Account',
   'account.signedInAs': 'Hai effettuato l’accesso come {email}',
