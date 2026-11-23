@@ -953,6 +953,7 @@ export const it: Messages = {
   'verify.back.title': 'Tornare indietro?',
   'verify.back.message': 'Questo account viene tolto e puoi scrivere un’altra email.',
   'verify.cannotGoBack': 'Non siamo riusciti a tornare indietro. Riprova fra poco.',
+  'verify.back.notRemoved': 'Non siamo riusciti a togliere l’account con questa email. Puoi comunque ricominciare.',
   'verify.checking': 'Controllo…',
   'help.chooseAPassword': 'Scegli una password.',
   'help.passwordTooShort': 'Falla di almeno {n} caratteri — è la lunghezza che la rende sicura.',

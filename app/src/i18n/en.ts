@@ -1015,6 +1015,7 @@ export const en = {
   'verify.back.title': 'Go back?',
   'verify.back.message': 'This account is removed and you can type another email.',
   'verify.cannotGoBack': 'We could not go back. Try again shortly.',
+  'verify.back.notRemoved': 'We couldn’t remove the account with this email. You can still start again.',
   'verify.checking': 'Checking…',
   'help.chooseAPassword': 'Choose a password.',
   'help.passwordTooShort': 'Make it at least {n} characters — length is what keeps it safe.',

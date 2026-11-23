@@ -9,6 +9,7 @@ import { kindOfTyped } from '@mise/shared/join-link';
 import type { MessageKey } from '../i18n/en';
 import { useT } from '../i18n/useT';
 import { Button } from '../ui/Button';
+import { useAlert } from '../ui/useAlert';
 import { useConfirm } from '../ui/useConfirm';
 import { authCodeOf, signInErrorKey } from './authErrors';
 import type { SessionUser } from './backend';
@@ -93,6 +94,7 @@ export function JoinScreen() {
   // The address Firebase said already has an account: «Sign in with that email» appears, the one way forward from there.
   const [takenEmail, setTakenEmail] = useState<string | null>(null);
   const [confirm, confirmDialog] = useConfirm();
+  const [alert, alertDialog] = useAlert();
   const refs: Record<Field, RefObject<HTMLInputElement | null>> = {
     first: useRef<HTMLInputElement>(null),
     last: useRef<HTMLInputElement>(null),
@@ -120,6 +122,33 @@ export function JoinScreen() {
   useEffect(() => {
     if (newAccount && someoneSignedIn && !inFlight.current) flowStore.openForm();
   }, [newAccount, someoneSignedIn, flowStore]);
+
+  // ⚠️ «CHECK YOUR EMAIL» IS FOR ONE ACCOUNT, THE ONE IT IS WAITING FOR. If another account signs in (another tab), or the
+  // account goes away by something other than this view's own «Go back», the view is left: nothing is deleted and no code is
+  // redeemed for a stranger, and the session takes over (the form opens again for whoever is signed in now). `baselineUid` is
+  // who the session showed when the view appeared (a fake or a slow announcement of our own account is not a change).
+  const liveUid = session.user?.uid ?? null;
+  const waitingUid = waiting?.user.uid ?? null;
+  const baselineUid = useRef<string | null>(null);
+  const leavingOnPurpose = useRef(false);
+  useEffect(() => { baselineUid.current = liveUid; }, [waitingUid]);
+  useEffect(() => {
+    if (waitingUid === null || leavingOnPurpose.current) return;
+    if (liveUid !== waitingUid && liveUid !== baselineUid.current) setWaiting(null);
+  }, [liveUid]);
+
+  // ⚠️ A NOTICE THAT IS ALREADY THERE WHEN THE VIEW MOUNTS IS NOT RELIABLY SPOKEN (VerifyEmailView keeps its regions in the page
+  // before they speak): the first notice (a first email that failed) is set one tick after the view is on screen.
+  const firstNotice = useRef<VerifyNotice | null>(null);
+  useEffect(() => {
+    if (waitingUid === null) return;
+    const timer = setTimeout(() => {
+      const notice = firstNotice.current;
+      firstNotice.current = null;
+      if (notice && mounted.current) setVerifyNotice(notice);
+    }, 0);
+    return () => { clearTimeout(timer); };
+  }, [waitingUid]);
 
   // ⚠️ THE FORM IS GONE (Back, «Sign in with a different account», a new invitation): an account it created and is holding still
   // is resolved now, as any sign-in is (session.ts releaseSignUp; nothing happens when nothing is held).
@@ -232,9 +261,9 @@ export function JoinScreen() {
   }
 
   // The confirmation email, in the language on screen, its link leading back to this app. null = sent; else what to say.
-  async function sendVerification(): Promise<VerifyNotice | null> {
+  async function sendVerification(uid: string): Promise<VerifyNotice | null> {
     try {
-      await store.sendEmailVerification(lang, appStartUrl(import.meta.env.BASE_URL, window.location.href));
+      await store.sendEmailVerification(lang, appStartUrl(import.meta.env.BASE_URL, window.location.href), uid);
       return null;
     } catch (error) {
       return { id: nextId(), kind: 'error', key: sendFailureKey(error) };
@@ -268,10 +297,11 @@ export function JoinScreen() {
       // ⚠️ THE PASSWORDS ARE NOT NEEDED ANY MORE: dropped from memory now, whatever happens next.
       setPassword('');
       setPassword2('');
-      const failed = await sendVerification();
+      const failed = await sendVerification(madeNow.uid);
       if (mounted.current) {
         setNotice(null);
-        setVerifyNotice(failed);
+        setVerifyNotice(null);
+        firstNotice.current = failed;
         setWaiting({ user: madeNow, mine: true });
       }
       done();
@@ -303,7 +333,8 @@ export function JoinScreen() {
         if (who && mounted.current) {
           const first = waiting === null;
           setWaiting({ user: who, mine: (made ?? created) !== null });
-          if (first) setVerifyNotice(await sendVerification());
+          // The view is already on screen here (set just above), so the notice goes straight in.
+          if (first) setVerifyNotice(await sendVerification(who.uid));
           else setVerifyNotice({ id: nextId(), kind: 'notYet' });
         }
         done();
@@ -358,9 +389,14 @@ export function JoinScreen() {
     setVerifyNotice(null);
     let verified: boolean;
     try {
-      verified = await store.checkEmailVerified();
+      verified = await store.checkEmailVerified(waiting.user.uid);
     } catch (error) {
       done();
+      // ⚠️ ANOTHER ACCOUNT IS SIGNED IN NOW: nothing is checked or redeemed for it; the view is left and the session takes over.
+      if (authCodeOf(error) === 'auth/user-mismatch') {
+        if (mounted.current) setWaiting(null);
+        return;
+      }
       if (mounted.current) {
         setVerifyNotice({ id: nextId(), kind: 'error', key: joinRefusal(error).key === 'join.offline' ? 'join.offline' : 'join.failed' });
       }
@@ -379,15 +415,17 @@ export function JoinScreen() {
     const { done } = begin();
     setVerifyPending('resend');
     setVerifyNotice(null);
-    const failed = await sendVerification();
+    const failed = await sendVerification(waiting.user.uid);
     done();
     if (mounted.current) setVerifyNotice(failed ?? { id: nextId(), kind: 'info', key: 'verify.resent' });
   }
 
-  // ⚠️ «WRONG EMAIL? GO BACK» REMOVES THE ACCOUNT THIS FORM MADE a moment ago (asked first), so the right address can be typed: it
-  // was created seconds ago, so no new sign-in is needed. If it cannot be removed the person is signed out instead. Either way the
-  // session goes signed-out and the gate draws a FRESH form, which starts with the names and the email (joinFlow carryToNextForm)
-  // and the invitation still held (holdThroughSignOut).
+  // ⚠️ «WRONG EMAIL? GO BACK» REMOVES THE ACCOUNT THIS FORM MADE a moment ago (asked first), so the right address can be typed.
+  // Normally the account is deleted here; once Firebase's recent-login window has passed the server removes it instead
+  // (session.ts deleteNewAccount). Either way the page is signed out WITHOUT a reload, the session goes signed-out and the gate
+  // draws a FRESH form, which starts with the names and the email (joinFlow carryToNextForm) and the invitation still held
+  // (holdThroughSignOut). Only when neither works does the person get the app's own sign-out, which RELOADS the page: the typed
+  // names and email do not survive that, so it is said first, in a dialog, that the account was not removed.
   async function goBackFromVerify() {
     if (inFlight.current || waiting === null || !waiting.mine) return;
     if (!(await confirm({
@@ -395,13 +433,16 @@ export function JoinScreen() {
       okLabel: t('auth.back'), cancelLabel: t('common.cancel'), danger: true,
     }))) return;
     if (inFlight.current) return;
+    const uid = waiting.user.uid;
     const { done, release } = begin();
     setVerifyPending('back');
     setVerifyNotice(null);
     flowStore.carryToNextForm({ firstName, lastName, email: email.trim() });
     flowStore.holdThroughSignOut(true);
+    leavingOnPurpose.current = true;
+    let reason = '';
     try {
-      await store.deleteNewAccount();
+      await store.deleteNewAccount(uid);
       release();
       if (mounted.current) {
         inFlight.current = false;
@@ -409,12 +450,23 @@ export function JoinScreen() {
         setVerifyPending(null);
       }
       return;
-    } catch { /* the account could not be removed: signed out below, which also leaves the form */ }
+    } catch (error) { reason = authCodeOf(error); }
+    // ⚠️ ANOTHER ACCOUNT IS SIGNED IN NOW: nothing was deleted and nobody is signed out; the view is left and the session takes over.
+    if (reason === 'auth/user-mismatch') {
+      flowStore.holdThroughSignOut(false);
+      leavingOnPurpose.current = false;
+      done();
+      if (mounted.current) setWaiting(null);
+      return;
+    }
+    // The account could not be removed. The page is signed out instead, which RELOADS it: said now, because after it nothing can be.
+    await alert({ message: t('verify.back.notRemoved'), okLabel: t('common.ok') });
     try {
       await store.signOut({ keepInvitation: true });
       release();
     } catch {
       flowStore.holdThroughSignOut(false);
+      leavingOnPurpose.current = false;
       done();
       if (mounted.current) setVerifyNotice({ id: nextId(), kind: 'error', key: 'verify.cannotGoBack' });
     }
@@ -458,6 +510,7 @@ export function JoinScreen() {
           onResend={() => { void resend(); }}
         />
         {confirmDialog}
+        {alertDialog}
       </>
     );
   }

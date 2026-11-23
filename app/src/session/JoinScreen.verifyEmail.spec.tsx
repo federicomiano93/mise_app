@@ -101,8 +101,9 @@ describe('after the sign-up: «Check your email», and nothing is redeemed', () 
     await fillAndJoin(user);
     await screen.findByRole('heading', { level: 1, name: 'Check your email' });
     expect(store.sendEmailVerification).toHaveBeenCalledOnce();
-    const [language, url] = store.sendEmailVerification.mock.calls[0] ?? [];
+    const [language, url, uid] = store.sendEmailVerification.mock.calls[0] ?? [];
     expect(language).toBe('en');
+    expect(uid).toBe('new-uid');
     expect(new URL(String(url)).origin).toBe(window.location.origin);
   });
 
@@ -130,6 +131,24 @@ describe('after the sign-up: «Check your email», and nothing is redeemed', () 
     await user.click(screen.getByRole('button', { name: 'Send it again' }));
     await waitFor(() => { expect(store.sendEmailVerification).toHaveBeenCalledTimes(2); });
     expect(await screen.findByText('We have sent it again.')).toBeInTheDocument();
+  });
+
+  // ⚠️ A live region inserted already filled is not announced reliably: the view mounts with an EMPTY alert, and the words
+  // are put in afterwards (a later change to the same element).
+  test('the first email could not be sent: the alert is in the page empty, and only then filled', async () => {
+    const { user, store } = draw();
+    store.sendEmailVerification.mockRejectedValueOnce(authError('auth/network-request-failed'));
+    const records: MutationRecord[] = [];
+    const observer = new MutationObserver(list => { records.push(...list); });
+    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+    await fillAndJoin(user);
+    const alert = await findSpokenAlert();
+    records.push(...observer.takeRecords());
+    observer.disconnect();
+    const inserted = records.findIndex(record => [...record.addedNodes].some(node => node instanceof Element && node.contains(alert)));
+    const filled = records.findIndex(record => alert.contains(record.target));
+    expect(inserted).toBeGreaterThanOrEqual(0);
+    expect(filled).toBeGreaterThan(inserted);
   });
 });
 
@@ -308,12 +327,56 @@ describe('«Wrong email? Go back»', () => {
     await waitFor(() => { expect(isBusy()).toBe(false); });
   });
 
-  test('the account cannot be deleted: the person is signed out instead, the invitation kept', async () => {
-    const { user, store } = await onTheScreen(TOKEN);
-    store.deleteNewAccount.mockRejectedValueOnce(authError('auth/requires-recent-login'));
+  test('the account is deleted for the uid the screen waits for', async () => {
+    const { user, store } = await onTheScreen();
     await user.click(screen.getByRole('button', { name: 'Wrong email? Go back' }));
     await user.click(await screen.findByRole('button', { name: 'Back' }));
+    await waitFor(() => { expect(store.deleteNewAccount).toHaveBeenCalledWith('new-uid'); });
+  });
+
+  test('the account cannot be removed at all: it SAYS so first, then the person is signed out, the invitation kept', async () => {
+    const { user, store } = await onTheScreen(TOKEN);
+    store.deleteNewAccount.mockRejectedValueOnce(authError('auth/network-request-failed'));
+    await user.click(screen.getByRole('button', { name: 'Wrong email? Go back' }));
+    await user.click(await screen.findByRole('button', { name: 'Back' }));
+    const notice = await screen.findByRole('alertdialog');
+    expect(notice).toHaveTextContent('We couldn’t remove the account with this email. You can still start again.');
+    // The sign-out reloads the page, so nothing may have happened before the words were read.
+    expect(store.signOut).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'OK' }));
     await waitFor(() => { expect(store.signOut).toHaveBeenCalledWith({ keepInvitation: true }); });
+  });
+
+  test('in Italian the same sentence', async () => {
+    const drawn = draw({ lang: 'it' });
+    await fillAndJoin(drawn.user, 'it');
+    await screen.findByRole('heading', { level: 1, name: 'Controlla la tua email' });
+    drawn.store.deleteNewAccount.mockRejectedValueOnce(authError('auth/network-request-failed'));
+    await drawn.user.click(screen.getByRole('button', { name: 'L’email è sbagliata? Torna indietro' }));
+    await drawn.user.click(await screen.findByRole('button', { name: 'Indietro' }));
+    expect(await screen.findByRole('alertdialog')).toHaveTextContent(
+      'Non siamo riusciti a togliere l’account con questa email. Puoi comunque ricominciare.',
+    );
+  });
+
+  // ⚠️ ANOTHER ACCOUNT IS SIGNED IN BY NOW (another tab): nothing is deleted, nobody is signed out.
+  test('another account signed in meanwhile: «Go back» deletes nothing and signs nobody out', async () => {
+    const { user, store } = await onTheScreen();
+    store.deleteNewAccount.mockRejectedValueOnce(authError('auth/user-mismatch'));
+    await user.click(screen.getByRole('button', { name: 'Wrong email? Go back' }));
+    await user.click(await screen.findByRole('button', { name: 'Back' }));
+    await waitFor(() => { expect(screen.queryByRole('heading', { level: 1, name: 'Check your email' })).not.toBeInTheDocument(); });
+    expect(store.signOut).not.toHaveBeenCalled();
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(isBusy()).toBe(false);
+  });
+
+  test('another account signs in while the screen is up: the screen is left, nothing deleted, nothing redeemed', async () => {
+    const { store } = await onTheScreen();
+    act(() => { store.set({ status: 'no-access', user: { uid: 'other-uid', email: 'other@club.test', isAnonymous: false } }); });
+    await waitFor(() => { expect(screen.queryByRole('heading', { level: 1, name: 'Check your email' })).not.toBeInTheDocument(); });
+    expect(store.deleteNewAccount).not.toHaveBeenCalled();
+    expect(store.redeemJoinCode).not.toHaveBeenCalled();
   });
 
   test('neither works: it says so, and the screen stays', async () => {
@@ -322,8 +385,23 @@ describe('«Wrong email? Go back»', () => {
     store.signOut.mockRejectedValueOnce(new Error('no'));
     await user.click(screen.getByRole('button', { name: 'Wrong email? Go back' }));
     await user.click(await screen.findByRole('button', { name: 'Back' }));
+    await user.click(await screen.findByRole('button', { name: 'OK' }));
     expect(await findSpokenAlert()).toHaveTextContent('We could not go back. Try again shortly.');
     expect(screen.getByRole('heading', { level: 1, name: 'Check your email' })).toBeInTheDocument();
+    expect(isBusy()).toBe(false);
+  });
+});
+
+describe('«I’ve confirmed» for another account', () => {
+  test('the store refuses (another account is signed in): nothing is redeemed, the screen is left', async () => {
+    const { user, store } = draw();
+    store.checkEmailVerified.mockRejectedValueOnce(authError('auth/user-mismatch'));
+    await fillAndJoin(user);
+    await user.click(await screen.findByRole('button', { name: 'I’ve confirmed' }));
+    await waitFor(() => { expect(screen.queryByRole('heading', { level: 1, name: 'Check your email' })).not.toBeInTheDocument(); });
+    expect(store.checkEmailVerified).toHaveBeenCalledWith('new-uid');
+    expect(store.redeemJoinCode).not.toHaveBeenCalled();
+    expect(store.openJoinedVenue).not.toHaveBeenCalled();
     expect(isBusy()).toBe(false);
   });
 });

@@ -45,12 +45,16 @@ export interface SessionBackend {
   sendReset(email: string): Promise<void>;
   // Email confirmation of the signed-in NEW account (the join form's «Check your email»). Sends the confirmation email in
   // `languageCode`; its link leads back to `continueUrl` (the app's own address).
-  sendEmailVerification(languageCode: 'it' | 'en', continueUrl: string): Promise<void>;
+  // `continueUrl` null = no link back (the retry when Firebase refuses the address). ⚠️ It acts on the account `expectedUid`
+  // ONLY: another account signed in meanwhile makes it reject with `auth/user-mismatch`.
+  sendEmailVerification(languageCode: 'it' | 'en', continueUrl: string | null, expectedUid: string): Promise<void>;
   // Reads the account again; when it is confirmed, also refreshes its ID token (the server trusts the token first) and resolves
   // true. false = not confirmed yet.
-  refreshEmailVerified(): Promise<boolean>;
-  // Deletes the signed-in account (a just-created one whose email was mistyped). Rejects with Firebase's error.
-  deleteCurrentAccount(): Promise<void>;
+  // Rejects with `auth/user-mismatch` when the signed-in account is not `expectedUid`.
+  refreshEmailVerified(expectedUid: string): Promise<boolean>;
+  // Deletes the signed-in account `expectedUid` (a just-created one whose email was mistyped). Rejects with Firebase's error
+  // (`auth/requires-recent-login` among them), or with `auth/user-mismatch` when another account is signed in.
+  deleteCurrentAccount(expectedUid: string): Promise<void>;
   signOut(): Promise<void>;
   // Stops Firestore and deletes its offline database. Never rejects:
   //   'cleared'     — done;
