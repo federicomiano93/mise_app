@@ -71,6 +71,8 @@ export interface FoodcostSnapshot {
   readonly recipesFailed: boolean;
   readonly ingredients: Readonly<Record<string, StoredDoc>>;
   readonly ingredientsLoaded: boolean;
+  // The ingredients' stream died (the database refused them, or it failed): nothing that needs their allergens is judged from what is held.
+  readonly ingredientsFailed: boolean;
   // The suppliers by id, for their names only: whom an ingredient is bought from (POST-SWITCH, step 4 of the Food cost plan,
   // 11 Nov 2026). {} until they arrive, and after a quiet failure: a line then simply shows no supplier. Memory only — no local
   // copy (a venue's supplier names on the phone's storage would need a key of their own; Firestore's own offline copy answers
@@ -244,6 +246,7 @@ export function createFoodcostStore(
   let recipesFailed = false;
   let ingredients: Readonly<Record<string, StoredDoc>> = indexById(bootIngredients);
   let ingredientsLoaded = Array.isArray(bootIngredients);
+  let ingredientsFailed = false;
   let suppliers: Readonly<Record<string, StoredDoc>> = {};
   let categories: readonly Category[] = [];
   let categoriesLoaded = false;
@@ -283,7 +286,7 @@ export function createFoodcostStore(
     }
     return {
       products, productsLoaded, productsFromServer, recipes, recipesLoaded, recipesFromServer, recipesFailed, ingredients,
-      ingredientsLoaded, suppliers, categories, categoriesLoaded, labourCostPerHour, settingsLoaded, tables, unsent: inFlight > 0,
+      ingredientsLoaded, ingredientsFailed, suppliers, categories, categoriesLoaded, labourCostPerHour, settingsLoaded, tables, unsent: inFlight > 0,
     };
   }
 
@@ -424,6 +427,7 @@ export function createFoodcostStore(
         },
         () => {
           ingredientsLoaded = true;
+          ingredientsFailed = true;
           changed();
         },
       ));

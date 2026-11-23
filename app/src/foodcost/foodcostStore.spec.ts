@@ -63,6 +63,7 @@ function fakeSource() {
     recipes: (list: StoredDoc[], fromServer?: boolean) => recipes!.onChange(list, fromServer === undefined ? undefined : { fromServer }),
     recipesFail: () => recipes!.onError(new Error('refused')),
     ingredients: (list: StoredDoc[]) => ingredients!.onChange(list),
+    ingredientsFail: () => ingredients!.onError(new Error('permission-denied')),
     suppliers: (list: StoredDoc[]) => suppliers!.onChange(list),
     suppliersFail: () => suppliers!.onError(new Error('permission-denied')),
     settings: (data: Record<string, unknown> | null, fromServer = true) => settings!(data, { fromServer }),
@@ -251,6 +252,16 @@ describe('the Food cost store', () => {
     // …and says the server's word about a recipe will never come (a legacy product stops waiting for it).
     expect(store.getSnapshot().recipesFailed).toBe(true);
     expect(store.getSnapshot().recipesFromServer).toBe(false);
+    expect(messages).toEqual([]);
+  });
+
+  test('a refused ingredients stream ends the wait and says it failed (a cake label must not be judged from what is held)', () => {
+    const { fake, store, messages } = setup();
+    store.start();
+    expect(store.getSnapshot().ingredientsFailed).toBe(false);
+    fake.ingredientsFail();
+    expect(store.getSnapshot().ingredientsLoaded).toBe(true);
+    expect(store.getSnapshot().ingredientsFailed).toBe(true);
     expect(messages).toEqual([]);
   });
 

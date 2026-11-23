@@ -137,11 +137,11 @@ function weighableGramsOf(recipe: unknown): number {
 // roughly a fifth.
 export type NutritionPer100g = Record<NutrientKey, number> & { yieldGrams: number; lossPct: number };
 
-export function nutritionPer100g(recipe: unknown, tables: RecipeLabelTables = {}): NutritionPer100g | null {
+export function nutritionPer100g(recipe: unknown, tables: RecipeLabelTables = {}, startDepth: number = 1): NutritionPer100g | null {
   // Only what was WEIGHED: a 0 g line adds nothing to any value, and asking it for a
   // full table would refuse a whole declaration over a pinch of salt — the table
   // has always been worked out from the weighed rows alone.
-  const items = flattenIngredients(recipe, tables).filter(item => item.grams > 0);
+  const items = flattenIngredients(recipe, tables, 1, startDepth).filter(item => item.grams > 0);
   if (!items.length) return null;
 
   const totals = {} as Record<NutrientKey, number>;
@@ -221,15 +221,15 @@ export type Label = DraftLabel | RefusedLabel;
 // `ingredients` carries `emphasise: true` on the ones that ARE an allergen, so
 // the screen can put them in bold — the regulation asks for the allergen to be
 // emphasised INSIDE the ingredient list, not only summarised underneath.
-export function buildLabel(recipe: unknown, tables: RecipeLabelTables = {}, { shows = 'both' }: { shows?: unknown } = {}): Label {
-  const declared = recipeAllergens(recipe, tables);
+export function buildLabel(recipe: unknown, tables: RecipeLabelTables = {}, { shows = 'both', startDepth = 1 }: { shows?: unknown; startDepth?: number } = {}): Label {
+  const declared = recipeAllergens(recipe, tables, startDepth);
 
   // ⚠️ THE ONE GATE. Everything below assumes every row is accounted for.
   if (!canLabel(declared)) {
     return { ok: false, reason: 'not-declared', gaps: declared.gaps };
   }
 
-  const items = flattenIngredients(recipe, tables);
+  const items = flattenIngredients(recipe, tables, 1, startDepth);
   // Still «no ingredients with a weight» when nothing was weighed: a list made only of
   // pinches has no order and no net weight to stand on.
   if (!items.some(item => item.grams > 0)) return { ok: false, reason: 'no-ingredients', gaps: [] };
@@ -249,7 +249,7 @@ export function buildLabel(recipe: unknown, tables: RecipeLabelTables = {}, { sh
   });
 
   const wants: LabelShows = (LABEL_SHOWS as readonly unknown[]).includes(shows) ? shows as LabelShows : 'both';
-  const nutrition = wants === 'allergens' ? null : nutritionPer100g(recipe, tables);
+  const nutrition = wants === 'allergens' ? null : nutritionPer100g(recipe, tables, startDepth);
 
   return {
     ok: true,
