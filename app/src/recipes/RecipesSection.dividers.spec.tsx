@@ -238,6 +238,11 @@ describe('the reorder rows (review, 5 Nov 2026)', () => {
       row.getAttribute('data-divider-after') === 'true', row.getAttribute('data-below-divider') === 'true',
     ]);
     expect(marks()).toEqual([[true, false], [false, true], [false, false]]);
+    // Entering the mode owes the focus to the first grip, and ReorderRows asks for it again in a requestAnimationFrame: a
+    // focus put on Salt before that frame is taken back, and ArrowUp then runs on Flour and moves nothing. So wait for the
+    // first grip to hold it, then for one frame (the component's own request was queued earlier, so it has run by then).
+    await waitFor(() => { expect(within(region).getByRole('button', { name: 'Move «Flour»' })).toHaveFocus(); });
+    await new Promise<void>(resolve => { requestAnimationFrame(() => { resolve(); }); });
     within(region).getByRole('button', { name: 'Move «Salt»' }).focus();
     await (user as unknown as { keyboard: (keys: string) => Promise<void> }).keyboard('{ArrowUp}');
     // Flour | Salt Water: the line stays under Flour, and Salt is now the row under it.
