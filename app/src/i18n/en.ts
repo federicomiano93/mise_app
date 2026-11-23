@@ -2571,6 +2571,7 @@ export const en = {
   'sup.pc.meta': '{supplier} · invoice of {date}',
   'sup.pc.metaNoSupplier': 'Invoice of {date}',
   'sup.pc.priceLine': '{old} → {new}',
+  'sup.pc.datesLine': 'Invoices: {old} → {new}',
   'sup.pc.packDiffers': 'Different pack: {old} → {new}',
   'sup.pc.empty': 'No changes in this period.',
   'sup.pc.emptyAll': 'Changes appear when you import invoices.',

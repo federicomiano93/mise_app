@@ -248,6 +248,7 @@ function Section({ titleKey, list }: { titleKey: MessageKey; list: StoredDoc[] }
 }
 
 const text = (value: unknown): string => (typeof value === 'string' ? value : '');
+const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
 
 function Row({ change }: { change: StoredDoc }) {
   const { t, lang } = useT();
@@ -263,6 +264,12 @@ function Row({ change }: { change: StoredDoc }) {
     old: pricePerUnitText({ priceUnit: change.priceUnit, pricePerUnit: change.oldPrice }, money, t),
     new: pricePerUnitText({ priceUnit: change.priceUnit, pricePerUnit: change.newPrice }, money, t),
   });
+  // «Invoices: 3 Aug 2026 → 12 Sept 2026»: the compared (older) invoice left, the latest right, like the prices. The rules require
+  // `oldDate` on every change, but an old or odd document without a real date gets no line rather than a half one.
+  const oldDate = text(change.oldDate);
+  const datesLine = ISO_DAY.test(oldDate) && ISO_DAY.test(text(change.date))
+    ? t('sup.pc.datesLine', { old: dayText(oldDate, localeOf(lang)), new: date })
+    : null;
   const pct = Number(change.pct);
   const oldPack = text(change.oldPack);
   const newPack = text(change.newPack);
@@ -276,6 +283,7 @@ function Row({ change }: { change: StoredDoc }) {
         <span className={styles.pct} data-tone={pct > 0 ? 'warn' : 'ok'}>{percentText(pct)}</span>
       </div>
       <p className={styles.price}>{priceLine}</p>
+      {datesLine === null ? null : <p className={styles.meta}>{datesLine}</p>}
       {oldPack !== '' && newPack !== '' && oldPack !== newPack ? (
         <p className={styles.meta}>{t('sup.pc.packDiffers', { old: oldPack, new: newPack })}</p>
       ) : null}

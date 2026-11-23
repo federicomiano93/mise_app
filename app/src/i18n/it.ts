@@ -2355,6 +2355,7 @@ export const it: Messages = {
   'sup.pc.meta': '{supplier} · fattura del {date}',
   'sup.pc.metaNoSupplier': 'Fattura del {date}',
   'sup.pc.priceLine': '{old} → {new}',
+  'sup.pc.datesLine': 'Fatture: {old} → {new}',
   'sup.pc.packDiffers': 'Confezione diversa: {old} → {new}',
   'sup.pc.empty': 'Nessuna variazione in questo periodo.',
   'sup.pc.emptyAll': 'Le variazioni compaiono quando importi le fatture.',
