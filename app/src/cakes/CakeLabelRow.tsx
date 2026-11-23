@@ -36,7 +36,8 @@ export function CakeLabelRow({ cake, onOpen, buttonRef }: Props) {
   } else {
     // ⚠️ THE WORDS AND THE NAMES ARE THE VENUE COUNTRY'S (a food's name), the rest of the line the interface's.
     const names = (codes: readonly string[]) => codes.map(code => allergenName(code, lang)).join(', ');
-    const { allergens, mayContain } = answer.label;
+    const allergens = answer.label.allergens;
+    const mayContain = answer.label.mayContain;
     const parts = { contains: labelWord('contains', lang), names: names(allergens), mayContain: labelWord('mayContain', lang), mayNames: names(mayContain) };
     if (allergens.length > 0) summary = t(mayContain.length > 0 ? 'cakes.label.summaryContainsMay' : 'cakes.label.summaryContains', parts);
     else summary = mayContain.length > 0 ? t('cakes.label.summaryMayOnly', parts) : t('cakes.label.summaryNone');
