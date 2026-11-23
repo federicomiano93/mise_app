@@ -1,6 +1,8 @@
 import { createContext, useContext } from 'react';
+import { useLocation, useNavigate } from 'react-router';
 import type { MutableRefObject } from 'react';
 import { KEEP_FOCUS } from '../shell/Page';
+import { SETTINGS_PATH } from './settingsPath';
 import type { SettingsDoor } from './settingsPath';
 
 // Back from a screen below Settings hands the focus back to the door that opened it, so a keyboard or screen-reader user lands where they
@@ -31,4 +33,18 @@ export function isHandBack(state: unknown): boolean {
 
 export function cameFromSettings(state: unknown): boolean {
   return typeof state === 'object' && state !== null && 'fromSettings' in state;
+}
+
+// One level up to the page, for a screen below Settings: its own Back and the «Done» of «New business» are the same step. Opened from
+// the page, the entry behind IS the page, so it is the browser's Back; opened by its address there is nothing behind, so it REPLACES the
+// screen with the page. The door is promised the focus either way.
+export function useBackToSettings(door: SettingsDoor): () => void {
+  const navigate = useNavigate();
+  const { state } = useLocation();
+  const pending = usePendingDoor();
+  return () => {
+    pending.current = door;
+    if (cameFromSettings(state)) void navigate(-1);
+    else void navigate(SETTINGS_PATH, { replace: true, state: BACK_TO_SETTINGS });
+  };
 }

@@ -70,3 +70,11 @@
   font-weight: 600;
   overflow-wrap: anywhere;
 }
+
+/* The sentence under a card's title that says who the card is for (the administrator's «Businesses you run»). */
+.cardNote {
+  margin: 0;
+  padding: 0 var(--s4) var(--s3);
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}

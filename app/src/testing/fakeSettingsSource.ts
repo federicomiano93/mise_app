@@ -1,12 +1,15 @@
 import { vi } from 'vitest';
 import { buildAwayDoc } from '@mise/shared/away-model';
 import type { DocData } from '../session/backend';
-import type { Invitation, Member, MyAway, SettingsSource } from '../settings/settingsSource';
+import type { CreatedBusiness, Invitation, Member, MyAway, NewBusiness, SettingsSource } from '../settings/settingsSource';
 
 // What the fake «server» mints: six digits for an employee, a link token for anybody, both living a day (functions/onboarding.js).
 export const FAKE_DIGITS = '482913';
 export const FAKE_LINK_TOKEN = 'Q7xk2mP9vR4tY8wZ1nB6cD3fG5hJ0sLa';
 const DAY_MS = 24 * 60 * 60 * 1000;
+// The business the fake «server» makes, and how long a customer's link lives (functions/onboarding.js createWorkspace: a week).
+export const FAKE_BUSINESS_ID = 'loc-fake-new';
+const LINK_DAYS = 7;
 
 // A settings source for the specs, in memory. The holiday lands at once (as Firestore's local copy does); a write is refused, as the
 // rules or the network would, by setting `refuseWith`. The Cloud Functions are `vi.fn`s a spec can make fail.
@@ -35,6 +38,10 @@ export type FakeSettingsSource = SettingsSource & {
   breakMembers(error: unknown): void;
   // While set, setMemberRole and setMemberName reject with this error (and the roster is left as it was).
   memberFailWith: unknown;
+  // While set, createBusiness rejects with this error. While `holdBusiness` is true it stays in the air until `answerBusiness()`.
+  businessFailWith: unknown;
+  holdBusiness: boolean;
+  answerBusiness(): void;
 };
 
 // A roster row for the specs.
@@ -56,7 +63,10 @@ export function fakeSettingsSource(
     holdWrites: false,
     members: seed.members ?? [] as readonly Member[],
     memberFailWith: null as unknown,
+    businessFailWith: null as unknown,
+    holdBusiness: false,
   };
+  const heldBusiness: (() => void)[] = [];
   const rosterListeners = new Set<{ onChange: (members: readonly Member[]) => void; onError: (error: unknown) => void }>();
   const tellRoster = () => { for (const listener of [...rosterListeners]) listener.onChange(state.members); };
   const held: { until: string; confirm: () => void; refuse: (err: Error) => void }[] = [];
@@ -84,6 +94,11 @@ export function fakeSettingsSource(
     },
     get memberFailWith() { return state.memberFailWith; },
     set memberFailWith(value) { state.memberFailWith = value; },
+    get businessFailWith() { return state.businessFailWith; },
+    set businessFailWith(value) { state.businessFailWith = value; },
+    get holdBusiness() { return state.holdBusiness; },
+    set holdBusiness(value) { state.holdBusiness = value; },
+    answerBusiness() { heldBusiness.shift()?.(); },
     confirmHeld() { held.shift()?.confirm(); },
     refuseHeld(err) { held.shift()?.refuse(err); },
 
@@ -136,6 +151,14 @@ export function fakeSettingsSource(
         title: role === 'manager' ? (title ?? 'manager') : null,
         expiresAt: now() + DAY_MS,
       };
+    }),
+    // Answers as the function does: a link (and no membership) for a customer's business, the caller as owner and no link for one of
+    // their own.
+    createBusiness: vi.fn(async (business: NewBusiness): Promise<CreatedBusiness> => {
+      if (state.holdBusiness) await new Promise<void>(done => { heldBusiness.push(done); });
+      if (state.businessFailWith !== null) throw state.businessFailWith as Error;
+      if (business.forSelf) return { kind: 'mine', locationId: FAKE_BUSINESS_ID };
+      return { kind: 'link', locationId: FAKE_BUSINESS_ID, token: FAKE_LINK_TOKEN, expiresAt: now() + LINK_DAYS * DAY_MS };
     }),
     // Answers at once from what it holds, as a listener does from the phone's copy.
     watchMembers: vi.fn((onChange, onError) => {

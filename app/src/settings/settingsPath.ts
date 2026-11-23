@@ -6,9 +6,11 @@ export const LANGUAGE_PATH = '/settings/language';
 export const SECTIONS_PATH = '/settings/sections';
 // The current app's screen is «people» too (js/staff/people.js).
 export const PEOPLE_PATH = '/settings/people';
+// «New business», for the app's administrator only (the current app's screen is js/staff/new-customer.js).
+export const NEW_BUSINESS_PATH = '/settings/new-business';
 
 // The doors of the page, by the name the Back button of a sub-screen hands the focus back to.
-export type SettingsDoor = 'language' | 'sections' | 'people';
+export type SettingsDoor = 'language' | 'sections' | 'people' | 'new-business';
 
 export type SettingsScreen = 'page' | SettingsDoor | 'unknown';
 
@@ -19,6 +21,7 @@ export function settingsScreenOf(pathname: string): SettingsScreen {
   if (clean === LANGUAGE_PATH) return 'language';
   if (clean === SECTIONS_PATH) return 'sections';
   if (clean === PEOPLE_PATH) return 'people';
+  if (clean === NEW_BUSINESS_PATH) return 'new-business';
   return 'unknown';
 }
 
@@ -29,5 +32,6 @@ export function settingsScreenName(pathname: string): string {
   if (screen === 'language') return 'settings-language';
   if (screen === 'sections') return 'settings-sections';
   if (screen === 'people') return 'settings-people';
+  if (screen === 'new-business') return 'settings-new-business';
   return 'settings';
 }

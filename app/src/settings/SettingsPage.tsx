@@ -12,7 +12,7 @@ import { AwayRow } from './AwayRow';
 import { DeviceCard } from './DeviceCard';
 import { SettingsRow } from './SettingsRow';
 import { FROM_SETTINGS, isHandBack, usePendingDoor } from './settingsHandBack';
-import { LANGUAGE_PATH, PEOPLE_PATH, SECTIONS_PATH } from './settingsPath';
+import { LANGUAGE_PATH, NEW_BUSINESS_PATH, PEOPLE_PATH, SECTIONS_PATH } from './settingsPath';
 import styles from './SettingsPage.module.css';
 
 // A card of Settings, named by WHO its rows are about: «You», «The venue», «Account». A card with no rows is not drawn by its caller.
@@ -32,20 +32,22 @@ function Card({ title, children }: { title: string; children: ReactNode }) {
 //                and «Who can get in» (the full owner only — `isOwner`);
 //   Account    — who is signed in, which venue, the way to another;
 //   This device — kiosk mode for this tablet or phone (everybody, an employee too: staff slice 5, DeviceCard). The app's version, the
-//                 current app's other row of that card, is not here yet.
+//                 current app's other row of that card, is not here yet;
+//   Businesses you run — «New business», only the app's administrator (`isAppAdmin`, which is not a role in the venue); the last card.
 // The way out, «Log out», is a small quiet button at the far right of the title line (the owner's choice, 15 Oct 2026).
 //
 // ⚠️ NOTHING HERE IS A PERMISSION (P2): the venue's two rows are not drawn for an employee and their addresses send an employee back
 // here, but the Cloud Functions behind them refuse a non-manager as well.
 export function SettingsPage() {
   const { t } = useT();
-  const { user, name, options, canManageVenue, isOwner } = useSession();
+  const { user, name, options, canManageVenue, isOwner, isAppAdmin } = useSession();
   const pending = usePendingDoor();
   const arrival = useNavigationType();
   const { state } = useLocation();
   const language = useRef<HTMLAnchorElement>(null);
   const sections = useRef<HTMLAnchorElement>(null);
   const people = useRef<HTMLAnchorElement>(null);
+  const newBusiness = useRef<HTMLAnchorElement>(null);
   // The email, or the account's id for the rare account that has none.
   const account = user?.email || user?.uid || '';
 
@@ -59,6 +61,7 @@ export function SettingsPage() {
     if (door === 'language') language.current?.focus();
     if (door === 'sections') sections.current?.focus();
     if (door === 'people') people.current?.focus();
+    if (door === 'new-business') newBusiness.current?.focus();
   }, [pending, arrival, state]);
 
   return (
@@ -102,6 +105,17 @@ export function SettingsPage() {
           <PartBoundary>
             <DeviceCard />
           </PartBoundary>
+
+          {isAppAdmin ? (
+            <Card title={t('newBusiness.card.title')}>
+              <PartBoundary>
+                <p className={styles.cardNote}>{t('newBusiness.card.note')}</p>
+                <div className={styles.rows}>
+                  <SettingsRow ref={newBusiness} to={NEW_BUSINESS_PATH} state={FROM_SETTINGS} onOpen={() => { pending.current = 'new-business'; }} title={t('newBusiness.row.title')} sub={t('newBusiness.row.sub')} />
+                </div>
+              </PartBoundary>
+            </Card>
+          ) : null}
         </div>
       </StatusMessageProvider>
     </Page>

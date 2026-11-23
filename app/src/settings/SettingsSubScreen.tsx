@@ -1,12 +1,11 @@
 import { useEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
-import { useLocation, useNavigate, useNavigationType } from 'react-router';
+import { useLocation, useNavigationType } from 'react-router';
 import { useT } from '../i18n/useT';
 import { Page } from '../shell/Page';
 import { FormBar } from '../ui/FormBar';
-import { BACK_TO_SETTINGS, cameFromSettings, usePendingDoor } from './settingsHandBack';
+import { cameFromSettings, useBackToSettings } from './settingsHandBack';
 import type { SettingsDoor } from './settingsPath';
-import { SETTINGS_PATH } from './settingsPath';
 import styles from './SettingsSubScreen.module.css';
 
 // A screen one level below Settings: the page's own h1 («Settings»), then a card with Back and the screen's name (an h2), and the
@@ -27,23 +26,16 @@ export function SettingsSubScreen({ door, title, backDisabled = false, children 
   children: ReactNode;
 }) {
   const { t } = useT();
-  const navigate = useNavigate();
   const { state } = useLocation();
   // The state survives a reload (the hash router keeps it in history.state): a reload is a POP, and only a PUSH is an arrival asked for.
   const arrival = useNavigationType();
-  const pending = usePendingDoor();
+  const back = useBackToSettings(door);
   const titleRef = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {
     if (arrival === 'PUSH' && cameFromSettings(state)) titleRef.current?.focus();
     // Once, as the screen opens.
   }, []);
-
-  function back(): void {
-    pending.current = door;
-    if (cameFromSettings(state)) void navigate(-1);
-    else void navigate(SETTINGS_PATH, { replace: true, state: BACK_TO_SETTINGS });
-  }
 
   return (
     <Page title={t('section.settings')}>

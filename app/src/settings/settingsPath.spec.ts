@@ -11,6 +11,9 @@ describe('the addresses of Settings', () => {
     ['/settings/sections', 'sections'],
     ['/settings/people', 'people'],
     ['/settings/people/', 'people'],
+    ['/settings/new-business', 'new-business'],
+    ['/settings/new-business/', 'new-business'],
+    ['/settings/New-business', 'unknown'],
     ['/settings/People', 'unknown'],
     ['/settings/invite', 'unknown'],
     ['/settings/language/more', 'unknown'],
@@ -24,6 +27,7 @@ describe('the addresses of Settings', () => {
     ['/settings/language', 'settings-language'],
     ['/settings/sections', 'settings-sections'],
     ['/settings/people', 'settings-people'],
+    ['/settings/new-business', 'settings-new-business'],
     ['/settings/nonsense', 'settings'],
   ])('%s is called %s in the usage record', (pathname, expected) => {
     expect(settingsScreenName(pathname)).toBe(expected);
