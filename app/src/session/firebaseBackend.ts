@@ -31,7 +31,7 @@ import { deleteApp, initializeApp, type FirebaseApp } from 'firebase/app';
 import {
   initializeAuth, indexedDBLocalPersistence, browserLocalPersistence, browserSessionPersistence, inMemoryPersistence,
   onAuthStateChanged, signInWithEmailAndPassword, sendPasswordResetEmail, signOut, connectAuthEmulator,
-  createUserWithEmailAndPassword, type Auth,
+  createUserWithEmailAndPassword, sendEmailVerification, deleteUser, type Auth,
 } from 'firebase/auth';
 import type { Firestore } from 'firebase/firestore';
 import { configForHost, LOCAL_HOSTS, vapidKeyForHost } from '@mise/shared/firebase-target';
@@ -220,6 +220,29 @@ export function createFirebaseBackend(hostname: string): FirebaseBackend {
       return { uid: user.uid, email: user.email, isAnonymous: user.isAnonymous };
     },
     sendReset: email => sendPasswordResetEmail(auth, email),
+    // ⚠️ The language and the address are Auth-wide settings of THIS page: set on every send, so an Italian phone is written to
+    // in Italian and the link brings the person back to this app (its address is an authorised domain of the project).
+    async sendEmailVerification(languageCode, continueUrl) {
+      const user = auth.currentUser;
+      if (!user) throw new Error('Nobody is signed in.');
+      auth.languageCode = languageCode;
+      await sendEmailVerification(user, { url: continueUrl });
+    },
+    // The account's own record is read again (the link was tapped in another window), and ONLY a confirmed one gets a fresh ID
+    // token: the server (redeemJoinCode) reads email_verified from the token first.
+    async refreshEmailVerified() {
+      const user = auth.currentUser;
+      if (!user) throw new Error('Nobody is signed in.');
+      await user.reload();
+      if (!user.emailVerified) return false;
+      await user.getIdToken(true);
+      return true;
+    },
+    async deleteCurrentAccount() {
+      const user = auth.currentUser;
+      if (!user) throw new Error('Nobody is signed in.');
+      await deleteUser(user);
+    },
     signOut: () => signOut(auth),
     // ⚠️ terminate() stops every listener, which is why every caller reloads straight after.
     // ⚠️ It starts Firestore if this page never did: the offline database may still hold a

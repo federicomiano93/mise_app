@@ -61,6 +61,9 @@ function setup(world: World, { local = {}, session = {}, now = 1_000_000, busy =
       return user;
     }),
     sendReset: vi.fn(async () => {}),
+    sendEmailVerification: vi.fn(async () => {}),
+    refreshEmailVerified: vi.fn(async () => true),
+    deleteCurrentAccount: vi.fn(async () => {}),
     signOut: vi.fn(async () => { calls.push('signOut'); }),
     wipeOfflineCache: vi.fn(async () => {
       calls.push('wipe');

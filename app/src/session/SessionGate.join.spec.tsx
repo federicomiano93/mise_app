@@ -347,11 +347,14 @@ describe('signed out: the form for a NEW account (staff slice 2)', () => {
     store.redeemJoinCode.mockImplementation(() => new Promise((_resolve, reject) => { refuse = reject; }));
     await fillNew(user);
     await user.click(screen.getByRole('button', { name: 'Join' }));
+    await user.click(await screen.findByRole('button', { name: 'I’ve confirmed' }));
     await waitFor(() => { expect(store.redeemJoinCode).toHaveBeenCalled(); });
     act(() => { store.set({ ...NO_ACCESS, user: NEWBIE }); });
-    expect(screen.getByLabelText('Code')).toHaveValue(TOKEN);
+    // The screen held through the moves is «Check your email», then the form for that account once the code is refused.
+    expect(screen.getByRole('heading', { level: 1, name: 'Check your email' })).toBeInTheDocument();
     await act(async () => { refuse(Object.assign(new Error('x'), { code: 'functions/permission-denied' })); });
     expect(await findSpokenAlert()).toHaveTextContent('That code does not work. Ask for a new one.');
+    expect(screen.getByLabelText('Code')).toHaveValue(TOKEN);
     expect(screen.getByText('anna.b@club.test')).toBeInTheDocument();
     expect(screen.queryByLabelText('Your email')).not.toBeInTheDocument();
     // A late answer of the session does not wipe it either.
@@ -371,6 +374,7 @@ describe('signed out: the form for a NEW account (staff slice 2)', () => {
     store.redeemJoinCode.mockRejectedValueOnce(Object.assign(new Error('x'), { code: 'functions/permission-denied' }));
     await fillNew(user);
     await user.click(screen.getByRole('button', { name: 'Join' }));
+    await user.click(await screen.findByRole('button', { name: 'I’ve confirmed' }));
     act(() => { store.set({ ...NO_ACCESS, user: NEWBIE }); });
     await findSpokenAlert();
     expect(screen.getByText('anna.b@club.test')).toBeInTheDocument();
@@ -382,6 +386,32 @@ describe('signed out: the form for a NEW account (staff slice 2)', () => {
     expect(screen.getByText('other@club.test')).toBeInTheDocument();
     expect(store.signUp).toHaveBeenCalledOnce();
     expect(store.redeemJoinCode).toHaveBeenCalledOnce();
+  });
+
+  // «Wrong email? Go back»: the account made a moment ago is deleted, the session signs out by itself, and the gate draws a FRESH
+  // form with the names and the email typed before and the invitation still held.
+  test('«Check your email» → «Wrong email? Go back»: the form again, with the typed email to correct and the invitation kept', async () => {
+    const { user, store, flow, storage } = draw(SIGNED_OUT, { invited: TOKEN });
+    store.signUp.mockImplementation(async () => {
+      store.set({ status: 'loading', user: NEWBIE });
+      return NEWBIE;
+    });
+    store.deleteNewAccount.mockImplementation(async () => { store.set({ status: 'signed-out', user: null }); });
+    await fillNew(user);
+    await user.click(screen.getByRole('button', { name: 'Join' }));
+    expect(await screen.findByRole('heading', { level: 1, name: 'Check your email' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Wrong email? Go back' }));
+    await user.click(await screen.findByRole('button', { name: 'Back' }));
+    expect(await screen.findByRole('heading', { level: 1, name: 'You have been invited' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Your first name')).toHaveValue('Anna');
+    expect(screen.getByLabelText('Your surname')).toHaveValue('Bianchi');
+    expect(screen.getByLabelText('Your email')).toHaveValue('anna.b@club.test');
+    expect(screen.getByLabelText('Repeat your email')).toHaveValue('');
+    expect(screen.getByLabelText('Choose a password (at least 10 characters)')).toHaveValue('');
+    expect(screen.getByLabelText('Code')).toHaveValue(TOKEN);
+    expect(flow.getSnapshot().invited).toBe(TOKEN);
+    expect(storage.map.get(PENDING_INVITE_KEY)).toBe(TOKEN);
+    expect(store.redeemJoinCode).not.toHaveBeenCalled();
   });
 
   test('Back on a link: to sign-in, which says the invitation waits; after the sign-in, it is offered', async () => {

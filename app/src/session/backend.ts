@@ -43,6 +43,14 @@ export interface SessionBackend {
   // membership on the server.
   signUp(email: string, password: string): Promise<SessionUser>;
   sendReset(email: string): Promise<void>;
+  // Email confirmation of the signed-in NEW account (the join form's «Check your email»). Sends the confirmation email in
+  // `languageCode`; its link leads back to `continueUrl` (the app's own address).
+  sendEmailVerification(languageCode: 'it' | 'en', continueUrl: string): Promise<void>;
+  // Reads the account again; when it is confirmed, also refreshes its ID token (the server trusts the token first) and resolves
+  // true. false = not confirmed yet.
+  refreshEmailVerified(): Promise<boolean>;
+  // Deletes the signed-in account (a just-created one whose email was mistyped). Rejects with Firebase's error.
+  deleteCurrentAccount(): Promise<void>;
   signOut(): Promise<void>;
   // Stops Firestore and deletes its offline database. Never rejects:
   //   'cleared'     — done;

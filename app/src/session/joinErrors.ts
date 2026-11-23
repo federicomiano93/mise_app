@@ -51,6 +51,14 @@ function minutesIn(message: unknown): number | null {
   return n >= 1 ? n : null;
 }
 
+// ⚠️ THE ONE REFUSAL THAT IS NOT SAID AS A SENTENCE: a new account whose email was never confirmed (functions/onboarding.js
+// requireConfirmedEmail answers `failed-precondition` with the reason `email-unverified`, before any try is charged). The form
+// answers it by showing «Check your email», so it is read here, beside the others, and the form asks this first.
+export function isEmailUnverified(error: unknown): boolean {
+  const e: CallError = error && typeof error === 'object' ? error as CallError : {};
+  return codeOf(e) === 'failed-precondition' && reasonOf(e) === 'email-unverified';
+}
+
 export function joinRefusal(error: unknown): JoinRefusal {
   const e: CallError = error && typeof error === 'object' ? error as CallError : {};
   const code = codeOf(e);

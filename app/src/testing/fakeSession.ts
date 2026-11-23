@@ -12,6 +12,9 @@ type FakeStore = SessionStore & {
   signIn: Mock<SessionStore['signIn']>;
   signUp: Mock<SessionStore['signUp']>;
   releaseSignUp: Mock<SessionStore['releaseSignUp']>;
+  sendEmailVerification: Mock<SessionStore['sendEmailVerification']>;
+  checkEmailVerified: Mock<SessionStore['checkEmailVerified']>;
+  deleteNewAccount: Mock<SessionStore['deleteNewAccount']>;
   sendReset: Mock<SessionStore['sendReset']>;
   signOut: Mock<SessionStore['signOut']>;
   chooseLocation: Mock<SessionStore['chooseLocation']>;
@@ -54,6 +57,10 @@ export function fakeStore(partial: Partial<Session> = {}): FakeStore {
     // By default the account is created; a spec makes Firebase refuse with mockRejectedValue.
     signUp: vi.fn<SessionStore['signUp']>(email => Promise.resolve({ uid: 'new-uid', email: email.trim(), isAnonymous: false })),
     releaseSignUp: vi.fn<SessionStore['releaseSignUp']>(),
+    // By default the email goes, is already confirmed when checked, and the account can be deleted.
+    sendEmailVerification: vi.fn<SessionStore['sendEmailVerification']>(() => Promise.resolve()),
+    checkEmailVerified: vi.fn<SessionStore['checkEmailVerified']>(() => Promise.resolve(true)),
+    deleteNewAccount: vi.fn<SessionStore['deleteNewAccount']>(() => Promise.resolve()),
     sendReset: vi.fn<SessionStore['sendReset']>(() => Promise.resolve()),
     signOut: vi.fn<SessionStore['signOut']>(() => Promise.resolve()),
     chooseLocation: vi.fn<SessionStore['chooseLocation']>(() => Promise.resolve()),

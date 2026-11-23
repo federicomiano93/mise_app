@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import type { ReactNode } from 'react';
+import type { ReactNode, Ref } from 'react';
 import { useT } from '../i18n/useT';
 import { Mark } from './Mark';
 import styles from './GateScreen.module.css';
@@ -9,6 +9,10 @@ type Props = {
   // which has nothing else to be called).
   title?: string;
   subtitle?: string;
+  // The title's h1, so a screen that appears in the middle of a flow can take the focus to it (tabIndex -1 is then set).
+  headingRef?: Ref<HTMLHeadingElement>;
+  // Drawn in place of the product's mark: a screen about one thing ('Check your email') shows that thing. Decoration only.
+  mark?: ReactNode;
   children: ReactNode;
 };
 
@@ -20,7 +24,7 @@ type Props = {
 //
 // «Mise» is the product's name, written the same in every language; the one h1 is the screen's
 // title, or «Mise» itself when it has none.
-export function GateScreen({ title, subtitle, children }: Props) {
+export function GateScreen({ title, subtitle, headingRef, mark, children }: Props) {
   const { t } = useT();
 
   // Inside the app, Page sets the tab's title; out here nothing else does.
@@ -34,9 +38,9 @@ export function GateScreen({ title, subtitle, children }: Props) {
     <main className={styles.screen}>
       <div className={styles.card}>
         <div className={styles.head}>
-          <Mark />
+          {mark ?? <Mark />}
           <Name className={title === undefined ? styles.heading : styles.name}>{t('app.name')}</Name>
-          {title === undefined ? null : <h1 className={styles.heading}>{title}</h1>}
+          {title === undefined ? null : <h1 ref={headingRef} tabIndex={headingRef ? -1 : undefined} className={styles.heading}>{title}</h1>}
           {subtitle === undefined ? null : <p className={styles.subtitle}>{subtitle}</p>}
         </div>
         {children}

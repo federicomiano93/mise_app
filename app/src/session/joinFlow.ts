@@ -50,6 +50,15 @@ export interface JoinFlowState {
   // The invitation is HELD but the form was left on purpose (Back, once an account had been made for it): «No location yet» must
   // not open the form again by itself, only through «I have a join code», which then has the code filled in.
   readonly parked: boolean;
+  // What the form for a NEW account had typed (names and the email, never a password or a code) when the person went back from
+  // «Check your email» to correct the address: the next form starts with it. Memory only, never stored.
+  readonly carried?: JoinCarry | null;
+}
+
+export interface JoinCarry {
+  readonly firstName: string;
+  readonly lastName: string;
+  readonly email: string;
 }
 
 export interface JoinFlow {
@@ -72,6 +81,8 @@ export interface JoinFlow {
   // The person is about to sign out with «Sign in with a different account»: the invitation is to be kept through that sign-out
   // (and only that one), for the sign-in screen and the form for a new account. `false` takes it back (the sign-out failed).
   holdThroughSignOut(on?: boolean): void;
+  // With holdThroughSignOut: what the fresh form that follows that sign-out starts with (see `carried`). null drops it.
+  carryToNextForm(carry: JoinCarry | null): void;
   // The session says nobody is signed in any more (from this window or another): the invitation is forgotten — unless
   // holdThroughSignOut said it should go along.
   signedOut(): void;
@@ -98,11 +109,12 @@ function storedInvite(storage: KeyValueStorage): string {
 
 export function createJoinFlow(storage: KeyValueStorage): JoinFlow {
   let state: JoinFlowState = Object.freeze({
-    invited: storedInvite(storage), open: false, sent: null, formKey: 0, returned: false, signInFirst: false, signInEmail: '', parked: false,
+    invited: storedInvite(storage), open: false, sent: null, formKey: 0, returned: false, signInFirst: false, signInEmail: '', parked: false, carried: null,
   });
   const listeners = new Set<() => void>();
   // Not state: nothing draws from it. Set for one sign-out by holdThroughSignOut.
   let holdOnSignOut = false;
+  let carryOnSignOut: JoinCarry | null = null;
 
   function set(next: Partial<JoinFlowState>): void {
     state = Object.freeze({ ...state, ...next });
@@ -130,7 +142,7 @@ export function createJoinFlow(storage: KeyValueStorage): JoinFlow {
       // and answered() gives it its own form once the check is over.
       const fresh = state.sent?.busy ? {} : { formKey: state.formKey + 1, sent: null };
       // A NEW invitation is a new reason to show the form, even to somebody who had stepped over to sign in.
-      set({ invited: token, returned: false, signInFirst: false, parked: false, ...fresh });
+      set({ invited: token, returned: false, signInFirst: false, parked: false, carried: null, ...fresh });
     },
     forget(only) {
       if (only !== undefined && only !== state.invited) return;
@@ -138,20 +150,24 @@ export function createJoinFlow(storage: KeyValueStorage): JoinFlow {
       if (state.invited) set({ invited: '' });
     },
     openForm() {
-      set({ open: true, sent: null, formKey: state.formKey + 1, returned: false, signInFirst: false, signInEmail: '', parked: false });
+      set({ open: true, sent: null, formKey: state.formKey + 1, returned: false, signInFirst: false, signInEmail: '', parked: false, carried: null });
     },
     cancel() {
       store(null);
-      set({ invited: '', open: false, sent: null, returned: true, signInFirst: false, signInEmail: '', parked: false });
+      set({ invited: '', open: false, sent: null, returned: true, signInFirst: false, signInEmail: '', parked: false, carried: null });
     },
     signInInstead(email = '') {
-      set({ open: false, sent: null, returned: true, signInFirst: true, signInEmail: email.trim(), parked: false });
+      set({ open: false, sent: null, returned: true, signInFirst: true, signInEmail: email.trim(), parked: false, carried: null });
     },
     leave() {
-      set({ open: false, sent: null, returned: true, signInFirst: false, signInEmail: '', parked: true });
+      set({ open: false, sent: null, returned: true, signInFirst: false, signInEmail: '', parked: true, carried: null });
     },
     holdThroughSignOut(on = true) {
       holdOnSignOut = on;
+      if (!on) carryOnSignOut = null;
+    },
+    carryToNextForm(carry) {
+      carryOnSignOut = carry;
     },
     signedOut() {
       if (!holdOnSignOut) {
@@ -159,15 +175,18 @@ export function createJoinFlow(storage: KeyValueStorage): JoinFlow {
         return;
       }
       holdOnSignOut = false;
+      const carried = carryOnSignOut;
+      carryOnSignOut = null;
       // A fresh form for whoever comes next: the signed-out gate draws the form for a new account with the link filled in.
       set({
-        open: false, sent: null, formKey: state.formKey + 1, returned: false, signInFirst: false, signInEmail: '', parked: false,
+        // Going back from «Check your email» opens the form again even with no invitation behind it (a code typed by hand).
+        open: carried !== null, sent: null, formKey: state.formKey + 1, returned: false, signInFirst: false, signInEmail: '', parked: false, carried,
       });
     },
     // The invitation that was used is forgotten by name the moment the server says yes (forget(only)); one opened since is
     // kept, and asked about once the venue is open.
     finish() {
-      set({ open: false, sent: null, returned: false, signInFirst: false, signInEmail: '', parked: false });
+      set({ open: false, sent: null, returned: false, signInFirst: false, signInEmail: '', parked: false, carried: null });
     },
     sending() {
       set({ sent: Object.freeze({ busy: true, invited: state.invited }) });

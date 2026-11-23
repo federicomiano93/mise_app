@@ -107,6 +107,11 @@ export interface SessionStore {
   // The join form of a new account is gone (Back, sign-out, a new invitation): the account it created is resolved as any
   // sign-in is. Does nothing when no sign-up is held.
   releaseSignUp(): void;
+  // The join form's «Check your email» (see backend.ts): send the confirmation email, check it was confirmed (a fresh ID token
+  // follows), and remove a just-created account whose email was mistyped. Each rejects with Firebase's error.
+  sendEmailVerification(languageCode: 'it' | 'en', continueUrl: string): Promise<void>;
+  checkEmailVerified(): Promise<boolean>;
+  deleteNewAccount(): Promise<void>;
   sendReset(email: string): Promise<void>;
   // Signs out, wipes this phone's copies and reloads. The caller asks first when
   // changesStillWaiting() says something typed has not reached the server yet.
@@ -473,6 +478,9 @@ export function createSession(backend: SessionBackend, env: SessionEnv): Session
       }
     },
     releaseSignUp,
+    sendEmailVerification: (languageCode, continueUrl) => backend.sendEmailVerification(languageCode, continueUrl),
+    checkEmailVerified: () => backend.refreshEmailVerified(),
+    deleteNewAccount: () => backend.deleteCurrentAccount(),
     sendReset: email => backend.sendReset(String(email || '').trim()),
     async signOut({ keepInvitation = false } = {}) {
       // ⚠️ A PENDING INVITATION IS FORGOTTEN ON SIGN-OUT (docs/parity/staff-plan.md, «Security»): it is a key to a

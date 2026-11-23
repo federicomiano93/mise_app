@@ -72,6 +72,10 @@ async function fill(user: User, {
 }
 
 const join = () => screen.getByRole('button', { name: 'Join' });
+// A new account first confirms its email: «Join» makes the account and shows «Check your email»; the code is checked only
+// once «I’ve confirmed» is tapped (the fake store says the email is confirmed).
+const tapConfirmed = async (user: User) => { await user.click(await screen.findByRole('button', { name: 'I’ve confirmed' })); };
+const signUpAndConfirm = async (user: User) => { await user.click(join()); await tapConfirmed(user); };
 
 describe('the form for a new account: what it says', () => {
   test('typed by hand: «Join with a code», email twice, password twice, no account named', () => {
@@ -151,6 +155,7 @@ describe('joining with a new account', () => {
     store.openJoinedVenue.mockImplementation(async () => { order.push('open'); });
     await fill(user, { email2: 'Anna.B@club.test', code: '123 456' });
     await user.dblClick(join());
+    await tapConfirmed(user);
     await waitFor(() => { expect(store.openJoinedVenue).toHaveBeenCalled(); });
     expect(order).toEqual(['signUp', 'redeem', 'open']);
     expect(store.signUp).toHaveBeenCalledWith('anna.b@club.test', PASSWORD);
@@ -174,18 +179,22 @@ describe('joining with a new account', () => {
     expect(screen.getByRole('link', { name: 'How to install the app' })).toHaveAttribute('aria-disabled', 'true');
     expect(isBusy()).toBe(true);
     await act(async () => { made({ uid: 'new-uid', email: 'anna.b@club.test', isAnonymous: false }); });
-    expect(screen.getByRole('status')).toHaveTextContent('Checking your code…');
-    // ⚠️ The passwords are dropped from memory the moment the account exists.
-    expect(screen.getByLabelText(PASSWORD_LABEL)).toHaveValue('');
-    expect(screen.getByLabelText('Repeat the password')).toHaveValue('');
+    // ⚠️ The account exists, its email is to be confirmed: the code is NOT checked yet and nothing is in the air.
+    expect(await screen.findByRole('heading', { level: 1, name: 'Check your email' })).toBeInTheDocument();
+    expect(store.redeemJoinCode).not.toHaveBeenCalled();
+    expect(isBusy()).toBe(false);
+    await user.click(screen.getByRole('button', { name: 'I’ve confirmed' }));
+    await waitFor(() => { expect(store.redeemJoinCode).toHaveBeenCalled(); });
+    expect(screen.getByRole('status')).toHaveTextContent('Checking…');
+    expect(isBusy()).toBe(true);
     await act(async () => { answer('joined'); });
-    expect(screen.getByRole('status')).toHaveTextContent('You’re in. Opening…');
+    await waitFor(() => { expect(store.openJoinedVenue).toHaveBeenCalledWith('joined', 'new-uid'); });
   });
 
   test('the invitation is forgotten the moment the code is accepted', async () => {
     const { user, flow, storage } = draw({ invited: TOKEN });
     await fill(user);
-    await user.click(join());
+    await signUpAndConfirm(user);
     await waitFor(() => { expect(flow.getSnapshot().invited).toBe(''); });
     expect(storage.map.has(PENDING_INVITE_KEY)).toBe(false);
     nothingHeardOf(TOKEN, PASSWORD);
@@ -235,7 +244,7 @@ describe('the account was created, and only the code was refused', () => {
     const { user, store } = draw();
     store.redeemJoinCode.mockRejectedValueOnce(fnError('permission-denied', 'That code does not work.'));
     await fill(user, { code: '123456' });
-    await user.click(join());
+    await signUpAndConfirm(user);
     const alert = await findSpokenAlert();
     expect(alert).toHaveTextContent('That code does not work. Ask for a new one.');
     expect(screen.getByText('The code will be used for this account:')).toBeInTheDocument();
@@ -256,7 +265,7 @@ describe('the account was created, and only the code was refused', () => {
     const { user, store } = draw();
     store.redeemJoinCode.mockRejectedValueOnce(fnError('permission-denied', 'That code does not work.'));
     await fill(user, { code: '123456' });
-    await user.click(join());
+    await signUpAndConfirm(user);
     await findSpokenAlert();
     const code = screen.getByLabelText('Code');
     await user.clear(code);
@@ -273,7 +282,7 @@ describe('the account was created, and only the code was refused', () => {
     const { user, store, flow } = draw({ invited: TOKEN });
     store.redeemJoinCode.mockRejectedValueOnce(Object.assign(new Error('timed out'), { code: 'functions/deadline-exceeded' }));
     await fill(user);
-    await user.click(join());
+    await signUpAndConfirm(user);
     await findSpokenAlert();
     store.redeemJoinCode.mockRejectedValueOnce(fnError('failed-precondition', 'x', { reason: 'already-member' }));
     await user.click(join());
@@ -287,7 +296,7 @@ describe('the account was created, and only the code was refused', () => {
     const { user, store } = draw();
     store.redeemJoinCode.mockRejectedValueOnce(fnError('failed-precondition', 'x', { reason: 'already-member' }));
     await fill(user, { code: '123456' });
-    await user.click(join());
+    await signUpAndConfirm(user);
     await waitFor(() => { expect(store.openJoinedVenue).toHaveBeenCalledWith(null, 'new-uid'); });
   });
 
@@ -295,7 +304,7 @@ describe('the account was created, and only the code was refused', () => {
     const { user, store, flow, storage } = draw({ invited: TOKEN });
     store.redeemJoinCode.mockRejectedValueOnce(fnError('permission-denied', 'That code does not work.'));
     await fill(user);
-    await user.click(join());
+    await signUpAndConfirm(user);
     await findSpokenAlert();
     await user.click(screen.getByRole('button', { name: 'Back' }));
     await user.click(await screen.findByRole('button', { name: 'Discard' }));
@@ -307,7 +316,7 @@ describe('the account was created, and only the code was refused', () => {
     const { user, store } = draw();
     store.redeemJoinCode.mockRejectedValue(fnError('permission-denied', 'That code does not work.'));
     await fill(user, { code: '123456' });
-    await user.click(join());
+    await signUpAndConfirm(user);
     await findSpokenAlert();
     await user.click(join());
     await waitFor(() => { expect(store.redeemJoinCode).toHaveBeenCalledTimes(2); });
