@@ -33,12 +33,13 @@ export function CakeLabelRow({ cake, onOpen, buttonRef }: Props) {
   else if (answer.state === 'empty') summary = t('cakes.label.summaryEmpty');
   else if (answer.state === 'blocked') {
     summary = answer.blockedCards > 0 ? t('cakes.label.summaryBlocked', { n: answer.blockedCards }) : t('cakes.label.summaryNoWeights');
-  } else if (answer.label.allergens.length === 0) summary = t('cakes.label.summaryNone');
-  else {
-    summary = t('cakes.label.summaryContains', {
-      contains: labelWord('contains', lang),
-      names: answer.label.allergens.map(code => allergenName(code, lang)).join(', '),
-    });
+  } else {
+    // ⚠️ THE WORDS AND THE NAMES ARE THE VENUE COUNTRY'S (a food's name), the rest of the line the interface's.
+    const names = (codes: readonly string[]) => codes.map(code => allergenName(code, lang)).join(', ');
+    const { allergens, mayContain } = answer.label;
+    const parts = { contains: labelWord('contains', lang), names: names(allergens), mayContain: labelWord('mayContain', lang), mayNames: names(mayContain) };
+    if (allergens.length > 0) summary = t(mayContain.length > 0 ? 'cakes.label.summaryContainsMay' : 'cakes.label.summaryContains', parts);
+    else summary = mayContain.length > 0 ? t('cakes.label.summaryMayOnly', parts) : t('cakes.label.summaryNone');
   }
 
   return (

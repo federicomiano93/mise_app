@@ -32,6 +32,7 @@ const FLOUR = declared('flour', ['gluten-wheat']);
 const MILK = declared('milk', ['milk'], { mayContain: ['nuts-hazelnut'] });
 const SUGAR = declared('sugar', []);
 // Nobody has said what is in the rum.
+const TRACE = declared('trace', [], { mayContain: ['nuts-hazelnut'] });
 const RUM: StoredDoc = { id: 'rum', name: 'Rum', allergens: [] };
 
 const card = (id: string, name: string, components: unknown[], extra: Record<string, unknown> = {}): StoredDoc =>
@@ -41,6 +42,8 @@ const grams = (ingredientId: string, qty: number) => ({ kind: 'ingredient', ingr
 const SPONGE = card('sponge', 'Sponge', [grams('flour', 600), grams('sugar', 400)]);
 const CREAM = card('cream', 'Cream', [grams('milk', 500), grams('sugar', 500)]);
 const SOAK = card('soak', 'Rum soak', [grams('rum', 100), grams('sugar', 400)]);
+const PLAIN = card('plain', 'Plain', [grams('sugar', 1000)]);
+const TRACES = card('traces', 'Traces', [grams('trace', 1000)]);
 const FRUIT = card('fruit', 'Fruit filling', [{ recipeId: 'fruit-recipe', qtyKg: 1 }]);
 
 const FRUIT_RECIPE: StoredDoc = { id: 'fruit-recipe', name: 'Fruit', ingredients: [] };
@@ -58,7 +61,7 @@ async function open(seed: Seed = {}, options: { location?: Record<string, unknow
   const foodcost = fakeFoodcostSource({
     products: seed.cards ?? [SPONGE, CREAM],
     recipes: [FRUIT_RECIPE],
-    ingredients: [FLOUR, MILK, SUGAR, RUM],
+    ingredients: [FLOUR, MILK, SUGAR, RUM, TRACE],
   });
   if (options.refuse) foodcost.refuse[options.refuse] = true;
   const view = renderCakes(options.path ?? '/cakes/c1', {
@@ -79,7 +82,17 @@ const switchGroup = () => screen.findByRole('group', { name: 'What the label sho
 describe('the row under «Cost and price»', () => {
   it('says «Contains …» once every card is declared, in the venue country\'s words', async () => {
     await open();
-    await waitFor(() => { expect(rowButton()).toHaveTextContent('Contains: Wheat, Milk · ready to print'); }, LOAD);
+    await waitFor(() => { expect(rowButton()).toHaveTextContent('Contains: Wheat, Milk · May contain: Hazelnut · label ready'); }, LOAD);
+  });
+
+  it('says «Allergens checked: none» (never «not declared») for a cake with nothing in it to declare', async () => {
+    await open({ cards: [PLAIN], lines: [line(0, 'base', 'plain', 900)] });
+    await waitFor(() => { expect(rowButton()).toHaveTextContent('Allergens checked: none · label ready'); }, LOAD);
+  });
+
+  it('says only the may-contain when nothing is contained, in the venue’s words', async () => {
+    await open({ cards: [TRACES], lines: [line(0, 'base', 'traces', 900)] }, { location: IT, lang: 'en' });
+    await waitFor(() => { expect(rowButton()).toHaveTextContent(/Può contenere: .* · label ready$/); }, LOAD);
   });
 
   it('says what is missing while a card is not declared', async () => {
@@ -94,7 +107,7 @@ describe('the row under «Cost and price»', () => {
 
   it('keeps the interface in its own language and the allergens in the venue\'s: an Italian venue, an English screen', async () => {
     await open({}, { location: IT, lang: 'en' });
-    await waitFor(() => { expect(rowButton()).toHaveTextContent(/Contiene: .*· ready to print/); }, LOAD);
+    await waitFor(() => { expect(rowButton()).toHaveTextContent(/Contiene: .* · label ready/); }, LOAD);
     expect(rowButton()).not.toHaveTextContent('Contains');
   });
 
@@ -118,6 +131,31 @@ describe('the full-screen view', () => {
     expect(await screen.findByRole('button', { name: 'Save to the price list' })).toBeVisible();
     expect(rowButton()).toHaveFocus();
     expect(screen.queryByRole('group', { name: 'What the label shows' })).not.toBeInTheDocument();
+  });
+
+  it('the browser’s Back closes the VIEW only: still on the cake, the form as it was, no discard question', async () => {
+    const { user, router } = await open({}, { path: '/cakes/new' });
+    await user.type(screen.getByRole('textbox', { name: 'Name' }), 'Mia torta');
+    await user.click(rowButton());
+    expect(await screen.findByRole('heading', { level: 2, name: 'Mia torta' })).toBeInTheDocument();
+    expect(router.state.location.state).toMatchObject({ cakeLabel: true });
+    await act(async () => { await router.navigate(-1); });
+    expect(await screen.findByRole('button', { name: 'Save to the price list' })).toBeVisible();
+    expect(screen.queryByRole('heading', { level: 2, name: 'Mia torta' })).not.toBeInTheDocument();
+    expect(router.state.location.pathname).toBe('/cakes/new');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Name' })).toHaveValue('Mia torta');
+    await waitFor(() => { expect(rowButton()).toHaveFocus(); });
+  });
+
+  it('the view’s own Back steps the same entry back', async () => {
+    const { user, router } = await open();
+    await user.click(rowButton());
+    await switchGroup();
+    await user.click(screen.getByRole('button', { name: 'Back' }));
+    await screen.findByRole('button', { name: 'Save to the price list' });
+    expect(router.state.location.state).not.toMatchObject({ cakeLabel: true });
+    expect(router.state.location.pathname).toBe('/cakes/c1');
   });
 
   it('closes on Escape too', async () => {
@@ -179,7 +217,7 @@ describe('what stops the label', () => {
     const { user } = await open(blockedSeed());
     await user.click(await screen.findByRole('button', { name: /^Cake label.*Not yet: 2 cards to fix/ }, LOAD));
     expect(await screen.findByText('The label cannot be made yet')).toBeInTheDocument();
-    expect(screen.getByText(/2 cards are in the way:/)).toBeInTheDocument();
+    expect(screen.getByText(/2 cards to fix:/)).toBeInTheDocument();
     expect(view().getByText('Rum soak')).toBeInTheDocument();
     expect(screen.getByText('The ingredient “Rum” does not have its allergens verified yet.')).toBeInTheDocument();
     expect(view().getByText('Fruit filling')).toBeInTheDocument();
@@ -214,6 +252,27 @@ describe('what stops the label', () => {
     const { user } = await open({ cards: [SPONGE], lines: [line(0, 'base', 'sponge', 900), line(0, 'filling', 'ghost', 500)] });
     await user.click(await screen.findByRole('button', { name: /^Cake label.*Not yet: 1 card to fix/ }, LOAD));
     expect(await screen.findByText('This card is no longer in Food cost.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Open the ingredient' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Open in Recipes' })).not.toBeInTheDocument();
+    // And no finished-looking label either: no card, no Copy.
+    expect(screen.queryByText('Check this before it goes on food')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Copy the text' })).not.toBeInTheDocument();
+    expect(document.querySelector('.lab-sheet')).toBeNull();
+  });
+
+  it('a line with a card but no grams refuses the label, naming the card, and has no door', async () => {
+    const { user } = await open({ cards: [SPONGE, CREAM], lines: [line(0, 'base', 'sponge', 900), { tier: 0, part: 'filling', productId: 'cream', grams: 0 }] });
+    await user.click(await screen.findByRole('button', { name: /^Cake label.*Not yet: 1 card to fix/ }, LOAD));
+    expect(await screen.findByText('This card’s grams in the cake are missing: type them in its part’s step.')).toBeInTheDocument();
+    expect(view().getByText('Cream')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Open the ingredient' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Check this before it goes on food')).not.toBeInTheDocument();
+  });
+
+  it('the doors are hidden for a person who is not shown Recipes or Ingredients & suppliers', async () => {
+    const { user } = await open(blockedSeed(), { location: { ...GB, sections: { catalogue: false, orders: false } } });
+    await user.click(await screen.findByRole('button', { name: /^Cake label.*Not yet/ }, LOAD));
+    expect(await screen.findByText('The label cannot be made yet')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Open the ingredient' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Open in Recipes' })).not.toBeInTheDocument();
   });

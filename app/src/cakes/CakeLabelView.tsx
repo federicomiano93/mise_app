@@ -1,7 +1,7 @@
 import { useEffect, useId, useMemo, useRef } from 'react';
 import type { KeyboardEvent, ReactNode } from 'react';
 import { cakeLabelDiameters } from '@mise/shared/cake-label-model';
-import type { CakeLabelAnswer, CakeLabelBlock, CakeLabelCard } from '@mise/shared/cake-label-model';
+import type { CakeLabelAnswer, CakeLabelBlock, CakeLabelCard, CakeLabelProblemReason } from '@mise/shared/cake-label-model';
 import type { Cake, CakePart } from '@mise/shared/cake-model';
 import { localNumber } from '@mise/shared/currency';
 import { PartBoundary } from '../errors/PartBoundary';
@@ -146,11 +146,12 @@ function Refusal({ answer, onOpenIngredient, onOpenRecipe }: { answer: CakeLabel
 
 type RowView = { title: string; text: string; door: 'ingredient' | 'recipe' | null; id: string };
 
-const CARD_REASON: Readonly<Record<'card-gone' | 'card-no-weights' | 'too-deep' | 'loop', MessageKey>> = {
+const CARD_REASON: Readonly<Record<CakeLabelProblemReason, MessageKey>> = {
   'card-gone': 'cakes.label.row.cardGone',
   'card-no-weights': 'cakes.label.row.cardNoWeights',
   'too-deep': 'cakes.label.row.tooDeep',
   loop: 'cakes.label.row.loop',
+  'line-no-grams': 'cakes.label.row.lineNoGrams',
 };
 
 // One refused row in words. The names are the venue's own (the card, the ingredient, the recipe); the sentences are the interface's.
