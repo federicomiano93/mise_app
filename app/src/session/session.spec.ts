@@ -61,6 +61,9 @@ function setup(world: World, { local = {}, session = {}, now = 1_000_000, busy =
       return user;
     }),
     sendReset: vi.fn(async () => {}),
+    sendEmailVerification: vi.fn(async () => {}),
+    refreshEmailVerified: vi.fn(async () => true),
+    deleteCurrentAccount: vi.fn(async () => {}),
     signOut: vi.fn(async () => { calls.push('signOut'); }),
     wipeOfflineCache: vi.fn(async () => {
       calls.push('wipe');
@@ -860,6 +863,92 @@ describe('joining with a NEW account (staff slice 2)', () => {
     await s.store.openJoinedVenue('newplace', 'somebody-else');
     expect(s.env.reload).not.toHaveBeenCalled();
     expect(s.localStore.getItem(JUST_JOINED)).toBeNull();
+  });
+});
+
+describe('«Check your email» acts on the account the form created (new account, email not confirmed)', () => {
+  const refused = (code: string) => Object.assign(new Error(code), { code });
+  async function signedUpAs() {
+    const s = setup(world({}));
+    s.auth(null);
+    await settle();
+    await s.store.signUp('anna@club.test', 'a long password');
+    return s;
+  }
+
+  test('the email goes for that account, with the link back', async () => {
+    const s = await signedUpAs();
+    await s.store.sendEmailVerification('en', 'https://app.test/', 'newbie');
+    expect(s.backend.sendEmailVerification).toHaveBeenCalledOnce();
+    expect(s.backend.sendEmailVerification).toHaveBeenCalledWith('en', 'https://app.test/', 'newbie');
+  });
+
+  test.each(['auth/unauthorized-continue-uri', 'auth/invalid-continue-uri'])('%s: sent again ONCE with no link back', async code => {
+    const s = await signedUpAs();
+    vi.mocked(s.backend.sendEmailVerification).mockRejectedValueOnce(refused(code));
+    await s.store.sendEmailVerification('it', 'https://app.test/', 'newbie');
+    expect(vi.mocked(s.backend.sendEmailVerification).mock.calls).toEqual([
+      ['it', 'https://app.test/', 'newbie'], ['it', null, 'newbie'],
+    ]);
+  });
+
+  test('any other failure is not retried', async () => {
+    const s = await signedUpAs();
+    vi.mocked(s.backend.sendEmailVerification).mockRejectedValue(refused('auth/too-many-requests'));
+    await expect(s.store.sendEmailVerification('en', 'https://app.test/', 'newbie')).rejects.toMatchObject({ code: 'auth/too-many-requests' });
+    expect(s.backend.sendEmailVerification).toHaveBeenCalledOnce();
+  });
+
+  test('a failing retry is the failure said', async () => {
+    const s = await signedUpAs();
+    vi.mocked(s.backend.sendEmailVerification)
+      .mockRejectedValueOnce(refused('auth/unauthorized-continue-uri'))
+      .mockRejectedValueOnce(refused('auth/network-request-failed'));
+    await expect(s.store.sendEmailVerification('en', 'https://app.test/', 'newbie')).rejects.toMatchObject({ code: 'auth/network-request-failed' });
+  });
+
+  test('another account signed in: nothing is sent, checked or deleted', async () => {
+    const s = await signedUpAs();
+    s.auth({ uid: 'someone-else', email: 'x@club.test', isAnonymous: false });
+    await expect(s.store.sendEmailVerification('en', 'https://app.test/', 'newbie')).rejects.toMatchObject({ code: 'auth/user-mismatch' });
+    await expect(s.store.checkEmailVerified('newbie')).rejects.toMatchObject({ code: 'auth/user-mismatch' });
+    await expect(s.store.deleteNewAccount('newbie')).rejects.toMatchObject({ code: 'auth/user-mismatch' });
+    expect(s.backend.sendEmailVerification).not.toHaveBeenCalled();
+    expect(s.backend.refreshEmailVerified).not.toHaveBeenCalled();
+    expect(s.backend.deleteCurrentAccount).not.toHaveBeenCalled();
+    expect(s.backend.callFunction).not.toHaveBeenCalled();
+  });
+
+  test('«Go back»: the account is deleted, and nothing else is asked', async () => {
+    const s = await signedUpAs();
+    await s.store.deleteNewAccount('newbie');
+    expect(s.backend.deleteCurrentAccount).toHaveBeenCalledWith('newbie');
+    expect(s.backend.callFunction).not.toHaveBeenCalled();
+    expect(s.backend.signOut).not.toHaveBeenCalled();
+  });
+
+  test('«Go back» after Firebase\'s recent-login window: the server removes it, then Firebase\'s own sign-out (no reload)', async () => {
+    const s = await signedUpAs();
+    vi.mocked(s.backend.deleteCurrentAccount).mockRejectedValueOnce(refused('auth/requires-recent-login'));
+    await s.store.deleteNewAccount('newbie');
+    expect(s.backend.callFunction).toHaveBeenCalledWith('discardUnconfirmedAccount', {}, expect.any(Number));
+    expect(s.backend.signOut).toHaveBeenCalledOnce();
+    expect(s.env.reload).not.toHaveBeenCalled();
+  });
+
+  test('both the delete and the server fail: it rejects, and nobody is signed out', async () => {
+    const s = await signedUpAs();
+    vi.mocked(s.backend.deleteCurrentAccount).mockRejectedValueOnce(refused('auth/requires-recent-login'));
+    vi.mocked(s.backend.callFunction).mockRejectedValueOnce(refused('functions/failed-precondition'));
+    await expect(s.store.deleteNewAccount('newbie')).rejects.toMatchObject({ code: 'functions/failed-precondition' });
+    expect(s.backend.signOut).not.toHaveBeenCalled();
+  });
+
+  test('another failure of the delete does not reach the server', async () => {
+    const s = await signedUpAs();
+    vi.mocked(s.backend.deleteCurrentAccount).mockRejectedValueOnce(refused('auth/network-request-failed'));
+    await expect(s.store.deleteNewAccount('newbie')).rejects.toMatchObject({ code: 'auth/network-request-failed' });
+    expect(s.backend.callFunction).not.toHaveBeenCalled();
   });
 });
 

@@ -1,0 +1,110 @@
+/* «Check your email»: the confirmation icon, the three steps, the answers, and the buttons. It sits in the gate's card. */
+
+.icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: var(--r-pill);
+  background: var(--accent-tint);
+  color: var(--accent-ink);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s4);
+  width: 100%;
+}
+
+.sentTo {
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+}
+
+.sentTo b {
+  color: var(--ink);
+}
+
+.steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: step;
+  text-align: left;
+  font-size: var(--fs-md);
+}
+
+.steps li {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  counter-increment: step;
+}
+
+.steps li::before {
+  content: counter(step);
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--r-pill);
+  background: var(--sunken);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+}
+
+/* Two live regions, in the page before they speak. Empty, they take no room but are never display:none. */
+.note {
+  width: 100%;
+  border-radius: var(--r-md);
+  font-size: var(--fs-sm);
+  text-align: left;
+}
+
+.note[data-filled="true"] {
+  padding: var(--s3) var(--s4);
+}
+
+.note[data-kind="warn"][data-filled="true"] {
+  border: 1px solid var(--warn);
+  background: var(--warn-tint);
+  color: var(--warn-ink);
+}
+
+.note[data-kind="info"][data-filled="true"] {
+  background: var(--sunken);
+  color: var(--ink-2);
+}
+
+.note[data-kind="error"][data-filled="true"] {
+  background: var(--danger-tint);
+  color: var(--danger-ink);
+}
+
+.buttons {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  width: 100%;
+}
+
+.ways {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.spam {
+  color: var(--ink-3);
+  font-size: var(--fs-sm);
+}

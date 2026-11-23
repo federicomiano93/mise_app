@@ -33,6 +33,8 @@ import {
   sendPasswordResetEmail,
   verifyPasswordResetCode,
   confirmPasswordReset,
+  checkActionCode,
+  applyActionCode,
   connectAuthEmulator,
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
 import {
@@ -692,6 +694,18 @@ export function checkResetCode(code) {
 
 export function setNewPassword(code, password) {
   return confirmPasswordReset(auth, String(code || ''), String(password || ''));
+}
+
+// «Confirm your email» (a new account, before a join code lets it in) lands on the same page
+// (mode=verifyEmail). checkVerifyCode reads the address the code belongs to, applyVerifyCode
+// confirms it. Neither call signs anybody in: the person is confirming from another window.
+export async function checkVerifyCode(code) {
+  const info = await checkActionCode(auth, String(code || ''));
+  return String((info && info.data && info.data.email) || '');
+}
+
+export function applyVerifyCode(code) {
+  return applyActionCode(auth, String(code || ''));
 }
 
 // Signing out wipes this device's cached copies of the location's data — the

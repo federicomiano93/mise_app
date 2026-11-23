@@ -243,6 +243,11 @@ const DICTIONARIES = Object.freeze({
     'reset.retry': 'Try again',
     'reset.unavailable': 'Something went wrong opening this page. Please try again in a moment.',
     'reset.needsUpdate': 'This link needs the latest version of Mise. Open the Mise app, tap “Update now” if it appears, then tap the link in the email again.',
+    'verifyEmail.doneTitle': 'Email confirmed',
+    'verifyEmail.doneFor': 'Thank you: {email} is confirmed.',
+    'verifyEmail.doneBack': 'Go back to the Mise window where you were signing up and tap “I’ve confirmed”.',
+    'verifyEmail.badTitle': 'This link no longer works',
+    'verifyEmail.badBody': 'It has expired or was already used. Go back to Mise and tap “Send it again”. If you’ve already confirmed it, go back to Mise and tap “I’ve confirmed”.',
     'join.badCode': 'That code does not work. Ask for a new one.',
     // ⚠️ NOT A FAULT WITH THE CODE, AND IT MUST NOT SOUND LIKE ONE. This is what
     // an owner sees on opening an invitation to their own business — which is how
@@ -3660,6 +3665,11 @@ const DICTIONARIES = Object.freeze({
     'reset.retry': 'Riprova',
     'reset.unavailable': 'Qualcosa è andato storto aprendo questa pagina. Riprova tra un momento.',
     'reset.needsUpdate': 'Questo link richiede la versione più recente di Mise. Apri l’app Mise, tocca “Aggiorna ora” se compare, poi tocca di nuovo il link nell’email.',
+    'verifyEmail.doneTitle': 'Email confermata',
+    'verifyEmail.doneFor': 'Grazie: {email} è confermata.',
+    'verifyEmail.doneBack': 'Torna alla finestra di Mise dove ti stavi registrando e tocca «Ho confermato».',
+    'verifyEmail.badTitle': 'Il link non funziona più',
+    'verifyEmail.badBody': 'È scaduto o è già stato usato. Torna su Mise e tocca «Mandala di nuovo». Se l’hai già confermata, torna su Mise e tocca «Ho confermato».',
     'join.badCode': 'Questo codice non funziona. Chiedine uno nuovo.',
     'join.alreadyMember': 'Sei già dentro questa attività. Un codice non può cambiare cosa puoi fare qui.',
     'join.digitsPaused': 'Per sicurezza i codici di sei cifre sono sospesi per un po’. Chiedi un link d’invito.',

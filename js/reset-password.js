@@ -1,11 +1,12 @@
-// reset-password.js — the page «Forgot your password?» lands on (reset-password.html).
+// reset-password.js — the page the project's email links land on (reset-password.html): «Forgot your password?»
+// (mode=resetPassword) and «Confirm your email» for a new account (mode=verifyEmail).
 //
 // Firebase's own hosted page has one password box and a six-character floor. This page asks
 // for the new password TWICE and applies the app's own rules (js/credentials.js), the same
 // ones the invitation form uses.
 //
 // ⚠️ THE PAGE LOADS js/reset-password-boot.js, NOT THIS FILE. The boot file draws the card at
-// once, hands every email action that is not `resetPassword` on to Firebase's own page, and
+// once, hands every email action it does not handle itself (`resetPassword` and `verifyEmail`) on to Firebase's own page, and
 // loads this module dynamically so that ANY failure here (an old cached dictionary, a missing
 // export, a rejected start) ends in a «update the app and tap the link again» message instead
 // of a blank page. It does NOT forward a failed reset to Firebase's page: that page calls the
@@ -16,6 +17,12 @@
 // ⚠️ THE CODE AND THE EMAIL NEVER LEAVE THIS PAGE: not into a URL, not into a log (P17), and
 // sw.js never stores the page's address (it carries the code). Nothing here signs anybody in —
 // confirmPasswordReset does not, and that stays.
+//
+// ⚠️ THE EMAIL CONFIRMATION (mode=verifyEmail) is handled HERE for the same reason as the reset: Firebase's hosted page cannot
+// call the API from its own domain. The code is checked (that gives the address), then applied; the page says so and sends the
+// person back to the Mise window where they were signing up. Nothing is stored for it — not even the «done» note the reset
+// keeps — so a reload of the address says «no longer works», which is true of a code already used. «Open Mise» goes to the link's
+// `continueUrl` ONLY when that is on this very origin (it is untrusted input: anybody can write a link), else to the start page.
 //
 // start() takes its collaborators as arguments (Firebase, the document, the location, the
 // storage) so tests/reset-password.test.mjs can drive the whole page with fakes; the real wiring
@@ -31,6 +38,21 @@ export function readAction(search) {
     mode: params.get('mode') || '',
     code: params.get('oobCode') || '',
   };
+}
+
+// Where «Open Mise» goes after a confirmation: the link's `continueUrl`, but only when it is an http(s) address on the same
+// origin as this page. Anything else (another site, a javascript: address, rubbish, nothing) is '' and the caller uses the start page.
+export function sameOriginContinueUrl(search, pageHref) {
+  const raw = new URLSearchParams(String(search || '')).get('continueUrl');
+  if (!raw) return '';
+  try {
+    const page = new URL(String(pageHref || ''));
+    const target = new URL(raw, page);
+    if (target.protocol !== 'https:' && target.protocol !== 'http:') return '';
+    return target.origin === page.origin ? target.href : '';
+  } catch {
+    return '';
+  }
 }
 
 // The interface language: the PHONE's, always (the owner's decision, 4 Oct 2026) — the same
@@ -65,6 +87,12 @@ export const REQUIRED_KEYS = Object.freeze([
   'reset.retry', 'auth.signIn', 'join.choosePassword', 'join.repeatPassword',
 ]);
 
+// The sentences the email confirmation needs, on top of the shared ones.
+export const REQUIRED_VERIFY_KEYS = Object.freeze([
+  'verifyEmail.doneTitle', 'verifyEmail.doneFor', 'verifyEmail.doneBack', 'verifyEmail.badTitle', 'verifyEmail.badBody',
+  'reset.checking', 'reset.openMise', 'reset.inactive', 'reset.checkFailed', 'reset.retry',
+]);
+
 // Remembers that THIS code has been used, for a reload after success (which would otherwise
 // say «link expired»). The code is consumed and worthless by then; sessionStorage dies with
 // the tab. A browser that refuses storage simply loses the nicety.
@@ -84,13 +112,15 @@ function remember(storage, code) {
 
 export async function start({ fb, doc = document, loc = location, nav = navigator, storage = defaultStorage() } = {}) {
   const firebase = fb || await import('./firebase.js');
-  const { code } = readAction(loc.search);
+  const { mode, code } = readAction(loc.search);
+  const verifying = mode === 'verifyEmail';
   setLanguage(pickLanguage(nav.language));
 
-  if (typeof firebase.checkResetCode !== 'function' || typeof firebase.setNewPassword !== 'function') {
-    throw new Error('reset page: this version of firebase.js cannot check a reset code');
+  const calls = verifying ? ['checkVerifyCode', 'applyVerifyCode'] : ['checkResetCode', 'setNewPassword'];
+  if (calls.some(name => typeof firebase[name] !== 'function')) {
+    throw new Error('reset page: this version of firebase.js cannot check this kind of code');
   }
-  if (REQUIRED_KEYS.some(key => t(key) === key)) {
+  if ((verifying ? REQUIRED_VERIFY_KEYS : REQUIRED_KEYS).some(key => t(key) === key)) {
     throw new Error('reset page: this version of the dictionary lacks its sentences');
   }
 
@@ -113,9 +143,9 @@ export async function start({ fb, doc = document, loc = location, nav = navigato
     input.id = id;
     form.append(label, input);
   };
-  const openMiseLink = (text, primary) => {
+  const openMiseLink = (text, primary, href = 'index.html') => {
     const link = el('a', primary ? 'auth-btn auth-btn-link' : 'auth-link', text);
-    link.href = 'index.html';
+    link.href = href;
     return link;
   };
   // A sentence that takes the cursor: tabindex -1 so focus() works on a paragraph, and a live
@@ -156,6 +186,8 @@ export async function start({ fb, doc = document, loc = location, nav = navigato
     show(done, openMiseLink(t('reset.openMise'), true));
     done.focus();
   };
+
+  if (verifying) { await startVerifyEmail(); return; }
 
   if (!code) { showBadLink(); return; }
   if (remembered(storage, code)) { showDone(); return; }
@@ -259,4 +291,65 @@ export async function start({ fb, doc = document, loc = location, nav = navigato
   };
 
   await check();
+
+  // ── mode=verifyEmail ────────────────────────────────────────────────────────────────────────────────────────────
+  // Hoisted: called above, once the card exists. Nothing is stored and the code never leaves this function but for Firebase.
+  async function startVerifyEmail() {
+    const openMise = primary => openMiseLink(
+      t('reset.openMise'), primary, sameOriginContinueUrl(loc.search, loc.href) || 'index.html',
+    );
+    // The page's title follows what it says; the h1 takes the cursor so a screen reader says it.
+    const showVerify = (title, ...nodes) => {
+      const heading = el('h1', 'auth-title', title);
+      heading.setAttribute('tabindex', '-1');
+      card.textContent = '';
+      card.append(heading, ...nodes);
+      doc.title = title + ' · Mise';
+      heading.focus();
+    };
+    const showNoLongerWorks = () => {
+      showVerify(t('verifyEmail.badTitle'), el('p', 'auth-sub', t('verifyEmail.badBody')), openMise(true));
+    };
+    const showConfirmed = email => {
+      // The sentence keeps its hole, and the address is put in bold around a marker no sentence contains.
+      const mark = '\u0001';
+      const parts = t('verifyEmail.doneFor', { email: mark }).split(mark);
+      const thanks = el('p', 'auth-sub');
+      thanks.setAttribute('role', 'status');
+      thanks.append(el('span', '', parts[0] || ''), el('b', '', email), el('span', '', parts[1] || ''));
+      showVerify(t('verifyEmail.doneTitle'), thanks, el('p', 'auth-sub', t('verifyEmail.doneBack')), openMise(true));
+    };
+
+    if (!code) { showNoLongerWorks(); return; }
+
+    const confirmEmail = async (refocus = false) => {
+      const checking = el('p', 'auth-sub', t('reset.checking'));
+      checking.setAttribute('role', 'status');
+      checking.setAttribute('tabindex', '-1');
+      show(checking);
+      if (refocus) checking.focus();
+      try {
+        const email = await firebase.checkVerifyCode(code);
+        await firebase.applyVerifyCode(code);
+        showConfirmed(email);
+      } catch (err) {
+        const key = errorKeyFor(err && err.code);
+        if (key === 'reset.badLink') { showNoLongerWorks(); return; }
+        if (key === 'reset.inactive') {
+          const inactive = message(t('reset.inactive'), 'bad', 'alert');
+          show(inactive, openMise(false));
+          inactive.focus();
+          return;
+        }
+        // The connection's failure, not the link's: a retry that asks again.
+        const failure = message(t('reset.checkFailed'), 'bad', 'alert');
+        const retry = el('button', 'auth-btn', t('reset.retry'));
+        retry.type = 'button';
+        retry.addEventListener('click', () => confirmEmail(true));
+        show(failure, retry, openMise(false));
+        failure.focus();
+      }
+    };
+    await confirmEmail();
+  }
 }

@@ -9,17 +9,21 @@ import { kindOfTyped } from '@mise/shared/join-link';
 import type { MessageKey } from '../i18n/en';
 import { useT } from '../i18n/useT';
 import { Button } from '../ui/Button';
+import { useAlert } from '../ui/useAlert';
 import { useConfirm } from '../ui/useConfirm';
 import { authCodeOf, signInErrorKey } from './authErrors';
 import type { SessionUser } from './backend';
 import { markBusy, markLeavingOnPurpose } from './busy';
 import { GateScreen } from './GateScreen';
 import { InstallGuideLink } from './InstallGuideLink';
-import { joinRefusal } from './joinErrors';
+import { isEmailUnverified, joinRefusal } from './joinErrors';
 import type { JoinRefusal } from './joinErrors';
+import { appStartUrl, sendFailureKey } from './emailVerify';
 import { useJoinFlowStore } from './JoinFlowContext';
 import { useSession, useSessionStore } from './SessionContext';
 import { SignOutButton } from './SignOutButton';
+import { VerifyEmailView } from './VerifyEmailView';
+import type { VerifyNotice, VerifyPending } from './VerifyEmailView';
 import styles from './JoinScreen.module.css';
 
 type Field = 'first' | 'last' | 'email' | 'email2' | 'password' | 'password2' | 'code';
@@ -56,22 +60,24 @@ type Notice =
 // logs, reports or keeps them, the passwords are dropped from memory the moment the account exists, and the usage line names
 // this screen `join` and nothing more.
 export function JoinScreen() {
-  const { t } = useT();
+  const { t, lang } = useT();
   const session = useSession();
   const store = useSessionStore();
   const flowStore = useJoinFlowStore();
   // The invitation this form was opened for, read ONCE: the form is keyed on the flow's formKey, so a new invitation
   // builds a new form rather than rewriting this one under somebody's fingers.
   const [prefill] = useState(() => flowStore.getSnapshot().invited);
+  // What the person had typed when they went back from «Check your email» to correct the address (names and email only).
+  const [carried] = useState(() => flowStore.getSnapshot().carried);
   // Which kind of form, decided ONCE, when it opens: signed out, there is no account yet. The session moves while it is sent
   // (signed-out → loading), and the form must not change kind under the person because of it.
   const [needsAccount] = useState(() => session.status === 'signed-out');
   // The account this form created, once the code was then refused: the form is now for it.
   const [created, setCreated] = useState<SessionUser | null>(null);
   const newAccount = needsAccount && created === null;
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
-  const [email, setEmail] = useState('');
+  const [firstName, setFirstName] = useState(carried?.firstName ?? '');
+  const [lastName, setLastName] = useState(carried?.lastName ?? '');
+  const [email, setEmail] = useState(carried?.email ?? '');
   const [email2, setEmail2] = useState('');
   const [password, setPassword] = useState('');
   const [password2, setPassword2] = useState('');
@@ -79,9 +85,16 @@ export function JoinScreen() {
   const [problem, setProblem] = useState<Problem | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [sending, setSending] = useState(false);
+  // ⚠️ THE ACCOUNT WHOSE EMAIL HAS TO BE CONFIRMED FIRST: while it is set, the screen is «Check your email», not the form.
+  // `mine`: this form made the account a moment ago, so «Go back» may remove it. false: an account that was already there
+  // (the server refused its code with `email-unverified`): nothing here may delete it.
+  const [waiting, setWaiting] = useState<{ user: SessionUser; mine: boolean } | null>(null);
+  const [verifyNotice, setVerifyNotice] = useState<VerifyNotice | null>(null);
+  const [verifyPending, setVerifyPending] = useState<VerifyPending | null>(null);
   // The address Firebase said already has an account: «Sign in with that email» appears, the one way forward from there.
   const [takenEmail, setTakenEmail] = useState<string | null>(null);
   const [confirm, confirmDialog] = useConfirm();
+  const [alert, alertDialog] = useAlert();
   const refs: Record<Field, RefObject<HTMLInputElement | null>> = {
     first: useRef<HTMLInputElement>(null),
     last: useRef<HTMLInputElement>(null),
@@ -109,6 +122,33 @@ export function JoinScreen() {
   useEffect(() => {
     if (newAccount && someoneSignedIn && !inFlight.current) flowStore.openForm();
   }, [newAccount, someoneSignedIn, flowStore]);
+
+  // ⚠️ «CHECK YOUR EMAIL» IS FOR ONE ACCOUNT, THE ONE IT IS WAITING FOR. If another account signs in (another tab), or the
+  // account goes away by something other than this view's own «Go back», the view is left: nothing is deleted and no code is
+  // redeemed for a stranger, and the session takes over (the form opens again for whoever is signed in now). `baselineUid` is
+  // who the session showed when the view appeared (a fake or a slow announcement of our own account is not a change).
+  const liveUid = session.user?.uid ?? null;
+  const waitingUid = waiting?.user.uid ?? null;
+  const baselineUid = useRef<string | null>(null);
+  const leavingOnPurpose = useRef(false);
+  useEffect(() => { baselineUid.current = liveUid; }, [waitingUid]);
+  useEffect(() => {
+    if (waitingUid === null || leavingOnPurpose.current) return;
+    if (liveUid !== waitingUid && liveUid !== baselineUid.current) setWaiting(null);
+  }, [liveUid]);
+
+  // ⚠️ A NOTICE THAT IS ALREADY THERE WHEN THE VIEW MOUNTS IS NOT RELIABLY SPOKEN (VerifyEmailView keeps its regions in the page
+  // before they speak): the first notice (a first email that failed) is set one tick after the view is on screen.
+  const firstNotice = useRef<VerifyNotice | null>(null);
+  useEffect(() => {
+    if (waitingUid === null) return;
+    const timer = setTimeout(() => {
+      const notice = firstNotice.current;
+      firstNotice.current = null;
+      if (notice && mounted.current) setVerifyNotice(notice);
+    }, 0);
+    return () => { clearTimeout(timer); };
+  }, [waitingUid]);
 
   // ⚠️ THE FORM IS GONE (Back, «Sign in with a different account», a new invitation): an account it created and is holding still
   // is resolved now, as any sign-in is (session.ts releaseSignUp; nothing happens when nothing is held).
@@ -195,21 +235,14 @@ export function JoinScreen() {
     }
   }
 
-  async function submit(event: FormEvent) {
-    event.preventDefault();
-    if (inFlight.current) return;
-    const wrong = check();
-    if (wrong) {
-      showProblem(wrong);
-      return;
-    }
-    // The kind decides how the code is normalised as well as what it is called: case is folded for digits and KEPT for a
-    // link, where folding destroys it.
-    const kind = kindOfTyped(code) ?? 'digits';
-    const invitation = flowStore.getSnapshot().invited;
-    const typed = normalizeTyped(code, kind);
-    setProblem(null);
-    setTakenEmail(null);
+  const nextId = () => {
+    noticeCount.current += 1;
+    return noticeCount.current;
+  };
+
+  // One call in the air: the gate keeps this form, the session's reloads wait, and a second tap does nothing. `done` ends it
+  // when this screen is still the one to answer; `release` alone ends it when the screen is about to be replaced.
+  function begin() {
     inFlight.current = true;
     setSending(true);
     // ⚠️ MARKED BEFORE THE FIRST CALL: from here until the answer, the gate keeps this form (js/join-hold.js) and nothing reloads.
@@ -219,15 +252,41 @@ export function JoinScreen() {
       flowStore.answered();
       inFlight.current = false;
       release();
-      if (mounted.current) setSending(false);
+      if (mounted.current) {
+        setSending(false);
+        setVerifyPending(null);
+      }
     };
+    return { done, release };
+  }
 
-    // Who sends it: compared when the answer comes back. For a new account, the account is made first; for the account this
-    // form made, that one (the session may not have caught up with it).
-    let sender = created?.uid ?? session.user?.uid ?? '';
-    let madeNow: SessionUser | null = null;
+  // The confirmation email, in the language on screen, its link leading back to this app. null = sent; else what to say.
+  async function sendVerification(uid: string): Promise<VerifyNotice | null> {
+    try {
+      await store.sendEmailVerification(lang, appStartUrl(import.meta.env.BASE_URL, window.location.href), uid);
+      return null;
+    } catch (error) {
+      return { id: nextId(), kind: 'error', key: sendFailureKey(error) };
+    }
+  }
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    if (inFlight.current) return;
+    const wrong = check();
+    if (wrong) {
+      showProblem(wrong);
+      return;
+    }
+    setProblem(null);
+    setTakenEmail(null);
+    const { done, release } = begin();
+
     if (newAccount) {
+      // For a new account, the account is made first, and then its email has to be confirmed: the code is NOT checked yet
+      // (the server refuses a code from an account whose email is not confirmed, and it would be a try spent for nothing).
       say({ busy: 'join.creating' });
+      let madeNow: SessionUser;
       try {
         madeNow = await store.signUp(email, password);
       } catch (error) {
@@ -235,25 +294,58 @@ export function JoinScreen() {
         if (mounted.current) signUpRefused(error);
         return;
       }
-      sender = madeNow.uid;
-      // ⚠️ THE PASSWORDS ARE NOT NEEDED ANY MORE: dropped from memory now, whatever the code's answer.
+      // ⚠️ THE PASSWORDS ARE NOT NEEDED ANY MORE: dropped from memory now, whatever happens next.
       setPassword('');
       setPassword2('');
-      if (mounted.current) say({ busy: 'join.checkingCode' });
-    } else {
-      say({ busy: 'join.checking' });
+      const failed = await sendVerification(madeNow.uid);
+      if (mounted.current) {
+        setNotice(null);
+        setVerifyNotice(null);
+        firstNotice.current = failed;
+        setWaiting({ user: madeNow, mine: true });
+      }
+      done();
+      return;
     }
 
+    say({ busy: 'join.checking' });
+    await redeemNow({ made: null, sender: created?.uid ?? session.user?.uid ?? '', done, release });
+  }
+
+  // The code is checked, and on a yes the venue is opened. `made` is the account this form created (to be told about when the
+  // code is refused); `sender` who sends it, compared when the answer comes back.
+  async function redeemNow({ made, sender, done, release }: {
+    made: SessionUser | null; sender: string; done: () => void; release: () => void;
+  }) {
+    // The kind decides how the code is normalised as well as what it is called: case is folded for digits and KEPT for a
+    // link, where folding destroys it.
+    const kind = kindOfTyped(code) ?? 'digits';
+    const invitation = flowStore.getSnapshot().invited;
+    const typed = normalizeTyped(code, kind);
     let locationId: string | null;
     try {
       locationId = await store.redeemJoinCode(typed, kind, firstName, lastName);
     } catch (error) {
+      // ⚠️ AN ACCOUNT WHOSE EMAIL IS NOT CONFIRMED (one that came back later, or one the server does not yet see as confirmed): the
+      // «Check your email» screen, with a fresh email sent once when it first appears. No try was charged.
+      if (isEmailUnverified(error)) {
+        const who = made ?? created ?? session.user;
+        if (who && mounted.current) {
+          const first = waiting === null;
+          setWaiting({ user: who, mine: (made ?? created) !== null });
+          // The view is already on screen here (set just above), so the notice goes straight in.
+          if (first) setVerifyNotice(await sendVerification(who.uid));
+          else setVerifyNotice({ id: nextId(), kind: 'notYet' });
+        }
+        done();
+        return;
+      }
       const refusal = joinRefusal(error);
       // ⚠️ AN ACCOUNT THIS FORM CREATED CANNOT HAVE BEEN IN THE BUSINESS BEFORE: «already in this business» for it means the
       // server accepted an earlier try whose reply was lost (a timeout, a dropped connection), so this IS the join, done —
       // not a refusal to leave the person stuck on (code review, 13 Nov 2026). The venue is not named in that answer: the next
       // page finds it from the account's own document.
-      const alreadyJoined = refusal.key === 'join.alreadyMember' && (madeNow ?? created) !== null;
+      const alreadyJoined = refusal.key === 'join.alreadyMember' && (made ?? created) !== null;
       if (!alreadyJoined) {
         // ⚠️ «ALREADY IN THIS BUSINESS» CANNOT BE CHANGED BY TRYING AGAIN, so the invitation is dropped (the current app does the
         // same): left in place it would be offered again for the life of the window. The code itself is untouched on the server.
@@ -261,7 +353,8 @@ export function JoinScreen() {
         done();
         if (mounted.current) {
           // The account exists now: the form becomes the form for it (see the header).
-          if (madeNow) setCreated(madeNow);
+          if (made) setCreated(made);
+          setWaiting(null);
           say({ refusal });
         }
         return;
@@ -284,6 +377,98 @@ export function JoinScreen() {
       window.location.reload();
     } finally {
       release();
+    }
+  }
+
+  // «I’ve confirmed»: the account is read again; when it is confirmed (and its ID token renewed, which the server reads first)
+  // the code is checked exactly as before, with the same invitation, names and kind.
+  async function confirmed() {
+    if (inFlight.current || waiting === null) return;
+    const { done, release } = begin();
+    setVerifyPending('check');
+    setVerifyNotice(null);
+    let verified: boolean;
+    try {
+      verified = await store.checkEmailVerified(waiting.user.uid);
+    } catch (error) {
+      done();
+      // ⚠️ ANOTHER ACCOUNT IS SIGNED IN NOW: nothing is checked or redeemed for it; the view is left and the session takes over.
+      if (authCodeOf(error) === 'auth/user-mismatch') {
+        if (mounted.current) setWaiting(null);
+        return;
+      }
+      if (mounted.current) {
+        setVerifyNotice({ id: nextId(), kind: 'error', key: joinRefusal(error).key === 'join.offline' ? 'join.offline' : 'join.failed' });
+      }
+      return;
+    }
+    if (!verified) {
+      done();
+      if (mounted.current) setVerifyNotice({ id: nextId(), kind: 'notYet' });
+      return;
+    }
+    await redeemNow({ made: waiting.mine ? waiting.user : null, sender: waiting.user.uid, done, release });
+  }
+
+  async function resend() {
+    if (inFlight.current || waiting === null) return;
+    const { done } = begin();
+    setVerifyPending('resend');
+    setVerifyNotice(null);
+    const failed = await sendVerification(waiting.user.uid);
+    done();
+    if (mounted.current) setVerifyNotice(failed ?? { id: nextId(), kind: 'info', key: 'verify.resent' });
+  }
+
+  // ⚠️ «WRONG EMAIL? GO BACK» REMOVES THE ACCOUNT THIS FORM MADE a moment ago (asked first), so the right address can be typed.
+  // Normally the account is deleted here; once Firebase's recent-login window has passed the server removes it instead
+  // (session.ts deleteNewAccount). Either way the page is signed out WITHOUT a reload, the session goes signed-out and the gate
+  // draws a FRESH form, which starts with the names and the email (joinFlow carryToNextForm) and the invitation still held
+  // (holdThroughSignOut). Only when neither works does the person get the app's own sign-out, which RELOADS the page: the typed
+  // names and email do not survive that, so it is said first, in a dialog, that the account was not removed.
+  async function goBackFromVerify() {
+    if (inFlight.current || waiting === null || !waiting.mine) return;
+    if (!(await confirm({
+      title: t('verify.back.title'), message: t('verify.back.message'),
+      okLabel: t('auth.back'), cancelLabel: t('common.cancel'), danger: true,
+    }))) return;
+    if (inFlight.current) return;
+    const uid = waiting.user.uid;
+    const { done, release } = begin();
+    setVerifyPending('back');
+    setVerifyNotice(null);
+    flowStore.carryToNextForm({ firstName, lastName, email: email.trim() });
+    flowStore.holdThroughSignOut(true);
+    leavingOnPurpose.current = true;
+    let reason = '';
+    try {
+      await store.deleteNewAccount(uid);
+      release();
+      if (mounted.current) {
+        inFlight.current = false;
+        setSending(false);
+        setVerifyPending(null);
+      }
+      return;
+    } catch (error) { reason = authCodeOf(error); }
+    // ⚠️ ANOTHER ACCOUNT IS SIGNED IN NOW: nothing was deleted and nobody is signed out; the view is left and the session takes over.
+    if (reason === 'auth/user-mismatch') {
+      flowStore.holdThroughSignOut(false);
+      leavingOnPurpose.current = false;
+      done();
+      if (mounted.current) setWaiting(null);
+      return;
+    }
+    // The account could not be removed. The page is signed out instead, which RELOADS it: said now, because after it nothing can be.
+    await alert({ message: t('verify.back.notRemoved'), okLabel: t('common.ok') });
+    try {
+      await store.signOut({ keepInvitation: true });
+      release();
+    } catch {
+      flowStore.holdThroughSignOut(false);
+      leavingOnPurpose.current = false;
+      done();
+      if (mounted.current) setVerifyNotice({ id: nextId(), kind: 'error', key: 'verify.cannotGoBack' });
     }
   }
 
@@ -311,6 +496,24 @@ export function JoinScreen() {
     ? (newAccount ? 'join.sub.prefillNew' : 'join.sub.prefill')
     : (newAccount ? 'join.sub.new' : 'join.sub.have');
   const refusalShown = notice !== null && ('refusal' in notice || 'auth' in notice);
+
+  if (waiting !== null) {
+    return (
+      <>
+        <VerifyEmailView
+          email={waiting.user.email || email.trim() || waiting.user.uid}
+          pending={verifyPending}
+          notice={verifyNotice}
+          onBack={waiting.mine ? () => { void goBackFromVerify(); } : null}
+          leave={<SignOutButton variant="quiet" label={t('auth.otherAccount')} isDisabled={verifyPending !== null} keepInvitation />}
+          onConfirmed={() => { void confirmed(); }}
+          onResend={() => { void resend(); }}
+        />
+        {confirmDialog}
+        {alertDialog}
+      </>
+    );
+  }
 
   return (
     <GateScreen title={t(titleKey)} subtitle={t(subKey)}>

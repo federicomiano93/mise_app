@@ -29,6 +29,7 @@ import { sameData } from '@mise/shared/same-data';
 import { JUST_JOINED_KEY, markJustJoined } from '@mise/shared/install-hint';
 import type { Language } from '../i18n/i18n';
 import type { DocData, SessionBackend, SessionEnv, SessionUser } from './backend';
+import { authCodeOf } from './authErrors';
 import { PENDING_INVITE_KEY } from './joinFlow';
 
 export type SessionStatus = 'loading' | 'signed-out' | 'choose-location' | 'no-access' | 'error' | 'ready';
@@ -107,6 +108,16 @@ export interface SessionStore {
   // The join form of a new account is gone (Back, sign-out, a new invitation): the account it created is resolved as any
   // sign-in is. Does nothing when no sign-up is held.
   releaseSignUp(): void;
+  // The join form's «Check your email» (see backend.ts): send the confirmation email, check it was confirmed (a fresh ID token
+  // follows), and remove a just-created account whose email was mistyped. Each rejects with Firebase's error.
+  // ⚠️ Each acts on the account `uid` (the one the form is waiting for) and on no other: another account signed in meanwhile
+  // makes it reject with `auth/user-mismatch`, having done nothing.
+  // The address of the link is retried once without it when Firebase refuses it (the link page falls back to the app's start).
+  sendEmailVerification(languageCode: 'it' | 'en', continueUrl: string, uid: string): Promise<void>;
+  checkEmailVerified(uid: string): Promise<boolean>;
+  // Removes the account; when Firebase wants a recent sign-in, the server removes it instead (discardUnconfirmedAccount) and
+  // this page is signed out WITHOUT the reload of signOut() below, so the form can come back with what was typed.
+  deleteNewAccount(uid: string): Promise<void>;
   sendReset(email: string): Promise<void>;
   // Signs out, wipes this phone's copies and reloads. The caller asks first when
   // changesStillWaiting() says something typed has not reached the server yet.
@@ -354,6 +365,11 @@ export function createSession(backend: SessionBackend, env: SessionEnv): Session
   // left must not be published in that gap.
   let signedInUid: string | null = null;
 
+  // The join form's «Check your email» acts on the account it created, never on whoever is signed in by now.
+  function assertSignedInAs(uid: string): void {
+    if (signedInUid !== uid) throw Object.assign(new Error('Another account is signed in.'), { code: 'auth/user-mismatch' });
+  }
+
   function onAuth(user: SessionUser | null): void {
     signedInUid = user && !user.isAnonymous ? user.uid : null;
     if (!user) {
@@ -473,6 +489,37 @@ export function createSession(backend: SessionBackend, env: SessionEnv): Session
       }
     },
     releaseSignUp,
+    async sendEmailVerification(languageCode, continueUrl, uid) {
+      assertSignedInAs(uid);
+      try {
+        await backend.sendEmailVerification(languageCode, continueUrl, uid);
+      } catch (err) {
+        // ⚠️ THE ADDRESS OF THE LINK REFUSED (not an authorised domain of the project, or malformed): the email still goes, with
+        // no link back. The action page falls back to the app's start on its own.
+        const code = authCodeOf(err);
+        if (code !== 'auth/unauthorized-continue-uri' && code !== 'auth/invalid-continue-uri') throw err;
+        await backend.sendEmailVerification(languageCode, null, uid);
+      }
+    },
+    async checkEmailVerified(uid) {
+      assertSignedInAs(uid);
+      return backend.refreshEmailVerified(uid);
+    },
+    async deleteNewAccount(uid) {
+      assertSignedInAs(uid);
+      try {
+        await backend.deleteCurrentAccount(uid);
+        return;
+      } catch (err) {
+        if (authCodeOf(err) !== 'auth/requires-recent-login') throw err;
+      }
+      // ⚠️ FIREBASE'S RECENT-LOGIN WINDOW HAS PASSED: the server removes this account (only an unconfirmed one, new, with no
+      // record). Checked again first: the call acts on whoever is signed in. Then Firebase's own sign-out, NOT this store's: that
+      // one reloads the page, and the typed names and email would be lost. The session sees «signed out» as after a delete.
+      assertSignedInAs(uid);
+      await backend.callFunction('discardUnconfirmedAccount', {}, JOIN_TIMEOUT_MS);
+      await backend.signOut();
+    },
     sendReset: email => backend.sendReset(String(email || '').trim()),
     async signOut({ keepInvitation = false } = {}) {
       // ⚠️ A PENDING INVITATION IS FORGOTTEN ON SIGN-OUT (docs/parity/staff-plan.md, «Security»): it is a key to a

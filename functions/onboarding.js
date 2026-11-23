@@ -15,6 +15,7 @@
 //   createWorkspace   the app's owner only   a new customer's location + its first link
 //   createJoinCode    a location's owner     one invitation: digits, or a link
 //   redeemJoinCode    anybody signed in      THE only write to users/{uid}
+//                     (an account made from 23 Nov 2026 must have confirmed its email first)
 //   setMemberRole     a location's owner     promote, demote, remove
 //
 // ⚠️ EVERY DECISION THAT CAN BE MADE WITHOUT A DATABASE LIVES IN join-code.js,
@@ -25,6 +26,7 @@
 
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import { getAuth } from 'firebase-admin/auth';
 import { logger } from 'firebase-functions';
 import { createHash, randomInt, randomBytes } from 'node:crypto';
 
@@ -136,6 +138,29 @@ async function requireOwner(uid, locationId) {
     // location exists to somebody who should not know.
     throw new HttpsError('permission-denied', 'Only the owner can do that.');
   }
+}
+
+// ⚠️ A NEW ACCOUNT MUST HAVE CONFIRMED ITS EMAIL BEFORE A CODE LETS IT IN (Federico's decision, 22 Nov 2026).
+// Only accounts created from EMAIL_CHECK_SINCE (23 Nov 2026, the night it was built) on: everybody already inside keeps working, and «everybody confirms»
+// is a later, separate step of his. Without it, anybody could sign up with somebody else's address, open an
+// invitation sent to that person, and sit in the business under their name.
+//
+// The token's `email_verified` is checked first because it is free; a token minted before the person tapped the
+// link still says false, so the account record is read before refusing (the app also refreshes its token after
+// «Ho confermato»). An account whose creation time cannot be read counts as NEW: the uncertain answer is the
+// closed one. Refused BEFORE a try is charged, so confirming late costs no attempts.
+const EMAIL_CHECK_SINCE = Date.UTC(2026, 10, 23);
+
+async function requireConfirmedEmail(request, uid) {
+  if (request.auth && request.auth.token && request.auth.token.email_verified === true) return;
+  const account = await getAuth().getUser(uid);
+  if (account.emailVerified === true) return;
+  const created = Date.parse((account.metadata && account.metadata.creationTime) || '');
+  if (Number.isFinite(created) && created < EMAIL_CHECK_SINCE) return;
+  logger.info('Redeem refused', { uid, reason: 'email-unverified' });
+  throw new HttpsError('failed-precondition',
+    'Confirm your email address first: open the email we sent you and tap the link in it.',
+    { reason: 'email-unverified' });
 }
 
 // Federico, and nobody else. One document, created once from the console — the
@@ -613,6 +638,8 @@ export const redeemJoinCode = onCall(CALL, async (request) => {
   const kind = (request.data && request.data.kind) === 'link' ? 'link' : 'digits';
   const code = String((request.data && request.data.code) || '');
 
+  await requireConfirmedEmail(request, uid);
+
   // ⚠️ A PAUSE IS ANSWERED BEFORE THE ACCOUNT IS CHARGED (code review, 23 Sep 2026).
   // While six-digit codes are paused for everybody, a real person trying theirs would
   // otherwise spend one of their five tries an hour on an answer that was never going
@@ -792,6 +819,36 @@ export const redeemJoinCode = onCall(CALL, async (request) => {
   logger.info('Joined', { uid, locationId: result.locationId, role: result.role });
   return { locationId: result.locationId, role: result.role };
 });
+
+// ── 3b. «L’email è sbagliata? Torna indietro»: removing the account the join form just made
+//
+// The app deletes it itself when it can, but Firebase lets a client delete its own account only within ~5 minutes of
+// signing in (`auth/requires-recent-login`), and a person who waited for the email, looked in the spam and only then
+// saw the typo is past that. Without this, the account under somebody else's address would stay for good (P13) and
+// the person would start again from an empty form.
+//
+// ⚠️ ONLY THE CALLER'S OWN ACCOUNT, AND ONLY ONE THAT NEVER GOT ANYWHERE: not confirmed, created from EMAIL_CHECK_SINCE
+// on and within the last 7 days (the life of an invitation link), and with NO users/{uid} document — so never an
+// account that is in a business, or ever was. Every uncertain answer (an unreadable creation time) refuses. It deletes
+// nothing else: such an account has written nothing, since every venue path needs a membership it never had.
+const DISCARD_WITHIN_MS = 7 * 24 * 60 * 60 * 1000;
+
+export const discardUnconfirmedAccount = onCall(CALL, async (request) => {
+  const uid = requireAuth(request);
+  const account = await getAuth().getUser(uid);
+  const created = Date.parse((account.metadata && account.metadata.creationTime) || '');
+  const young = Number.isFinite(created) && created >= EMAIL_CHECK_SINCE && Date.now() - created <= DISCARD_WITHIN_MS;
+  if (account.emailVerified === true || !young) {
+    throw new HttpsError('failed-precondition', 'This account cannot be removed here.', { reason: 'not-discardable' });
+  }
+  if ((await db().doc(`users/${uid}`).get()).exists) {
+    throw new HttpsError('failed-precondition', 'This account cannot be removed here.', { reason: 'not-discardable' });
+  }
+  await getAuth().deleteUser(uid);
+  logger.info('Unconfirmed account discarded', { uid });
+  return { ok: true };
+});
+
 
 // ── 4. Promote, demote, remove ───────────────────────────────────────────────
 
