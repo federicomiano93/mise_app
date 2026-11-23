@@ -695,3 +695,38 @@ describe('leaving a form with something typed or chosen', () => {
     expect(within(question).getByText('L’attività non è ancora stata creata.')).toBeInTheDocument();
   });
 });
+
+describe('opening your own business: the check', () => {
+  async function madeOwn() {
+    const view = await open();
+    await fill(view.user, { name: 'Mine', who: 'self', country: 'IT', sections: ['Orders'] });
+    await create(view.user);
+    await screen.findByText('✓ Mine has been created and it is yours');
+    return view;
+  }
+
+  it('says it is checking, on the button and in a status line, while the answer is out', async () => {
+    const { user, store } = await madeOwn();
+    store.changesStillWaiting.mockReturnValueOnce(new Promise<boolean>(() => undefined));
+
+    await press(user, 'Open Mine');
+
+    expect(await screen.findByRole('button', { name: 'Checking…' })).toBeInTheDocument();
+    expect(screen.getByText('Checking everything has reached the server…').closest('[role="status"]')).not.toBeNull();
+  });
+
+  it('Done during the check cancels it: a late «nothing waiting» opens nothing', async () => {
+    const { user, store, router } = await madeOwn();
+    let answer: (waiting: boolean) => void = () => undefined;
+    store.changesStillWaiting.mockReturnValueOnce(new Promise<boolean>(resolve => { answer = resolve; }));
+    await press(user, 'Open Mine');
+    await screen.findByRole('button', { name: 'Checking…' });
+
+    await press(user, 'Done');
+    await waitFor(() => { expect(router.state.location.pathname).toBe('/settings'); });
+    answer(false);
+    await new Promise(resolve => setTimeout(resolve, 20));
+
+    expect(store.openJoinedVenue).not.toHaveBeenCalled();
+  });
+});

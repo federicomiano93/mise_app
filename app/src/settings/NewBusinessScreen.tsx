@@ -8,6 +8,7 @@ import type { MessageKey } from '../i18n/en';
 import { useT } from '../i18n/useT';
 import { markBusy } from '../session/busy';
 import { LeaveDialog } from '../session/LeaveDialog';
+import { LeaveChecking } from '../session/LeaveChecking';
 import { LeaveFailed } from '../session/LeaveFailed';
 import { useSession, useSessionStore } from '../session/SessionContext';
 import { useLeaveFlow } from '../session/useLeaveFlow';
@@ -281,10 +282,11 @@ function NewBusinessBody() {
             <p className={styles.note}>{t('newBusiness.self.text')}</p>
             <div className={styles.actions}>
               <Button variant="primary" isPending={open.checking} onPress={() => { void openVenue(created.locationId); }}>
-                {t('newBusiness.self.open', { name: made.name })}
+                {open.checking ? t('leave.checking.button') : t('newBusiness.self.open', { name: made.name })}
               </Button>
               <Button onPress={back}>{t('newBusiness.done')}</Button>
             </div>
+            <LeaveChecking checking={open.checking} />
             <LeaveFailed failed={open.failed} />
           </div>
           {dialogs}
