@@ -66,7 +66,14 @@ export function supplierScreenOf(state: unknown): string | null {
 }
 
 // Did the card's own Back have a screen to step back to (the list, or a supplier's screen)?
-export const cameFromListOrSupplierScreen = (state: unknown): boolean => cameFromList(state) || supplierScreenOf(state) !== null;
+export const cameFromListOrSupplierScreen = (state: unknown): boolean => cameFromList(state) || supplierScreenOf(state) !== null || cameFromElsewhere(state);
+
+// The same card, opened from ANOTHER section (23 Nov 2026: a gap of a recipe's allergen card): the entry behind it is that screen, so
+// Back — and the leave after a Save or a Delete — is the browser's Back, never a second copy of the list pushed on top. The recipe
+// builds this state itself (recipes/recipesNav.ts TO_INGREDIENT_CARD, a copy of the word: a feature never imports another's folder).
+export function cameFromElsewhere(state: unknown): boolean {
+  return typeof state === 'object' && state !== null && 'fromElsewhere' in state;
+}
 
 // An ingredient's card to «Merge another pack…», one level below it: Back from the chooser is the browser's Back, which lands on
 // the card. The state carries on what the card's own state said about the list beside it (its tab, the supplier's screen it came

@@ -38,7 +38,7 @@ import { ReorderRows } from './ReorderRows';
 import { NEW_OPENER, recipeOpener, useHandBack } from './handBack';
 import { FROM_EDITOR, cameFromDuplicate, carryOwner, forgetHandover, hasTypedCopy, peekHandedOver, typedCopyOf, withTypedCopy, withoutTypedCopy } from './photoCarry';
 import { recipePhotoOn } from './photoGate';
-import { cameFromCake, cameFromList, cameFromRecipe, recipeCameFromList, useLeave } from './recipesNav';
+import { cameFromCake, cameFromList, cameFromRecipe, recipeCameFromGap, recipeCameFromList, useLeave } from './recipesNav';
 import { PHOTO_PATH, RECIPES_PATH, recipePath } from './recipesPath';
 import { useDeleteRecipe } from './useDeleteRecipe';
 import styles from './RecipeEditor.module.css';
@@ -494,8 +494,9 @@ export function RecipeEditor({ id, recipe, titleRef, onTyped }: Props) {
       landOn.current = recipeOpener(savedId);
       leave();
     } else {
-      // Back to the LIST (not to the recipe), the row of the saved recipe owed the focus.
-      handBack.expect(recipeOpener(savedId));
+      // Back to the LIST (not to the recipe), the row of the saved recipe owed the focus. A recipe opened from a gap goes back to the
+      // recipe behind it instead, and no list row is owed anything.
+      if (!recipeCameFromGap(state)) handBack.expect(recipeOpener(savedId));
       leaveForList();
     }
   }
@@ -503,9 +504,12 @@ export function RecipeEditor({ id, recipe, titleRef, onTyped }: Props) {
   // ⚠️ AFTER A SAVE OR A DELETE the list is shown, and Back from it must leave the catalogue, not reopen the recipe (or a
   // recipe that is gone). Opened [list, recipe, editor] from the list, that is a jump of two steps; any other way in (an
   // address, the Allergen sheet) replaces the editor with the list, as before.
-  const leaveForList = () => {
+  const leaveForList = (deleted = false) => {
     // ⚠️ OPENED FROM A CAKE (Cakes' «Open in Recipes»): the cake's screen is the entry behind, and it is where a Save goes back to.
     if (cameFromCake(state)) { void navigate(-1); return; }
+    // ⚠️ OPENED FROM A GAP of another recipe's allergen card: [that recipe, this recipe, this editor]. A Save steps back to this recipe;
+    // a Delete (this recipe is gone) steps back to the one whose gap it was.
+    if (cameFromRecipe(state) && recipeCameFromGap(state)) { void navigate(deleted ? -2 : -1); return; }
     if (cameFromRecipe(state) && recipeCameFromList(state)) void navigate(-2);
     else void navigate(RECIPES_PATH, { replace: true, state: KEEP_FOCUS });
   };
@@ -516,8 +520,8 @@ export function RecipeEditor({ id, recipe, titleRef, onTyped }: Props) {
     try {
       await runDelete({ id, name: storedName }, () => {
         leavingClean.current = true;
-        handBack.expect(recipeOpener(id));
-        leaveForList();
+        if (!recipeCameFromGap(state)) handBack.expect(recipeOpener(id));
+        leaveForList(true);
       });
     } finally {
       busy.current = false;

@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'vitest';
+import { ingredientCardAddress } from '@mise/shared/recipe-link';
 import {
   NEW_INGREDIENT_PATH, NEW_PACKAGING_PATH, NEW_SUPPLIER_PATH, PACKAGING_TAB_PATH, SUPPLIERS_IMPORT_PATH, SUPPLIERS_PRICE_CHANGES_PATH, SUPPLIERS_PATH, SUPPLIERS_SETTINGS_PATH,
   SUPPLIERS_TAB_PATH, TAB_OF_KIND,
@@ -139,5 +140,14 @@ describe('the addresses of Ingredients & suppliers', () => {
     expect(suppliersScreenName('/ingredient/abc')).toBe('suppliers-ingredient');
     expect(suppliersScreenName('/ingredient/new')).toBe('suppliers-ingredient');
     expect(suppliersScreenName('/junk')).toBe('suppliers');
+  });
+});
+
+describe('the address a recipe’s allergen card opens', () => {
+  test('is the one ingredientPath draws, so the two cannot drift apart', () => {
+    for (const id of ['abc', 'a b', 'x/y'.replace('/', '%'), 'ÅÈ']) expect(ingredientCardAddress(id)).toBe(ingredientPath(id));
+    expect(ingredientCardAddress('new')).toBeNull();
+    expect(ingredientCardAddress('')).toBeNull();
+    expect(ingredientCardAddress('a/b')).toBeNull();
   });
 });

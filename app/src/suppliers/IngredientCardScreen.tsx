@@ -22,7 +22,7 @@ import { ADD_INGREDIENT_OPENER, MERGE_OPENER, NEW_OPENER, SEARCH_OPENER, itemOpe
 import { useIngredientDeletions } from './ingredientDeletions';
 import { SupplierCard } from './SupplierCard';
 import { useSuppliers, useSuppliersStore } from './SuppliersContext';
-import { cameFromList, cameFromListOrSupplierScreen, fromCard, supplierScreenOf, tabOfState, useLeave } from './suppliersNav';
+import { cameFromElsewhere, cameFromList, cameFromListOrSupplierScreen, fromCard, supplierScreenOf, tabOfState, useLeave } from './suppliersNav';
 import { TAB_OF_KIND, ingredientMergePath, tabPath } from './suppliersPath';
 import { useDeleteIngredient } from './useDeleteIngredient';
 import { useMayWritePrices } from './useMayWritePrices';
@@ -121,6 +121,8 @@ export function IngredientCardScreen({ id, newKind, preset }: Props) {
   const kindTab = TAB_OF_KIND[kind];
   const fallback = tabPath(tabOfState(state) ?? kindTab);
   const owed = (afterDelete: boolean) => {
+    // Opened from another section (a recipe's allergen card): no row of this section is owed the focus, the screen behind takes it.
+    if (cameFromElsewhere(state)) return;
     if (supplierOrigin !== null) {
       handBack.wantOn(supplierOrigin, afterDelete || id === null ? ADD_INGREDIENT_OPENER : supplierItemOpener(id));
     } else {
@@ -140,7 +142,7 @@ export function IngredientCardScreen({ id, newKind, preset }: Props) {
   // Opened from a tap, the page does not move the focus: it goes to this title. Not on a POP (Back arriving here again).
   useEffect(() => {
     if (waiting || gone || broken || cannotOpen) return;
-    if ((cameFromList(state) || supplierOrigin !== null) && navigationType !== 'POP') title.current?.focus();
+    if ((cameFromList(state) || supplierOrigin !== null || cameFromElsewhere(state)) && navigationType !== 'POP') title.current?.focus();
   }, [waiting, gone, broken, cannotOpen]);
 
   // Back from the merge chooser, or a finished merge, owes the focus to the merge door (the card is drawn fresh).

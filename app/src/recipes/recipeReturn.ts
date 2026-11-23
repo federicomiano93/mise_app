@@ -38,6 +38,12 @@ export interface RecipeReturn {
   // Is this recipe being returned to from Orders (a row's «Order»)? The row that opened the menu and the rows split in two, or null.
   // Read while drawing; it changes nothing.
   pendingOrder(recipeId: string): OrderTrip | null;
+  // A gap row of this recipe's allergen card was tapped (an ingredient's card in Suppliers, a sub-recipe, its editor): write down which, and
+  // where the screen is. Kept in a STACK of its own, apart from `remember`'s single place, so a detour made on the way (the sub-recipe's own
+  // editor or label) cannot overwrite it. `carry` only for a trip to another SECTION (the place would die with this one).
+  rememberGap(recipeId: string, row: string, carry: boolean): void;
+  // The key of the gap row (allergenGaps.ts) this recipe is being returned to, or null. Read while drawing; it changes nothing.
+  pendingGap(recipeId: string): string | null;
   // Put the scroll area (and the split's right-hand side) back where `remember` found them. The recipe screen asks once its
   // page is drawn, because a scroll box cannot be scrolled past the content that is not there yet.
   restoreScroll(recipeId: string): void;
@@ -64,6 +70,8 @@ const NOTHING: RecipeReturn = {
   pendingMix: () => false,
   pendingCost: () => false,
   pendingOrder: () => null,
+  rememberGap() { /* ditto */ },
+  pendingGap: () => null,
   restoreScroll() { /* ditto */ },
   markDelivered() { /* ditto */ },
   wasDelivered: () => false,
@@ -82,6 +90,19 @@ let carried: Place | null = null;
 export function carryPlace(place: Place): void { carried = place; }
 export function carriedPlace(): Place | null { return carried; }
 export function forgetCarriedPlace(): void { carried = null; }
+
+// The gap rows tapped, outermost recipe first (a sub-recipe's own gap comes after its parent's). Carried the same way as the place, but ONLY
+// for a trip to Suppliers: every other trip stays inside this section.
+export interface GapPlace {
+  readonly id: string;
+  readonly row: string;
+  readonly area: number | null;
+  readonly detail: number | null;
+}
+let carriedGapStack: readonly GapPlace[] = [];
+export function carryGaps(stack: readonly GapPlace[]): void { carriedGapStack = stack; }
+export function carriedGaps(): readonly GapPlace[] { return carriedGapStack; }
+export function forgetCarriedGaps(): void { carriedGapStack = []; }
 
 // The place written down: the recipe, how far the shell's scroll area and the split's right-hand side were scrolled.
 export interface Place {

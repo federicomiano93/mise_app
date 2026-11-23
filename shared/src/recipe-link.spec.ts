@@ -150,7 +150,7 @@ describe('the new builders and the parameter reader (Mise 2 only)', () => {
 describe('the port against the original', () => {
   const LEFT_OUT = ['recipeHash', 'foodCostHref', 'recipeHref', 'recipeSpotFromHash', 'ordersHref', 'ordersIngredientHref',
     'catalogueOriginFromHash', 'orderIngredientFromHash'];
-  const ADDED = ['FROM_RECIPE_LINK', 'foodCostForRecipePath', 'ordersForIngredientPath', 'recipeAddress', 'recipeIdParam'];
+  const ADDED = ['FROM_RECIPE_LINK', 'ingredientCardAddress', 'foodCostForRecipePath', 'ordersForIngredientPath', 'recipeAddress', 'recipeIdParam'];
   const original = legacyJs as unknown as Record<string, unknown>;
   const port = ported as unknown as Record<string, unknown>;
   const shared = Object.keys(original).filter(name => !LEFT_OUT.includes(name)).sort();
