@@ -15,7 +15,7 @@ type Props = {
 };
 
 // The one settings door of a section: a 48px square with the gear alone, right after the title on the title's own line (the Orders
-// band, 21 Nov 2026, for every section that has settings). Passed to `Page` as its `band`, and drawn only for who sees the settings.
+// band, 21 Nov 2026, for every section that has settings). Passed to `Page` as its `gear` (from 700px it sits in the top bar beside the title), and drawn only for who sees the settings.
 export function SettingsGear({ onPress, label, ref, 'aria-current': current }: Props) {
   const { t } = useT();
   return (

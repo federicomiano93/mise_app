@@ -13,6 +13,13 @@ const code = import.meta.glob<string>(
 // The service worker's source (app/sw/worker.js, outside src/): it runs on the lab tablet's Chrome 101 too.
 const worker = import.meta.glob<string>('../../sw/*.js', { query: '?raw', import: 'default', eager: true });
 
+// Uses behind a feature check — the one allowed exception (shared/src/chrome101-tokens.ts), each with its check named.
+// useCoverBar sets `inert` only where the browser has it; Chrome 101 takes the aria-hidden + tabindex -1 branch.
+const GUARDED: Array<{ file: string; token: string; check: string }> = [
+  { file: '../shell/useCoverBar.ts', token: '.inert', check: "if ('inert' in node)" },
+  { file: '../shell/useCoverBar.ts', token: 'inert attribute', check: "if ('inert' in node)" },
+];
+
 describe('app/src uses nothing newer than Chrome 101', () => {
   it('reads the source it checks, and sees what it forbids', () => {
     expect(Object.keys(css).length + Object.keys(code).length).toBeGreaterThan(50);
@@ -26,7 +33,14 @@ describe('app/src uses nothing newer than Chrome 101', () => {
   });
 
   it('has no JS or DOM API newer than Chrome 101', () => {
-    expect(findings(code, JS_TOKENS, codeWithoutComments)).toEqual([]);
+    const found = findings(code, JS_TOKENS, codeWithoutComments);
+    const unguarded = found.filter(finding => !GUARDED.some(g => finding.startsWith(`${g.file}:`) && finding.endsWith(` ${g.token}`)));
+    expect(unguarded).toEqual([]);
+    // Each exception still has its check in the file, and is still needed (a stale one would hide a later use).
+    for (const g of GUARDED) {
+      expect(codeWithoutComments(code[g.file] ?? '')).toContain(g.check);
+      expect(found.some(finding => finding.startsWith(`${g.file}:`) && finding.endsWith(` ${g.token}`))).toBe(true);
+    }
   });
 
   it('nor does the service worker', () => {

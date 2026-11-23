@@ -59,8 +59,9 @@ test('a changed icon needs a re-install too — it is baked into the installed a
 
 test('harmless fields do NOT raise a notice', () => {
   // ⚠️ A notice that fires for nothing is a notice nobody reads. Wording and colours
-  // reach an installed app perfectly well and must stay silent.
-  for (const field of ['description', 'background_color', 'theme_color']) {
+  // reach an installed app perfectly well and must stay silent. The same for display_override (the PC app's title bar, 22 Nov 2026):
+  // it changes only how the window is drawn, never what is installed.
+  for (const field of ['description', 'background_color', 'theme_color', 'display_override']) {
     const changed = { ...MANIFEST, [field]: 'changed' };
     assert.equal(fingerprint(changed), fingerprint(MANIFEST), `${field} must not warn`);
   }

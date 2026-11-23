@@ -166,6 +166,15 @@ describe('the lab holds the app', () => {
     await user.click(within(lab()).getByRole('button', { name: 'Exit' }));
     await waitFor(() => { expect(isBusy()).toBe(false); });
   });
+
+  it('makes the browser ask «leave this page?» only once a production is in progress', async () => {
+    const { hasUnsavedWork } = await import('../../session/busy');
+    const { user } = await openLab();
+    expect(hasUnsavedWork(), 'an open lab with nothing started loses nothing').toBe(false);
+    await start(user);
+    expect(window.localStorage.getItem(KEY)).not.toBeNull();
+    expect(hasUnsavedWork()).toBe(true);
+  });
 });
 
 describe('the people of the card', () => {

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import type { KeyValueStorage } from '../session/backend';
-import { createPhonePush, rowWriter } from './phonePush';
+import { browserPushEnv, createPhonePush, rowWriter } from './phonePush';
 import type { PhonePushDeps, PushEnv } from './phonePush';
 
 // Registering this phone for server push: js/push.js's pushSupport / enablePush / rememberToken / pushOnForMe, with the browser
@@ -357,5 +357,19 @@ describe('rowWriter: the real write', () => {
     expect(setDoc).toHaveBeenCalledWith({ path: 'locations/bakery/fcm-tokens/tok-1' }, { bakery: 'bakery', uid: 'u1', updatedAt: 5, muteOrderRequests: false }, { merge: true });
     await writer.deleteRow('bakery', 'old');
     expect(deleteDoc).toHaveBeenCalledWith({ path: 'locations/bakery/fcm-tokens/old' });
+  });
+});
+
+describe('browserPushEnv: the installed app in every display mode', () => {
+  afterEach(() => { vi.unstubAllGlobals(); });
+
+  test('the PC app with its title bar folded into the page (window-controls-overlay) is standalone too', () => {
+    vi.stubGlobal('matchMedia', (query: string) => ({ matches: /display-mode: window-controls-overlay/.test(query) }));
+    expect(browserPushEnv().isStandalone()).toBe(true);
+  });
+
+  test('a browser tab is not', () => {
+    vi.stubGlobal('matchMedia', () => ({ matches: false }));
+    expect(browserPushEnv().isStandalone()).toBe(false);
   });
 });

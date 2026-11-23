@@ -18,7 +18,8 @@ export const TIER_BOARD_CM = 0.22;
 export const BOARD_MARGIN_CM = 3.2;
 export const BOARD_THICKNESS_CM = 0.5;
 // The part of a disc that is soaked (its top), and the thickness of a layer of filling as a share of a disc.
-export const SOAK_SHARE = 0.22;
+// The soak is a thin band, far thinner than the filling (his ask, 22 Nov 2026: at 0.22 it looked as thick as the cream).
+export const SOAK_SHARE = 0.07;
 export const FILLING_SHARE = 0.3;
 export const FILLING_MIN_CM = 0.5;
 // The empty gap between two discs while the filling has no card, as a share of a disc.
@@ -278,6 +279,24 @@ export function tapAction(picked: Selected | null, selected: Selected | null): '
   return selected !== null && selected.tier === picked.tier && selected.part === picked.part ? 'open' : 'select';
 }
 
+// ── The chosen layer's highlight ─────────────────────────────────────────────
+
+// How strongly a layer lights up in ITS OWN colour: the chosen part, the part under the pointer, or neither. The glow is the material's own
+// colour (or its texture), never a tint of the app's: a custard stays yellow, a chocolate layer still reads as chocolate.
+export const HIGHLIGHT_CHOSEN = 0.35;
+export const HIGHLIGHT_HOVER = 0.15;
+export function highlightLevel(chosen: boolean, hovered: boolean): number {
+  return chosen ? HIGHLIGHT_CHOSEN : hovered ? HIGHLIGHT_HOVER : 0;
+}
+
+// What a material glows with: its picture (a textured one has a white `color`, which would wash it out), its own colour, or nothing
+// (a material with neither, and a see-through one such as the ghost tiers).
+export function glowSource(m: { map?: unknown; color?: unknown; transparent?: boolean }): 'map' | 'colour' | 'none' {
+  if (m.transparent === true) return 'none';
+  if (m.map) return 'map';
+  return m.color ? 'colour' : 'none';
+}
+
 // ── Labels and their leader lines ────────────────────────────────────────────
 
 export interface Anchor { key: string; x: number; y: number }
@@ -292,6 +311,9 @@ export interface LabelBox {
   labelHeight: number;
   gap: number;
   margin: number;
+  // The band kept free along the top, for the view buttons (the cut-away/whole pill and Home) that float over the picture: no label stands in
+  // it, at any width, or a label would hide under a button (it did at 1100px and touched at 800px).
+  head: number;
   // The strip kept free along the bottom, for the «raw materials so far» total: no label stands in it.
   foot: number;
   // One column on each side, one on the right only (a narrow stage), or none: a stage under STACKED_UNDER px wide has no room for the cake beside
@@ -315,7 +337,7 @@ export const SLOT_SPREAD_PX = 110;
 export function slotHeights(wanted: readonly number[], box: LabelBox): number[] {
   const count = wanted.length;
   if (count === 0) return [];
-  const low = box.margin + box.labelHeight / 2;
+  const low = box.head + box.labelHeight / 2;
   const high = box.height - box.margin - box.foot - box.labelHeight / 2;
   const room = Math.max(0, high - low);
   const step = count > 1 ? Math.min(SLOT_SPREAD_PX, room / (count - 1)) : 0;
@@ -333,7 +355,7 @@ export function placeLabels(anchors: readonly Anchor[], box: LabelBox): PlacedLa
   const sides: Record<'left' | 'right', Anchor[]> = { left: [], right: [] };
   for (const anchor of anchors) sides[box.columns !== 2 || anchor.x >= box.width / 2 ? 'right' : 'left'].push(anchor);
   // A column that would hold more than the stage's height allows hands its extra to the other column.
-  const fits = Math.max(1, Math.floor((box.height - 2 * box.margin - box.foot + box.gap) / (box.labelHeight + box.gap)));
+  const fits = Math.max(1, Math.floor((box.height - box.head - box.margin - box.foot + box.gap) / (box.labelHeight + box.gap)));
   if (box.columns === 2) {
     while (sides.left.length > fits || sides.right.length > fits) {
       const from = sides.left.length > fits ? 'left' : 'right';
@@ -388,12 +410,17 @@ export function leadersCross(a: PlacedLabel, b: PlacedLabel): boolean {
 // How the stage lays out its labels for a width: two columns when there is room, one on the right when there is not.
 export const STACKED_UNDER = 330;
 
+// The band the floating view buttons take at the top of the stage: Cake3D.module.css puts the bar at --s3 (12px) from the top, its buttons are
+// 48px tall (--hit), and the labels keep a gap (8px) under it. The bar can wrap to a second row on a stage under about 380px, but the second
+// row holds Home alone, at the LEFT, where the single column of such a stage (on the right) never stands.
+export const BAR_BAND = 12 + 48 + 8;
+
 export function labelBoxFor(width: number, height: number): LabelBox {
   const columns: 0 | 1 | 2 = width < STACKED_UNDER ? 0 : width >= 560 ? 2 : 1;
   const labelWidth = columns === 2
     ? Math.round(Math.min(210, Math.max(140, width * 0.24)))
     : Math.round(Math.min(150, Math.max(112, width * 0.38)));
-  return { width, height, labelWidth, labelHeight: columns === 2 ? 48 : 52, gap: 10, margin: 10, foot: 44, columns };
+  return { width, height, labelWidth, labelHeight: columns === 2 ? 48 : 52, gap: 10, margin: 10, head: BAR_BAND, foot: 44, columns };
 }
 
 // The share of the stage's width the cake may use: what the label columns leave.

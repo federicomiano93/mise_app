@@ -101,8 +101,9 @@
   color: var(--ink);
 }
 
-/* One column below 1280px, in an order that puts the drawing first, then the name and measures, then the steps (the two groups below
-   stop being boxes); from 1280px two columns: the drawing, and a 420px side with the measures and the steps (the cost is the last
+/* One column below 1000px, in an order that puts the drawing first, then the name and measures, then the steps (the two groups below
+   stop being boxes); from 1000px two columns (it was 1280px until 22 Nov 2026: the open cake is now a layer over the whole column, so the
+   drawing and the side fit side by side from there): the drawing, and a 420px side with the measures and the steps (the cost is the last
    of them). */
 .grid {
   display: flex;
@@ -127,7 +128,11 @@
   order: 3;
 }
 
-@media (min-width: 1280px) {
+.cost {
+  order: 4;
+}
+
+@media (min-width: 1000px) {
   .grid {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 420px;
@@ -144,7 +149,8 @@
 
   .stage,
   .measures,
-  .parts {
+  .parts,
+  .cost {
     order: 0;
   }
 }
@@ -167,8 +173,10 @@
   font-size: var(--fs-lg);
 }
 
-.caption {
-  color: var(--ink-3);
-  font-size: var(--fs-sm);
-  font-weight: 400;
+/* The 3D picture stands on its own, with no card around it. */
+.card.stage {
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
 }

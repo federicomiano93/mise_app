@@ -31,6 +31,7 @@ import { useMoney } from '../session/useMoney';
 import { announceAction } from '../telemetry/usage';
 import { Button } from '../ui/Button';
 import { FormBar } from '../ui/FormBar';
+import { useCakeHeadingLevel } from './headingLevel';
 import { useStatusMessage } from '../ui/StatusMessage';
 import { useConfirm } from '../ui/useConfirm';
 import {
@@ -38,16 +39,17 @@ import {
   withoutMissingRecipeCards, workingFrom,
 } from './cakeEditorModel';
 import type { Selected } from './cakeEditorModel';
-import { dropParked, parkCake, parkedKeyOf, peekParked, useParkingOwner } from './cakeParking';
+import { dropParked, flushRemembered, forgetCake, parkCake, parkedKeyOf, peekParked, rememberCake, useParkingOwner } from './cakeParking';
 import { CakeStage } from './CakeStage';
 import type { StageLabels } from './CakeStage';
 import { useCakes } from './CakesContext';
 import { CAKES_PATH, referencePath } from './cakesPath';
 import type { CakeStart } from './cakesPath';
-import { partFigures, partKey, startStep } from './cakeStepsModel';
+import { STEP_PARTS, partFigures, partKey, startStep } from './cakeStepsModel';
 import type { StepKey } from './cakeStepsModel';
 import { CostCard } from './CostCard';
 import type { PriceField, PriceTexts } from './CostCard';
+import { FoldTitle } from './FoldTitle';
 import { MeasuresCard } from './MeasuresCard';
 import { NeedDialog } from './NeedDialog';
 import { TierParts } from './TierParts';
@@ -76,6 +78,11 @@ const NUMBER_LABEL: Readonly<Record<PriceField, MessageKey>> = {
   foodCostTarget: 'fc.foodCostTargetAs',
 };
 
+// The Parts card knows only the five parts: a saved 'cost' belongs to the Cost and price card.
+const partOnly = (key: StepKey | null): CakePart | null => (key === 'cost' ? null : key);
+
+type ParkedView = { working: Cake; initial: Cake; texts: PriceTexts; tier: number; openStepKey: StepKey | null; selected: Selected | null };
+
 const textOf = (value: number | null): string => (value === null || !Number.isFinite(value) ? '' : String(value));
 
 // One cake, on one page: the drawing, its parts, its measures, its cost and price.
@@ -90,6 +97,7 @@ const textOf = (value: number | null): string => (value === null || !Number.isFi
 // ⚠️ SAVE IS ONE WRITE: the cake and its Food cost card travel in the same batch (saveProduct with a companion), so a cake and its card
 // can never be saved apart; Delete removes both the same way.
 export function CakeForm({ id, cake, start = 'standard', titleRef, onSaved, onParking }: Props) {
+  const headingLevel = useCakeHeadingLevel();
   const { t } = useT();
   const store = useFoodcostStore();
   const snap = useFoodcost();
@@ -128,11 +136,17 @@ export function CakeForm({ id, cake, start = 'standard', titleRef, onSaved, onPa
     return { price: textOf(initial.sellingPrice), target: textOf(initial.foodCostTarget), vatSelect: vat.select, vatOther: vat.other };
   });
   const [tier, setTier] = useState(() => parked?.tier ?? 0);
-  // The step that is open: the first one for a new cake, none for a saved one.
-  const [openStepKey, setOpenStepKey] = useState<StepKey | null>(() => (parked ? parked.openStepKey : startStep(id !== null)));
+  // The step that is open: the first one for a new cake, none for a saved one. «Cost and price» is a card of its own (never a step): a
+  // copy set aside with it open (the saved key 'cost') brings it back open.
+  const [openStepKey, setOpenStepKey] = useState<CakePart | null>(() => partOnly(parked ? parked.openStepKey : startStep(id !== null)));
+  // The Parts card is open at the start; the Cost and price card is folded until someone opens it (or Save needs its price box).
+  const [partsOpen, setPartsOpen] = useState(true);
+  const [costOpen, setCostOpen] = useState(() => parked?.openStepKey === 'cost');
   const [selected, setSelected] = useState<Selected | null>(() => parked?.selected ?? null);
   // The 3D view's second tap on the chosen part: TierParts opens that part's step and puts the cursor in its search box.
   const [openRequest, setOpenRequest] = useState<OpenRequest | null>(null);
+  // A part asked for (a tap in the 3D view, a recipe just made) while the Parts card is folded: the card opens so the request is heard.
+  useLayoutEffect(() => { if (openRequest !== null) setPartsOpen(true); }, [openRequest]);
   const [showNameError, setShowNameError] = useState(false);
   const [badNumber, setBadNumber] = useState<PriceField | null>(null);
   const [needsOpen, setNeedsOpen] = useState(false);
@@ -170,8 +184,26 @@ export function CakeForm({ id, cake, start = 'standard', titleRef, onSaved, onPa
   // Set once the working copy has been set aside for the Recipes (openInRecipes): nothing is lost by that move, so the blocker stays quiet.
   const parkedAway = useRef(false);
   // What a parked copy holds, as of the last render (see openInRecipes).
-  const onScreen = useRef({ working: initial, initial, texts, tier, openStepKey, selected });
-  useLayoutEffect(() => { onScreen.current = { working, initial, texts, tier, openStepKey, selected }; });
+  const onScreen = useRef<ParkedView>({ working: initial, initial, texts, tier, openStepKey, selected });
+  useLayoutEffect(() => { onScreen.current = { working, initial, texts, tier, openStepKey: openStepKey ?? (costOpen ? 'cost' : null), selected }; });
+
+  // ⚠️ THE UNSAVED CAKE IS ALSO KEPT ON THE DEVICE (cakeParking.ts): a moment after the last change while the form is dirty, so a window
+  // or an app closed with no way to ask (a tablet's recent apps) still finds «Unsaved cake: …» in the list next time. Clean again (saved, or
+  // every change taken back): nothing is kept. A form that goes away for any other reason (a part that fails) leaves its last copy there.
+  // ⚠️ «CLEAN AGAIN» FORGETS ONLY WHAT THIS FORM HAS REMEMBERED: a form that opens clean (the page reloaded onto it) must not wipe a copy of the
+  // same cake that Cakes has yet to offer.
+  const remembering = useRef(false);
+  useEffect(() => {
+    if (owner === null || parkedAway.current) return;
+    if (dirty) {
+      remembering.current = true;
+      rememberCake({ uid: owner.uid, locationId: owner.locationId, key: cakeId, savedId: id, ...onScreen.current, fromScratch });
+    } else if (remembering.current) {
+      remembering.current = false;
+      forgetCake(cakeId);
+    }
+  }, [dirty, working, initial, texts, tier, openStepKey, costOpen, selected, owner, cakeId, id, fromScratch]);
+  useEffect(() => () => { flushRemembered(); }, []);
 
   const onLeaving = useCallback(() => { handBack.expect(id === null ? NEW_OPENER : productOpener(id)); }, [handBack, id]);
   const leave = useLeave(CAKES_PATH, onLeaving);
@@ -219,6 +251,7 @@ export function CakeForm({ id, cake, start = 'standard', titleRef, onSaved, onPa
         const current = latestBlocker.current;
         if (current.state !== 'blocked') return;
         if (discard) {
+          forgetCake(cakeId);
           current.proceed();
         } else {
           // Staying: the Back button had already said whose button is owed the focus.
@@ -244,6 +277,7 @@ export function CakeForm({ id, cake, start = 'standard', titleRef, onSaved, onPa
         asking.current = false;
       }
       dirtyRef.current = false;
+      forgetCake(cakeId);
     }
     leave();
   }
@@ -253,7 +287,30 @@ export function CakeForm({ id, cake, start = 'standard', titleRef, onSaved, onPa
   const priceBoxes = useRef<Partial<Record<PriceField, HTMLInputElement | null>>>({});
   // The box Save refused, waiting for its step to open (see save()).
   const revealAfterRender = useRef<PriceField | null>(null);
+  // The Measures card starts open for a new cake and folded for a saved one. Save with an empty name opens it, and the name box takes the
+  // focus once it is on the page.
+  const [measuresOpen, setMeasuresOpen] = useState(id === null);
+  const focusNameAfterRender = useRef(false);
+  // The Cost and price card's title (the ✓ of the last part brings the focus there) and a packaging box Save refused while the Parts card
+  // was folded: both wait for their card to be on the page.
+  const costButton = useRef<HTMLButtonElement>(null);
+  const focusCostAfterRender = useRef(false);
+  const focusPackAfterRender = useRef<string | null>(null);
   useLayoutEffect(() => {
+    if (focusCostAfterRender.current && costButton.current) {
+      focusCostAfterRender.current = false;
+      costButton.current.focus();
+      if (typeof costButton.current.scrollIntoView === 'function') costButton.current.scrollIntoView({ block: 'start' });
+    }
+    const pack = focusPackAfterRender.current;
+    if (pack !== null && packBoxes.current.has(pack)) {
+      focusPackAfterRender.current = null;
+      reveal(packBoxes.current.get(pack));
+    }
+    if (focusNameAfterRender.current && nameBox.current) {
+      focusNameAfterRender.current = false;
+      reveal(nameBox.current);
+    }
     const field = revealAfterRender.current;
     if (field === null) return;
     const node = priceBoxes.current[field];
@@ -312,7 +369,11 @@ export function CakeForm({ id, cake, start = 'standard', titleRef, onSaved, onPa
     const name = working.name.trim();
     if (name === '') {
       setShowNameError(true);
-      reveal(nameBox.current);
+      if (nameBox.current) reveal(nameBox.current);
+      else {
+        focusNameAfterRender.current = true;
+        setMeasuresOpen(true);
+      }
       say(t('cakes.nameEmpty'));
       return;
     }
@@ -324,8 +385,8 @@ export function CakeForm({ id, cake, start = 'standard', titleRef, onSaved, onPa
     const invalid = firstInvalidNumber(product) ?? (product.sellingPrice !== null && product.sellingPrice > MAX_SELLING_PRICE ? 'sellingPrice' : null);
     if (invalid === 'sellingPrice' || invalid === 'vatRate' || invalid === 'foodCostTarget') {
       setBadNumber(invalid);
-      // The price, VAT and target boxes live in the cost step: it opens, and the box takes the focus once it is on the page.
-      setOpenStepKey('cost');
+      // The price, VAT and target boxes live in the Cost and price card: it opens, and the box takes the focus once it is on the page.
+      setCostOpen(true);
       revealAfterRender.current = invalid;
       reveal(priceBoxes.current[invalid]);
       say(t('fc.checkNumber', { field: t(NUMBER_LABEL[invalid]) }));
@@ -333,7 +394,11 @@ export function CakeForm({ id, cake, start = 'standard', titleRef, onSaved, onPa
     }
     const emptyPack = firstEmptyPack(working);
     if (emptyPack !== null) {
-      reveal(packBoxes.current.get(emptyPack));
+      if (packBoxes.current.has(emptyPack)) reveal(packBoxes.current.get(emptyPack));
+      else {
+        focusPackAfterRender.current = emptyPack;
+        setPartsOpen(true);
+      }
       const named = snap.ingredients[emptyPack];
       say(t('cakes.checkPack', { name: String(named?.name ?? '') }));
       return;
@@ -361,6 +426,7 @@ export function CakeForm({ id, cake, start = 'standard', titleRef, onSaved, onPa
 
     // Saved: nothing is unsaved any more, so leaving asks nothing. The blocker reads the ref at the moment of the navigation below.
     dirtyRef.current = false;
+    forgetCake(cakeId);
     touched.current = true;
     setInitial(named);
     setWorking(named);
@@ -388,6 +454,7 @@ export function CakeForm({ id, cake, start = 'standard', titleRef, onSaved, onPa
     }
     leaving.current = true;
     dirtyRef.current = false;
+    forgetCake(cakeId);
     store.deleteProduct(productId, { kind: 'cake', id });
     say(t('cakes.deleted'));
     leave();
@@ -486,6 +553,14 @@ export function CakeForm({ id, cake, start = 'standard', titleRef, onSaved, onPa
   const partial = totals.partial || totals.unpricedIds.length > 0 || totals.missingLines > 0;
   const rawText = totals.materials === null ? '—' : `${fcMoney(totals.materials, money)}${partial ? ' +?' : ''}`;
   const hasParts = working.lines.some(line => line.tier < working.tiers) || working.packaging.length > 0;
+  // Folded, the Parts card names the parts that hold a recipe (on any tier), in the order a cake is built.
+  const filledParts = STEP_PARTS.filter(part => working.lines.some(line => line.tier < working.tiers && line.part === part));
+  const partsSummary = filledParts.length === 0
+    ? t('cakes.parts.summaryNone', { total: STEP_PARTS.length })
+    : t('cakes.parts.summary', { names: filledParts.map(part => t(`cakes.part.${part}`)).join(', '), done: filledParts.length, total: STEP_PARTS.length });
+  // Folded, the Cost and price card says the raw materials, and the price once one is set.
+  const costBase = hasParts ? t('cakes.steps.costSummary', { cost: rawText }) : '—';
+  const costSummary = forCost.sellingPrice === null ? costBase : t('cakes.cost.summaryPrice', { cost: costBase, price: fcMoney(forCost.sellingPrice, money) });
   const labels = useMemo<StageLabels>(() => ({
     summary: t('cakes.stage.summary', { n: working.tiers, discs: t('cakes.stage.discCount', { n: working.discs }) }),
     part: {
@@ -521,6 +596,7 @@ export function CakeForm({ id, cake, start = 'standard', titleRef, onSaved, onPa
   return (
     <section className={styles.editor} aria-labelledby={titleId}>
       <FormBar
+        level={headingLevel}
         backLabel={t('ui.back')}
         onBack={() => { void back(); }}
         title={heading}
@@ -573,57 +649,71 @@ export function CakeForm({ id, cake, start = 'standard', titleRef, onSaved, onPa
           </div>
           <div className={styles.side}>
             <div className={styles.measures}>
-              <MeasuresCard cake={working} edit={edit} nameRef={nameBox} nameInvalid={showNameError && working.name.trim() === ''} />
+              <MeasuresCard cake={working} edit={edit} nameRef={nameBox} nameInvalid={showNameError && working.name.trim() === ''} open={measuresOpen} onToggle={setMeasuresOpen} />
             </div>
             <section className={`${styles.card} ${styles.parts}`} aria-labelledby={`${ids}-parts`}>
               <h3 id={`${ids}-parts`} className={styles.cardTitle}>
-                {t('cakes.parts.title')}
-                <span className={styles.caption}>{t(working.tiers > 1 ? 'cakes.parts.captionMany' : typedByHand ? 'cakes.parts.captionTyped' : 'cakes.parts.captionOne')}</span>
+                <FoldTitle title={t('cakes.parts.title')} summary={partsSummary} open={partsOpen} onToggle={setPartsOpen} bodyId={`${ids}-parts-body`} />
               </h3>
-              <PartBoundary>
-                <TierParts
-                  cake={working}
-                  typedByHand={typedByHand}
-                  edit={edit}
-                  tier={shownTier}
-                  onTier={next => { setTier(next); }}
-                  selected={selected}
-                  onSelect={next => { setSelected(next); }}
-                  registerPack={registerPack}
-                  openRequest={openRequest}
-                  onNewRecipe={mayMakeRecipes ? (name, part) => { void newRecipe(name, part); } : undefined}
-                  onCardFromBook={mayMakeRecipes ? cardFromBook : undefined}
-                  onOpenHandled={() => { setOpenRequest(null); }}
-                  open={openStepKey}
-                  onOpen={setOpenStepKey}
-                  costSummary={hasParts ? t('cakes.steps.costSummary', { cost: rawText }) : ''}
-                  costBody={
-                    <PartBoundary>
-                      <CostCard
-                        totals={totals}
-                        sellingPrice={forCost.sellingPrice}
-                        texts={texts}
-                        showLabour={showLabour}
-                        invalid={badNumber}
-                        slices={working.slices}
-                        onSlices={n => { edit(current => setMeasure(current, 'slices', n)); }}
-                        assemblyMinutes={working.assemblyMinutes}
-                        onAssembly={n => { edit(current => setMeasure(current, 'assemblyMinutes', n)); }}
-                        onPrice={setPriceText}
-                        onTarget={setTargetText}
-                        onVatSelect={setVatSelect}
-                        onVatOther={setVatOther}
-                        onVatGuide={applyVatRate}
-                        registerBox={registerPrice}
-                        onOpenNeeds={opener => {
-                          needsOpener.current = opener;
-                          setNeedsOpen(true);
-                        }}
-                      />
-                    </PartBoundary>
-                  }
-                />
-              </PartBoundary>
+              {partsOpen ? (
+                <div id={`${ids}-parts-body`} role="group" aria-labelledby={`${ids}-parts`}>
+                  <PartBoundary>
+                    <TierParts
+                      cake={working}
+                      typedByHand={typedByHand}
+                      edit={edit}
+                      tier={shownTier}
+                      onTier={next => { setTier(next); }}
+                      selected={selected}
+                      onSelect={next => { setSelected(next); }}
+                      registerPack={registerPack}
+                      openRequest={openRequest}
+                      onNewRecipe={mayMakeRecipes ? (name, part) => { void newRecipe(name, part); } : undefined}
+                      onCardFromBook={mayMakeRecipes ? cardFromBook : undefined}
+                      onOpenHandled={() => { setOpenRequest(null); }}
+                      open={openStepKey}
+                      onOpen={setOpenStepKey}
+                      onOpenCost={() => {
+                        setOpenStepKey(null);
+                        setCostOpen(true);
+                        focusCostAfterRender.current = true;
+                      }}
+                    />
+                  </PartBoundary>
+                </div>
+              ) : null}
+            </section>
+            <section className={`${styles.card} ${styles.cost}`} aria-labelledby={`${ids}-cost`}>
+              <h3 id={`${ids}-cost`} className={styles.cardTitle}>
+                <FoldTitle title={t('cakes.cost.title')} summary={costSummary} open={costOpen} onToggle={setCostOpen} bodyId={`${ids}-cost-body`} buttonRef={costButton} />
+              </h3>
+              {costOpen ? (
+                <div id={`${ids}-cost-body`} role="group" aria-labelledby={`${ids}-cost`}>
+                  <PartBoundary>
+                    <CostCard
+                      totals={totals}
+                      sellingPrice={forCost.sellingPrice}
+                      texts={texts}
+                      showLabour={showLabour}
+                      invalid={badNumber}
+                      slices={working.slices}
+                      onSlices={n => { edit(current => setMeasure(current, 'slices', n)); }}
+                      assemblyMinutes={working.assemblyMinutes}
+                      onAssembly={n => { edit(current => setMeasure(current, 'assemblyMinutes', n)); }}
+                      onPrice={setPriceText}
+                      onTarget={setTargetText}
+                      onVatSelect={setVatSelect}
+                      onVatOther={setVatOther}
+                      onVatGuide={applyVatRate}
+                      registerBox={registerPrice}
+                      onOpenNeeds={opener => {
+                        needsOpener.current = opener;
+                        setNeedsOpen(true);
+                      }}
+                    />
+                  </PartBoundary>
+                </div>
+              ) : null}
             </section>
           </div>
         </div>

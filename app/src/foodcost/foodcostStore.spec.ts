@@ -305,7 +305,7 @@ describe('the Food cost store', () => {
   describe('the cost of a cake line made from a new recipe', () => {
     const cake = (): Cake => ({
       id: 'c1', name: 'Cake', diameterCm: 20, tiers: 1, discs: 2, slices: 8, packaging: [], assemblyMinutes: null, sellingPrice: null, vatRate: null,
-      foodCostTarget: null, categoryId: null, ref: null, model: 1,
+      foodCostTarget: null, categoryId: null, discHeightCm: null, ref: null, model: 1,
       lines: [{ tier: 0, part: 'base', productId: 'recipe-r1', grams: 400 }],
     });
 

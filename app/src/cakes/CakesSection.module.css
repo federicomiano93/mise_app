@@ -23,3 +23,46 @@
 .layout[data-view="detail"] .list {
   display: none;
 }
+
+/* ⚠️ THE OPEN CAKE IS A LAYER OVER THE WHOLE COLUMN FROM 700px (his call, 22 Nov 2026): a new cake or a saved one covers the top bar and the
+   page's title, and the dark rail stays beside it, usable. It has its own scroll (the form bar sticks to its top), so a field the form scrolls
+   to (Save's empty name, the cost card) scrolls INSIDE it. `data-cover` is set for a cake only, never for the settings. Under 700px nothing
+   changes: the cake already takes the page and the tab bar stays. The bar under it is made unreachable by keyboard and screen reader
+   (shell/useCoverBar.ts). z-index 50: over the bar and the sticky bands (5), under the dialogs and the status message (200, 300).
+   Chrome 101: `position: fixed` and `env()` only; the height is the app's own var(--vh100), as the shell's. */
+@media (min-width: 700px) {
+  .layout[data-cover="true"] .detail {
+    position: fixed;
+    top: 0;
+    right: 0;
+    left: calc(var(--rail-w) + env(safe-area-inset-left));
+    z-index: 50;
+    height: var(--vh100);
+    overflow: auto;
+    padding: var(--s4) var(--s6) var(--s6);
+    background: var(--bg);
+  }
+}
+
+/* ⚠️ THE INSTALLED PC APP WITH ITS TITLE BAR FOLDED INTO THE PAGE (Window Controls Overlay): the layer covers the top bar, which is the drag
+   region and keeps the window buttons clear, so it starts BELOW the title bar area and a strip of that height is the drag region instead —
+   the corner of the window buttons stays free, with nothing of the layer under it (the same strip as Lab mode's, LabMode.module.css). The
+   strip is `fixed` on its own, so it does not scroll with the layer. Only under this media query. */
+@media (min-width: 700px) and (display-mode: window-controls-overlay) {
+  .layout[data-cover="true"] .detail {
+    top: env(titlebar-area-height, 0px);
+    height: calc(var(--vh100) - env(titlebar-area-height, 0px));
+  }
+
+  .layout[data-cover="true"] .detail::before {
+    content: "";
+    position: fixed;
+    top: 0;
+    right: 0;
+    left: calc(var(--rail-w) + env(safe-area-inset-left));
+    height: env(titlebar-area-height, 0px);
+    background: var(--bg);
+    -webkit-app-region: drag;
+    app-region: drag;
+  }
+}

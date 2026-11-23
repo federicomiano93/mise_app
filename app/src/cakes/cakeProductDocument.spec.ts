@@ -14,7 +14,7 @@ const CAKE: Cake = {
   id: 'c1', name: 'Sacher', diameterCm: 24, tiers: 2, discs: 3, slices: 12,
   lines: [{ tier: 0, part: 'base', productId: 'SPONGE', grams: 600 }, { tier: 1, part: 'filling', productId: 'CREAM', grams: null }],
   packaging: [{ ingredientId: 'box', qtyPcs: 2 }], assemblyMinutes: 20, sellingPrice: 60, vatRate: 10, foodCostTarget: 30,
-  categoryId: 'cat', ref: { diameterCm: 22, discs: 3, discHeightCm: 3, baseG: 300, soakG: 90, fillingG: 280, coatingG: 450, decorationG: 200 }, model: 1,
+  categoryId: 'cat', discHeightCm: null, ref: { diameterCm: 22, discs: 3, discHeightCm: 3, baseG: 300, soakG: 90, fillingG: 280, coatingG: 450, decorationG: 200 }, model: 1,
 };
 
 const rules = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'firestore.rules'), 'utf8').replace(/\r\n/g, '\n');

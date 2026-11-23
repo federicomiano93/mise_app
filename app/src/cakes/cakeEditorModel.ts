@@ -11,7 +11,7 @@
 // cake's alike), so a loop through two cakes cannot be built.
 
 import {
-  CAKE_MODEL, MAX_CARDS_PER_PART, MAX_DISCS, MAX_PACKAGING, MAX_SLICES, MIN_DISCS, MAX_LINE_GRAMS, isCakeProductId, maxTiersFor, minDiameterFor,
+  CAKE_MODEL, MAX_CARDS_PER_PART, MAX_DISCS, normalizeDiscHeight, MAX_PACKAGING, MAX_SLICES, MIN_DISCS, MAX_LINE_GRAMS, isCakeProductId, maxTiersFor, minDiameterFor,
   sameReference, toCakeDocument,
 } from '@mise/shared/cake-model';
 import type { Cake, CakeLine, CakePart, ReferenceGrams } from '@mise/shared/cake-model';
@@ -41,7 +41,7 @@ export function workingFrom(cake: Cake | null, venueRef: ReferenceGrams | null, 
   if (cake === null) {
     return {
       id: newId, name: '', diameterCm: NEW_DIAMETER_CM, tiers: 1, discs: NEW_DISCS, slices: NEW_SLICES, lines: [], packaging: [],
-      assemblyMinutes: null, sellingPrice: null, vatRate: null, foodCostTarget: null, categoryId: null,
+      assemblyMinutes: null, sellingPrice: null, vatRate: null, foodCostTarget: null, categoryId: null, discHeightCm: null,
       ref: venueRef ? { ...venueRef } : null, model: CAKE_MODEL,
     };
   }
@@ -65,7 +65,7 @@ export function isDirty(working: Cake, initial: Cake): boolean {
 
 const clamp = (value: number, min: number, max: number): number => Math.min(max, Math.max(min, value));
 
-export type Measure = 'diameterCm' | 'tiers' | 'discs' | 'slices' | 'assemblyMinutes';
+export type Measure = 'diameterCm' | 'tiers' | 'discs' | 'discHeightCm' | 'slices' | 'assemblyMinutes';
 
 // One measure, clamped to what the cake can be: the diameter from the smallest the tiers need (minDiameterFor) to the editor's ceiling,
 // the tiers from 1 to what the diameter carries (maxTiersFor), the discs 1–5, the slices 1–200, the assembly minutes above 0 or none.
@@ -84,6 +84,11 @@ export function setMeasure(cake: Cake, measure: Measure, value: number): Cake {
       const discs = clamp(Math.round(value), MIN_DISCS, MAX_DISCS);
       return discs === cake.discs ? cake : { ...cake, discs };
     }
+    case 'discHeightCm': {
+      // Junk and non-positive values are ignored: the box shows what the cake has again. Following the reference again is clearDiscHeight's.
+      const discHeightCm = normalizeDiscHeight(value);
+      return discHeightCm === null || discHeightCm === cake.discHeightCm ? cake : { ...cake, discHeightCm };
+    }
     case 'slices': {
       const slices = clamp(Math.round(value), 1, MAX_SLICES);
       return slices === cake.slices ? cake : { ...cake, slices };
@@ -93,6 +98,12 @@ export function setMeasure(cake: Cake, measure: Measure, value: number): Cake {
       return assemblyMinutes === cake.assemblyMinutes ? cake : { ...cake, assemblyMinutes };
     }
   }
+}
+
+// The height box emptied: the cake has no height of its own again and follows its reference's (a typed value, even the reference's own,
+// is an explicit pin and stays).
+export function clearDiscHeight(cake: Cake): Cake {
+  return cake.discHeightCm === null ? cake : { ...cake, discHeightCm: null };
 }
 
 export function setName(cake: Cake, name: string): Cake {
@@ -160,10 +171,6 @@ export function setGrams(cake: Cake, tier: number, part: CakePart, productId: st
   if (typed !== null && !Number.isFinite(typed)) return cake;
   const grams = typed === null ? null : clamp(Math.round(typed), 0, MAX_LINE_GRAMS);
   return { ...cake, lines: cake.lines.map(line => (same(line) ? { ...line, grams } : line)) };
-}
-
-export function resetGrams(cake: Cake, tier: number, part: CakePart, productId: string): Cake {
-  return setGrams(cake, tier, part, productId, '');
 }
 
 // Packaging for the whole cake, counted in pieces. One line per ingredient; MAX_PACKAGING lines.

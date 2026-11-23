@@ -2931,7 +2931,7 @@ service cloud.firestore {
           && request.resource.data.keys().hasOnly([
                'bakery', 'name', 'diameterCm', 'tiers', 'discs', 'slices', 'lines', 'packaging',
                'assemblyMinutes', 'sellingPrice', 'vatRate', 'foodCostTarget', 'categoryId',
-               'ref', 'model', 'updatedAt'
+               'ref', 'discHeightCm', 'model', 'updatedAt'
              ])
           && request.resource.data.name is string
           && request.resource.data.name.size() > 0
@@ -2983,6 +2983,12 @@ service cloud.firestore {
           && (!('ref' in request.resource.data)
               || request.resource.data.ref == null
               || isCakeReference(request.resource.data.ref))
+          // The cake's own disc height (22 Nov 2026), optional: cakes saved before it have none (cake-model.ts MIN/MAX_DISC_HEIGHT_CM).
+          && (!('discHeightCm' in request.resource.data)
+              || request.resource.data.discHeightCm == null
+              || (request.resource.data.discHeightCm is number
+                  && request.resource.data.discHeightCm >= 0.5
+                  && request.resource.data.discHeightCm <= 20))
           // ⚠️ The ceiling is CAKE_MODEL exactly (shared/src/cake-model.ts), pinned by shared/src/model-ceiling.spec.ts:
           // raising CAKE_MODEL = raise this first.
           && request.resource.data.model is int

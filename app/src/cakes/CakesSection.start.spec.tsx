@@ -114,15 +114,12 @@ describe('a cake from scratch', () => {
     await user.click(await screen.findByRole('option', { name: /Sponge/ }, LOAD));
     const grams = await screen.findByRole('textbox', { name: 'Sponge: grams' });
     expect(grams).toHaveAttribute('placeholder', '0');
-    expect(screen.getByText('type the grams')).toBeInTheDocument();
-    expect(screen.getByText('type the grams by hand')).toBeInTheDocument();
-    expect(screen.getByText('you type the grams of every part')).toBeInTheDocument();
-    // The cost step says the cost is incomplete until they are.
+    expect(screen.queryByText('type the grams')).not.toBeInTheDocument();
+    expect(screen.queryByText('type the grams by hand')).not.toBeInTheDocument();
+    // The cost card says the cost is incomplete until they are (it is a card of its own: the Base step stays open beside it).
     await user.click(screen.getByRole('button', { name: /^Cost and price/ }));
     expect(screen.getByText('1 line without grams: type the grams or fill in the standard cake in Settings.')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: /^Base/ }));
-    await user.type(await screen.findByRole('textbox', { name: 'Sponge: grams' }), '500');
-    await user.click(screen.getByRole('button', { name: /^Cost and price/ }));
+    await user.type(screen.getByRole('textbox', { name: 'Sponge: grams' }), '500');
     expect(screen.queryByText(/1 line without grams/)).not.toBeInTheDocument();
   });
 

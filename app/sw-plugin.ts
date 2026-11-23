@@ -137,7 +137,11 @@ export function miseServiceWorker(repoRoot = join(HERE, '..')): Plugin {
       handler: () => [
         { tag: 'link', attrs: { rel: 'manifest', href: `${config.base}manifest.json` }, injectTo: 'head' },
         { tag: 'link', attrs: { rel: 'apple-touch-icon', href: `${config.base}icons/icon-192.png` }, injectTo: 'head' },
-        { tag: 'meta', attrs: { name: 'theme-color', content: '#2D5016' }, injectTo: 'head' },
+        // ⚠️ TWO theme colours, IN THIS ORDER: the browser takes the FIRST one whose media query matches. In the installed PC app with the title bar
+        // folded into the page (Window Controls Overlay, manifest.json's display_override) the window buttons sit ON the top bar, which is white
+        // (--surface); everywhere else the status bar / window strip takes the dark of the rail (--rail). Hex, not oklch: a meta cannot read tokens.css.
+        { tag: 'meta', attrs: { name: 'theme-color', media: '(display-mode: window-controls-overlay)', content: '#fefefc' }, injectTo: 'head' },
+        { tag: 'meta', attrs: { name: 'theme-color', content: '#201b16' }, injectTo: 'head' },
       ],
     },
     generateBundle(_options, bundle) {

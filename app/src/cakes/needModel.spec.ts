@@ -40,7 +40,7 @@ const TABLES: CostTables = {
 const line = (tier: number, part: CakePart, productId: string, grams: number): CakeLine => ({ tier, part, productId, grams });
 const cakeOf = (lines: CakeLine[], overrides: Partial<Cake> = {}): Cake => ({
   id: 'c1', name: 'Torta di prova', diameterCm: 22, tiers: 2, discs: 3, slices: 20, lines, packaging: [], assemblyMinutes: null,
-  sellingPrice: null, vatRate: null, foodCostTarget: null, categoryId: null, ref: null, model: CAKE_MODEL, ...overrides,
+  sellingPrice: null, vatRate: null, foodCostTarget: null, categoryId: null, discHeightCm: null, ref: null, model: CAKE_MODEL, ...overrides,
 });
 // Sponge on both tiers (800 + 400 g), ganache with a 20% loss (1 kg ready).
 const CAKE = cakeOf([line(0, 'base', 'SPONGE', 800), line(1, 'base', 'SPONGE', 400), line(0, 'filling', 'GANACHE', 1000)]);

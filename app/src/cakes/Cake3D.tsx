@@ -28,7 +28,7 @@ function readColours(host: HTMLElement): SceneColours {
   return {
     base: read('--cake-base'), soak: read('--cake-soak'), filling: read('--cake-filling'), coating: read('--cake-coating'),
     decoration: read('--cake-decoration'), board: read('--cake-board'),
-    accent: read('--accent'), ground: read('--line'), glow: read('--surface'),
+    ground: read('--line'),
     stageCenter: read('--cake-stage-center'), stageEdge: read('--cake-stage-edge'),
   };
 }
@@ -75,6 +75,14 @@ export default function Cake3D({ geometry, selected, tier, onSelect, labels, onO
       viewport.current?.focus({ preventScroll: true });
       open?.(picked);
     }
+  }, []);
+
+  // One tap on a name box (not on the cake itself) chooses the part AND opens its step: the owner chose «second tap opens» for the cake only.
+  const openFromName = useCallback((picked: Selected) => {
+    const { onSelect: select, onOpenPart: open } = latest.current;
+    select(picked);
+    viewport.current?.focus({ preventScroll: true });
+    open?.(picked);
   }, []);
 
   const refreshLabels = useCallback(() => {
@@ -234,7 +242,7 @@ export default function Cake3D({ geometry, selected, tier, onSelect, labels, onO
                 data-chosen={chosen}
                 data-hover={sameSelection(hover, { tier, part })}
                 data-part={part}
-                onClick={() => { act({ tier, part }); }}
+                onClick={() => { openFromName({ tier, part }); }}
               >
                 <span className={styles.title}>{names}</span>
                 <span className={styles.names}>{figures}</span>
@@ -256,7 +264,7 @@ export default function Cake3D({ geometry, selected, tier, onSelect, labels, onO
                 data-chosen={sameSelection(selected, { tier, part })}
                 data-hover={sameSelection(hover, { tier, part })}
                 data-part={part}
-                onClick={() => { act({ tier, part }); }}
+                onClick={() => { openFromName({ tier, part }); }}
               >
                 <span className={styles.title}>{note.names}</span>
                 <span className={styles.names}>{note.figures}</span>

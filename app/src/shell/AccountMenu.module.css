@@ -1,0 +1,97 @@
+/* The account's letter at the right end of the top bar, and its menu on a kiosk device's Home (AccountMenu.tsx). */
+
+/* A 48px touch target (--hit) holding a 40px dark circle: the same disc the rail carried under Settings, now on the white bar. */
+.target {
+  display: grid;
+  flex: none;
+  place-items: center;
+  box-sizing: border-box;
+  width: var(--hit);
+  height: var(--hit);
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: transparent;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.circle {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--r-pill);
+  background: var(--rail);
+  color: var(--rail-ink-strong);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+/* While the menu is open the letter wears an accent ring, so it is plain which control the menu hangs from. The ring is on the 40px circle, with
+   a surface-coloured gap between: 3px of white, then 2px of accent. */
+.target[aria-expanded="true"] .circle {
+  box-shadow: 0 0 0 3px var(--surface), 0 0 0 5px var(--accent);
+}
+
+@media (hover: hover) {
+  .target:hover .circle {
+    background: var(--rail-hover);
+  }
+}
+
+/* The popover is placed by React Aria's script (it sets its own z-index), under the letter and aligned to its right edge. */
+.popover {
+  width: 220px;
+  max-width: calc(100vw - var(--s4) - var(--s4));
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-2);
+}
+
+.menu {
+  display: flex;
+  flex-direction: column;
+  padding: var(--s1);
+  outline: none;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  min-height: var(--hit);
+  padding: 0 var(--s3);
+  border-radius: var(--r-md);
+  color: var(--ink);
+  font-size: var(--fs-md);
+  font-weight: 500;
+  cursor: pointer;
+  outline: none;
+}
+
+.item[data-focused] {
+  background: var(--accent-tint);
+}
+
+.item[data-focus-visible] {
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
+}
+
+/* «Exit» leaves the kiosk: the danger ink, as the pill it replaces had. */
+.danger {
+  color: var(--danger-ink);
+}
+
+.danger[data-focused] {
+  background: var(--danger-tint);
+}
+
+/* Qualified: base.css's `svg.lucide` (20px) would win over a lone class. */
+.item .itemIcon {
+  flex: none;
+  width: 20px;
+  height: 20px;
+}

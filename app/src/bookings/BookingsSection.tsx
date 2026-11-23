@@ -231,7 +231,7 @@ function BookingsScreen() {
     <Page
       title={t('section.bookings')}
       ownHeading={view.kind === 'booking' && !split}
-      band={canManage && (view.kind === 'list' || view.kind === 'booking')
+      gear={canManage && (view.kind === 'list' || view.kind === 'booking')
         ? <SettingsGear ref={gearRef} onPress={openSettings} />
         : null}
     >

@@ -10,6 +10,7 @@ import { useT } from '../i18n/useT';
 import { FormBar } from '../ui/FormBar';
 import { parkedKeyOf } from './cakeParking';
 import { CakeForm } from './CakeForm';
+import { useCakeHeadingLevel } from './headingLevel';
 import { useCakes } from './CakesContext';
 import { CAKES_PATH, cakePath, startOf } from './cakesPath';
 import styles from './CakeEditor.module.css';
@@ -106,9 +107,10 @@ export function CakeEditor({ id }: { id: string | null }) {
 // A cake address whose cake is not among the cakes, once the server has said so.
 function Gone({ titleId, titleRef, onBack }: { titleId: string; titleRef: Ref<HTMLHeadingElement>; onBack: () => void }) {
   const { t } = useT();
+  const level = useCakeHeadingLevel();
   return (
     <section className={styles.editor} aria-labelledby={titleId}>
-      <FormBar backLabel={t('ui.back')} onBack={onBack} title={t('cakes.gone')} titleId={titleId} titleRef={titleRef} />
+      <FormBar level={level} backLabel={t('ui.back')} onBack={onBack} title={t('cakes.gone')} titleId={titleId} titleRef={titleRef} />
     </section>
   );
 }

@@ -27,6 +27,7 @@
 // ⚠️ A FAILURE LOGS THE ERROR CODE ALONE: a message can name the document path, and that path IS the token.
 // ⚠️ NEVER THROWS: the button must always come back.
 
+import { INSTALLED_DISPLAY_QUERY } from '../session/displayMode';
 import { sameSession } from '@mise/shared/device-model';
 import { buildPath } from '@mise/shared/location-id';
 import type { KeyValueStorage } from '../session/backend';
@@ -243,7 +244,7 @@ export function browserPushEnv(): PushEnv {
     hasPushManager: () => typeof window !== 'undefined' && 'PushManager' in window,
     isIOS: () => /iPad|iPhone|iPod/.test(navigator.userAgent)
       || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1),
-    isStandalone: () => window.matchMedia('(display-mode: standalone)').matches
+    isStandalone: () => window.matchMedia(INSTALLED_DISPLAY_QUERY).matches
       || (navigator as { standalone?: boolean }).standalone === true,
     permission: () => Notification.permission,
     requestPermission: () => Notification.requestPermission(),

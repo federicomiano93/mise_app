@@ -59,7 +59,8 @@ const FLAVOURS: readonly Flavour[] = [
   { words: /nocciol|hazelnut|gianduia/, colour: '#b98456', glossy: false, specks: false, decoration: 'grains' },
   { words: /caramell|caramel/, colour: '#c98a3a', glossy: true, specks: false, decoration: 'plain' },
   { words: /meringa|meringhe|meringue/, colour: '#fbf8f0', glossy: false, specks: false, decoration: 'rosettes' },
-  { words: /pasticcer|custard/, colour: '#f3da82', glossy: false, specks: true, decoration: 'rosettes' },
+  // Custard is a real yellow (his ask, 22 Nov 2026): the paler #f3da82 read as white under the scene's lights.
+  { words: /pasticcer|custard/, colour: '#e9bc3f', glossy: false, specks: true, decoration: 'rosettes' },
   { words: /panna|chantilly|crema|cream|vaniglia|vanilla/, colour: '#f6eedd', glossy: false, specks: true, decoration: 'rosettes' },
   // A plain «white» comes last: «panna bianca» is a cream first.
   { words: /\b(?:bianc[oa]|white)\b/, colour: '#f1e8d2', glossy: false, specks: false, decoration: 'plain' },
@@ -90,6 +91,8 @@ const SOAKS: readonly { words: RegExp; colour: string }[] = [
   { words: /alchermes/, colour: '#b4453f' },
   { words: /caff|coffee|espresso/, colour: '#6b4126' },
   { words: /\brum\b|liquor|limoncello|maraschino|marsala|cognac|brandy|amaretto/, colour: '#c08030' },
+  // A lemon soak is a light yellow (his ask, 22 Nov 2026). After the liqueurs: «limoncello» is a liqueur first.
+  { words: /limon|lemon/, colour: '#f1dc6e' },
 ];
 
 const normalised = (names: readonly string[]) => names.map(name => normalizeSearchText(name)).filter(name => name !== '');

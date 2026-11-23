@@ -1,5 +1,6 @@
 import { useT } from '../i18n/useT';
 import { Button } from '../ui/Button';
+import { markLeavingOnPurpose } from './busy';
 import { AccountLine } from './AccountLine';
 import { GateScreen } from './GateScreen';
 import { SignOutButton } from './SignOutButton';
@@ -12,7 +13,7 @@ export function SessionErrorScreen() {
   return (
     <GateScreen title={t('help.couldNotCheckYour')} subtitle={t('help.thisUsuallyMeansNo')}>
       <AccountLine />
-      <Button variant="primary" block onPress={() => { window.location.reload(); }}>
+      <Button variant="primary" block onPress={() => { markLeavingOnPurpose(); window.location.reload(); }}>
         {t('auth.tryAgain')}
       </Button>
       <SignOutButton variant="quiet" />

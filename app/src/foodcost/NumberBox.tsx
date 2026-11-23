@@ -9,6 +9,8 @@ type Props = {
   value: string;
   placeholder?: string;
   invalid: boolean;
+  // A limit on what can be typed, where a copy of the text is kept on the device and refused past it (cakes/cakeParking.ts).
+  maxLength?: number;
   inputRef?: Ref<HTMLInputElement>;
   onChange: (text: string) => void;
 };
@@ -18,7 +20,7 @@ type Props = {
 // ⚠️ A COMMA TYPED IS A DECIMAL POINT: an Italian keyboard offers one, and a number box returns ''
 // for «12,5» in some browsers, which would read as «empty». The text is kept as typed («12.» is a
 // number half-typed); productEditorModel's readNumber turns it into a number.
-export function NumberBox({ id, label, value, placeholder = '0', invalid, inputRef, onChange }: Props) {
+export function NumberBox({ id, label, value, placeholder = '0', invalid, maxLength, inputRef, onChange }: Props) {
   return (
     <input
       ref={inputRef}
@@ -28,6 +30,7 @@ export function NumberBox({ id, label, value, placeholder = '0', invalid, inputR
       autoComplete="off"
       className={styles.box}
       placeholder={placeholder}
+      {...(maxLength === undefined ? {} : { maxLength })}
       {...(label === undefined ? {} : { 'aria-label': label })}
       aria-invalid={invalid ? true : undefined}
       data-invalid={invalid}

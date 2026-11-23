@@ -137,7 +137,7 @@ describe('where the address with no section in it lands', () => {
   });
 });
 
-describe('the avatar under Settings', () => {
+describe('the account\'s letter at the right end of the top bar', () => {
   it('is the first letter of the email, in capitals, and leads to the account', async () => {
     const { router, user } = renderApp('/orders', { session: { user: { uid: 'u2', email: 'chef@club.test', isAnonymous: false } } });
 
@@ -151,10 +151,12 @@ describe('the avatar under Settings', () => {
     expect(router.state.location.pathname).toBe('/settings');
   });
 
-  it('is not one of the sections: it is outside the «All sections» navigation', () => {
+  it('is not one of the sections: it is outside the «All sections» navigation, in the top bar, and the rail has no Account landmark', () => {
     renderApp('/orders');
     const avatar = screen.getByRole('link', { name: 'Account' });
     expect(screen.getByRole('navigation', { name: 'All sections' })).not.toContainElement(avatar);
+    expect(avatar.closest('header')).not.toBeNull();
+    expect(screen.queryByRole('navigation', { name: 'Account' })).not.toBeInTheDocument();
   });
 
   it('falls back to the account\'s id when it has no email', () => {
@@ -182,9 +184,10 @@ describe('the venue in the top bar', () => {
     expect(header.queryByRole('button')).not.toBeInTheDocument();
   });
 
-  it('shows the venue\'s first letter in a small square', () => {
+  it('is its name alone: no initial square beside it any more (the single bar, 22 Nov 2026)', () => {
     renderApp('/home', { session: { name: 'the bakery' } });
-    expect(topBar().getByText('T')).toBeInTheDocument();
+    expect(topBar().getByText('the bakery')).toBeInTheDocument();
+    expect(topBar().queryByText('T')).not.toBeInTheDocument();
   });
 
   it('is a button that opens the other venues when the account has several', async () => {

@@ -122,14 +122,13 @@ describe('AppShell: navigation', () => {
 });
 
 describe('AppShell: landmarks and the skip link', () => {
-  // The account avatar has a landmark of its own: content outside every landmark is skipped by
-  // people who move from landmark to landmark (axe «region»).
-  it('has one main landmark, one h1, and three named navigations', () => {
+  // The account's letter is in the top bar (a banner), so it needs no landmark of its own (22 Nov 2026).
+  it('has one main landmark, one h1, and two named navigations', () => {
     renderApp('/orders');
     expect(screen.getAllByRole('main')).toHaveLength(1);
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
     expect(screen.getAllByRole('navigation').map(nav => nav.getAttribute('aria-label')))
-      .toEqual(['All sections', 'Account', 'Main sections']);
+      .toEqual(['All sections', 'Main sections']);
   });
 
   it('has a skip link that points at the main content', () => {

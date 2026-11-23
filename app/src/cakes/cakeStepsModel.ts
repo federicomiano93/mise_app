@@ -23,11 +23,6 @@ export function startStep(saved: boolean): StepKey | null {
   return saved ? null : (STEP_PARTS[0] ?? null);
 }
 
-// A tap on a step's title: it opens, and only one is open at a time; a tap on the open one closes it.
-export function toggleStep(open: StepKey | null, key: StepKey): StepKey | null {
-  return open === key ? null : key;
-}
-
 // ── What a part of one tier holds, for its label and its closed row ───────────────────────────────
 
 export interface PartFigures {

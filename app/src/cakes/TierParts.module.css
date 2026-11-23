@@ -202,33 +202,29 @@
   font-size: var(--fs-sm);
 }
 
-/* «Then, once the cake is composed»: the dashed line before the cost step. */
-.divider {
-  margin: var(--s1) var(--s1) 0;
-  padding-top: var(--s3);
-  border-top: 1px dashed var(--line-2);
-  color: var(--ink-2);
-  font-size: var(--fs-sm);
-}
-
-.finish {
-  align-self: flex-start;
-}
-
+/* One card of a step: name, grams box and ✕ on one line, the cost under the name. A recipe row (.lineConfirm) has the ✓ between the box
+   and the ✕. Narrow (a phone, 296px included): the box takes a line of its own, with the name and the ✕ above it and the cost and the ✓ below. */
 .line {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-areas: "what qty actions" "money money money";
   align-items: center;
-  gap: var(--s2) var(--s3);
+  column-gap: var(--s2);
+  row-gap: 0;
   padding: var(--s2) var(--s3);
   border: 1px solid var(--line);
   border-radius: var(--r-sm);
   background: var(--sunken);
 }
 
+.lineConfirm {
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  grid-template-areas: "what qty confirm actions" "money money money money";
+}
+
 .what {
+  grid-area: what;
   display: flex;
-  flex: 1 1 160px;
   flex-direction: column;
   min-width: 0;
   font-weight: 600;
@@ -245,19 +241,10 @@
   font-weight: 400;
 }
 
-.what small[data-manual="true"] {
-  color: var(--accent-ink);
-  font-weight: 600;
-}
-
-.what small[data-todo="true"] {
-  color: var(--warn-ink);
-  font-weight: 600;
-}
-
 .qty {
+  grid-area: qty;
   display: flex;
-  flex: 0 1 128px;
+  width: 7.75rem;
   align-items: center;
   gap: var(--s2);
 }
@@ -267,16 +254,20 @@
   font-size: var(--fs-sm);
 }
 
+.qty input {
+  min-width: 0;
+}
+
 .money {
-  flex: 0 0 auto;
-  min-width: 72px;
+  grid-area: money;
+  min-width: 0;
   font-size: var(--fs-md);
   font-variant-numeric: tabular-nums;
-  text-align: right;
+  text-align: left;
 }
 
 .money small {
-  display: block;
+  margin-left: var(--s1);
   color: var(--ink-2);
   font-size: var(--fs-xs);
 }
@@ -287,8 +278,58 @@
 }
 
 .actions {
+  grid-area: actions;
   display: flex;
-  margin-left: auto;
+}
+
+/* The ✓: the brand's filled button; it closes the step and opens the next one. */
+.confirm {
+  grid-area: confirm;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--hit);
+  height: var(--hit);
+  border: 0;
+  border-radius: var(--r-md);
+  background: var(--accent);
+  color: var(--on-accent);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.confirm svg {
+  width: 20px;
+  height: 20px;
+}
+
+.confirm:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (hover: hover) {
+  .confirm:hover {
+    background: var(--accent-ink);
+  }
+}
+
+/* ⚠️ At 296px a card has only about 144px inside it: the name, the box, ✓ and ✕ cannot share a line without squeezing the box to 26px, where
+   «9999» does not fit. So the box takes a line of its own, the full width of the card, and the ✕ moves up beside the name. */
+@media (max-width: 360px) {
+  .line {
+    column-gap: var(--s1);
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "what actions" "qty qty" "money money";
+  }
+
+  .lineConfirm {
+    grid-template-areas: "what actions" "qty qty" "money confirm";
+  }
+
+  .qty {
+    width: auto;
+  }
 }
 
 .icon {

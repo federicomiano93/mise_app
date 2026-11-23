@@ -12,7 +12,7 @@ import type * as T from 'three';
 import type { CakePart } from '@mise/shared/cake-model';
 import type { Selected } from './cakeEditorModel';
 import {
-  BOARD_THICKNESS_CM, CUT_ANGLE, TIER_BOARD_CM, CAMERA_FOV_DEG, appearedParts, homeView, partAnchors, pickedPart,
+  BOARD_THICKNESS_CM, CUT_ANGLE, TIER_BOARD_CM, CAMERA_FOV_DEG, appearedParts, glowSource, highlightLevel, homeView, partAnchors, pickedPart,
 } from './cake3dModel';
 import type { Anchor, CakeLayout, StageView, TierLayout } from './cake3dModel';
 import { FOOD, PLAIN_LOOK } from './cakeLook';
@@ -26,11 +26,9 @@ export type Three = typeof import('./threeParts');
 // The colours of the scene, as CSS values read from the tokens (Cake3D reads them with getComputedStyle, never typed here).
 export interface SceneColours {
   base: string; soak: string; filling: string; coating: string; decoration: string; board: string;
-  accent: string; ground: string;
+  ground: string;
   // The stage's radial backdrop, lighter in the middle (his choice, 21 Nov 2026: the tokens --cake-stage-center and --cake-stage-edge).
   stageCenter: string; stageEdge: string;
-  // The hover glow (a light surface colour).
-  glow: string;
 }
 
 export interface SceneHooks {
@@ -146,8 +144,8 @@ function assemble(lib: Three, renderer: T.WebGLRenderer, canvas: HTMLCanvasEleme
   };
   const palette = {
     base: colourOf(css.base), soak: colourOf(css.soak), filling: colourOf(css.filling), coating: colourOf(css.coating),
-    decoration: colourOf(css.decoration), board: colourOf(css.board), accent: colourOf(css.accent),
-    ground: colourOf(css.ground), glow: colourOf(css.glow),
+    decoration: colourOf(css.decoration), board: colourOf(css.board),
+    ground: colourOf(css.ground),
   };
 
   const scene = new lib.Scene();
@@ -827,8 +825,15 @@ function assemble(lib: Three, renderer: T.WebGLRenderer, canvas: HTMLCanvasEleme
       const chosen = selectedNow !== null && tagKey(selectedNow) === key;
       const hovered = !chosen && hoveredNow !== null && tagKey(hoveredNow) === key;
       for (const mat of list) {
-        mat.emissive.copy(chosen ? palette.accent : hovered ? palette.glow : none);
-        mat.emissiveIntensity = chosen ? 0.4 : hovered ? 0.2 : 0;
+        const level = highlightLevel(chosen, hovered);
+        const source = glowSource(mat);
+        // The glow keeps the layer's own colour: its colour, or its picture where it has one (the picture's own colour is not `color`).
+        if (source === 'map') {
+          if (mat.emissiveMap !== mat.map) { mat.emissiveMap = mat.map; mat.needsUpdate = true; }
+          mat.emissive.setRGB(1, 1, 1);
+        } else if (source === 'colour') mat.emissive.copy(mat.color);
+        else mat.emissive.copy(none);
+        mat.emissiveIntensity = source === 'none' ? 0 : level;
       }
     }
   }

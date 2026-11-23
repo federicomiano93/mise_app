@@ -4,7 +4,9 @@ import { useCallback, useSyncExternalStore } from 'react';
 // upright to landscape, a window resized).
 //
 // For what a stylesheet cannot say: LAYOUT is always CSS (a media query in the module), and this
-// is only for the few attributes that must agree with it, such as a tab list's aria-orientation.
+// is only for the few attributes that must agree with it, such as a tab list's aria-orientation —
+// and, since the single bar (22 Nov 2026), ONE layout move: shell/Page draws a section's title into the top bar from 700px, and a stylesheet
+// cannot move an element to another place in the document. Its 700px must stay the stylesheets' 700px.
 //
 // ⚠️ jsdom has no matchMedia, and the specs that do stub it give back a bare `{ matches }`: both
 // read as «does not match», never as an error.

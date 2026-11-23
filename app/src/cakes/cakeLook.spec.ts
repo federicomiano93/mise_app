@@ -60,7 +60,7 @@ describe('the look of a coating', () => {
 describe('the look of a filling', () => {
   it('a ganache shines, a custard has vanilla specks, a cream too', () => {
     expect(fillingLook(['Ganache'])).toEqual({ colour: DARK, glossy: true, specks: false });
-    expect(fillingLook(['Crema pasticcera'])).toEqual({ colour: '#f3da82', glossy: false, specks: true });
+    expect(fillingLook(['Crema pasticcera'])).toEqual({ colour: '#e9bc3f', glossy: false, specks: true });
     expect(fillingLook(['Chantilly']).specks).toBe(true);
   });
   it('a pistachio cream is pistachio, not cream', () => {
@@ -143,6 +143,8 @@ describe('the look of a sponge and its soak', () => {
     expect(soakLook(['Bagna al rum']).colour).toBe('#c08030');
     expect(soakLook(['Liquore']).colour).toBe('#c08030');
     expect(soakLook(['Bagna al caffè']).colour).toBe('#6b4126');
+    expect(soakLook(['Bagna al limone']).colour).toBe('#f1dc6e');
+    expect(soakLook(['Bagna al limoncello']).colour).toBe('#c08030');
     expect(soakLook(['Rum syrup']).colour).toBe('#c08030');
     expect(soakLook(['Bagna analcolica']).colour).toBeNull();
     // «rum» inside another word is not a rum.
@@ -158,7 +160,7 @@ describe('the looks of a whole cake', () => {
       { tier: 0, part: 'coating', productId: 'B', grams: 300 },
       { tier: 1, part: 'decoration', productId: 'C', grams: 40 },
     ],
-    packaging: [], assemblyMinutes: null, sellingPrice: null, vatRate: null, foodCostTarget: null, categoryId: null, ref: null, model: 1,
+    packaging: [], assemblyMinutes: null, sellingPrice: null, vatRate: null, foodCostTarget: null, categoryId: null, discHeightCm: null, ref: null, model: 1,
   };
   const names: Record<string, string> = { A: 'Pan di spagna', B: 'Ganache', C: 'Frutti di bosco' };
   const looks = (lookup: Record<string, string>) => cakeLooks(cakeGeometry(CAKE), id => lookup[id] ?? '');

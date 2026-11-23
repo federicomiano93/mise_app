@@ -1,5 +1,6 @@
 import { useT } from '../i18n/useT';
 import { Button } from '../ui/Button';
+import { markLeavingOnPurpose } from './busy';
 import { AccountLine } from './AccountLine';
 import { GateScreen } from './GateScreen';
 import { useJoinFlow, useJoinFlowStore } from './JoinFlowContext';
@@ -27,7 +28,7 @@ export function NoAccessScreen() {
       <Button variant="secondary" block autoFocus={returned} onPress={() => { flowStore.openForm(); }}>
         {t('auth.iHaveACode')}
       </Button>
-      <Button variant="primary" block onPress={() => { window.location.reload(); }}>
+      <Button variant="primary" block onPress={() => { markLeavingOnPurpose(); window.location.reload(); }}>
         {t('auth.tryAgain')}
       </Button>
       <SignOutButton variant="quiet" />

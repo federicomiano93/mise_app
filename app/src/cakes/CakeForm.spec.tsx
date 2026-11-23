@@ -3,6 +3,7 @@ import { screen, waitFor, within } from '@testing-library/react';
 import { normalizeStandard, referenceFor } from '@mise/shared/cake-standard';
 import { fakeCakesSource } from '../testing/fakeCakesSource';
 import { REFERENCE, cakeDoc, renderCakes, storedReference } from '../testing/renderCakes';
+import { openMeasures } from '../testing/openMeasures';
 import { EMPLOYEE, LOAD } from '../testing/renderFoodcost';
 
 // One cake's editor: it opens a stored cake and a new one, saves the cake and its Food cost card in ONE write, asks before it saves,
@@ -19,7 +20,7 @@ const SACHER = cakeDoc('c1', 'Sacher', { diameterCm: 22, discs: 2, ref: REFERENC
 
 // The keys the cakes rule lists (firestore.rules, match /cakes/{cakeId}), minus the stamp the data layer adds.
 const RULE_KEYS = [
-  'assemblyMinutes', 'categoryId', 'diameterCm', 'discs', 'foodCostTarget', 'lines', 'model', 'name', 'packaging', 'ref', 'sellingPrice',
+  'assemblyMinutes', 'categoryId', 'diameterCm', 'discHeightCm', 'discs', 'foodCostTarget', 'lines', 'model', 'name', 'packaging', 'ref', 'sellingPrice',
   'slices', 'tiers', 'updatedAt', 'vatRate',
 ];
 
@@ -37,14 +38,16 @@ describe('a stored cake', () => {
     expect(screen.getByText('On the price list')).toBeInTheDocument();
     expect(await screen.findByRole('img', { name: /^Section drawing of the cake: 1 tier, 2 discs per tier/ })).toBeInTheDocument();
     expect(screen.getByRole('heading', { level: 3, name: /^Parts of the cake/ })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { level: 3, name: 'Measures' })).toBeInTheDocument();
+    // The Measures card is folded on a saved cake: its title and one line of what it holds.
+    expect(screen.getByRole('heading', { level: 3, name: /^Measures.*Sacher · 22 cm · 1 tier · 2 discs · discs of 3 cm$/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^Cost and price/ })).toHaveAttribute('aria-expanded', 'false');
+    await openMeasures(user);
     expect(screen.getByRole('textbox', { name: 'Name' })).toHaveValue('Sacher');
     // Every step is closed when a saved cake opens; the first one holds the sponge, 1000 g of it at £2.00 a kilo.
     expect(screen.getByRole('button', { name: /^Base/ })).toHaveTextContent(/Sponge · 1,?000 g/);
     await user.click(screen.getByRole('button', { name: /^Base/ }));
     expect(screen.getByRole('textbox', { name: 'Sponge: grams' })).toHaveValue('1000');
-    expect(screen.getByText('adjusted by hand · the rule says 600 g')).toBeInTheDocument();
+    expect(screen.queryByText(/adjusted by hand/)).not.toBeInTheDocument();
   });
 
   it('says «This cake no longer exists.» only once the server has answered', async () => {
@@ -137,6 +140,7 @@ describe('leaving', () => {
   it('with typing on it, Back asks «Discard changes?»; Cancel stays, Discard leaves', async () => {
     const { user, router } = await open('/cakes/c1');
     await heading('Sacher');
+    await openMeasures(user);
     await user.type(screen.getByRole('textbox', { name: 'Name' }), '!');
     await user.click(screen.getByRole('button', { name: 'Back' }));
     const question = await screen.findByRole('alertdialog');

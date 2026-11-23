@@ -54,3 +54,29 @@
 .subtitle {
   color: var(--ink-2);
 }
+
+/* ⚠️ THE INSTALLED PC APP WITH ITS TITLE BAR FOLDED INTO THE PAGE (Window Controls Overlay, manifest.json's display_override): this screen is drawn
+   OUTSIDE the shell, so the shell's top bar is not there to be the drag region, and without one the window could not be moved from here. A strip as
+   tall as the title bar area (`titlebar-area-height`) is the drag region; the content is centred, so it never reaches the window buttons at the
+   right. Only under this media query: a browser tab and a phone never match it. macOS puts its buttons at the LEFT: the strip is still the place to
+   drag, and nothing on these screens sits at that corner either, so it is left as it is. */
+@media (display-mode: window-controls-overlay) {
+  .screen::before {
+    content: "";
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: env(titlebar-area-height, 0px);
+    -webkit-app-region: drag;
+    app-region: drag;
+  }
+
+  .screen button,
+  .screen a,
+  .screen input,
+  .screen [role="button"] {
+    -webkit-app-region: no-drag;
+    app-region: no-drag;
+  }
+}

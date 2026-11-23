@@ -11,7 +11,7 @@ const KEY = 'just-joined';
 const standalone = (installed: boolean) => {
   // jsdom has no matchMedia of its own.
   vi.stubGlobal('matchMedia', (query: string) => ({
-    matches: installed && query === '(display-mode: standalone)', media: query, onchange: null,
+    matches: installed && /display-mode: standalone/.test(query), media: query, onchange: null,
     addListener: () => {}, removeListener: () => {}, addEventListener: () => {}, removeEventListener: () => {}, dispatchEvent: () => false,
   }) as MediaQueryList);
 };

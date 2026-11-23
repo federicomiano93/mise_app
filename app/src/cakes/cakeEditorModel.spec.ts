@@ -4,7 +4,7 @@ import type { Cake, ReferenceGrams } from '@mise/shared/cake-model';
 import { normalizeStandard, referenceFor } from '@mise/shared/cake-standard';
 import type { CakeStandard } from '@mise/shared/cake-standard';
 import {
-  addCard, addPack, canAddCard, cardsIn, firstEmptyPack, followStandard, isDirty, referenceChanged, removeCard, removePack, resetGrams,
+  addCard, addPack, canAddCard, cardsIn, clearDiscHeight, firstEmptyPack, followStandard, isDirty, referenceChanged, removeCard, removePack,
   setGrams, setMeasure, setName, setPackQty, setPrice, setTarget, setVat, takeReference, vatFromSelect, withoutMissingRecipeCards, workingFrom,
 } from './cakeEditorModel';
 
@@ -14,7 +14,7 @@ const CAKE: Cake = {
   id: 'c1', name: 'Sacher', diameterCm: 24, tiers: 2, discs: 3, slices: 12,
   lines: [{ tier: 0, part: 'base', productId: 'SPONGE', grams: null }, { tier: 1, part: 'base', productId: 'SPONGE', grams: 400 }],
   packaging: [{ ingredientId: 'box', qtyPcs: 1 }], assemblyMinutes: 20, sellingPrice: 60, vatRate: 10, foodCostTarget: 30,
-  categoryId: 'cat', ref: REF, model: CAKE_MODEL,
+  categoryId: 'cat', discHeightCm: null, ref: REF, model: CAKE_MODEL,
 };
 
 describe('workingFrom', () => {
@@ -79,6 +79,24 @@ describe('setMeasure', () => {
     expect(setMeasure(CAKE, 'slices', 500).slices).toBe(200);
     expect(setMeasure(CAKE, 'slices', 0).slices).toBe(1);
     expect(setMeasure(CAKE, 'slices', 7.6).slices).toBe(8);
+  });
+
+  it('the disc height takes one decimal inside 0.5–20, ignores junk and returns the same cake when nothing moves', () => {
+    expect(setMeasure(CAKE, 'discHeightCm', 4.46).discHeightCm).toBe(4.5);
+    expect(setMeasure(CAKE, 'discHeightCm', 0.1).discHeightCm).toBe(0.5);
+    expect(setMeasure(CAKE, 'discHeightCm', 99).discHeightCm).toBe(20);
+    const own = { ...CAKE, discHeightCm: 4.5 };
+    expect(setMeasure(own, 'discHeightCm', 0)).toBe(own);
+    expect(setMeasure(own, 'discHeightCm', -3)).toBe(own);
+    expect(setMeasure(own, 'discHeightCm', Number.NaN)).toBe(own);
+    expect(setMeasure(own, 'discHeightCm', 4.5)).toBe(own);
+  });
+
+  it('clearing the disc height makes the cake follow its reference again, and does nothing when it already does', () => {
+    const own = { ...CAKE, discHeightCm: 4.5 };
+    expect(clearDiscHeight(own).discHeightCm).toBeNull();
+    expect(clearDiscHeight(CAKE)).toBe(CAKE);
+    expect(isDirty(clearDiscHeight(own), own)).toBe(true);
   });
 
   it('assembly minutes above 0, or none', () => {
@@ -176,7 +194,6 @@ describe('grams', () => {
     const typed = setGrams(CAKE, 0, 'base', 'SPONGE', '650');
     expect(typed.lines[0]?.grams).toBe(650);
     expect(setGrams(typed, 0, 'base', 'SPONGE', '').lines[0]?.grams).toBeNull();
-    expect(resetGrams(typed, 0, 'base', 'SPONGE').lines[0]?.grams).toBeNull();
   });
 
   it('0 is a real answer, whole grams, never above what the rules accept', () => {

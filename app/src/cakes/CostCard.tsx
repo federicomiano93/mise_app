@@ -17,6 +17,7 @@ import { useSession } from '../session/SessionContext';
 import { useMoney } from '../session/useMoney';
 import { Button } from '../ui/Button';
 import { ASSEMBLY_STEP_MIN, vatFromSelect } from './cakeEditorModel';
+import { TEXT_BOX_MAX } from './cakeParking';
 import { Stepper } from './MeasuresCard';
 import styles from './CostCard.module.css';
 
@@ -175,6 +176,7 @@ export function CostCard({ totals, sellingPrice, texts, showLabour, invalid, sli
             id={`${ids}-price`}
             value={texts.price}
             invalid={invalid === 'sellingPrice'}
+            maxLength={TEXT_BOX_MAX}
             inputRef={node => { registerBox('sellingPrice', node); }}
             onChange={onPrice}
           />
@@ -205,6 +207,7 @@ export function CostCard({ totals, sellingPrice, texts, showLabour, invalid, sli
               label={t('fc.anotherVatRateAs')}
               value={texts.vatOther}
               invalid={invalid === 'vatRate'}
+              maxLength={TEXT_BOX_MAX}
               inputRef={node => { registerBox('vatRate', node); }}
               onChange={onVatOther}
             />
@@ -217,6 +220,7 @@ export function CostCard({ totals, sellingPrice, texts, showLabour, invalid, sli
             id={`${ids}-target`}
             value={texts.target}
             invalid={invalid === 'foodCostTarget'}
+            maxLength={TEXT_BOX_MAX}
             inputRef={node => { registerBox('foodCostTarget', node); }}
             onChange={onTarget}
           />

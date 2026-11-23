@@ -6,6 +6,7 @@ import { fakeFoodcostSource } from '../testing/fakeFoodcostSource';
 import { fakeRecipesSource } from '../testing/fakeRecipesSource';
 import { SPONGE, cakeDoc, renderCakes, storedReference } from '../testing/renderCakes';
 import { FLOUR, FLOUR_PRICES, LOAD } from '../testing/renderFoodcost';
+import { openMeasures } from '../testing/openMeasures';
 import { resetParkedCakes } from './cakeParking';
 
 // «Open in Recipes» on the dialog that says a recipe was just made: the unsaved cake is parked in memory (no question, nothing lost), the
@@ -104,6 +105,7 @@ describe('«Open in Recipes»', () => {
     const cake = cakeDoc('c1', 'Plain');
     const view = renderCakes('/cakes/c1', { cakes: fakeCakesSource({ cakes: [cake], reference: storedReference() }), foodcost: source, data: { recipes: () => recipes } });
     await screen.findByRole('heading', { level: 2, name: 'Plain' }, LOAD);
+    await openMeasures(view.user);
     await view.user.type(screen.getByRole('textbox', { name: 'Name' }), ' two');
     await view.user.click(screen.getByRole('button', { name: /^Soak/ }));
     await view.user.type(screen.getByRole('combobox', { name: 'Search a recipe for Soak' }), 'Glaze');
@@ -116,6 +118,7 @@ describe('«Open in Recipes»', () => {
     await view.user.click(within(region).getByRole('button', { name: 'Back' }));
     await screen.findByRole('heading', { level: 2, name: 'Plain' }, LOAD);
     expect(view.router.state.location.pathname).toBe('/cakes/c1');
+    await openMeasures(view.user);
     expect(screen.getByRole('textbox', { name: 'Name' })).toHaveValue('Plain two');
     // The step that was open is open again, with the new card in it.
     expect(screen.getByRole('textbox', { name: 'Glaze: grams' })).toBeInTheDocument();

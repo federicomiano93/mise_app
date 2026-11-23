@@ -14,7 +14,7 @@
 // first screen away for nothing). At most one update reload a minute, and after three in a row a ten-minute
 // pause (sessionStorage): a worker that never manages to take over cannot reload the app in a tight loop.
 
-import { isBusy } from '../session/busy';
+import { isBusy, markLeavingOnPurpose } from '../session/busy';
 
 export interface ServiceWorkerEnv {
   readonly container: ServiceWorkerContainer | undefined;
@@ -121,7 +121,7 @@ export function browserServiceWorkerEnv(base: string): ServiceWorkerEnv {
     scriptUrl: `${base}sw.js`,
     scope: base,
     isBusy,
-    reload: () => { window.location.reload(); },
+    reload: () => { markLeavingOnPurpose(); window.location.reload(); },
     now: () => Date.now(),
     setTimeout: (callback, ms) => window.setTimeout(callback, ms),
     setInterval: (callback, ms) => window.setInterval(callback, ms),

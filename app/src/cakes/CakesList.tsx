@@ -8,7 +8,7 @@ import { useMoney } from '../session/useMoney';
 import { Button } from '../ui/Button';
 import { Dialog } from '../ui/Dialog';
 import { useConfirm } from '../ui/useConfirm';
-import { dropParked, useParkedCakes } from './cakeParking';
+import { discardParked, useParkedCakes } from './cakeParking';
 import type { ParkedCake } from './cakeParking';
 import { useCakes } from './CakesContext';
 import { cakeSubLine, costCakes, matchingCakes } from './cakesListModel';
@@ -62,7 +62,7 @@ export function CakesList({ onOpenCake, onOpenNew, onResume }: Props) {
       cancelLabel: t('common.cancel'),
       danger: true,
     });
-    if (ok) dropParked(copy.key);
+    if (ok) discardParked(copy.key);
   };
 
   return (

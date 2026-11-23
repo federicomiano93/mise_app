@@ -17,11 +17,12 @@
   font-size: var(--fs-lg);
 }
 
-/* The four measures in one row where the card is wide enough: the name takes the first line, the three numbers share the second. */
+/* The four measures in one row where the card is wide enough: the name takes the first line, the four numbers (diameter, tiers, discs,
+   disc height) share the second. */
 .grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--s3);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--s2);
   align-items: end;
 }
 
@@ -155,11 +156,11 @@
   font-weight: 600;
 }
 
-/* A phone: the card is 230px wide at 296, so three boxes share ~70px each. Tighter gaps and padding, and a unit that takes only the room
-   «cm» needs, keep the number (22) fully visible; the labels may wrap and the cells may shrink. */
+/* A phone: the card is 230px wide at 296, so the four boxes go two by two (~110px each): «20 cm» and «4,5 cm» stay fully visible. Tighter
+   padding and a unit that takes only the room «cm» needs; the labels may wrap and the cells may shrink. */
 @media (max-width: 420px) {
   .grid {
-    gap: var(--s2);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .input {

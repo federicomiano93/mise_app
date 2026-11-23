@@ -83,7 +83,7 @@ function CalculatorScreen() {
 
   return (
     <HandBackProvider value={handBack}>
-      <Page title={t('section.calculator')} band={gear}>
+      <Page title={t('section.calculator')} gear={gear}>
         {'settings' in resolved ? (
           <PartBoundary resetKey={pathname}>
             <SettingsScreens view={resolved.settings} />

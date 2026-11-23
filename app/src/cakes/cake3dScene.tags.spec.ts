@@ -44,7 +44,7 @@ const lib = { ...real, WebGLRenderer: FakeRenderer, PMREMGenerator: FakePmrem, R
 
 const css = {
   base: '#e8c98f', soak: '#c9a36b', filling: '#f3e6c4', coating: '#f6eedd', decoration: '#b03a4a', board: '#d9d2c4',
-  accent: '#285cc2', ground: '#8899aa', stageCenter: '#c9d1d9', stageEdge: '#6f7c8a', glow: '#ffffff',
+  ground: '#8899aa', stageCenter: '#c9d1d9', stageEdge: '#6f7c8a',
 };
 const hooks = { onMoving() { /* unused */ }, onRest() { /* unused */ }, onTap() { /* unused */ }, onHover() { /* unused */ }, onGaveUp() { /* unused */ } };
 
@@ -60,7 +60,7 @@ const CAKE: Cake = {
     { tier: 1, part: 'coating', productId: 'D', grams: null },
     { tier: 1, part: 'decoration', productId: 'E', grams: null },
   ],
-  packaging: [], assemblyMinutes: null, sellingPrice: null, vatRate: null, foodCostTarget: null, categoryId: null, ref: null, model: 1,
+  packaging: [], assemblyMinutes: null, sellingPrice: null, vatRate: null, foodCostTarget: null, categoryId: null, discHeightCm: null, ref: null, model: 1,
 };
 const layout = cakeLayout(cakeGeometry(CAKE));
 const KINDS: DecorationKind[] = ['plain', 'berries', 'blueberries', 'curls', 'grains', 'rosettes'];

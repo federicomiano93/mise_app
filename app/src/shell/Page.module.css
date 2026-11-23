@@ -95,7 +95,10 @@
 }
 
 /* From tablet width the content also keeps clear of a notch on the right (see the rail in
-   AppShell.module.css for the left; below 700px nothing changes). */
+   AppShell.module.css for the left; below 700px nothing changes).
+   ⚠️ THE 700px RULES FOR `.head`, `.band` AND `.title` IN THIS BLOCK NOW SERVE ONLY A PAGE WITH NO TOP BAR TO DRAW INTO (a Page outside the
+   shell: no slot). In the shell, from 700px, Page draws the title and gear into the bar and uses `.barRow`, `.actionRow` and `.bodyTop` at the
+   end of this file; `.body` is the one rule here that both layouts use. */
 @media (min-width: 700px) {
   .head {
     padding: var(--s6) calc(var(--s8) + env(safe-area-inset-right)) var(--s4) var(--s8);
@@ -123,7 +126,7 @@
 
 /* ⚠️ A BAND IS ONE LINE HIGH on the split; it STICKS only where the section asks (`.stickyBand`: Orders), and only because nothing
    between it and the scroll area (the shell's main) clips. The other sections' panes stick at the top of the scroll area, so a band
-   that stuck would cover their first 56px. */
+   that stuck would cover their first --band-h (64px). */
 @media (min-width: 1000px) {
   /* Exactly --band-h tall: the parts that stick under it (Orders' search box and pane) read that token. */
   .band {
@@ -137,4 +140,79 @@
     top: 0;
     z-index: 5;
   }
+}
+
+/* ⚠️ THE SINGLE BAR (22 Nov 2026): from 700px, with the shell's top bar to draw into (Page.tsx), the title and its gear are NOT in the page: the
+   rules above for `.head` and `.band` are then only the fallback of a Page with no bar (and the phone's). What the page still draws:
+   - `.barRow`: Orders' other controls, a white row under the bar. 1px line under it, 8px above and below (a 48px control, so 64px = --band-h);
+     sticky on the split exactly as the old band was, wrapping below 1000px as the old one did.
+   - `.actionRow`: Settings' «Log out», alone on a row, at the right.
+   - `.bodyTop`: a page with neither row has no header at all, and its content starts 24px under the bar. */
+.cluster {
+  display: flex;
+  flex: none;
+  align-items: center;
+  /* The gear sits 10px after the title. */
+  gap: 10px;
+}
+
+/* In the bar the title is 700-weight, tight, and NEVER truncated: the bar's left cell grows for it (AppShell.module.css).
+   --fs-xl, not the page title's --fs-2xl: the approved mockup drew it at 24px inside the 60px bar, and 28px crowded the bar;
+   22px is the nearest size in the tokens. */
+.barTitle {
+  margin: 0;
+  font-size: var(--fs-xl);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+.barRow {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: var(--s2);
+  padding: var(--s2) calc(var(--s6) + env(safe-area-inset-right)) var(--s2) var(--s6);
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.barRowWraps {
+  flex-wrap: wrap;
+}
+
+.actionRow {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  padding: var(--s6) calc(var(--s8) + env(safe-area-inset-right)) var(--s2) var(--s8);
+}
+
+/* The wrapper steps aside (see `.action`), so «Log out» and its failure message are children of the row; the phone's negative margin goes. */
+.actionRow .action > button {
+  margin-block: 0;
+}
+
+@media (min-width: 700px) {
+  .bodyTop {
+    padding-top: var(--s6);
+  }
+}
+
+@media (min-width: 1000px) {
+  /* Exactly --band-h (64px) tall, as the old band was: the parts that stick under it read that token. */
+  .barRow {
+    flex-wrap: nowrap;
+    height: var(--band-h);
+    padding-block: 0;
+  }
+}
+
+/* A phone's title bar with a gear AND an action: the action goes to the far right, on the same line, its failure message wrapping under it. */
+.bandAction {
+  flex-wrap: wrap;
+}
+
+.band .action > button {
+  margin-left: auto;
 }

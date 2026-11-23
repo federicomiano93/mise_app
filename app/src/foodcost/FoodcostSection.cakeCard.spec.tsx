@@ -1,7 +1,8 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { screen, within } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import { fakeCakesSource } from '../testing/fakeCakesSource';
 import { REFERENCE, cakeDoc, storedReference } from '../testing/renderCakes';
+import { openMeasures } from '../testing/openMeasures';
 import { EMPLOYEE, LOAD, MANAGER, bareProduct, product, renderFoodcost, sourceWith } from '../testing/renderFoodcost';
 
 // A cake's own card in Food cost (Cakes step 7): READ ONLY for everybody, with a band and a link to the cake in Cakes, a «Cake» tag on
@@ -60,10 +61,12 @@ describe('a cake\'s own card', () => {
     const link = screen.getByRole('link', { name: 'Open in Cakes' });
     expect(link).toHaveAttribute('href', '/cakes/c1');
     await user.click(link);
-    expect(await screen.findByRole('textbox', { name: 'Name' }, LOAD)).toHaveValue('Sacher');
+    await screen.findByRole('heading', { level: 2, name: 'Sacher' }, LOAD);
     expect(router.state.location.pathname).toBe('/cakes/c1');
     expect(router.state.location.state).toMatchObject({ fromFoodcost: true });
-    expect(document.activeElement).toBe(screen.getByRole('heading', { level: 2, name: 'Sacher' }));
+    await waitFor(() => { expect(document.activeElement).toBe(screen.getByRole('heading', { level: 2, name: 'Sacher' })); });
+    await openMeasures(user);
+    expect(screen.getByRole('textbox', { name: 'Name' })).toHaveValue('Sacher');
     await user.click(screen.getByRole('button', { name: 'Back' }));
     expect(await screen.findByRole('link', { name: 'Open in Cakes' }, LOAD)).toBeInTheDocument();
     expect(router.state.location.pathname).toBe('/food-cost/product/cake-c1');
