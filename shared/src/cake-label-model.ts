@@ -22,7 +22,7 @@
 
 import { resolveLines, tierDiameters } from './cake-model';
 import type { Cake, CakePart } from './cake-model';
-import { currentProduct, lineRawKg, MAX_SEMI_DEPTH, productCooking } from './foodcost-model';
+import { currentProduct, MAX_SEMI_DEPTH, productCooking } from './foodcost-model';
 import type { CostTables } from './foodcost-model';
 import { ingredientDisplayName } from './ingredient-name';
 import { canLabel, recipeAllergens } from './recipe-allergen-model';
@@ -47,7 +47,7 @@ export interface CakeLabelCard {
   grams: number;
 }
 
-export type CakeLabelProblemReason = 'card-gone' | 'card-no-weights' | 'too-deep' | 'loop';
+export type CakeLabelProblemReason = 'card-gone' | 'card-no-weights' | 'too-deep' | 'loop' | 'line-no-grams';
 
 export interface CakeLabelProblem {
   productId: string;
@@ -64,6 +64,9 @@ export interface CakeLabelBuild {
   // The finished weight of the cake, whole grams: the sum of its lines.
   totalGrams: number;
 }
+
+// ⚠️ THE SYNTHETIC CAKE RECIPE IS NOT A LEVEL: a recipe that labels on its own (depth 1) must label inside a cake, so the cake sits at 0.
+const CAKE_DEPTH = 0;
 
 type Table = CostTables['recipes'];
 
@@ -83,32 +86,38 @@ export function cakeLabelRecipe(cake: Cake, tables: CostTables): CakeLabelBuild 
   const cards = new Map<string, CakeLabelCard>();
   let totalGrams = 0;
   for (const line of resolveLines(cake)) {
-    if (!(line.grams > 0)) continue;
-    totalGrams += line.grams;
+    if (!line.productId) continue;
+    if (line.grams > 0) totalGrams += line.grams;
     let card = cards.get(line.productId);
     if (!card) {
       card = { productId: line.productId, name: nameOf(lookup(tables.products, line.productId)), where: [], grams: 0 };
       cards.set(line.productId, card);
     }
-    card.grams += line.grams;
+    card.grams += Math.max(0, line.grams);
     if (!card.where.some(spot => spot.part === line.part && spot.tier === line.tier)) card.where.push({ part: line.part, tier: line.tier });
   }
 
   const rows: CakeLabelRow[] = [];
   const rowCard = new Map<number, string>();
   const problems: CakeLabelProblem[] = [];
+  // The weighed raw grams, and what they weigh once baked: every card's loss is taken to fall evenly on all its raw mass.
   let rawG = 0;
-  let pieceG = 0;
+  let finishedWeighedG = 0;
 
   const problem = (productId: string, name: string, reason: CakeLabelProblemReason): void => {
     if (!problems.some(p => p.productId === productId && p.reason === reason)) problems.push({ productId, name, reason });
   };
+  // ⚠️ A LINE WITH A CARD BUT NO GRAMS REFUSES THE LABEL: its card would be walked at 0 g (or not at all) and the finished cake would be
+  // described without the part of it nobody weighed.
+  for (const line of resolveLines(cake)) {
+    if (line.productId && !(line.grams > 0)) problem(line.productId, cards.get(line.productId)?.name ?? '', 'line-no-grams');
+  }
   const addRow = (row: CakeLabelRow, cardId: string): void => {
     rowCard.set(rows.length, cardId);
     rows.push(row);
   };
 
-  const walk = (productId: string, readyKg: number, depth: number, chain: readonly string[]): void => {
+  const walk = (productId: string, readyKg: number, depth: number, chain: readonly string[], ratio: number): void => {
     const doc = lookup(tables.products, productId);
     if (!doc) return problem(productId, cards.get(productId)?.name ?? '', 'card-gone');
     const name = nameOf(doc);
@@ -119,39 +128,42 @@ export function cakeLabelRecipe(cake: Cake, tables: CostTables): CakeLabelBuild 
     const outputKg = productCooking(card, tables).outputKg;
     if (!product || outputKg === null || !(outputKg > 0)) return problem(productId, name, 'card-no-weights');
     const f = readyKg / outputKg;
+    // finished ÷ raw of this card, times that of the cards it sits inside.
+    const rawTotalKg = productCooking(card, tables).rawTotalKg;
+    const r = (rawTotalKg > 0 ? outputKg / rawTotalKg : 1) * ratio;
 
     for (const component of product.components) {
       if (component.kind === 'semi') {
-        if (component.qtyKg > 0) walk(component.productId, component.qtyKg * f, depth + 1, [...chain, productId]);
+        // ⚠️ A semi-finished line with no quantity is walked at 0 kg: its rows still carry their allergens and their gates.
+        walk(component.productId, Math.max(0, component.qtyKg || 0) * f, depth + 1, [...chain, productId], r);
       } else if (component.kind === 'ingredient') {
-        if (!(component.qty > 0)) continue;
+        // ⚠️ A ROW WITH NO WEIGHT IS STILL AN INGREDIENT (recipe-label-model): it keeps 0 g, its allergens and its gate.
+        const qty = Math.max(0, component.qty || 0);
         const ingredient = lookup(tables.ingredients, component.ingredientId);
         const label = (ingredient ? ingredientDisplayName(ingredient) : '') || component.ingredientId;
         if (component.unit === 'pcs') {
-          const pieceKg = lineRawKg(component, tables);
-          if (pieceKg !== null) pieceG += pieceKg * 1000 * f;
-          addRow({ label, grams: component.qty * f, unit: 'pcs', kind: 'ingredient', refId: component.ingredientId }, productId);
+          addRow({ label, grams: qty * f, unit: 'pcs', kind: 'ingredient', refId: component.ingredientId }, productId);
         } else {
-          const grams = (component.unit === 'kg' ? component.qty * 1000 : component.qty) * f;
+          const grams = (component.unit === 'kg' ? qty * 1000 : qty) * f;
           rawG += grams;
+          finishedWeighedG += grams * r;
           addRow({ label, grams, unit: 'g', kind: 'ingredient', refId: component.ingredientId }, productId);
         }
       } else {
-        if (!(component.qtyKg > 0)) continue;
-        const grams = component.qtyKg * 1000 * f;
+        const grams = Math.max(0, component.qtyKg || 0) * 1000 * f;
         rawG += grams;
+        finishedWeighedG += grams * r;
         const label = nameOf(lookup(tables.recipes, component.recipeId)) || component.recipeId;
         addRow({ label, grams, unit: 'g', kind: 'recipe', refId: component.recipeId }, productId);
       }
     }
   };
 
-  for (const card of cards.values()) walk(card.productId, card.grams / 1000, 0, []);
+  for (const card of cards.values()) walk(card.productId, card.grams / 1000, 0, [], 1);
 
-  // What the oven took, over everything that has a weight on the label: the finished weight (without the pieces, which the label
-  // lists without a weight) against the raw one. Never below 0 or above the recipes' own cap.
-  const finishedG = totalGrams - pieceG;
-  const lossPct = rawG > 0 ? Math.min(95, Math.max(0, (1 - finishedG / rawG) * 100)) : 0;
+  // What the oven took, over everything that has a weight on the label: the finished weight of the WEIGHED rows (each card's own
+  // finished ÷ raw, so pieces cost nothing here) against their raw weight. Never below 0 or above the recipes' own cap.
+  const lossPct = rawG > 0 ? Math.min(95, Math.max(0, (1 - finishedWeighedG / rawG) * 100)) : 0;
 
   return {
     recipe: { id: `cake:${cake.id}`, name: cake.name.trim(), lossPct, ingredients: rows },
@@ -178,13 +190,13 @@ export type CakeLabelAnswer =
 // ingredients is one).
 export function cakeLabel(cake: Cake, tables: CostTables, shows: LabelShows = 'both'): CakeLabelAnswer {
   const build = cakeLabelRecipe(cake, tables);
-  const label = buildLabel(build.recipe, tables, { shows });
+  const label = buildLabel(build.recipe, tables, { shows, startDepth: CAKE_DEPTH });
   if (build.cards.length === 0) return { state: 'empty', build, blocks: [], blockedCards: 0, label: null };
 
   const blocks: CakeLabelBlock[] = build.problems.map(p => ({ kind: 'card', productId: p.productId, name: p.name, reason: p.reason }));
   const seen = new Set<string>();
   // The rows the label code refuses, one by one: index-aligned with the synthetic recipe's rows.
-  const declared = recipeAllergens(build.recipe, tables);
+  const declared = recipeAllergens(build.recipe, tables, CAKE_DEPTH);
   declared.rows.forEach((row, index) => {
     const source = build.recipe.ingredients[index];
     const productId = build.rowCard.get(index);

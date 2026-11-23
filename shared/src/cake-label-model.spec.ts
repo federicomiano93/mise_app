@@ -7,6 +7,7 @@ import { describe, expect, test } from 'vitest';
 import { CAKE_MODEL } from './cake-model';
 import type { Cake, CakeLine, CakePart } from './cake-model';
 import type { CostTables } from './foodcost-model';
+import { buildLabel } from './recipe-label-model';
 import { cakeLabel, cakeLabelDiameters, cakeLabelRecipe } from './cake-label-model';
 
 type Doc = Record<string, unknown>;
@@ -20,6 +21,7 @@ const INGREDIENTS: Record<string, Doc> = {
   BUTTER: { id: 'BUTTER', name: 'Butter', ...checked(['milk'], { mayContain: ['nuts-hazelnut'] }) },
   EGG: { id: 'EGG', name: 'Egg', unitWeightKg: 0.06, ...checked(['eggs']) },
   RUM: { id: 'RUM', name: 'Rum', allergens: [], nutrition: NUTRITION },
+  NUTS: { id: 'NUTS', name: 'Hazelnuts', ...checked(['nuts-hazelnut']) },
   BOX: { id: 'BOX', name: 'Cake box', packaging: true, ...checked([]) },
 };
 const gram = (ingredientId: string, qty: number): Doc => ({ kind: 'ingredient', ingredientId, qty, unit: 'g' });
@@ -37,6 +39,14 @@ const RECIPES: Record<string, Doc> = {
   },
 };
 
+const CHAIN = ['R1', 'R2', 'R3', 'R4'].map((id, index, all) => ({
+  id, name: id,
+  ingredients: [index < all.length - 1
+    ? { label: all[index + 1], refId: all[index + 1], kind: 'recipe', grams: 1000, unit: 'g' }
+    : { label: 'Sugar', refId: 'SUGAR', kind: 'ingredient', grams: 1000, unit: 'g' }],
+}));
+for (const recipe of CHAIN) RECIPES[recipe.id] = recipe as Doc;
+
 const SPONGE = card('SPONGE', [gram('FLOUR', 500), gram('SUGAR', 500)]);
 const LOSSY = card('LOSSY', [gram('FLOUR', 500), gram('SUGAR', 500)], { cookedGrams: 800 });
 const NESTED = card('NESTED', [gram('FLOUR', 500), semi('SPONGE', 0.5)]);
@@ -44,6 +54,11 @@ const WITH_DOUGH = card('WITH_DOUGH', [{ recipeId: 'DOUGH', qtyKg: 1 }]);
 const WITH_EGGS = card('WITH_EGGS', [gram('FLOUR', 500), pieces('EGG', 4)]);
 const EMPTY = card('EMPTY', []);
 const RUMMY = card('RUMMY', [gram('RUM', 100), gram('SUGAR', 400)]);
+const NUTTY = card('NUTTY', [gram('FLOUR', 500), gram('NUTS', 0)]);
+const NUTTY_RAW = card('NUTTY_RAW', [gram('FLOUR', 500), gram('RUM', 0)]);
+const NUTTY_SEMI = card('NUTTY_SEMI', [gram('FLOUR', 500), semi('NUTTY', 0)]);
+const EGGY = card('EGGY', [gram('FLOUR', 300), gram('SUGAR', 300), pieces('EGG', 10)], { cookedGrams: 900 });
+const WITH_CHAIN = card('WITH_CHAIN', [{ recipeId: 'R1', qtyKg: 1 }]);
 const LOOP_A = card('LOOP_A', [gram('SUGAR', 500), semi('LOOP_B', 0.5)]);
 const LOOP_B = card('LOOP_B', [gram('SUGAR', 500), semi('LOOP_A', 0.5)]);
 const DEEP = ['D0', 'D1', 'D2', 'D3', 'D4'].map((id, index, all) => card(id, [gram('SUGAR', 500), ...(index < all.length - 1 ? [semi(`D${index + 1}`, 0.5)] : [])]));
@@ -51,7 +66,7 @@ const DEEP = ['D0', 'D1', 'D2', 'D3', 'D4'].map((id, index, all) => card(id, [gr
 const tables: CostTables = {
   ingredients: INGREDIENTS,
   recipes: RECIPES,
-  products: new Map([SPONGE, LOSSY, NESTED, WITH_DOUGH, WITH_EGGS, EMPTY, RUMMY, LOOP_A, LOOP_B, ...DEEP].map(c => [c['id'] as string, c])),
+  products: new Map([SPONGE, NUTTY, NUTTY_RAW, NUTTY_SEMI, EGGY, WITH_CHAIN, LOSSY, NESTED, WITH_DOUGH, WITH_EGGS, EMPTY, RUMMY, LOOP_A, LOOP_B, ...DEEP].map(c => [c['id'] as string, c])),
 };
 
 const line = (tier: number, part: CakePart, productId: string, grams: number | null): CakeLine => ({ tier, part, productId, grams });
@@ -109,14 +124,41 @@ describe('the synthetic recipe', () => {
     expect(cakeLabelRecipe(cake, tables).recipe.lossPct).toBeCloseTo(0, 6);
   });
 
+  test('pieces and oven loss: the loss of each card falls evenly on all its raw mass', () => {
+    // 300 g + 300 g + 10 eggs of 60 g = 1.2 kg raw, 900 g baked: a true loss of 25%.
+    const cake = cakeOf([line(0, 'base', 'EGGY', 900)]);
+    expect(cakeLabelRecipe(cake, tables).recipe.lossPct).toBeCloseTo(25, 6);
+  });
+
   test('packaging is never on the label', () => {
     const build = cakeLabelRecipe(cakeOf([line(0, 'base', 'SPONGE', 500)]), tables);
     expect(build.recipe.ingredients.some(r => r.refId === 'BOX')).toBe(false);
   });
 
-  test('a line with no grams at all is left out, like the cake product leaves it out', () => {
+  test('a line with no grams adds none to the cake and is a problem naming its card', () => {
     const build = cakeLabelRecipe(cakeOf([line(0, 'base', 'SPONGE', 500), line(0, 'filling', 'LOSSY', null)]), tables);
-    expect(build.cards.map(c => c.productId)).toEqual(['SPONGE']);
+    expect(build.cards.map(c => [c.productId, c.grams])).toEqual([['SPONGE', 500], ['LOSSY', 0]]);
+    expect(build.totalGrams).toBe(500);
+    expect(build.problems).toEqual([{ productId: 'LOSSY', name: 'lossy', reason: 'line-no-grams' }]);
+  });
+
+  test('a component with no quantity keeps its row at 0 g, so its allergen still counts', () => {
+    const answer = cakeLabel(cakeOf([line(0, 'base', 'NUTTY', 500)]), tables);
+    expect(answer.state).toBe('ready');
+    expect(answer.label?.ok && answer.label.allergens).toEqual(['gluten-wheat', 'nuts-hazelnut']);
+    expect(rowsOf(cakeOf([line(0, 'base', 'NUTTY', 500)])).map(r => [r.refId, r.grams])).toEqual([['FLOUR', 500], ['NUTS', 0]]);
+  });
+
+  test('an UNCHECKED component with no quantity still refuses the label, naming it', () => {
+    const answer = cakeLabel(cakeOf([line(0, 'base', 'NUTTY_RAW', 500)]), tables);
+    expect(answer.state).toBe('blocked');
+    expect(answer.blocks).toEqual([{ kind: 'ingredient', productId: 'NUTTY_RAW', cardName: 'nutty_raw', refId: 'RUM', name: 'Rum', reason: 'not-declared' }]);
+  });
+
+  test('a semi-finished line at 0 kg is still walked: its allergens count', () => {
+    const answer = cakeLabel(cakeOf([line(0, 'base', 'NUTTY_SEMI', 500)]), tables);
+    expect(answer.state).toBe('ready');
+    expect(answer.label?.ok && answer.label.allergens).toEqual(['gluten-wheat', 'nuts-hazelnut']);
   });
 
   test('a line of a tier the cake no longer has is not part of it', () => {
@@ -132,7 +174,16 @@ describe('the synthetic recipe', () => {
 describe('what stops the label', () => {
   test('a cake with no card is empty, not refused', () => {
     expect(cakeLabel(cakeOf([]), tables).state).toBe('empty');
-    expect(cakeLabel(cakeOf([line(0, 'base', 'SPONGE', null)]), tables).state).toBe('empty');
+  });
+
+  test('a line with a card but no grams REFUSES the label, naming the card', () => {
+    for (const grams of [null, 0]) {
+      const answer = cakeLabel(cakeOf([line(0, 'base', 'SPONGE', grams)]), tables);
+      expect(answer.state).toBe('blocked');
+      expect(answer.blocks).toEqual([{ kind: 'card', productId: 'SPONGE', name: 'sponge', reason: 'line-no-grams' }]);
+      expect(answer.blockedCards).toBe(1);
+    }
+    expect(cakeLabel(cakeOf([line(0, 'base', 'SPONGE', 500), line(0, 'filling', 'LOSSY', null)]), tables).state).toBe('blocked');
   });
 
   test('a card that does not exist is a problem and the label is refused', () => {
@@ -188,8 +239,17 @@ describe('what stops the label', () => {
   });
 });
 
+describe('depth', () => {
+  test('a recipe that labels on its own labels inside a cake', () => {
+    expect(buildLabel(RECIPES['R1'], tables as never).ok).toBe(true);
+    const answer = cakeLabel(cakeOf([line(0, 'base', 'WITH_CHAIN', 500)]), tables);
+    expect(answer.state).toBe('ready');
+    expect(answer.label?.ok && answer.label.ingredients.map(i => i.name)).toEqual(['Sugar']);
+  });
+});
+
 describe('the label of a ready cake', () => {
-  const answer = cakeLabel(cakeOf([line(0, 'base', 'LOSSY', 800), line(0, 'filling', 'SPONGE', 0)]), { ...tables, products: new Map([['LOSSY', LOSSY]]) });
+  const answer = cakeLabel(cakeOf([line(0, 'base', 'LOSSY', 800)]), { ...tables, products: new Map([['LOSSY', LOSSY]]) });
 
   test('contains and may contain are kept apart, from the label code', () => {
     const butter = card('BUTTERY', [gram('BUTTER', 500), gram('FLOUR', 500)]);
