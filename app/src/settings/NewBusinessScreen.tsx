@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { useBlocker } from 'react-router';
 import type { BlockerFunction } from 'react-router';
 import { joinLinkFor } from '@mise/shared/join-link';
+import { PartBoundary } from '../errors/PartBoundary';
 import type { MessageKey } from '../i18n/en';
 import { useT } from '../i18n/useT';
 import { markBusy } from '../session/busy';
@@ -62,7 +63,17 @@ const FIELD_ERROR: Readonly<Record<Field, MessageKey>> = {
   sections: 'newBusiness.err.sections',
 };
 
+// ⚠️ THE BOUNDARY IS OUTSIDE THE SCREEN: an error thrown while drawing it shows the part's fallback, not a white Settings page.
 export function NewBusinessScreen() {
+  const { t } = useT();
+  return (
+    <PartBoundary title={t('section.settings')}>
+      <NewBusinessBody />
+    </PartBoundary>
+  );
+}
+
+function NewBusinessBody() {
   const { t } = useT();
   const source = useSettingsSource();
   const store = useSessionStore();
@@ -101,12 +112,12 @@ export function NewBusinessScreen() {
   const typed = name !== '' || who !== null || country !== null || anySection;
   const linkPending = made !== null && made.created.kind === 'link' && !handedOver;
 
-  // What leaving would lose, if anything: typing nobody saved, or a link nobody has copied. A call in the air for a customer's
-  // business counts as the link (its answer carries the one chance to see it); one for the owner's own loses nothing.
-  type Guard = 'discard' | 'link' | null;
+  // What leaving would lose, if anything: typing nobody saved, a link nobody has copied, or the answer of a call in the air (for a
+  // customer's business it carries the one chance to see the link; for one's own it is the only way to learn it was made).
+  type Guard = 'discard' | 'link' | 'making' | null;
   let guard: Guard = null;
   if (made !== null) guard = linkPending ? 'link' : null;
-  else if (making) guard = who === 'link' ? 'link' : null;
+  else if (making) guard = 'making';
   else if (typed) guard = 'discard';
   const guardRef = useRef<Guard>(guard);
   guardRef.current = guard;
@@ -123,13 +134,21 @@ export function NewBusinessScreen() {
   useEffect(() => {
     if (blocker.state !== 'blocked' || asking.current) return;
     asking.current = true;
-    const question = guardRef.current === 'link'
-      ? { message: t('newBusiness.leave.link'), okLabel: t('newBusiness.leave.ok'), cancelLabel: t('unsent.stay'), danger: true }
+    const kind = guardRef.current;
+    const question = kind === 'link' || kind === 'making'
+      ? { message: t(kind === 'link' ? 'newBusiness.leave.link' : 'newBusiness.leave.making'), okLabel: t('newBusiness.leave.ok'), cancelLabel: t('unsent.stay'), danger: true }
       : { title: t('newBusiness.discard.title'), message: t('newBusiness.discard.body'), okLabel: t('ui.discard'), cancelLabel: t('common.cancel'), danger: true };
     void confirm(question).then(leave => {
       asking.current = false;
       if (blocker.state !== 'blocked') return;
-      if (leave) blocker.proceed(); else blocker.reset();
+      if (leave) { blocker.proceed(); return; }
+      blocker.reset();
+      // A navigation with no button behind it (the rail, the gesture) leaves the dialog nothing to give the focus back to: after
+      // Stay it goes to the screen's own first stop, never to the page body.
+      setTimeout(() => {
+        if (!alive.current || document.activeElement !== document.body) return;
+        (banner.current ?? nameInput.current)?.focus();
+      }, 0);
     });
   }, [blocker, confirm, t]);
 
@@ -141,6 +160,18 @@ export function NewBusinessScreen() {
     if (!user) throw new Error('Nobody is signed in.');
     return store.openJoinedVenue(locationId, user.uid);
   });
+
+  // ⚠️ ONE OPENING PER TAP, read at once: a second press before the leaving cover appears must not start a second wipe-and-reload.
+  const opening = useRef(false);
+  async function openVenue(locationId: string): Promise<void> {
+    if (opening.current) return;
+    opening.current = true;
+    try {
+      await open.proceed(locationId);
+    } finally {
+      opening.current = false;
+    }
+  }
 
   function clear(field: Field): void {
     setInvalid(current => {
@@ -177,7 +208,12 @@ export function NewBusinessScreen() {
     try {
       const ok = await confirm({
         title: t('newBusiness.confirm.title', { name: trimmed }),
-        message: forSelf ? t('newBusiness.confirm.self') : t('newBusiness.confirm.link'),
+        // The two choices that cannot be undone are said again, in the words of the form and in its order.
+        message: [
+          forSelf ? t('newBusiness.confirm.self') : t('newBusiness.confirm.link'),
+          t('newBusiness.confirm.country', { country: t(country === 'IT' ? 'newBusiness.country.IT' : 'newBusiness.country.GB') }),
+          t('newBusiness.confirm.sections', { sections: BUSINESS_SECTION_IDS.filter(id => sections[id]).map(id => t(SECTION_LABEL[id])).join(', ') }),
+        ],
         okLabel: t('newBusiness.confirm.ok'),
         cancelLabel: t('common.cancel'),
       });
@@ -224,6 +260,16 @@ export function NewBusinessScreen() {
     }
   }
 
+  // ⚠️ EVERY DIALOG AT ONE PLACE, the same for every view: the result replaces the form under an open question, and a dialog that
+  // moved in the tree would be remounted with it (and the focus would have nowhere real to return to after «Stay»).
+  const dialogs = (
+    <>
+      {alertDialog}
+      {confirmDialog}
+      <LeaveDialog flow={open} role="dialog" title={made === null ? '' : t('newBusiness.self.open', { name: made.name })} actions={null}>{null}</LeaveDialog>
+    </>
+  );
+
   if (made !== null) {
     const { created } = made;
     const title = t('newBusiness.title');
@@ -234,15 +280,14 @@ export function NewBusinessScreen() {
             <p ref={banner} tabIndex={-1} className={styles.banner}>{t('newBusiness.made.self', { name: made.name })}</p>
             <p className={styles.note}>{t('newBusiness.self.text')}</p>
             <div className={styles.actions}>
-              <Button variant="primary" isPending={open.checking} onPress={() => { void open.proceed(created.locationId); }}>
+              <Button variant="primary" isPending={open.checking} onPress={() => { void openVenue(created.locationId); }}>
                 {t('newBusiness.self.open', { name: made.name })}
               </Button>
               <Button onPress={back}>{t('newBusiness.done')}</Button>
             </div>
             <LeaveFailed failed={open.failed} />
-            <LeaveDialog flow={open} role="dialog" title={t('newBusiness.self.open', { name: made.name })} actions={null}>{null}</LeaveDialog>
-            {confirmDialog}
           </div>
+          {dialogs}
         </SettingsSubScreen>
       );
     }
@@ -268,9 +313,8 @@ export function NewBusinessScreen() {
             <strong>{t('newBusiness.link.warning.lead')}</strong>{' '}
             {t('newBusiness.link.warning', { n: days })}
           </p>
-          {alertDialog}
-          {confirmDialog}
         </div>
+        {dialogs}
       </SettingsSubScreen>
     );
   }
@@ -300,6 +344,7 @@ export function NewBusinessScreen() {
             maxLength={MAX_NAME}
             autoCapitalize="words"
             autoComplete="off"
+            aria-required="true"
             placeholder={t('newBusiness.name.placeholder')}
             disabled={making}
             {...field('name')}
@@ -420,7 +465,7 @@ export function NewBusinessScreen() {
           <Button variant="primary" isPending={making} onPress={() => { void create(); }}>{t('newBusiness.create')}</Button>
         </div>
       </section>
-      {confirmDialog}
+      {dialogs}
     </SettingsSubScreen>
   );
 }

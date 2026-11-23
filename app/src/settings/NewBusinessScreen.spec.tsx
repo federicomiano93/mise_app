@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { UserEvent } from '@testing-library/user-event';
 import { joinLinkFor } from '@mise/shared/join-link';
-import { isBusy } from '../session/busy';
+import { hasUnsavedWork, isBusy } from '../session/busy';
 import { FAKE_BUSINESS_ID, FAKE_LINK_TOKEN, fakeSettingsSource } from '../testing/fakeSettingsSource';
 import type { FakeSettingsSource } from '../testing/fakeSettingsSource';
 import { renderApp } from '../testing/renderApp';
@@ -12,6 +12,7 @@ import { renderApp } from '../testing/renderApp';
 // what was typed, the customer's link shown once (and the question while it has not been copied), the business that is yours, and the
 // question on leaving a form with something typed.
 
+const MAYBE = 'The answer did not arrive: the business may already have been created. Before trying again, reload the app and see whether it is already among your venues.';
 const main = () => within(screen.getByRole('main'));
 const LINK = joinLinkFor(FAKE_LINK_TOKEN);
 const ADMIN = { isAppAdmin: true };
@@ -247,14 +248,26 @@ describe('the question before anything is created', () => {
     expect(within(question).getByText('It opens in your account, as owner.')).toBeInTheDocument();
   });
 
+  it('repeats the country and the sections, in the form\'s words and order', async () => {
+    const { user } = await open();
+    await fill(user, { country: 'IT', sections: ['Pastries', 'Orders', 'Calculator'] });
+    await press(user, 'Create the business');
+    const question = await screen.findByRole('alertdialog');
+    expect(within(question).getByText('Country: Italy — it decides the label language and cannot be changed later.')).toBeInTheDocument();
+    expect(within(question).getByText('Sections: Orders, Calculator, Pastries.')).toBeInTheDocument();
+  });
+
   it('is in Italian', async () => {
     const { user } = await open({ lang: 'it' });
     await user.type(screen.getByRole('textbox', { name: 'Nome' }), 'Pasticceria Rossi');
     await user.click(screen.getByRole('radio', { name: 'Chi apre il link' }));
     await user.click(screen.getByRole('radio', { name: 'Italia' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Calcolatore' }));
     await user.click(screen.getByRole('checkbox', { name: 'Ordini' }));
     await user.click(screen.getByRole('button', { name: 'Crea l’attività' }));
     const question = await screen.findByRole('alertdialog');
+    expect(within(question).getByText('Paese: Italia — decide la lingua delle etichette e non si cambia dopo.')).toBeInTheDocument();
+    expect(within(question).getByText('Sezioni: Ordini, Calcolatore.')).toBeInTheDocument();
     expect(within(question).getByText('Creare “Pasticceria Rossi”?')).toBeInTheDocument();
     expect(within(question).getByText('Esce un link per chi sarà il titolare: si vede una volta sola.')).toBeInTheDocument();
     expect(within(question).getByRole('button', { name: 'Annulla' })).toBeInTheDocument();
@@ -307,7 +320,7 @@ describe('the request', () => {
     await fill(user);
     await create(user);
     await waitFor(() => { expect(source.createBusiness).toHaveBeenCalledTimes(1); });
-    expect(isBusy()).toBe(true);
+    expect(hasUnsavedWork()).toBe(true);
     // The button is pending: a second press does nothing, and Cancel and Back are off.
     await user.click(screen.getByRole('button', { name: 'Create the business' }));
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
@@ -325,9 +338,12 @@ describe('a business that could not be made', () => {
 
   it.each([
     ['functions/permission-denied', 'Only Mise’s administrator can create a business.'],
-    ['functions/unavailable', 'The server could not be reached. Try again.'],
-    ['functions/deadline-exceeded', 'The server could not be reached. Try again.'],
-    ['functions/internal', 'Nothing was created. Try again.'],
+    ['functions/invalid-argument', 'Nothing was created. Try again.'],
+    ['functions/unauthenticated', 'Nothing was created. Try again.'],
+    ['functions/unavailable', MAYBE],
+    ['functions/deadline-exceeded', MAYBE],
+    ['functions/internal', MAYBE],
+    ['functions/unknown', MAYBE],
   ])('%s is said in the app\'s own words, and nothing typed is lost', async (code, sentence) => {
     const source = fakeSettingsSource();
     source.businessFailWith = refused(code);
@@ -356,7 +372,7 @@ describe('a business that could not be made', () => {
     const { user } = await open({}, source);
     await fill(user, { name: 'Rossi Bakery' });
     await create(user);
-    await screen.findByText('Nothing was created. Try again.');
+    await screen.findByText(MAYBE);
     expect(JSON.stringify(consoleCalls)).not.toContain('Rossi');
   });
 });
@@ -391,7 +407,7 @@ describe('a customer\'s link', () => {
     await user.click(screen.getByRole('button', { name: 'Crea l’attività' }));
     const question = await screen.findByRole('alertdialog');
     await user.click(within(question).getByRole('button', { name: 'Crea l’attività' }));
-    await screen.findByText('✓ Pasticceria Rossi è stata creata');
+    await screen.findByText('✓ L’attività Pasticceria Rossi è stata creata');
     expect(screen.getByRole('heading', { level: 3, name: 'Il link per registrarsi' })).toBeInTheDocument();
     expect(screen.getByText('Il link si vede solo adesso.')).toBeInTheDocument();
     expect(screen.getByText(/Funziona una volta sola e scade fra 7 giorni\./)).toBeInTheDocument();
@@ -459,7 +475,7 @@ describe('a customer\'s link', () => {
 
   it('asks before leaving until the link has been copied: Stay keeps the link, Leave anyway goes', async () => {
     const { user, router } = await made();
-    expect(isBusy()).toBe(true);
+    expect(hasUnsavedWork()).toBe(true);
     await press(user, 'Done');
     const question = await screen.findByRole('alertdialog');
     expect(within(question).getByText('The link cannot be shown again. Leave anyway?')).toBeInTheDocument();
@@ -517,7 +533,7 @@ describe('a business of your own', () => {
     const question = await screen.findByRole('alertdialog');
     expect(within(question).getByText('Si apre nel tuo account, come titolare.')).toBeInTheDocument();
     await user.click(within(question).getByRole('button', { name: 'Crea l’attività' }));
-    await screen.findByText('✓ Mia è stata creata ed è tua');
+    await screen.findByText('✓ L’attività Mia è stata creata ed è tua');
     expect(screen.getByText('Sei il titolare. Nessun link da mandare.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Apri Mia' })).toBeInTheDocument();
   });
@@ -536,12 +552,32 @@ describe('a business of your own', () => {
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
   });
 
-  it('Open moves to the new venue through the session, which reloads without the browser\'s question', async () => {
+  it('Open moves to the new venue through the session\'s own way in, not its switch, and asks nothing when nothing is waiting', async () => {
     const { user, store } = await made();
     await press(user, 'Open Mine');
     await waitFor(() => { expect(store.openJoinedVenue).toHaveBeenCalledExactlyOnceWith(FAKE_BUSINESS_ID, 'u1'); });
     expect(store.switchLocation).not.toHaveBeenCalled();
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+  });
+
+  it('a second press of Open before the first has been answered does nothing', async () => {
+    const { store } = await made();
+    let answer: (waiting: boolean) => void = () => undefined;
+    store.changesStillWaiting.mockReturnValueOnce(new Promise<boolean>(resolve => { answer = resolve; }));
+    const button = screen.getByRole('button', { name: 'Open Mine' });
+    fireEvent.click(button);
+    fireEvent.click(button);
+    answer(false);
+    await waitFor(() => { expect(store.openJoinedVenue).toHaveBeenCalledTimes(1); });
+    expect(store.changesStillWaiting).toHaveBeenCalledTimes(1);
+  });
+
+  it('Open that fails says so beside the button, and the screen stays', async () => {
+    const { user, store } = await made();
+    store.openJoinedVenue.mockRejectedValueOnce(new Error('no'));
+    await press(user, 'Open Mine');
+    expect(await screen.findByText('That did not work. Check the connection and try again.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open Mine' })).toBeInTheDocument();
   });
 
   it('Open asks first when something typed elsewhere has not reached the server', async () => {
@@ -565,7 +601,7 @@ describe('leaving a form with something typed or chosen', () => {
   ])('asks after %s, and the browser asks too', async (_what, touch) => {
     const { user, router } = await open();
     await touch(user);
-    expect(isBusy()).toBe(true);
+    expect(hasUnsavedWork()).toBe(true);
     await press(user, 'Back');
     const question = await screen.findByRole('alertdialog');
     expect(within(question).getByText('Discard what you typed?')).toBeInTheDocument();
@@ -593,6 +629,59 @@ describe('leaving a form with something typed or chosen', () => {
     void router.navigate('/');
     expect(await screen.findByRole('alertdialog')).toBeInTheDocument();
     expect(source.createBusiness).not.toHaveBeenCalled();
+  });
+
+  it('a customer\'s link not yet copied asks on the rail too, and Stay keeps the link and gives the focus back to a real element', async () => {
+    const { user, router } = await open();
+    await fill(user);
+    await create(user);
+    await screen.findByText('✓ Rossi Bakery has been created');
+    void router.navigate('/');
+    const question = await screen.findByRole('alertdialog');
+    expect(within(question).getByText('The link cannot be shown again. Leave anyway?')).toBeInTheDocument();
+    await user.click(within(question).getByRole('button', { name: 'Stay' }));
+    await waitFor(() => { expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument(); });
+    expect(router.state.location.pathname).toBe('/settings/new-business');
+    expect(screen.getByText(LINK)).toBeInTheDocument();
+    await waitFor(() => { expect(document.activeElement).not.toBe(document.body); });
+  });
+
+  it.each([
+    ['a customer\'s business', 'link' as const],
+    ['one of your own', 'self' as const],
+  ])('while the call for %s is in the air, leaving asks, and the browser asks too', async (_what, who) => {
+    const source = fakeSettingsSource();
+    source.holdBusiness = true;
+    const { user, router } = await open({}, source);
+    await fill(user, { who });
+    await create(user);
+    await waitFor(() => { expect(source.createBusiness).toHaveBeenCalledTimes(1); });
+    expect(hasUnsavedWork()).toBe(true);
+    void router.navigate('/');
+    const question = await screen.findByRole('alertdialog');
+    expect(within(question).getByText('The business is being created. Leave anyway?')).toBeInTheDocument();
+    await user.click(within(question).getByRole('button', { name: 'Stay' }));
+    await waitFor(() => { expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument(); });
+    expect(router.state.location.pathname).toBe('/settings/new-business');
+    source.answerBusiness();
+    await screen.findByText(who === 'link' ? '✓ Rossi Bakery has been created' : '✓ Rossi Bakery has been created and it is yours');
+  });
+
+  it('leaving anyway during the call lets the answer arrive with nothing to draw: no throw, nothing logged', async () => {
+    const source = fakeSettingsSource();
+    source.holdBusiness = true;
+    const { user, router } = await open({}, source);
+    await fill(user, { who: 'self' });
+    await create(user);
+    await waitFor(() => { expect(source.createBusiness).toHaveBeenCalledTimes(1); });
+    void router.navigate('/');
+    const question = await screen.findByRole('alertdialog');
+    await user.click(within(question).getByRole('button', { name: 'Leave anyway' }));
+    await waitFor(() => { expect(router.state.location.pathname).toBe('/'); });
+    await waitFor(() => { expect(screen.queryByRole('textbox', { name: 'Name' })).not.toBeInTheDocument(); });
+    source.answerBusiness();
+    await waitFor(() => { expect(isBusy()).toBe(false); });
+    expect(consoleCalls).toEqual([]);
   });
 
   it('is in Italian', async () => {

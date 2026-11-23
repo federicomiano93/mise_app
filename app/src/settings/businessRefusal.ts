@@ -7,7 +7,7 @@
 import type { MessageKey } from '../i18n/en';
 
 export type BusinessRefusalKey = Extract<MessageKey,
-  'newBusiness.err.notAdmin' | 'newBusiness.err.offline' | 'newBusiness.err.failed'>;
+  'newBusiness.err.notAdmin' | 'newBusiness.err.maybe' | 'newBusiness.err.failed'>;
 
 // The Functions SDK names its codes `functions/<code>`; the bare code is accepted too.
 function codeOf(error: unknown): string {
@@ -15,19 +15,18 @@ function codeOf(error: unknown): string {
   return typeof code === 'string' ? code.replace(/^functions\//, '') : '';
 }
 
+// ⚠️ «NOTHING WAS CREATED» IS SAID ONLY WHEN THE SERVER ANSWERED THAT IT REFUSED (a bad request, no sign-in). Every other failure — a
+// timeout, no signal, `internal`, `unknown`, an answer that arrived unreadable — may have come AFTER the business was made, and a retry
+// would then make a second one: those say it may exist, and to look before trying again.
 export function businessRefusal(error: unknown): BusinessRefusalKey {
   switch (codeOf(error)) {
     // requireAppAdmin: the screen is drawn only for an administrator, so this is an account that stopped being one meanwhile.
     case 'permission-denied':
       return 'newBusiness.err.notAdmin';
-    // No answer: no signal, a timeout, the Functions code not downloaded.
-    case 'unavailable':
-    case 'deadline-exceeded':
-      return 'newBusiness.err.offline';
-    default:
-      // ⚠️ A phone that knows it is offline says so, whatever the code: the Functions SDK turns a fetch that never left the phone
-      // into `internal`.
-      if (typeof navigator !== 'undefined' && navigator.onLine === false) return 'newBusiness.err.offline';
+    case 'invalid-argument':
+    case 'unauthenticated':
       return 'newBusiness.err.failed';
+    default:
+      return 'newBusiness.err.maybe';
   }
 }

@@ -94,10 +94,11 @@
   border-radius: var(--r-md);
 }
 
-/* Sections: two columns on a phone, three from a tablet. */
+/* Sections: as many columns as fit a whole word — two on a wide phone, three from a tablet, one where «Calcolatore» would break mid-word
+   (it did at 360px with two fixed columns). */
 .checks {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 10.5rem), 1fr));
   gap: var(--s2);
   border-radius: var(--r-md);
 }
@@ -105,10 +106,6 @@
 @media (min-width: 700px) {
   .choices {
     grid-template-columns: 1fr 1fr;
-  }
-
-  .checks {
-    grid-template-columns: repeat(3, 1fr);
   }
 }
 

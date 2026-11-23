@@ -15,26 +15,27 @@ describe('a business that could not be made', () => {
     expect(businessRefusal(refused('permission-denied'))).toBe('newBusiness.err.notAdmin');
   });
 
-  it('says the server could not be reached, for no signal or a timeout', () => {
-    expect(businessRefusal(refused('functions/unavailable'))).toBe('newBusiness.err.offline');
-    expect(businessRefusal(refused('functions/deadline-exceeded'))).toBe('newBusiness.err.offline');
-  });
-
-  it('says the same for a phone that knows it is offline, whatever the code', () => {
-    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
-    expect(businessRefusal(refused('functions/internal'))).toBe('newBusiness.err.offline');
-    expect(businessRefusal(new Error('Failed to fetch'))).toBe('newBusiness.err.offline');
-  });
-
-  it('says nothing was made for anything else, even an invalid-argument or an error with no code', () => {
+  it('says nothing was created only when the server refused the request itself', () => {
     expect(businessRefusal(refused('functions/invalid-argument'))).toBe('newBusiness.err.failed');
-    expect(businessRefusal(refused('functions/internal'))).toBe('newBusiness.err.failed');
-    expect(businessRefusal(new Error('no code at all'))).toBe('newBusiness.err.failed');
-    expect(businessRefusal(null)).toBe('newBusiness.err.failed');
+    expect(businessRefusal(refused('functions/unauthenticated'))).toBe('newBusiness.err.failed');
+  });
+
+  it('says the business may exist, and to look before retrying, for every failure that could have come after it was made', () => {
+    for (const code of ['unavailable', 'deadline-exceeded', 'internal', 'unknown']) {
+      expect(businessRefusal(refused(`functions/${code}`))).toBe('newBusiness.err.maybe');
+    }
+    expect(businessRefusal(new Error('Failed to fetch'))).toBe('newBusiness.err.maybe');
+    expect(businessRefusal(new Error('no code at all'))).toBe('newBusiness.err.maybe');
+    expect(businessRefusal(null)).toBe('newBusiness.err.maybe');
+  });
+
+  it('says the same on a phone that knows it is offline, never that nothing was created', () => {
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    expect(businessRefusal(refused('functions/internal'))).toBe('newBusiness.err.maybe');
   });
 
   it('every sentence exists in both languages and is the app\'s own, not the server\'s', () => {
-    for (const key of ['newBusiness.err.notAdmin', 'newBusiness.err.offline', 'newBusiness.err.failed'] as const) {
+    for (const key of ['newBusiness.err.notAdmin', 'newBusiness.err.maybe', 'newBusiness.err.failed'] as const) {
       expect(en[key]).not.toContain('Server English');
       expect(italian[key]).not.toBe(en[key]);
     }
