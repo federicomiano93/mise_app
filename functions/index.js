@@ -18,6 +18,9 @@
 // kind of reason (confirm-dialog.js, dom.js) and already has the sentinel that
 // stops them drifting: tests/copie-allineate.test.mjs.
 
+// ⚠️ FIRST, before every other import: it sets the ceiling every function is
+// defined with (why the order matters: the file's own header).
+import './global-options.js';
 import { onDocumentCreated } from 'firebase-functions/v2/firestore';
 import { onTaskDispatched } from 'firebase-functions/v2/tasks';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
