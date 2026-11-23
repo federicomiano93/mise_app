@@ -50,3 +50,27 @@ test('the check: token first, then the account record; an older account passes; 
 test('getAuth comes from the Admin SDK', () => {
   assert.match(SERVER, /import \{ getAuth \} from 'firebase-admin\/auth';/);
 });
+
+// «Torna indietro» past Firebase's ~5-minute recent-login window: the server removes the caller's OWN account, and
+// only one that never got anywhere. Every condition is a lock, so each is pinned.
+test('discardUnconfirmedAccount: own account only, unconfirmed, young, never in a business', () => {
+  const start = SERVER.indexOf('export const discardUnconfirmedAccount = onCall(CALL, async (request) => {');
+  assert.ok(start > 0, 'the callable exists');
+  const fn = SERVER.slice(start, SERVER.indexOf('\n});', start));
+  assert.match(fn, /const uid = requireAuth\(request\);/);
+  assert.doesNotMatch(fn, /request\.data/, 'it takes no uid from the caller: only its own account');
+  assert.match(fn, /account\.emailVerified === true \|\| !young/);
+  assert.match(fn, /Number\.isFinite\(created\) && created >= EMAIL_CHECK_SINCE && Date\.now\(\) - created <= DISCARD_WITHIN_MS/);
+  assert.match(SERVER, /const DISCARD_WITHIN_MS = 7 \* 24 \* 60 \* 60 \* 1000;/);
+  assert.match(fn, /db\(\)\.doc\(`users\/\$\{uid\}`\)\.get\(\)\)\.exists/);
+  const del = fn.indexOf('getAuth().deleteUser(uid)');
+  assert.ok(del > fn.indexOf('.exists'), 'deleted only after every check');
+  assert.equal(fn.match(/deleteUser\(/g).length, 1);
+});
+
+test('discardUnconfirmedAccount is exported from functions/index.js, or it is never deployed', () => {
+  const index = readFileSync(join(ROOT, 'functions', 'index.js'), 'utf8').replace(/\r\n/g, '\n');
+  const start = index.indexOf('export {\n  createWorkspace');
+  assert.ok(start > 0, 'the onboarding export list is there');
+  assert.match(index.slice(start, index.indexOf("} from './onboarding.js';", start)), /discardUnconfirmedAccount/);
+});

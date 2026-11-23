@@ -517,7 +517,7 @@ export const notifyOrderRequest = onDocumentCreated(
 // exactly like a broken function.
 export {
   createWorkspace, listWorkspaces, reissueOwnerLink, deleteWorkspace,
-  createJoinCode, redeemJoinCode, setMemberRole, setMemberName,
+  createJoinCode, redeemJoinCode, discardUnconfirmedAccount, setMemberRole, setMemberName,
   setLocationLanguage, setRecipePhoto, setPackPhoto, setIngredientPanels,
   setStaffCard, setHomeCardOrder,
 } from './onboarding.js';

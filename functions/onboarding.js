@@ -15,6 +15,7 @@
 //   createWorkspace   the app's owner only   a new customer's location + its first link
 //   createJoinCode    a location's owner     one invitation: digits, or a link
 //   redeemJoinCode    anybody signed in      THE only write to users/{uid}
+//                     (an account made from 23 Nov 2026 must have confirmed its email first)
 //   setMemberRole     a location's owner     promote, demote, remove
 //
 // ⚠️ EVERY DECISION THAT CAN BE MADE WITHOUT A DATABASE LIVES IN join-code.js,
@@ -139,14 +140,6 @@ async function requireOwner(uid, locationId) {
   }
 }
 
-// Federico, and nobody else. One document, created once from the console — the
-// same way everything else in this project is bootstrapped, needing no new
-// tooling and no key.
-//
-// ⚠️ SINCE v272 AN ACCOUNT MAY READ ITS OWN admins/{uid}, so the app can decide
-// whether to draw the entry at all. Nobody may write one, nobody may read
-// somebody else's, and nobody may list the collection. This check is the real
-// gate and never trusts anything the caller sends.
 // ⚠️ A NEW ACCOUNT MUST HAVE CONFIRMED ITS EMAIL BEFORE A CODE LETS IT IN (Federico's decision, 22 Nov 2026).
 // Only accounts created from EMAIL_CHECK_SINCE (23 Nov 2026, the night it was built) on: everybody already inside keeps working, and «everybody confirms»
 // is a later, separate step of his. Without it, anybody could sign up with somebody else's address, open an
@@ -170,6 +163,14 @@ async function requireConfirmedEmail(request, uid) {
     { reason: 'email-unverified' });
 }
 
+// Federico, and nobody else. One document, created once from the console — the
+// same way everything else in this project is bootstrapped, needing no new
+// tooling and no key.
+//
+// ⚠️ SINCE v272 AN ACCOUNT MAY READ ITS OWN admins/{uid}, so the app can decide
+// whether to draw the entry at all. Nobody may write one, nobody may read
+// somebody else's, and nobody may list the collection. This check is the real
+// gate and never trusts anything the caller sends.
 async function requireAppAdmin(uid) {
   const snap = await db().doc(`admins/${uid}`).get();
   if (!snap.exists) throw new HttpsError('permission-denied', 'Not allowed.');
@@ -818,6 +819,36 @@ export const redeemJoinCode = onCall(CALL, async (request) => {
   logger.info('Joined', { uid, locationId: result.locationId, role: result.role });
   return { locationId: result.locationId, role: result.role };
 });
+
+// ── 3b. «L’email è sbagliata? Torna indietro»: removing the account the join form just made
+//
+// The app deletes it itself when it can, but Firebase lets a client delete its own account only within ~5 minutes of
+// signing in (`auth/requires-recent-login`), and a person who waited for the email, looked in the spam and only then
+// saw the typo is past that. Without this, the account under somebody else's address would stay for good (P13) and
+// the person would start again from an empty form.
+//
+// ⚠️ ONLY THE CALLER'S OWN ACCOUNT, AND ONLY ONE THAT NEVER GOT ANYWHERE: not confirmed, created from EMAIL_CHECK_SINCE
+// on and within the last 7 days (the life of an invitation link), and with NO users/{uid} document — so never an
+// account that is in a business, or ever was. Every uncertain answer (an unreadable creation time) refuses. It deletes
+// nothing else: such an account has written nothing, since every venue path needs a membership it never had.
+const DISCARD_WITHIN_MS = 7 * 24 * 60 * 60 * 1000;
+
+export const discardUnconfirmedAccount = onCall(CALL, async (request) => {
+  const uid = requireAuth(request);
+  const account = await getAuth().getUser(uid);
+  const created = Date.parse((account.metadata && account.metadata.creationTime) || '');
+  const young = Number.isFinite(created) && created >= EMAIL_CHECK_SINCE && Date.now() - created <= DISCARD_WITHIN_MS;
+  if (account.emailVerified === true || !young) {
+    throw new HttpsError('failed-precondition', 'This account cannot be removed here.', { reason: 'not-discardable' });
+  }
+  if ((await db().doc(`users/${uid}`).get()).exists) {
+    throw new HttpsError('failed-precondition', 'This account cannot be removed here.', { reason: 'not-discardable' });
+  }
+  await getAuth().deleteUser(uid);
+  logger.info('Unconfirmed account discarded', { uid });
+  return { ok: true };
+});
+
 
 // ── 4. Promote, demote, remove ───────────────────────────────────────────────
 
