@@ -32,15 +32,19 @@
 }
 
 /* The three-way switch: a segmented control, the chosen one marked by colour AND by aria-pressed. */
+/* ⚠️ THE BUTTONS WRAP when the three words do not fit (296px in Italian): none is cut and nothing is wider than its card. */
 .switch {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--s2);
 }
 
 .switchButton {
-  flex: 1;
+  flex: 1 1 auto;
+  min-width: 0;
   min-height: var(--hit);
-  padding: 0 var(--s3);
+  padding: var(--s2) var(--s3);
+  overflow-wrap: anywhere;
   border: 1px solid var(--line-2);
   border-radius: var(--r-md);
   background: var(--surface);
