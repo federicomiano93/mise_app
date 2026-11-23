@@ -3,6 +3,7 @@ import type { Ref } from 'react';
 import { Check, Trash2 } from 'lucide-react';
 import { useBlocker, useLocation, useNavigate } from 'react-router';
 import type { BlockerFunction } from 'react-router';
+import { ingredientCardPath } from '@mise/shared/cake-label-model';
 import { MAX_SELLING_PRICE, cakeGeometry, cakeLineCosts, cakeProduct, cakeProductId, cakeTotals, toCakeDocument } from '@mise/shared/cake-model';
 import type { Cake, CakePart } from '@mise/shared/cake-model';
 import { vatSelection } from '@mise/shared/foodcost-model';
@@ -26,6 +27,7 @@ import { editPath } from '../recipes/recipesPath';
 import { newRecipeId } from '../recipes/recipesSource';
 import { markBusy } from '../session/busy';
 import { useSession } from '../session/SessionContext';
+import { KEEP_FOCUS } from '../shell/Page';
 import { visibleSectionIds } from '../session/visibility';
 import { useMoney } from '../session/useMoney';
 import { announceAction } from '../telemetry/usage';
@@ -47,6 +49,8 @@ import { CAKES_PATH, referencePath } from './cakesPath';
 import type { CakeStart } from './cakesPath';
 import { STEP_PARTS, partFigures, partKey, startStep } from './cakeStepsModel';
 import type { StepKey } from './cakeStepsModel';
+import { CakeLabelRow } from './CakeLabelRow';
+import { CakeLabelView } from './CakeLabelView';
 import { CostCard } from './CostCard';
 import type { PriceField, PriceTexts } from './CostCard';
 import { FoldTitle } from './FoldTitle';
@@ -152,6 +156,12 @@ export function CakeForm({ id, cake, start = 'standard', titleRef, onSaved, onPa
   const [needsOpen, setNeedsOpen] = useState(false);
   // The button that opened «What you need»: the focus goes back to it on close (the dialog is opened by state, so nothing else would).
   const needsOpener = useRef<HTMLElement | null>(null);
+  // The cake's label is a full-screen view INSIDE this form (state, not a route): the form stays mounted behind it, only hidden, so nothing
+  // typed is lost and nothing is remounted. Back and Escape close it and the focus returns to the row that opened it, where the page was.
+  const [labelOpen, setLabelOpen] = useState(false);
+  const editorRef = useRef<HTMLElement>(null);
+  const labelButton = useRef<HTMLButtonElement>(null);
+  const labelPlaces = useRef<{ node: HTMLElement; top: number }[] | null>(null);
 
   // ⚠️ DIRTY IS «DIFFERENT FROM WHAT WAS LAST SAVED» (what Save would write), also kept in a ref: the router's blocker reads it at the
   // moment of a navigation, and a state value read there could be one render behind. `touched` NEVER goes back to false: a cake deleted
@@ -464,6 +474,7 @@ export function CakeForm({ id, cake, start = 'standard', titleRef, onSaved, onPa
   // ⚠️ ONLY SOMEONE WHO MAY USE THE RECIPES gets the option: the same question the rail asks about its door (visibility.ts); the rules
   // (recipes: canUse 'catalogue') are the real guard, this is the courtesy that keeps the option from ending in a refusal.
   const mayMakeRecipes = useMemo(() => visibleSectionIds(location, canManage, role).has('recipes'), [location, canManage, role]);
+  const mayOpenIngredients = useMemo(() => visibleSectionIds(location, canManage, role).has('suppliers'), [location, canManage, role]);
   // Where each card made here was put, so a refusal can take it off the cake again.
   const madeHere = useRef(new Map<string, { tier: number; part: CakePart }>());
   const latestEdit = useRef(edit);
@@ -528,15 +539,52 @@ export function CakeForm({ id, cake, start = 'standard', titleRef, onSaved, onPa
   // ⚠️ THE UNSAVED COPY IS SET ASIDE, NOT ASKED ABOUT: it is parked in memory (cakeParking.ts) and the move is not blocked, so the
   // person comes back to exactly this cake, and the dirty mark with it. A NEW cake's history entry is marked with its id first (the same
   // address, replaced, so nothing is blocked) because /cakes/new alone cannot tell which copy is meant.
-  async function openInRecipes(recipeId: string) {
+  async function parkAndGo(path: string, to: object) {
     // ⚠️ READ FROM THE REF: this runs after a dialog was answered, from the closure of the render that opened it, which does not have the card just added.
     if (owner === null) return;
     parkedAway.current = true;
     parkCake({ uid: owner.uid, locationId: owner.locationId, key: cakeId, savedId: id, ...onScreen.current, fromScratch });
     onParking?.(cakeId);
     await navigate(pathname, { replace: true, state: { ...(state as object | null), parkedCake: cakeId } });
-    await navigate(editPath(recipeId), { state: FROM_CAKE });
+    await navigate(path, { state: to });
   }
+
+  async function openInRecipes(recipeId: string) {
+    await parkAndGo(editPath(recipeId), FROM_CAKE);
+  }
+
+  // ⚠️ THE SAME SET-ASIDE FOR THE LABEL'S «Open the ingredient» (the ingredient's card in Ingredients & suppliers): its Back is the browser's
+  // Back (`fromList`), which lands on this cake's own entry, marked with the copy's key — the cake comes back as it was typed.
+  async function openIngredient(ingredientId: string) {
+    const path = ingredientCardPath(ingredientId);
+    if (path !== null) await parkAndGo(path, { ...KEEP_FOCUS, fromList: true });
+  }
+
+  // ── The cake's label ──────────────────────────────────────────────────────────────────────────
+  // The scrolling ancestors of the form (the shell's area, and the open cake's own layer from 700px): the view starts at the top of them and
+  // Back puts the form back where it was.
+  const openLabel = () => {
+    const places: { node: HTMLElement; top: number }[] = [];
+    for (let node = editorRef.current?.parentElement ?? null; node !== null; node = node.parentElement) {
+      const overflow = window.getComputedStyle(node).overflowY;
+      if (overflow === 'auto' || overflow === 'scroll') places.push({ node, top: node.scrollTop });
+    }
+    labelPlaces.current = places;
+    setLabelOpen(true);
+  };
+  const wasLabelOpen = useRef(false);
+  useLayoutEffect(() => {
+    if (labelOpen) {
+      wasLabelOpen.current = true;
+      labelPlaces.current?.forEach(place => { place.node.scrollTop = 0; });
+      return;
+    }
+    if (!wasLabelOpen.current) return;
+    wasLabelOpen.current = false;
+    labelPlaces.current?.forEach(place => { place.node.scrollTop = place.top; });
+    labelPlaces.current = null;
+    labelButton.current?.focus({ preventScroll: true });
+  }, [labelOpen]);
 
   // ── What is drawn ─────────────────────────────────────────────────────────────────────────────
   const forCost = useMemo(() => costable(working), [working]);
@@ -594,7 +642,8 @@ export function CakeForm({ id, cake, start = 'standard', titleRef, onSaved, onPa
   const noReference = !fromScratch && working.ref === null && venueRef === null && (id === null || referenceLoaded);
 
   return (
-    <section className={styles.editor} aria-labelledby={titleId}>
+    <>
+    <section ref={editorRef} className={styles.editor} aria-labelledby={titleId} hidden={labelOpen}>
       <FormBar
         level={headingLevel}
         backLabel={t('ui.back')}
@@ -715,6 +764,11 @@ export function CakeForm({ id, cake, start = 'standard', titleRef, onSaved, onPa
                 </div>
               ) : null}
             </section>
+            <section className={`${styles.card} ${styles.label}`} aria-labelledby={`${ids}-label`}>
+              <h3 id={`${ids}-label`} className={styles.cardTitle}>
+                <CakeLabelRow cake={working} onOpen={openLabel} buttonRef={labelButton} />
+              </h3>
+            </section>
           </div>
         </div>
       </div>
@@ -734,5 +788,14 @@ export function CakeForm({ id, cake, start = 'standard', titleRef, onSaved, onPa
         </PartBoundary>
       ) : null}
     </section>
+    {labelOpen ? (
+      <CakeLabelView
+        cake={working}
+        onBack={() => { setLabelOpen(false); }}
+        onOpenIngredient={mayOpenIngredients ? ingredientId => { void openIngredient(ingredientId); } : undefined}
+        onOpenRecipe={mayMakeRecipes ? recipeId => { void openInRecipes(recipeId); } : undefined}
+      />
+    ) : null}
+    </>
   );
 }

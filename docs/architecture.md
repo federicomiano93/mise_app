@@ -197,6 +197,17 @@ Aria does not support Preact. The numbers are below.
   written there (read back field by field, for the same account and venue only), so a close nobody could stop (a tablet's recent apps) still
   finds «Unsaved cake: …» in the list. ⚠️ DELIBERATELY NOT UNDER `KEEP_PREFIXES`: it holds a venue's cake, so a sign-out or a venue switch wipes it
   (`cakeParking.device.spec.tsx` pins that with `keysToClear`). Everything else is memory and Firestore's offline cache. The section's gate is Food cost's (`session/visibility.ts`, no card id of its own).
+  ⚠️ THE WHOLE CAKE'S LABEL (Torte step 2b, 23 Nov 2026; `shared/src/cake-label-model.ts`, `cakes/CakeLabelRow.tsx`, `CakeLabelView.tsx`, `useCakeLabel.ts`): NO LABEL LAW IS WRITTEN FOR CAKES. `cakeLabelRecipe` turns the cake
+  (`resolveLines`: every tier and part, packaging never) into ONE synthetic recipe — each card scaled by `readyKg ÷ productCooking(card).outputKg` into its RAW components (a recipe line stays a recipe row,
+  an ingredient an ingredient row, pieces keep their unit and end the list without a weight, a semi line is the same walk one level down, depth `MAX_SEMI_DEPTH`, a chain guard), `lossPct` = what the cards together lose in the oven — and hands it to
+  `buildLabel` / `recipeAllergens`, so the gate (one unchecked ingredient anywhere refuses the label), the weight order, contains / may contain and the nutrition per 100 g of the FINISHED cake are the recipe label's own code.
+  `cakeLabel` answers `empty` / `blocked` / `ready`; a card that cannot be walked (gone, no weights, a loop, too deep) is a PROBLEM that refuses the label (its rows are missing, so the verdict over the rest would look complete), and
+  every refused row is mapped back to the card that holds it (`rowCard`). The row «Cake label» sits under «Cost and price» (a button in an h3, summary line: «Contains: …» / what is missing); it opens a full-screen VIEW INSIDE the form (state,
+  not a route: `CakeForm` hides its own `<section>` with `hidden`, so nothing typed is remounted or lost; Back and Escape close it, the focus returns to the row and the scroll to where it was; works on an unsaved cake). The view's body is
+  `recipes/LabelBody.tsx`, factored out of `LabelScreen` and shared (props: the `recipe` buildLabel reads, `shelfLifeDays`, `netWeightG`, `source` = the tables to judge by + loaded + unreadable, `intro`, `refusal`, `afterCard`): the switch,
+  the paper at real size, the three print roads and copy / send are the SAME function, started under its own `RecipesProvider` ONLY while the view is open (label settings, paper, the shop computer's heartbeat: P14), while the cake is JUDGED by
+  the recipes and ingredients Food cost already holds (`FoodcostSnapshot.ingredientsFailed` is new: a refused ingredients stream means «cannot be read», never a label from what is held). «Open the ingredient» (`/suppliers/ingredient/<id>`,
+  `ingredientCardPath`, pinned to `suppliersPath` by `CakeLabelView.spec.tsx`) and «Open in Recipes» go through `CakeForm.parkAndGo` (the unsaved copy is set aside, as for «+ New recipe»), each only for whoever is shown that section.
 - `kiosk/` — kiosk mode for the lab tablet (staff slice 5, `docs/parity/staff-plan.md`): a setting of ONE DEVICE, never written to
   Firestore. `kioskSettings.ts` reads and saves `kiosk-mode` (the current app's key and JSON shape, through `@mise/shared/kiosk-model`;
   `kiosk-` is in KEEP_PREFIXES) and hears another tab's change; `kioskController.ts` is the runtime of `js/kiosk.js` behind an injected

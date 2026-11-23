@@ -1,0 +1,154 @@
+/* The whole cake's label, a full page inside the editor. The page is the recipe label's own body (recipes/LabelBody, whose chrome is
+   LabelScreen.module.css); what is here is the frame, the sentence about the whole cake, the refusal's rows and «From which cards».
+
+   ⚠️ NOTHING ON THE CARD MAY CLIP (no `overflow` but the wide table's own): the form bar sticks to the top of the scrolling area. */
+
+.view {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+.sub {
+  display: block;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.intro {
+  margin: 0;
+  color: var(--ink-2);
+  line-height: 1.5;
+}
+
+.intro strong {
+  color: var(--ink);
+}
+
+/* The refusal: the amber box of the recipe label, with a row per card in the way. */
+.blocked {
+  padding: var(--s4);
+  border-radius: var(--r-md);
+  background: var(--warn-tint);
+  color: var(--warn-ink);
+}
+
+.blockedTitle {
+  margin: 0;
+  font-size: var(--fs-lg);
+  font-weight: 700;
+}
+
+.blockedText {
+  margin: var(--s2) 0 0;
+  line-height: 1.45;
+}
+
+.rows {
+  margin: var(--s3) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  padding: var(--s3) 0;
+  border-top: 1px solid var(--line-2);
+}
+
+.rowText {
+  flex: 1 1 14rem;
+  min-width: 0;
+}
+
+.rowName,
+.rowReason {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.rowName {
+  font-weight: 700;
+}
+
+.rowReason {
+  line-height: 1.45;
+}
+
+/* «From which cards». */
+.from {
+  padding: var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+.fromTitle {
+  margin: 0;
+  font-size: var(--fs-xl);
+  font-weight: 700;
+}
+
+.fromNote {
+  margin: var(--s2) 0 var(--s3);
+  color: var(--ink-2);
+}
+
+/* The table may be wider than a phone: it scrolls on its own, the page does not. */
+.scroll {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.scroll:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-md);
+}
+
+.table th,
+.table td {
+  padding: var(--s3) var(--s2);
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.table thead th {
+  color: var(--ink-2);
+  font-size: var(--fs-xs);
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.table tbody th {
+  font-weight: 600;
+}
+
+.table .r {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.tick {
+  color: var(--ok-ink);
+  font-weight: 700;
+}
+
+.total th,
+.total td {
+  border-bottom: 0;
+  font-weight: 700;
+}

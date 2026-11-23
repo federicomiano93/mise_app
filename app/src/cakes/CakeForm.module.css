@@ -132,6 +132,10 @@
   order: 4;
 }
 
+.label {
+  order: 5;
+}
+
 @media (min-width: 1000px) {
   .grid {
     display: grid;
@@ -150,7 +154,8 @@
   .stage,
   .measures,
   .parts,
-  .cost {
+  .cost,
+  .label {
     order: 0;
   }
 }
