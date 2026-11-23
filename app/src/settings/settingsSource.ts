@@ -114,6 +114,37 @@ export function memberOf(uid: string, data: unknown): Member {
   };
 }
 
+// A new business, as «New business» asks the live function `createWorkspace` for it (the app's administrator only: the function checks
+// admins/{uid} itself). ⚠️ EVERY FIELD IS CHOSEN BY A PERSON, none has a default: the country decides the language of the allergen
+// labels and can never be changed, and a pre-chosen «for a customer» once made the owner's own bakery a customer's.
+export type BusinessCountry = 'IT' | 'GB';
+export const BUSINESS_SECTION_IDS = ['orders', 'calculator', 'catalogue', 'pastries', 'foodcost'] as const;
+export type BusinessSectionId = (typeof BUSINESS_SECTION_IDS)[number];
+export type NewBusiness = {
+  readonly name: string;
+  readonly country: BusinessCountry;
+  readonly sections: Readonly<Record<BusinessSectionId, boolean>>;
+  // true: the caller becomes its owner on the spot, no link. false: a customer's, with a link nobody but the customer redeems.
+  readonly forSelf: boolean;
+};
+
+// What the server made. ⚠️ THE LINK'S TOKEN EXISTS HERE AND NOWHERE ELSE: only its hash is stored, so it can never be shown again.
+export type CreatedBusiness =
+  | { readonly kind: 'mine'; readonly locationId: string }
+  | { readonly kind: 'link'; readonly locationId: string; readonly token: string; readonly expiresAt: number };
+
+// The function's answer, checked: anything that is not a whole answer for the KIND asked is a failure, never half a screen.
+export function createdBusinessOf(answer: unknown, forSelf: boolean): CreatedBusiness | null {
+  if (!answer || typeof answer !== 'object') return null;
+  const { locationId, mine, token, expiresAt } = answer as Record<string, unknown>;
+  if (typeof locationId !== 'string' || locationId === '') return null;
+  if (forSelf) return mine === true ? { kind: 'mine', locationId } : null;
+  if (mine === true) return null;
+  if (!isWellFormed(token, 'link') || typeof token !== 'string') return null;
+  if (typeof expiresAt !== 'number' || !Number.isFinite(expiresAt)) return null;
+  return { kind: 'link', locationId, token, expiresAt };
+}
+
 export interface SettingsSource {
   // This person's own holiday document, read ONCE (the phone's copy is allowed offline). null when there is none, or when it could
   // not be read: the button still works, it simply starts from nothing.
@@ -138,6 +169,10 @@ export interface SettingsSource {
   setMemberRole(uid: string, role: Role | null, title: ManagerTitle | null): Promise<void>;
   // Gives a member another first and last name on the roster (a label: it changes nothing they may do). REJECTS likewise.
   setMemberName(uid: string, firstName: string, lastName: string): Promise<void>;
+  // Creates a business (the app's administrator only: the function refuses anybody else). REJECTS when refused, offline, past the
+  // timeout, or when the answer is not a whole answer for the kind asked. ⚠️ Nothing here writes down or logs the answer: it may
+  // hold a link that is shown once.
+  createBusiness(business: NewBusiness): Promise<CreatedBusiness>;
 }
 
 export type CallFunction = (name: string, data: unknown, timeoutMs: number) => Promise<unknown>;
@@ -252,6 +287,21 @@ export function createFirestoreSettingsSource(
     async setMemberName(uid, firstName, lastName) {
       await callFunction('setMemberName', { locationId, uid, firstName: cleanName(firstName), lastName: cleanName(lastName) },
         FUNCTION_TIMEOUT_MS);
+    },
+
+    // The fields the current app's wrapper sends (js/staff/firebase-staff.js): the roster name stays empty, as it does there.
+    async createBusiness(business) {
+      const answer = await callFunction('createWorkspace', {
+        name: business.name.trim(),
+        sections: business.sections,
+        country: business.country,
+        forSelf: business.forSelf,
+        firstName: '',
+        lastName: '',
+      }, FUNCTION_TIMEOUT_MS);
+      const created = createdBusinessOf(answer, business.forSelf);
+      if (!created) throw new Error('The createWorkspace answer was not a whole answer.');
+      return created;
     },
   };
 }

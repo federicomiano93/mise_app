@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from 'vitest';
 import type { FirestoreKit } from '../session/firebaseBackend';
-import { FUNCTION_TIMEOUT_MS, createFirestoreSettingsSource, invitationOf, memberOf } from './settingsSource';
+import { FUNCTION_TIMEOUT_MS, createFirestoreSettingsSource, createdBusinessOf, invitationOf, memberOf } from './settingsSource';
 import type { Member } from './settingsSource';
 
 // The ONLY code in Mise 2 that writes the holiday and calls the language and sections functions, against a recording fake of the
@@ -352,5 +352,56 @@ describe('the people list, as firestore.rules and functions/onboarding.js expect
     expect(memberOf('x', { role: 'manager' })).toMatchObject({ role: 'manager', title: 'manager' });
     expect(memberOf('x', { role: 'owner', title: 'head-chef' })).toMatchObject({ role: 'owner', title: null });
     expect(memberOf('x', null)).toEqual({ uid: 'x', email: '', firstName: '', lastName: '', role: null, title: null });
+  });
+});
+
+describe('creating a business, as functions/onboarding.js createWorkspace expects it', () => {
+  const SECTIONS = { orders: true, calculator: false, catalogue: true, pastries: false, foodcost: false };
+  const TOKEN = 'Q7xk2mP9vR4tY8wZ1nB6cD3fG5hJ0sLa';
+
+  test('asks for a customer\'s business with exactly the fields the current app sends, the long timeout, and no venue id', async () => {
+    const { source, callFunction } = make();
+    callFunction.mockResolvedValueOnce({ locationId: 'loc-1', token: TOKEN, expiresAt: 5, mine: false });
+    await source.createBusiness({ name: '  Rossi Bakery  ', country: 'GB', sections: SECTIONS, forSelf: false });
+    expect(callFunction).toHaveBeenCalledExactlyOnceWith('createWorkspace',
+      { name: 'Rossi Bakery', sections: SECTIONS, country: 'GB', forSelf: false, firstName: '', lastName: '' }, FUNCTION_TIMEOUT_MS);
+  });
+
+  test('asks for one of your own the same way, with forSelf true', async () => {
+    const { source, callFunction } = make();
+    callFunction.mockResolvedValueOnce({ locationId: 'loc-1', mine: true });
+    await source.createBusiness({ name: 'Mine', country: 'IT', sections: SECTIONS, forSelf: true });
+    expect(callFunction).toHaveBeenCalledExactlyOnceWith('createWorkspace',
+      { name: 'Mine', sections: SECTIONS, country: 'IT', forSelf: true, firstName: '', lastName: '' }, FUNCTION_TIMEOUT_MS);
+  });
+
+  test('answers with what the server made, for either kind', async () => {
+    const { source, callFunction } = make();
+    callFunction.mockResolvedValueOnce({ locationId: 'loc-1', token: TOKEN, expiresAt: 5, mine: false });
+    await expect(source.createBusiness({ name: 'A', country: 'GB', sections: SECTIONS, forSelf: false }))
+      .resolves.toEqual({ kind: 'link', locationId: 'loc-1', token: TOKEN, expiresAt: 5 });
+    callFunction.mockResolvedValueOnce({ locationId: 'loc-2', mine: true });
+    await expect(source.createBusiness({ name: 'A', country: 'GB', sections: SECTIONS, forSelf: true }))
+      .resolves.toEqual({ kind: 'mine', locationId: 'loc-2' });
+  });
+
+  test.each([
+    ['nothing', null, false],
+    ['no venue', { token: TOKEN, expiresAt: 5, mine: false }, false],
+    ['a link with no token', { locationId: 'l', expiresAt: 5, mine: false }, false],
+    ['a token too short', { locationId: 'l', token: 'abc', expiresAt: 5, mine: false }, false],
+    ['a link with no expiry', { locationId: 'l', token: TOKEN, mine: false }, false],
+    ['a link answered for an own business', { locationId: 'l', token: TOKEN, expiresAt: 5, mine: false }, true],
+    ['an own business answered for a customer', { locationId: 'l', mine: true }, false],
+  ])('%s is not a whole answer', (_what, answer, forSelf) => {
+    expect(createdBusinessOf(answer, forSelf)).toBeNull();
+  });
+
+  test('a refusal reaches the caller untouched and nothing is written to Firestore from here', async () => {
+    const { source, callFunction, fs } = make();
+    const refusal = Object.assign(new Error('Only the app administrator.'), { code: 'functions/permission-denied' });
+    callFunction.mockRejectedValueOnce(refusal);
+    await expect(source.createBusiness({ name: 'A', country: 'GB', sections: SECTIONS, forSelf: false })).rejects.toBe(refusal);
+    expect(fs.setDoc).not.toHaveBeenCalled();
   });
 });
