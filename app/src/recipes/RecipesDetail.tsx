@@ -29,6 +29,9 @@ import styles from './RecipesDetail.module.css';
 //
 // (No `key` on the recipe screen here: the section keeps one screen from one recipe to the next on
 // the split, so the focus stays on the row that was pressed.)
+// Back is the browser's Back when the entry behind is the list OR the recipe whose gap opened this one.
+const cameFromListOrGap = (state: unknown): boolean => cameFromList(state) || cameFromGap(state);
+
 export function RecipesDetail({ view, onOpenFromSheet, onOpenFromHaccp, onOpenFromIngredients }: {
   view: ShownView;
   onOpenFromSheet: (id: string) => void;
@@ -185,7 +188,7 @@ function RecipeScreen({ id, label }: { id: string; label: boolean }) {
   const leave = useLeave(RECIPES_PATH, () => {
     if (cameFromGap(state)) return;
     handBack.expect(fromBook ?? (cameFromSheet(state) ? sheetOpener(id) : recipeOpener(id)));
-  });
+  }, cameFromListOrGap);
   // The label steps up ONE level, to its recipe (the browser's Back when the recipe is the entry behind it).
   const leaveLabel = useLeave(recipePath(id), () => undefined, cameFromRecipe);
 

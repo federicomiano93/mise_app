@@ -41,18 +41,18 @@ async function open(path: string, { recipes, ingredients }: Seeds, options: Para
 const main = () => within(screen.getByRole('main'));
 const toggle = () => main().getByRole('button', { name: /^(Allergens|Allergeni)/ });
 // The recipe's own ingredient table has buttons with the same names, so a gap row is always looked up in its group's list.
-const ingredientGap = (name: string) => within(screen.getByRole('list', { name: /^Ingredients? without allergens/ })).getByRole('button', { name });
-const ingredientGapNames = () => within(screen.getByRole('list', { name: /^Ingredients? without allergens/ })).getAllByRole('button').map(button => button.textContent);
+const ingredientGap = (name: string) => within(screen.getByRole('list', { name: /^Ingredients? with no allergen information/ })).getByRole('button', { name });
+const ingredientGapNames = () => within(screen.getByRole('list', { name: /^Ingredients? with no allergen information/ })).getAllByRole('button').map(button => button.textContent);
 const where = (router: { state: { location: { pathname: string } } }) => router.state.location.pathname;
 
 describe('every gap, in two groups', () => {
   it('shows all ten, with a count on each title, the hint, and no «and N more»', async () => {
     const { user } = await open('/recipes/big', { recipes: [BIG], ingredients: BIG_INGREDIENTS });
     await user.click(toggle());
-    expect(screen.getByRole('heading', { level: 4, name: 'Ingredients without allergens · 9' })).toBeVisible();
+    expect(screen.getByRole('heading', { level: 4, name: 'Ingredients with no allergen information · 9' })).toBeVisible();
     expect(screen.getByRole('heading', { level: 4, name: 'Row to fix in the recipe · 1' })).toBeVisible();
     expect(screen.getByText('Tap a name to open the ingredient in Suppliers; Back brings you back to this recipe.')).toBeVisible();
-    const first = within(screen.getByRole('list', { name: 'Ingredients without allergens · 9' }));
+    const first = within(screen.getByRole('list', { name: 'Ingredients with no allergen information · 9' }));
     for (const n of NINE) expect(first.getByRole('button', { name: `Thing ${n}` })).toBeVisible();
     const second = within(screen.getByRole('list', { name: 'Row to fix in the recipe · 1' }));
     expect(second.getByRole('button', { name: 'Free text not linked to an ingredient' })).toBeVisible();
@@ -63,14 +63,14 @@ describe('every gap, in two groups', () => {
   it('omits a group with no rows, and says it in the singular for one', async () => {
     const { user } = await open('/recipes/one', { recipes: [{ id: 'one', name: 'One', ingredients: [linked(1)] }], ingredients: [plain('i1')] });
     await user.click(toggle());
-    expect(screen.getByRole('heading', { level: 4, name: 'Ingredient without allergens · 1' })).toBeVisible();
+    expect(screen.getByRole('heading', { level: 4, name: 'Ingredient with no allergen information · 1' })).toBeVisible();
     expect(screen.queryByRole('heading', { level: 4, name: /Rows? to fix/ })).not.toBeInTheDocument();
   });
 
   it('says it in Italian', async () => {
     const { user } = await open('/recipes/big', { recipes: [BIG], ingredients: BIG_INGREDIENTS }, { lang: 'it', session: { language: 'it' } });
     await user.click(toggle());
-    expect(screen.getByRole('heading', { level: 4, name: 'Ingredienti senza allergeni · 9' })).toBeVisible();
+    expect(screen.getByRole('heading', { level: 4, name: 'Ingredienti senza allergeni dichiarati · 9' })).toBeVisible();
     expect(screen.getByRole('heading', { level: 4, name: 'Riga da sistemare nella ricetta · 1' })).toBeVisible();
     expect(screen.getByText('Tocca un nome: si apre l’ingrediente in Fornitori; Indietro ti riporta a questa ricetta.')).toBeVisible();
   });
@@ -131,7 +131,7 @@ describe('who may tap', () => {
   it('shows the ingredients as plain names, with no button and no hint, when the venue has no Suppliers', async () => {
     const { user } = await open('/recipes/big', { recipes: [BIG], ingredients: BIG_INGREDIENTS }, { session: { location: { country: 'GB', sections: { orders: false } } } });
     await user.click(toggle());
-    const first = within(screen.getByRole('list', { name: 'Ingredients without allergens · 9' }));
+    const first = within(screen.getByRole('list', { name: 'Ingredients with no allergen information · 9' }));
     expect(first.getAllByRole('listitem')).toHaveLength(9);
     expect(first.queryByRole('button')).not.toBeInTheDocument();
     expect(first.getByText('Thing 5')).toBeVisible();

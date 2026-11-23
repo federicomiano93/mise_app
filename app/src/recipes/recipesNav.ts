@@ -14,16 +14,21 @@ export const FROM_LIST = { ...KEEP_FOCUS, fromList: true } as const;
 export const FROM_SHEET = { ...FROM_LIST, fromSheet: true } as const;
 
 // A gap of the recipe's allergen card (23 Nov 2026), two ways out of the recipe:
-//   * an incomplete SUB-RECIPE opens its own screen one level above this one: it carries `fromList` so its Back is the browser's Back,
-//     which lands on the recipe that was left (the entry behind it), and `fromGap` so that Back hands the focus to nothing in the
-//     list — the recipe's own gap row is owed it instead (recipeReturn.ts).
+//   * an incomplete SUB-RECIPE opens its own screen one level above this one, with `fromGap` and NO `fromList` (it does not come from
+//     the list): its Back is the browser's Back, which lands on the recipe that was left (the entry behind it) and hands the focus to
+//     nothing in the list — the recipe's own gap row is owed it instead (recipeReturn.ts). Its editor's Save steps back to it only.
 //   * an undeclared INGREDIENT opens its card in Suppliers, ANOTHER section, with `fromElsewhere` (read by suppliers/suppliersNav.ts,
 //     a copy of the word, never an import): the card's Back and its leave after a Save or a Delete are the browser's Back, which
 //     lands here. KEEP_FOCUS so the page leaves the focus to the card's own title.
-export const FROM_GAP = { ...FROM_LIST, fromGap: true } as const;
+export const FROM_GAP = { ...KEEP_FOCUS, fromGap: true } as const;
 
 export function cameFromGap(state: unknown): boolean {
   return typeof state === 'object' && state !== null && 'fromGap' in state;
+}
+
+// Set on the «Edit» navigation of a recipe that was itself opened from a gap: its editor's Save steps back to that recipe (one step).
+export function recipeCameFromGap(state: unknown): boolean {
+  return typeof state === 'object' && state !== null && 'recipeFromGap' in state && state.recipeFromGap === true;
 }
 
 export const TO_INGREDIENT_CARD = { ...KEEP_FOCUS, fromElsewhere: true } as const;

@@ -1766,7 +1766,7 @@ export const en = {
     other: '{n} ingredients are not declared — no label can be made',
   },
   // The allergen card names EVERY gap, in two groups (23 Nov 2026): the ingredients to declare in Suppliers, and the rows to put right here.
-  'cat.alg.groupIngredients': { one: 'Ingredient without allergens · {n}', other: 'Ingredients without allergens · {n}' },
+  'cat.alg.groupIngredients': { one: 'Ingredient with no allergen information · {n}', other: 'Ingredients with no allergen information · {n}' },
   'cat.alg.groupIngredientsHint': 'Tap a name to open the ingredient in Suppliers; Back brings you back to this recipe.',
   'cat.alg.groupRows': { one: 'Row to fix in the recipe · {n}', other: 'Rows to fix in the recipe · {n}' },
   'cat.alg.soFar': 'So far, from the rows that are declared: {list}. This is NOT the full list.',

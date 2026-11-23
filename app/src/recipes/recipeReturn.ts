@@ -21,7 +21,7 @@ import { createContext, useContext } from 'react';
 
 export interface RecipeReturn {
   // «Make a label» (or «Edit», `origin` 'edit') of this recipe is about to open: write down where the screen is.
-  // `trip`: only for 'order' — the row key that opened the menu and the keys of the rows split in two; for 'gap' its `row` is the gap's key.
+  // `trip`: only for 'order' — the row key that opened the menu and the keys of the rows split in two.
   remember(recipeId: string, origin?: Origin, trip?: OrderTrip): void;
   // Is this recipe being returned to from its label? Read while drawing; it changes nothing.
   pending(recipeId: string): boolean;
@@ -38,8 +38,11 @@ export interface RecipeReturn {
   // Is this recipe being returned to from Orders (a row's «Order»)? The row that opened the menu and the rows split in two, or null.
   // Read while drawing; it changes nothing.
   pendingOrder(recipeId: string): OrderTrip | null;
-  // Is this recipe being returned to from one of its allergen card's gaps (an ingredient's card in Suppliers, a sub-recipe, its editor)?
-  // The key of the gap row that was tapped (allergenGaps.ts), or null. Read while drawing; it changes nothing.
+  // A gap row of this recipe's allergen card was tapped (an ingredient's card in Suppliers, a sub-recipe, its editor): write down which, and
+  // where the screen is. Kept in a STACK of its own, apart from `remember`'s single place, so a detour made on the way (the sub-recipe's own
+  // editor or label) cannot overwrite it. `carry` only for a trip to another SECTION (the place would die with this one).
+  rememberGap(recipeId: string, row: string, carry: boolean): void;
+  // The key of the gap row (allergenGaps.ts) this recipe is being returned to, or null. Read while drawing; it changes nothing.
   pendingGap(recipeId: string): string | null;
   // Put the scroll area (and the split's right-hand side) back where `remember` found them. The recipe screen asks once its
   // page is drawn, because a scroll box cannot be scrolled past the content that is not there yet.
@@ -50,7 +53,7 @@ export interface RecipeReturn {
 }
 
 // What the person pressed to leave the recipe.
-export type Origin = 'label' | 'edit' | 'steps' | 'mix' | 'cost' | 'duplicate' | 'order' | 'gap';
+export type Origin = 'label' | 'edit' | 'steps' | 'mix' | 'cost' | 'duplicate' | 'order';
 
 // What a trip to Orders must bring back: the row (shared/row-actions-model `rowKeysOf`) whose menu was opened, and the rows split in two.
 export interface OrderTrip {
@@ -67,6 +70,7 @@ const NOTHING: RecipeReturn = {
   pendingMix: () => false,
   pendingCost: () => false,
   pendingOrder: () => null,
+  rememberGap() { /* ditto */ },
   pendingGap: () => null,
   restoreScroll() { /* ditto */ },
   markDelivered() { /* ditto */ },
@@ -86,6 +90,19 @@ let carried: Place | null = null;
 export function carryPlace(place: Place): void { carried = place; }
 export function carriedPlace(): Place | null { return carried; }
 export function forgetCarriedPlace(): void { carried = null; }
+
+// The gap rows tapped, outermost recipe first (a sub-recipe's own gap comes after its parent's). Carried the same way as the place, but ONLY
+// for a trip to Suppliers: every other trip stays inside this section.
+export interface GapPlace {
+  readonly id: string;
+  readonly row: string;
+  readonly area: number | null;
+  readonly detail: number | null;
+}
+let carriedGapStack: readonly GapPlace[] = [];
+export function carryGaps(stack: readonly GapPlace[]): void { carriedGapStack = stack; }
+export function carriedGaps(): readonly GapPlace[] { return carriedGapStack; }
+export function forgetCarriedGaps(): void { carriedGapStack = []; }
 
 // The place written down: the recipe, how far the shell's scroll area and the split's right-hand side were scrolled.
 export interface Place {

@@ -15,6 +15,7 @@
 // characters is no id at all.
 //
 // NEW IN MISE 2, NO ORIGINAL: `foodCostForRecipePath`, `ordersForIngredientPath`, `recipeAddress`, `recipeIdParam` and
+// `ingredientCardAddress` (23 Nov 2026: a gap of the allergen card opens that ingredient in Suppliers; recipes/ may not import suppliers/) and
 // `FROM_RECIPE_LINK`.
 // Mise 2 is one page with real routes, so a recipe's Food cost is `/food-cost?recipe=<id>` (a query, not the
 // fragment the current app needs for its service worker's sake: Mise 2's router owns the address) and the way

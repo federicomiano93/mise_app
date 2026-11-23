@@ -97,8 +97,14 @@ export function AllergenCard({ recipe }: { recipe: CatalogueRecipe }) {
     if (target === null) return;
     target.focus({ preventScroll: true });
     recipeReturn.markDelivered();
-    // Again after the shell's own scroll reset, which runs after this card's effects (as the Food cost card does).
-    queueMicrotask(() => { recipeReturn.restoreScroll(recipe.id); });
+    // Again after the shell's own scroll reset, which runs after this card's effects (as the Food cost card does) — and then the row
+    // itself is brought into view if the restored scroll left it outside (the data arrives after the screen, so the place written down
+    // may be taller than what is drawn yet, and `preventScroll` leaves the browser no way to show it).
+    queueMicrotask(() => {
+      recipeReturn.restoreScroll(recipe.id);
+      const box = target.getBoundingClientRect();
+      if (typeof target.scrollIntoView === 'function' && (box.top < 0 || box.bottom > window.innerHeight)) target.scrollIntoView({ block: 'center' });
+    });
   }, [ingredientsLoaded]);
 
   // ⚠️ A GAP ROW THAT HAS THE FOCUS AND THEN GOES (the ingredient was declared, and the live list says so a moment after the card came
@@ -137,7 +143,7 @@ export function AllergenCard({ recipe }: { recipe: CatalogueRecipe }) {
   const ingredientGaps = gaps.filter(gap => gap.reason === 'not-declared');
   const rowGaps = gaps.filter(gap => gap.reason !== 'not-declared');
   const openGap = (gap: GapEntry) => {
-    recipeReturn.remember(recipe.id, 'gap', { row: gap.key, split: [] });
+    recipeReturn.rememberGap(recipe.id, gap.key, gap.target.kind === 'ingredient');
     if (gap.target.kind === 'ingredient') {
       const address = ingredientCardAddress(gap.target.refId);
       if (address !== null) void navigate(address, { state: TO_INGREDIENT_CARD });
