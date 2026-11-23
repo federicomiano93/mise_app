@@ -10,7 +10,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import {
-  readAction, pickLanguage, errorKeyFor, start, REQUIRED_KEYS, DONE_KEY,
+  readAction, pickLanguage, errorKeyFor, start, REQUIRED_KEYS, REQUIRED_VERIFY_KEYS, DONE_KEY, sameOriginContinueUrl,
 } from '../js/reset-password.js';
 import { boot, forwardUrl, wordsFor, languageOf, showNeedsUpdate } from '../js/reset-password-boot.js';
 import { t, setLanguage, _dictionaries } from '../js/i18n.js';
@@ -142,8 +142,8 @@ test('every sentence the page needs is in BOTH dictionaries, so an old one is de
 
 test('forwardUrl hands the same query string to Firebase\'s default handler, per project', () => {
   assert.equal(
-    forwardUrl('federicomiano93.github.io', '?mode=verifyEmail&oobCode=zz&apiKey=k'),
-    'https://bakery-app-ebf90.firebaseapp.com/__/auth/action?mode=verifyEmail&oobCode=zz&apiKey=k',
+    forwardUrl('federicomiano93.github.io', '?mode=recoverEmail&oobCode=zz&apiKey=k'),
+    'https://bakery-app-ebf90.firebaseapp.com/__/auth/action?mode=recoverEmail&oobCode=zz&apiKey=k',
   );
   assert.equal(
     forwardUrl('mise-app-preview--pr-1-x.web.app', '?mode=resetPassword&oobCode=zz'),
@@ -265,9 +265,9 @@ test('⚠ a dictionary too old for the page: start() rejects, and through the bo
   }
 });
 
-test('every mode but resetPassword is forwarded without loading the page at all', async () => {
+test('every mode but resetPassword and verifyEmail is forwarded without loading the page at all', async () => {
   let loaded = 0;
-  const search = '?mode=verifyEmail&oobCode=zz&apiKey=k';
+  const search = '?mode=recoverEmail&oobCode=zz&apiKey=k';
   const { replaced, done } = bootWith({ search, load: async () => { loaded += 1; return { start: async () => {} }; } });
   await done;
   assert.equal(loaded, 0);
@@ -275,7 +275,7 @@ test('every mode but resetPassword is forwarded without loading the page at all'
 });
 
 test('another mode on localhost shows the plain «unavailable» message instead of navigating', async () => {
-  const { doc, replaced, done } = bootWith({ hostname: 'localhost', search: '?mode=verifyEmail&oobCode=zz', language: 'it-IT', load: async () => ({ start: async () => {} }) });
+  const { doc, replaced, done } = bootWith({ hostname: 'localhost', search: '?mode=recoverEmail&oobCode=zz', language: 'it-IT', load: async () => ({ start: async () => {} }) });
   await done;
   assert.deepEqual(replaced, []);
   assert.ok(withText(doc, wordsFor('it').broken));
@@ -549,4 +549,206 @@ test('⚠ after «Try again» the button is gone and the cursor lands on the «C
   assert.equal(checking.focused, 1, 'focus must not drop to the body');
   release();
   await tick();
+});
+
+// ── mode=verifyEmail: a new account confirming its email (the join form's «Check your email») ─────────────────
+
+const VERIFY = '?mode=verifyEmail&oobCode=verify-code-9&apiKey=k&lang=en';
+const PAGE = 'https://federicomiano93.github.io/mise_app/reset-password.html';
+
+function fakeVerifyFirebase(over = {}) {
+  const calls = { check: [], apply: [] };
+  return {
+    calls,
+    isPreview: false,
+    checkVerifyCode: async code => { calls.check.push(code); return 'anna.b@club.test'; },
+    applyVerifyCode: async code => { calls.apply.push(code); },
+    ...over,
+  };
+}
+
+async function openVerify({ fb = fakeVerifyFirebase(), search = VERIFY, language = 'en-GB', href = PAGE + search } = {}) {
+  const doc = fakeDocument();
+  await start({ fb, doc, loc: { search, href }, nav: { language }, storage: fakeStorage() });
+  return { doc, fb };
+}
+
+const link = doc => find(doc, n => n.tagName === 'A');
+const heading = doc => find(doc, n => n.tagName === 'H1');
+
+test('verifyEmail: the code is checked (to read the address), then applied, and the card says so', async () => {
+  const { doc, fb } = await openVerify();
+  assert.deepEqual(fb.calls.check, ['verify-code-9']);
+  assert.deepEqual(fb.calls.apply, ['verify-code-9']);
+  assert.equal(heading(doc).textContent, 'Email confirmed');
+  assert.equal(heading(doc).focused, 1, 'the heading takes the cursor');
+  assert.equal(doc.title, 'Email confirmed · Mise');
+  const thanks = find(doc, n => n.getAttribute('role') === 'status');
+  assert.equal(thanks.textContent, 'Thank you: anna.b@club.test is confirmed.');
+  assert.equal(find(doc, n => n.tagName === 'B').textContent, 'anna.b@club.test');
+  assert.ok(withText(doc, 'Go back to the Mise window where you were signing up and tap “I’ve confirmed”.'));
+  assert.equal(link(doc).textContent, 'Open Mise');
+});
+
+test('verifyEmail: in Italian, by the phone', async () => {
+  const { doc } = await openVerify({ language: 'it-IT' });
+  assert.equal(heading(doc).textContent, 'Email confermata');
+  assert.equal(find(doc, n => n.getAttribute('role') === 'status').textContent, 'Grazie: anna.b@club.test è confermata.');
+  assert.ok(withText(doc, 'Torna alla finestra di Mise dove ti stavi registrando e tocca «Ho confermato».'));
+  assert.equal(link(doc).textContent, 'Apri Mise');
+  setLanguage('en');
+});
+
+test('the words of the confirmation page, word for word', () => {
+  const d = _dictionaries();
+  assert.equal(d.en['verifyEmail.badTitle'], 'This link no longer works');
+  assert.equal(d.en['verifyEmail.badBody'], 'It has expired or was already used. Go back to Mise and tap “Send it again”.');
+  assert.equal(d.it['verifyEmail.badTitle'], 'Il link non funziona più');
+  assert.equal(d.it['verifyEmail.badBody'], 'È scaduto o è già stato usato. Torna su Mise e tocca «Mandala di nuovo».');
+  // The buttons it names are the ones the app really has.
+  assert.ok(d.en['verifyEmail.doneBack'].includes('“I’ve confirmed”'));
+  assert.ok(d.it['verifyEmail.doneBack'].includes('«Ho confermato»'));
+  for (const key of REQUIRED_VERIFY_KEYS) {
+    assert.ok(d.en[key] !== undefined, `en lacks ${key}`);
+    assert.ok(d.it[key] !== undefined, `it lacks ${key}`);
+  }
+});
+
+for (const code of ['auth/expired-action-code', 'auth/invalid-action-code']) {
+  test(`verifyEmail: ${code} (expired, invalid or already used) is «This link no longer works», nothing applied`, async () => {
+    const applied = [];
+    const fb = fakeVerifyFirebase({
+      checkVerifyCode: async () => { const e = new Error('x'); e.code = code; throw e; },
+      applyVerifyCode: async c => { applied.push(c); },
+    });
+    const { doc } = await openVerify({ fb });
+    assert.equal(heading(doc).textContent, 'This link no longer works');
+    assert.equal(doc.title, 'This link no longer works · Mise');
+    assert.ok(withText(doc, 'It has expired or was already used. Go back to Mise and tap “Send it again”.'));
+    assert.deepEqual(applied, []);
+    assert.equal(find(doc, n => n.getAttribute('role') === 'status'), undefined);
+  });
+}
+
+test('verifyEmail: a code that expires between the check and the apply is the same «no longer works»', async () => {
+  const fb = fakeVerifyFirebase({ applyVerifyCode: async () => { const e = new Error('x'); e.code = 'auth/invalid-action-code'; throw e; } });
+  const { doc } = await openVerify({ fb });
+  assert.equal(heading(doc).textContent, 'This link no longer works');
+});
+
+test('verifyEmail: a link with no code is «no longer works», and Firebase is not asked', async () => {
+  const fb = fakeVerifyFirebase();
+  const { doc } = await openVerify({ fb, search: '?mode=verifyEmail' });
+  assert.equal(heading(doc).textContent, 'This link no longer works');
+  assert.deepEqual(fb.calls.check, []);
+});
+
+test('verifyEmail: a failure of the connection has its own sentence and a retry that asks again', async () => {
+  let attempt = 0;
+  const fb = fakeVerifyFirebase({
+    checkVerifyCode: async () => {
+      attempt += 1;
+      if (attempt === 1) { const e = new Error('x'); e.code = 'auth/network-request-failed'; throw e; }
+      return 'anna.b@club.test';
+    },
+  });
+  const { doc } = await openVerify({ fb });
+  assert.ok(withText(doc, t('reset.checkFailed')));
+  find(doc, n => n.tagName === 'BUTTON' && n.textContent === 'Try again').fire('click');
+  await tick();
+  assert.equal(heading(doc).textContent, 'Email confirmed');
+});
+
+test('verifyEmail: a disabled account says so, with no retry', async () => {
+  const fb = fakeVerifyFirebase({ checkVerifyCode: async () => { const e = new Error('x'); e.code = 'auth/user-disabled'; throw e; } });
+  const { doc } = await openVerify({ fb });
+  assert.ok(withText(doc, t('reset.inactive')));
+  assert.equal(find(doc, n => n.tagName === 'BUTTON'), undefined);
+});
+
+test('⚠ «Open Mise» follows the continueUrl only when it is on this page\'s own origin', async () => {
+  const own = 'https://federicomiano93.github.io/mise_app/';
+  const search = `${VERIFY}&continueUrl=${encodeURIComponent(own)}`;
+  const { doc } = await openVerify({ search });
+  assert.equal(link(doc).href, own);
+});
+
+test('⚠ a continueUrl on another origin (or not http) is ignored: «Open Mise» goes to the start page', async () => {
+  for (const bad of [
+    'https://evil.example/phish', 'https://federicomiano93.github.io.evil.example/', 'http://federicomiano93.github.io/mise_app/',
+    'javascript:alert(1)', 'data:text/html,x', '//evil.example/x', 'https://user@evil.example/',
+  ]) {
+    const { doc } = await openVerify({ search: `${VERIFY}&continueUrl=${encodeURIComponent(bad)}` });
+    const href = link(doc).href;
+    assert.equal(href, 'index.html', bad);
+  }
+  const { doc } = await openVerify();
+  assert.equal(link(doc).href, 'index.html', 'no continueUrl at all');
+});
+
+test('sameOriginContinueUrl is pure: same origin in, anything else out', () => {
+  assert.equal(sameOriginContinueUrl('?continueUrl=https%3A%2F%2Fa.test%2Fx%2F', 'https://a.test/page.html'), 'https://a.test/x/');
+  assert.equal(sameOriginContinueUrl('?continueUrl=%2Fx%2F', 'https://a.test/page.html'), 'https://a.test/x/');
+  assert.equal(sameOriginContinueUrl('?continueUrl=https%3A%2F%2Fb.test%2F', 'https://a.test/page.html'), '');
+  assert.equal(sameOriginContinueUrl('', 'https://a.test/page.html'), '');
+  assert.equal(sameOriginContinueUrl('?continueUrl=https%3A%2F%2Fa.test%2F', ''), '');
+});
+
+test('⚠ the code is never logged, stored or put in a URL by the confirmation', async () => {
+  const secret = 'verify-code-9';
+  const stored = fakeStorage();
+  const doc = fakeDocument();
+  const logged = [];
+  const spy = name => { const original = console[name]; console[name] = (...args) => logged.push(args); return () => { console[name] = original; }; };
+  const undo = ['log', 'info', 'warn', 'error', 'debug'].map(spy);
+  try {
+    await start({ fb: fakeVerifyFirebase(), doc, loc: { search: VERIFY, href: PAGE + VERIFY }, nav: { language: 'en' }, storage: stored });
+  } finally { undo.forEach(fn => fn()); }
+  assert.deepEqual(logged, []);
+  assert.deepEqual(stored.data, {}, 'nothing is kept, not even a «done» note');
+  assert.ok(!JSON.stringify(walk(doc.root).map(n => [n.textContent, n.href, n.attributes])).includes(secret));
+});
+
+test('⚠ verifyEmail through the boot: loaded and started, never forwarded to Firebase\'s page', async () => {
+  let started = 0;
+  const { replaced, done } = bootWith({ search: VERIFY, load: async () => ({ start: async () => { started += 1; } }) });
+  await done;
+  assert.equal(started, 1);
+  assert.deepEqual(replaced, []);
+});
+
+test('⚠ verifyEmail whose module fails to load says «update the app», never forwarded', async () => {
+  const { doc, replaced, done } = bootWith({ search: VERIFY, language: 'it-IT', load: async () => { throw new TypeError('old'); } });
+  await done;
+  assert.deepEqual(replaced, []);
+  assert.ok(withText(doc, NEEDS_UPDATE.it));
+});
+
+test('⚠ start refuses, by throwing, when firebase.js is too old to confirm an email', async () => {
+  const fb = { isPreview: false, checkResetCode: async () => '', setNewPassword: async () => {} };
+  await assert.rejects(start({ fb, doc: fakeDocument(), loc: { search: VERIFY, href: PAGE }, nav: { language: 'en' }, storage: fakeStorage() }));
+});
+
+test('⚠ a dictionary too old for the confirmation: start() rejects, and through the boot it ends in «update the app»', async () => {
+  for (const key of REQUIRED_VERIFY_KEYS) {
+    const page = await pageWithDictionaryMissing(key);
+    const args = { fb: fakeVerifyFirebase(), doc: fakeDocument(), loc: { search: VERIFY, href: PAGE + VERIFY }, nav: { language: 'en-GB' }, storage: fakeStorage() };
+    await assert.rejects(page.start(args), /dictionary/, key);
+  }
+});
+
+test('the confirmation sets nothing but its own title, and the page keeps «Mise» as its default title', () => {
+  assert.match(html, /<title>Mise<\/title>/);
+  assert.match(source, /doc\.title = title \+ ' · Mise'/);
+});
+
+test('firebase.js and its example both export the two confirmation helpers', () => {
+  for (const f of ['js/firebase.js', 'js/firebase.example.js']) {
+    const s = read(f);
+    assert.match(s, /export async function checkVerifyCode\(code\)/, f);
+    assert.match(s, /export function applyVerifyCode\(code\)/, f);
+    assert.match(s, /confirmPasswordReset,\s*\n\s*checkActionCode,\s*\n\s*applyActionCode,/, f);
+    assert.match(s, /checkActionCode\(auth, String\(code \|\| ''\)\)/, f);
+    assert.match(s, /applyActionCode\(auth, String\(code \|\| ''\)\)/, f);
+  }
 });

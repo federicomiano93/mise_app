@@ -13,8 +13,10 @@
 // (<authDomain>/__/auth/action) calls the API with the production key, which is restricted by
 // HTTP referrer to github.io + localhost; Google answers «Requests from referer <the auth
 // domain> are blocked». So the person is told, in the card,
-// the one thing that fixes it: update the app and tap the link again. Every email action that is
-// NOT a password reset (verifyEmail, …) is still forwarded — nothing of ours handles those.
+// the one thing that fixes it: update the app and tap the link again. The same goes for
+// `verifyEmail` (a new account confirming its email), which this page handles itself since the
+// join form asks for it. Every other email action (recoverEmail, …) is still forwarded — nothing
+// of ours handles those.
 //
 // ⚠️ ITS SENTENCES ARE A TABLE OF ITS OWN, not t(): the dictionary it may be running beside is
 // the old one. tests/reset-password.test.mjs pins them word for word to the dictionary. Nothing
@@ -35,6 +37,9 @@ const WORDS = {
     needsUpdate: 'Questo link richiede la versione più recente di Mise. Apri l’app Mise, tocca “Aggiorna ora” se compare, poi tocca di nuovo il link nell’email.',
   },
 };
+
+// The email actions this page does itself, the safe way: a password reset and an email confirmation.
+const HANDLED_MODES = ['resetPassword', 'verifyEmail'];
 
 // The same four names js/firebase.js sends to the emulator. There is no hosted handler there.
 const LOCAL = ['localhost', '127.0.0.1', '::1', '[::1]'];
@@ -105,7 +110,7 @@ export async function boot({ doc, loc, nav, load = () => import('./reset-passwor
   draw(doc, [checking]);
 
   const mode = new URLSearchParams(String(loc.search || '')).get('mode') || '';
-  if (mode && mode !== 'resetPassword') {
+  if (mode && !HANDLED_MODES.includes(mode)) {
     const url = forwardUrl(loc.hostname, loc.search);
     if (url) { loc.replace(url); return; }
     drawAlert(doc, words.broken);
