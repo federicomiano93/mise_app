@@ -158,6 +158,10 @@ jobs:
         run: npm ci --ignore-scripts
         working-directory: functions
       - run: firebase emulators:exec --only auth,firestore --project demo-theitalianclub "npm run test:retention"
+      # Every function deploys with a ceiling on its copies (functions/global-options.js): the
+      # real index.js loaded, each function's options read. Needs the packages installed above.
+      - name: Every function has a ceiling on its copies
+        run: node tests/rules/functions-options-check.mjs
 
   # ── Mise 2: the rewrite (app/ + shared/) ─────────────────────────────────────
   #

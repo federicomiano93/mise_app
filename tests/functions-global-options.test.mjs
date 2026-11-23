@@ -6,16 +6,18 @@
 // Moved one line down, every function defined above it would deploy with Google's
 // default of 100 copies and nothing anywhere would say so.
 //
-// ⚠️ Read as text, not imported: firebase-functions is installed in CI only for the
-// deploy job, so a test that imported it would fail there and pass here.
+// ⚠️ Read as text, not imported: the `test` job, which runs this file, installs no
+// functions/node_modules. The RESULT — every function really capped — is checked by
+// tests/rules/functions-options-check.mjs in the `rules` job, which does install them.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 
 const read = (n) => readFileSync(new URL(n, new URL('../', import.meta.url)), 'utf8');
-// Comments describe the trap in the same words the code uses: read the CODE only.
-const codeOf = (name) => read(name).replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+// Comments describe the trap in the same words the code uses: read the CODE only. Line
+// comments only — stripping /* … */ too would eat real code after a '/*' inside a string.
+const codeOf = (name) => read(name).replace(/^\s*\/\/.*$/gm, '');
 
 test('global-options.js is the first import of functions/index.js', () => {
   const first = codeOf('functions/index.js').match(/^\s*(import|export)\b[^;]*;/m);
