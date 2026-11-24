@@ -29,9 +29,13 @@
 // SDK is loaded, to the local emulator only, and a project id that is not a `demo-` one stops
 // the run.
 //
-// NOT COVERED, on purpose: createWorkspace, listWorkspaces, reissueOwnerLink, deleteWorkspace
-// (they need an app-admin account and, for the first, the Auth admin API), the photo and
-// ingredient-panel switches (same gate as setStaffCard), and the push functions in index.js.
+// Every callable in onboarding.js is run here, the app-admin ones included: onboarding.js
+// imports only firebase-admin/firestore, and an app admin is just a document, admins/{uid}.
+//
+// NOT COVERED: the push functions in index.js (they need Cloud Tasks and FCM, which the
+// emulators here do not offer); the code's own expiry and its five-wrong-tries lock (pure
+// judgements, pinned by tests/join-code.test.mjs); the exact wording of the messages; and
+// the Auth emulator, which is started but unused: no callable here talks to Auth.
 //
 // Deliberately NOT named *.test.mjs: `node --test` would pick it up in the `test` job, which has
 // no emulator (the same reason as firestore-rules-check.mjs).
@@ -60,7 +64,11 @@ initializeApp({ projectId: PROJECT });
 const db = getFirestore();
 
 const onboarding = await import('../../functions/onboarding.js');
-const { createJoinCode, redeemJoinCode, setMemberRole, setMemberName, setLocationLanguage, setStaffCard, setHomeCardOrder } = onboarding;
+const {
+  createJoinCode, redeemJoinCode, setMemberRole, setMemberName, setLocationLanguage, setStaffCard, setHomeCardOrder,
+  setRecipePhoto, setPackPhoto, setIngredientPanels,
+  createWorkspace, listWorkspaces, reissueOwnerLink, deleteWorkspace,
+} = onboarding;
 const { HIDEABLE_IDS, OPT_IN_IDS } = await import('../../functions/home-cards.js');
 const { LINK_LENGTH } = await import('../../functions/join-code.js');
 
@@ -358,6 +366,221 @@ await seed();
   const afterOrder = await read(`locations/${A}`);
   check('…it is saved whole, the venue\'s name survives', ordered && JSON.stringify(afterOrder.homeCardOrder) === JSON.stringify(order) && afterOrder.name === 'Venue A', JSON.stringify(afterOrder));
   check('…and venue-b was never touched', (await read(`locations/${B}`)).homeCardOrder === undefined && (await read(`locations/${B}`)).staffHiddenCards === undefined);
+}
+
+// ── 7. Removing a member also forgets their phones and their client grant ────
+console.log('\nRemoval side effects');
+await seed();
+{
+  await db.doc(`locations/${A}/fcm-tokens/tokStaff1`).set({ bakery: A, uid: 'staffA', updatedAt: 1 });
+  await db.doc(`locations/${A}/fcm-tokens/tokStaff2`).set({ bakery: A, uid: 'staffA', updatedAt: 2 });
+  await db.doc(`locations/${A}/fcm-tokens/tokManager`).set({ bakery: A, uid: 'managerA', updatedAt: 3 });
+  // The same person's phone registered in ANOTHER venue is not this venue's to forget.
+  await db.doc(`locations/${B}/fcm-tokens/tokStaffElsewhere`).set({ bakery: B, uid: 'staffA', updatedAt: 4 });
+  await db.doc(`locations/${A}/client-accounts/staffA`).set({ clientId: 'c1' });
+  await db.doc(`locations/${A}/client-accounts/managerA`).set({ clientId: 'c2' });
+
+  const gone = await succeeded('the owner removes an employee who has phones and a client grant',
+    call(setMemberRole, 'ownerA', { locationId: A, uid: 'staffA', role: null }));
+  check('…the answer says removed', gone && gone.removed === true);
+  check('…both of their phones are forgotten',
+    (await read(`locations/${A}/fcm-tokens/tokStaff1`)) === null && (await read(`locations/${A}/fcm-tokens/tokStaff2`)) === null);
+  check('…somebody else\'s phone is untouched', (await read(`locations/${A}/fcm-tokens/tokManager`)) !== null);
+  check('…and so is their phone in another venue', (await read(`locations/${B}/fcm-tokens/tokStaffElsewhere`)) !== null);
+  check('…their client grant is gone', (await read(`locations/${A}/client-accounts/staffA`)) === null);
+  check('…somebody else\'s client grant is untouched', (await read(`locations/${A}/client-accounts/managerA`)) !== null);
+}
+
+// ── 8. redeemJoinCode's limits ───────────────────────────────────────────────
+console.log('\nRedeem limits');
+await seed();
+{
+  const code = (await call(createJoinCode, 'ownerA', { locationId: A, role: 'staff' })).code;
+  // Five tries an hour per account, wrong ones included. '000000' is a code nobody minted.
+  for (let i = 1; i <= 5; i += 1) {
+    await refused(`try ${i} of 5 with a wrong code is permission-denied`, call(redeemJoinCode, 'limitOne', { kind: 'digits', code: '000000' }), 'permission-denied');
+  }
+  await refused('the sixth try, with the RIGHT code, is resource-exhausted',
+    call(redeemJoinCode, 'limitOne', { kind: 'digits', code }), 'resource-exhausted');
+  check('…nothing was joined and the code is unspent',
+    (await read('users/limitOne')) === null && (await read(`join-codes/${codeDocId(code)}`)).usedAt === null);
+  check('…the account\'s five tries are on record', (await read('rate-limits/limitOne')).attempts.length === 5);
+  await refused('a link is counted against the same account too',
+    call(redeemJoinCode, 'limitOne', { kind: 'link', code: 'x'.repeat(32) }), 'resource-exhausted');
+
+  // A different account is not affected.
+  const other = await succeeded('another account with the right code is let in', call(redeemJoinCode, 'limitTwo', { kind: 'digits', code }));
+  check('…and joined', other && (await read('users/limitTwo')).locations[A] === true);
+
+  // A wipe resets the limit.
+  await seed();
+  const again = (await call(createJoinCode, 'ownerA', { locationId: A, role: 'staff' })).code;
+  const reset = await succeeded('after a wipe the same account can try again', call(redeemJoinCode, 'limitOne', { kind: 'digits', code: again }));
+  check('…and joins', reset && (await read('users/limitOne')).locations[A] === true);
+
+  // The app-wide pause: 20 wrong six-digit guesses from any accounts.
+  await seed();
+  const guarded = (await call(createJoinCode, 'ownerA', { locationId: A, role: 'staff' })).code;
+  const linkCode = (await call(createJoinCode, 'ownerA', { locationId: A, role: 'manager', kind: 'link' })).code;
+  for (const who of ['guessOne', 'guessTwo', 'guessThree', 'guessFour']) {
+    for (let i = 0; i < 5; i += 1) await call(redeemJoinCode, who, { kind: 'digits', code: '000000' }).catch(() => {});
+  }
+  check('twenty wrong guesses from four accounts are on the app-wide counter', (await read('rate-limits-global/digits')).attempts.length === 20);
+  await refused('a fifth account with the RIGHT six digits is refused: digits-paused',
+    call(redeemJoinCode, 'pausedUser', { kind: 'digits', code: guarded }), 'resource-exhausted', 'digits-paused');
+  check('…nothing was joined, the code is unspent, the account was not even charged',
+    (await read('users/pausedUser')) === null && (await read(`join-codes/${codeDocId(guarded)}`)).usedAt === null && (await read('rate-limits/pausedUser')) === null);
+  const viaLink = await succeeded('…while an invitation link still works', call(redeemJoinCode, 'pausedUser', { kind: 'link', code: linkCode }));
+  check('…and joins as a manager', viaLink && (await read('users/pausedUser')).locations[A] === 'manager');
+  await seed();
+  const afterWipe = (await call(createJoinCode, 'ownerA', { locationId: A, role: 'staff' })).code;
+  const unpaused = await succeeded('after a wipe six digits work again', call(redeemJoinCode, 'pausedUser', { kind: 'digits', code: afterWipe }));
+  check('…and join', unpaused && (await read('users/pausedUser')).locations[A] === true);
+}
+
+// ── 9. The three photo / panel switches: each has its own access check ───────
+console.log('\nPhoto and panel switches');
+await seed();
+{
+  const switches = [
+    ['setRecipePhoto', setRecipePhoto, { enabled: true }, 'recipePhoto', true],
+    ['setPackPhoto', setPackPhoto, { enabled: true }, 'packPhoto', true],
+    ['setIngredientPanels', setIngredientPanels, { showAllergens: false }, 'showAllergens', false],
+  ];
+  for (const [name, fn, payload, field, value] of switches) {
+    await refused(`${name}: signed out is unauthenticated`, call(fn, null, { locationId: A, ...payload }), 'unauthenticated');
+    for (const who of NOT_ALLOWED_IN_A) {
+      await refused(`${name}: ${who} is permission-denied`, call(fn, who, { locationId: A, ...payload }), 'permission-denied');
+    }
+    check(`${name}: nothing was written by a refusal`, (await read(`locations/${A}`))[field] === undefined && (await read(`locations/${B}`))[field] === undefined);
+    await refused(`${name}: a bad locationId is invalid-argument`, call(fn, 'ownerA', { locationId: '../x', ...payload }), 'invalid-argument');
+    const byOwner = await succeeded(`${name}: the owner is let in`, call(fn, 'ownerA', { locationId: A, ...payload }));
+    const afterOwner = await read(`locations/${A}`);
+    check(`${name}: …saved, the venue's name and country survive`, byOwner && afterOwner[field] === value && afterOwner.name === 'Venue A' && afterOwner.country === 'GB', JSON.stringify(afterOwner));
+    const flipped = { ...payload, [Object.keys(payload)[0]]: !value };
+    const byManager = await succeeded(`${name}: a manager is let in`, call(fn, 'managerA', { locationId: A, ...flipped }));
+    check(`${name}: …saved`, byManager && (await read(`locations/${A}`))[field] === !value);
+    check(`${name}: …and venue-b was never touched`, (await read(`locations/${B}`))[field] === undefined);
+  }
+  await refused('setRecipePhoto: a non-boolean is invalid-argument', call(setRecipePhoto, 'ownerA', { locationId: A, enabled: 'yes' }), 'invalid-argument');
+  await refused('setIngredientPanels: an empty change is invalid-argument', call(setIngredientPanels, 'ownerA', { locationId: A }), 'invalid-argument');
+}
+
+// ── 10. The app-admin calls (admins/{uid} is just a document) ────────────────
+console.log('\nApp-admin calls');
+await seed();
+{
+  await db.doc('admins/adminX').set({ createdBy: 'console' });
+  await db.doc('admins/adminY').set({ createdBy: 'console' });
+  const locCount = async () => (await db.collection('locations').get()).size;
+  const adminCalls = {
+    createWorkspace: { name: 'Nobody Ltd', country: 'GB' },
+    listWorkspaces: {},
+    reissueOwnerLink: { locationId: A },
+    deleteWorkspace: { locationId: A },
+  };
+  const fns = { createWorkspace, listWorkspaces, reissueOwnerLink, deleteWorkspace };
+
+  for (const [name, data] of Object.entries(adminCalls)) {
+    await refused(`${name}: signed out is unauthenticated`, call(fns[name], null, data), 'unauthenticated');
+    for (const who of ['ownerA', 'managerA', 'ownerB', 'outsider']) {
+      await refused(`${name}: ${who} has no admin document, permission-denied`, call(fns[name], who, data), 'permission-denied');
+    }
+  }
+  check('refusals created, changed and deleted nothing',
+    (await locCount()) === 2 && (await joinCodeCount()) === 0 && (await read(`locations/${A}`)).name === 'Venue A');
+
+  // createWorkspace, for a customer.
+  await refused('createWorkspace: no name is invalid-argument', call(createWorkspace, 'adminX', { name: '  ', country: 'GB' }), 'invalid-argument');
+  await refused('createWorkspace: a name of 81 characters is invalid-argument', call(createWorkspace, 'adminX', { name: 'n'.repeat(81), country: 'GB' }), 'invalid-argument');
+  await refused('createWorkspace: no country is invalid-argument', call(createWorkspace, 'adminX', { name: 'Cafe' }), 'invalid-argument');
+  await refused('createWorkspace: an unknown country is invalid-argument', call(createWorkspace, 'adminX', { name: 'Cafe', country: 'FR' }), 'invalid-argument');
+  check('…and none of them wrote anything', (await locCount()) === 2 && (await joinCodeCount()) === 0);
+
+  const made = await succeeded('createWorkspace: the admin creates a customer business',
+    call(createWorkspace, 'adminX', { name: '  Cafe Rossi ', country: 'IT', sections: { orders: true, foodcost: 'yes' } }));
+  const W1 = made && made.locationId;
+  if (made) {
+    check('…a minted id, a 32-character link, not claimed', /^loc-[0-9a-f]{12}$/.test(W1) && made.token.length === LINK_LENGTH && made.mine === false, JSON.stringify(made));
+    const loc = await read(`locations/${W1}`);
+    check('…the venue holds the trimmed name, the country, every section explicit (only a real true is on)',
+      loc && loc.name === 'Cafe Rossi' && loc.country === 'IT' && loc.createdBy === 'adminX'
+      && JSON.stringify(loc.sections) === JSON.stringify({ orders: true, calculator: false, catalogue: false, pastries: false, foodcost: false }), JSON.stringify(loc));
+    const code = await read(`join-codes/${codeDocId(made.token)}`);
+    check('…its owner link is stored for that venue, unused', code && code.locationId === W1 && code.role === 'owner' && code.purpose === 'customer' && code.createdBy === 'adminX' && code.usedAt === null, JSON.stringify(code));
+    check('…and the admin did NOT become a member', (await read('users/adminX')) === null && (await read(`locations/${W1}/members/adminX`)) === null);
+  }
+
+  // createWorkspace, for the admin's own business.
+  const own = await succeeded('createWorkspace: forSelf makes a business of their own',
+    call(createWorkspace, 'adminX', { name: 'My Bakery', country: 'GB', forSelf: true, firstName: ' Fed ', lastName: 'M' }));
+  const W3 = own && own.locationId;
+  if (own) {
+    check('…mine, with no link returned or stored', own.mine === true && own.token === undefined && (await joinCodeCount()) === 1, JSON.stringify(own));
+    check('…the admin is its owner in users and on the roster', (await read('users/adminX')).locations[W3] === 'owner'
+      && (await read(`locations/${W3}/members/adminX`)).role === 'owner' && (await read(`locations/${W3}/members/adminX`)).firstName === 'Fed');
+  }
+
+  // A second customer with a link, for the delete tests.
+  const second = await call(createWorkspace, 'adminX', { name: 'Cafe Bianchi', country: 'GB' });
+  const W2 = second.locationId;
+
+  // listWorkspaces.
+  const listed = await succeeded('listWorkspaces: the admin lists their businesses', call(listWorkspaces, 'adminX', {}));
+  if (listed) {
+    const byId = Object.fromEntries(listed.workspaces.map(w => [w.id, w]));
+    check('…exactly the three they created, nothing of the seeded venues',
+      JSON.stringify(Object.keys(byId).sort()) === JSON.stringify([W1, W2, W3].sort()), JSON.stringify(listed));
+    check('…claimed only where the roster has somebody', byId[W1].claimed === false && byId[W2].claimed === false && byId[W3].claimed === true);
+    check('…with the name', byId[W1].name === 'Cafe Rossi');
+  }
+  const listedY = await succeeded('listWorkspaces: another admin sees none of them', call(listWorkspaces, 'adminY', {}));
+  check('…an empty list', listedY && listedY.workspaces.length === 0);
+
+  // reissueOwnerLink.
+  await refused('reissueOwnerLink: a bad id is invalid-argument', call(reissueOwnerLink, 'adminX', { locationId: '../x' }), 'invalid-argument');
+  await refused('reissueOwnerLink: a venue that is not theirs (no createdBy) is permission-denied', call(reissueOwnerLink, 'adminX', { locationId: A }), 'permission-denied');
+  await refused('reissueOwnerLink: a venue that does not exist is permission-denied', call(reissueOwnerLink, 'adminX', { locationId: 'nowhere' }), 'permission-denied');
+  await refused('reissueOwnerLink: another admin cannot reissue it', call(reissueOwnerLink, 'adminY', { locationId: W1 }), 'permission-denied');
+  await refused('reissueOwnerLink: a venue somebody has already opened (their own) is failed-precondition',
+    call(reissueOwnerLink, 'adminX', { locationId: W3 }), 'failed-precondition');
+  check('…nothing was minted by any refusal', (await joinCodeCount()) === 2);
+
+  const codesBefore = await joinCodeCount();
+  const fresh = await succeeded('reissueOwnerLink: an unopened customer venue gets a new link', call(reissueOwnerLink, 'adminX', { locationId: W1 }));
+  if (fresh && made) {
+    check('…a different 32-character token', fresh.token !== made.token && fresh.token.length === LINK_LENGTH);
+    const old = await read(`join-codes/${codeDocId(made.token)}`);
+    check('…the old link is spent and says who revoked it', typeof old.usedAt === 'number' && old.revokedBy === 'adminX', JSON.stringify(old));
+    const now = await read(`join-codes/${codeDocId(fresh.token)}`);
+    check('…the new one is stored unused for that venue', now && now.usedAt === null && now.locationId === W1 && now.role === 'owner' && now.purpose === 'customer');
+    check('…and exactly one code was added', (await joinCodeCount()) === codesBefore + 1);
+    check('…the other customer\'s link is untouched', (await read(`join-codes/${codeDocId(second.token)}`)).usedAt === null);
+  }
+
+  // Somebody opens W1 between the screen loading and the tap: the roster is read fresh.
+  await db.doc(`locations/${W1}/members/lateOwner`).set({ bakery: W1, role: 'owner' });
+  const codesWithMember = await joinCodeCount();
+  const newest = fresh && (await read(`join-codes/${codeDocId(fresh.token)}`));
+  await refused('reissueOwnerLink: once somebody is in, it is failed-precondition', call(reissueOwnerLink, 'adminX', { locationId: W1 }), 'failed-precondition');
+  check('…nothing was minted and the last link was not spent',
+    (await joinCodeCount()) === codesWithMember && newest && (await read(`join-codes/${codeDocId(fresh.token)}`)).usedAt === null);
+
+  // deleteWorkspace.
+  await refused('deleteWorkspace: a bad id is invalid-argument', call(deleteWorkspace, 'adminX', { locationId: 'a/b' }), 'invalid-argument');
+  await refused('deleteWorkspace: a venue that is not theirs is permission-denied', call(deleteWorkspace, 'adminX', { locationId: A }), 'permission-denied');
+  await refused('deleteWorkspace: a venue that does not exist is permission-denied', call(deleteWorkspace, 'adminX', { locationId: 'nowhere' }), 'permission-denied');
+  await refused('deleteWorkspace: another admin cannot delete it', call(deleteWorkspace, 'adminY', { locationId: W2 }), 'permission-denied');
+  await refused('deleteWorkspace: their own venue (it has a roster row) is failed-precondition', call(deleteWorkspace, 'adminX', { locationId: W3 }), 'failed-precondition');
+  await refused('deleteWorkspace: a venue somebody opened is failed-precondition', call(deleteWorkspace, 'adminX', { locationId: W1 }), 'failed-precondition');
+  check('…every venue and every code is still there',
+    (await locCount()) === 5 && (await read(`locations/${A}`)) !== null && (await read(`locations/${W1}`)) !== null
+    && (await read(`locations/${W2}`)) !== null && (await read(`locations/${W3}`)) !== null && (await joinCodeCount()) === codesWithMember);
+
+  const deleted = await succeeded('deleteWorkspace: an unopened venue is deleted', call(deleteWorkspace, 'adminX', { locationId: W2 }));
+  check('…the answer counts its code', deleted && deleted.deleted === true && deleted.codes === 1, JSON.stringify(deleted));
+  check('…the venue and its code are gone', (await read(`locations/${W2}`)) === null && (await read(`join-codes/${codeDocId(second.token)}`)) === null);
+  check('…and nothing else was', (await locCount()) === 4 && (await read(`locations/${W1}`)) !== null && (await joinCodeCount()) === codesWithMember - 1);
 }
 
 await wipe();

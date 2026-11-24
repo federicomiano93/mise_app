@@ -5,7 +5,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 
 import { redactTokenPath } from '../functions/log-redact.js';
 
@@ -36,25 +36,31 @@ test('bad input never throws and never echoes anything back', () => {
   }
 });
 
-test('no logger call in functions/index.js logs a path or a token as a key', () => {
-  const source = readFileSync(new URL('../functions/index.js', import.meta.url), 'utf8');
+test('no logger call in any functions/*.js logs a path or a token as a key', () => {
+  const dir = new URL('../functions/', import.meta.url);
+  const files = readdirSync(dir).filter(name => name.endsWith('.js'));
+  assert.ok(files.includes('index.js') && files.includes('onboarding.js'), 'the scan must see the known files');
   const calls = [];
   const start = /logger\.(?:info|warn|error|debug|log|write)\(/g;
-  let m;
-  while ((m = start.exec(source))) {
-    // Walk to the matching close parenthesis (strings in these calls hold no parentheses
-    // that would unbalance the count, and a miscount would only widen what is checked).
-    let depth = 1;
-    let i = start.lastIndex;
-    while (i < source.length && depth > 0) {
-      if (source[i] === '(') depth += 1;
-      else if (source[i] === ')') depth -= 1;
-      i += 1;
+  for (const file of files) {
+    const source = readFileSync(new URL(file, dir), 'utf8');
+    start.lastIndex = 0;
+    let m;
+    while ((m = start.exec(source))) {
+      // Walk to the matching close parenthesis (strings in these calls hold no parentheses
+      // that would unbalance the count, and a miscount would only widen what is checked).
+      let depth = 1;
+      let i = start.lastIndex;
+      while (i < source.length && depth > 0) {
+        if (source[i] === '(') depth += 1;
+        else if (source[i] === ')') depth -= 1;
+        i += 1;
+      }
+      calls.push(`${file}: ${source.slice(m.index, i)}`);
     }
-    calls.push(source.slice(m.index, i));
   }
   assert.ok(calls.length > 10, `found only ${calls.length} logger calls: the scan is broken`);
-  assert.ok(calls.some(c => c.includes('Dropping a dead registration')), 'the call under test must be among those scanned');
+  assert.ok(calls.some(c => c.startsWith('index.js') && c.includes('Dropping a dead registration')), 'the call under test must be among those scanned');
   for (const call of calls) {
     assert.ok(!/[{,]\s*(?:path|token)\s*[,}:]/.test(call), `a logger call logs a path or token: ${call}`);
   }
