@@ -25,6 +25,12 @@
 //                         so an upgrade that changes or adds one turns red.
 //   frame-src 'self', base-uri 'self', form-action 'self' — as the current app.
 //
+// ⚠️ THE FRAME-BUSTER (security plan B1-2, 24 Nov 2026): the bootstrap's FIRST lines hide the page and try to take over the
+// top window when the page is loaded inside another site's frame. GitHub Pages cannot send X-Frame-Options, and
+// frame-ancestors is ignored in a <meta> policy, so this script is the only guard against clickjacking. It runs before any
+// stylesheet or module, needs no 'unsafe-inline' (it IS the bootstrap), and leaves the page hidden when the browser refuses
+// the navigation. order.html and reset-password.html do the same; install-guide.html loads js/frame-buster.js.
+//
 // ⚠️ THE RECEIPT PRINTER (bookings step 3, 18 Nov 2026): the booking slips go straight from the device to the Epson on the
 // shop's network (https://<its address>/cgi-bin/fpmate.cgi). connect-src names that ONE address, read by the bootstrap from
 // this device's own setting (src/bookings/printerHost.ts) — and only when it matches the strict pattern of a private network
