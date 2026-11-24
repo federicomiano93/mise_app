@@ -33,6 +33,12 @@
 // A row deleted by a sign-out that then fails is harmless: the phone registers again from Orders → Settings.
 // LEAVING A VENUE (a switch) calls it too, in the venue being left (his decision, 24 Nov 2026, session.ts leaveVenue): the switch
 // wipes the keys, so the row would otherwise be orphaned there.
+// ⚠️⚠️ A REFUSED ROW MEANS «THIS PHONE CHANGED HANDS»: DROP THE TOKEN AND TRY ONCE WITH A NEW ONE (audit A2-1, step 2). The rules
+// update a row only under its stored owner, so a row left behind under the person before (an offline sign-out, the old app, an
+// expired session) refuses the next person's registration. register() then drops the token (Firebase deleteToken), takes a new
+// one — a new document, which the rules let anybody in the venue create — and writes again. Only on `permission-denied`, only
+// once per tap, and only while the same session holds: a time-out or an offline answer is not a refusal and keeps the token.
+// The person before loses nothing they should keep: the old token is dead, the server deletes its row on its next send.
 
 import { INSTALLED_DISPLAY_QUERY } from '../session/displayMode';
 import { sameSession } from '@mise/shared/device-model';
@@ -73,6 +79,8 @@ export interface PhonePushDeps {
   readonly now: () => number;
   // The token from Cloud Messaging (the backend's `pushToken`).
   readonly getToken: () => Promise<string>;
+  // Drops the token, so the next getToken() makes a new one (the backend's `dropPushToken`; a no-op on a local address).
+  readonly dropToken: () => Promise<unknown>;
   // setDoc(locations/{lid}/fcm-tokens/{token}, row, { merge: true }).
   readonly writeRow: (lid: string, token: string, row: TokenRow) => Promise<unknown>;
   readonly deleteRow: (lid: string, token: string) => Promise<unknown>;
@@ -203,14 +211,24 @@ export function createPhonePush(deps: PhonePushDeps): PhonePush {
       if (!deps.online()) return 'failed';
 
       const limit = deps.writeTimeoutMs ?? WRITE_TIMEOUT_MS;
-      const token = await withTimeout(deps.getToken(), limit);
+      let token = await withTimeout(deps.getToken(), limit);
       if (!usableToken(token)) return 'failed';
 
       // ⚠️ MERGED, see the header. The tap answers 'failed' if the server does not confirm in time; a write already handed
       // over may still arrive later, which is harmless (the same row, the same person).
-      await withTimeout(deps.writeRow(lid, token, {
-        bakery: lid, uid, updatedAt: deps.now(), muteOrderRequests: read(MUTE_KEY) === '1',
-      }), limit);
+      const row: TokenRow = { bakery: lid, uid, updatedAt: deps.now(), muteOrderRequests: read(MUTE_KEY) === '1' };
+      try {
+        await withTimeout(deps.writeRow(lid, token, row), limit);
+      } catch (err) {
+        // ⚠️⚠️ A2-1, see the header: the row is somebody else's. Anything else (a time-out, the network) is not a refusal.
+        if (errorCode(err) !== 'permission-denied') throw err;
+        if (!sameSession(session, deps.session())) return 'failed';
+        const refused = token;
+        await withTimeout(Promise.resolve(deps.dropToken()), limit);
+        token = await withTimeout(deps.getToken(), limit);
+        if (!usableToken(token) || token === refused) return 'failed';
+        await withTimeout(deps.writeRow(lid, token, row), limit);
+      }
 
       // ⚠️ THE PERSON OR THE VENUE MAY HAVE CHANGED DURING THE WAIT (a sign-out, a venue switch, somebody else on a shared tablet):
       // the registration is remembered only for the session it was written for.

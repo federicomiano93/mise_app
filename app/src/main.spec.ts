@@ -59,6 +59,8 @@ describe('main.tsx', () => {
   // get it through the provider (a missing provider throws, push/PhonePushContext.tsx).
   test('registers phones for push through the one backend, and gives the screens that registration', () => {
     expect(main).toMatch(/getToken: backend\.pushToken,/);
+    // A2-1: without it a phone that changed hands with a row left behind could never register again.
+    expect(main).toMatch(/dropToken: backend\.dropPushToken,/);
     expect(main).toContain('...rowWriter(backend.firestore),');
     expect(main).toMatch(/vapidKey: vapidKeyForHost\(location\.hostname\)/);
     expect(main).toMatch(/<PhonePushProvider phonePush=\{phonePush\} timerPush=\{timerPush\}>/);
