@@ -35,6 +35,7 @@ import {
 import { isAway, receivesOrderLists, personName } from './away-model.js';
 import { isHiddenForStaff, mayBeTold } from './home-cards.js';
 import { membershipIn } from './onboarding.js';
+import { redactTokenPath } from './log-redact.js';
 import { deleteOldBookings as deleteOldBookingsIn, TIME_ZONE as BOOKINGS_TIME_ZONE } from './booking-cleanup-model.js';
 
 initializeApp();
@@ -72,7 +73,8 @@ async function sendTo(token, { title, body }, { tag, url, path }) {
     // ERROR shapes it reports have been re-read, not only the calls made into it.
     const code = (err && err.code) || '';
     if (code.includes('registration-token-not-registered') || code.includes('invalid-argument')) {
-      logger.info('Dropping a dead registration', { path });
+      // The path ends in the device token; the log gets the venue and a hash tag only.
+      logger.info('Dropping a dead registration', redactTokenPath(path));
       if (path) await getFirestore().doc(path).delete().catch(() => {});
       return false;
     }
