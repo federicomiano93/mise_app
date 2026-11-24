@@ -85,6 +85,7 @@ function setup(world: World, { local = {}, session = {}, now = 1_000_000, busy =
     warn: () => {},
     // Written down with what the session said at that moment, so a spec sees that the app was told to leave first.
     letScreensClose: vi.fn(async () => { calls.push(`screens closed (leaving: ${String(store.getSnapshot().leaving)})`); }),
+    forgetThisPhone: vi.fn(async () => { calls.push('forget this phone'); }),
   };
   const store: SessionStore = createSession(backend, env);
   const states: string[] = [];
@@ -223,7 +224,37 @@ describe('somebody else\'s offline copy', () => {
     await settle();
     s.calls.length = 0;
     await s.store.signOut();
-    expect(s.calls).toEqual(['screens closed (leaving: true)', 'signOut', 'wipe', 'reload']);
+    expect(s.calls).toEqual(['screens closed (leaving: true)', 'forget this phone', 'signOut', 'wipe', 'reload']);
+  });
+
+  // ⚠️ Security audit A2-1: the phone's push row is deleted while the account still exists, and a failure there never traps anybody.
+  test('a sign-out forgets this phone for push BEFORE the account goes', async () => {
+    const s = setup(world(docs));
+    s.auth(ALICE);
+    await settle();
+    vi.mocked(s.backend.signOut).mockImplementationOnce(async () => {
+      expect(s.env.forgetThisPhone).toHaveBeenCalledOnce();
+    });
+    await s.store.signOut();
+    expect(s.env.forgetThisPhone).toHaveBeenCalledOnce();
+  });
+
+  test('a forget that rejects still signs out', async () => {
+    const s = setup(world(docs));
+    s.auth(ALICE);
+    await settle();
+    vi.mocked(s.env.forgetThisPhone).mockRejectedValueOnce(new Error('boom'));
+    await s.store.signOut();
+    expect(s.backend.signOut).toHaveBeenCalledOnce();
+    expect(s.env.reload).toHaveBeenCalledOnce();
+  });
+
+  test('a sign-out that keeps the invitation forgets this phone too', async () => {
+    const s = setup(world(docs));
+    s.auth(ALICE);
+    await settle();
+    await s.store.signOut({ keepInvitation: true });
+    expect(s.env.forgetThisPhone).toHaveBeenCalledOnce();
   });
 
   test('a sign-out that fails leaves the app on screen as it was', async () => {

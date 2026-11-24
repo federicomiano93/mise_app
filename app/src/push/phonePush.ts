@@ -26,6 +26,11 @@
 // for a dead token): verify() asks the browser, locally, and takes the registration back when it is gone.
 // ⚠️ A FAILURE LOGS THE ERROR CODE ALONE: a message can name the document path, and that path IS the token.
 // ⚠️ NEVER THROWS: the button must always come back.
+// ⚠️ SIGN-OUT DELETES THIS PHONE'S ROW (security audit A2-1): wiping the local keys is not enough, the server row stays under the
+// old person's uid and the server keeps sending that person's alerts (order requests, client orders, guided-mix timers) to a phone
+// that has since changed hands. forgetThisPhone() runs BEFORE the account goes (the delete needs the signed-in account and live
+// Firestore), only for a row this account owns, only online, bounded by FORGET_TIMEOUT_MS, and never throws or blocks longer.
+// A row deleted by a sign-out that then fails is harmless: the phone registers again from Orders → Settings.
 
 import { INSTALLED_DISPLAY_QUERY } from '../session/displayMode';
 import { sameSession } from '@mise/shared/device-model';
@@ -89,9 +94,13 @@ export interface PhonePush {
   permissionOnly(): 'default' | 'granted' | 'denied' | null;
   // «On» but the subscription is gone? 'cleared' = the registration was forgotten (the button comes back); 'ok'; 'unknown'.
   verify(): Promise<'ok' | 'cleared' | 'unknown'>;
+  // Sign-out: delete this phone's row in the open venue, best effort. Never throws, never waits past FORGET_TIMEOUT_MS.
+  forgetThisPhone(): Promise<void>;
 }
 
 export const WRITE_TIMEOUT_MS = 15_000;
+// A sign-out must not feel stuck: a delete that does not answer in this time is left behind.
+export const FORGET_TIMEOUT_MS = 3_000;
 
 // A token that could name a document: not empty, no path separator, no longer than the rules allow (as pushTokenRefresh.ts).
 function usableToken(token: unknown): token is string {
@@ -227,7 +236,25 @@ export function createPhonePush(deps: PhonePushDeps): PhonePush {
     }
   }
 
-  return { support, register, onForMe, permissionOnly, verify };
+  async function forgetThisPhone(): Promise<void> {
+    try {
+      const session = deps.session();
+      const lid = session?.locationId;
+      const uid = session?.user?.uid;
+      if (!lid || !uid) return;
+      const token = read(PUSH_TOKEN_KEY);
+      // Only the row this account registered: a stored token under somebody else's uid is not ours to delete.
+      if (!usableToken(token) || read(PUSH_TOKEN_OWNER_KEY) !== uid) return;
+      // Offline a delete never settles and would sit in Firestore's queue, to be warned about as unsent work.
+      if (!deps.online()) return;
+      await withTimeout(Promise.resolve(deps.deleteRow(lid, token)), FORGET_TIMEOUT_MS);
+    } catch (err) {
+      // The code alone: a message can name the document path, and that path IS the token.
+      console.warn('Phone push sign-out cleanup failed:', errorCode(err));
+    }
+  }
+
+  return { support, register, onForMe, permissionOnly, verify, forgetThisPhone };
 }
 
 // The browser's own subscription, locally and with no network. null when the worker is not there.

@@ -28,6 +28,7 @@ export function fakePhonePush(initial: Partial<Pick<FakePhonePush, 'reason' | 'o
     verifyAnswer: 'ok',
     ...initial,
     support: () => fake.reason,
+    forgetThisPhone: vi.fn<PhonePush['forgetThisPhone']>(async () => {}),
     onForMe: uid => fake.reason === 'granted' && fake.owner !== '' && fake.owner === uid,
     permissionOnly: () => fake.only,
     verify: vi.fn<PhonePush['verify']>(async () => {

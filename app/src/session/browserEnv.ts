@@ -18,7 +18,7 @@ function storage(get: () => Storage): KeyValueStorage & { keys(): string[] } {
 
 const SCREENS_CLOSE_MS = 50;
 
-export function createBrowserEnv(): SessionEnv {
+export function createBrowserEnv(forgetThisPhone: () => Promise<void>): SessionEnv {
   const local = storage(() => window.localStorage);
   return {
     local,
@@ -32,6 +32,7 @@ export function createBrowserEnv(): SessionEnv {
     // React redraws a change of an external store at once (a synchronous render, its effects' cleanups flushed with the
     // commit); one short timer is ample, and it is spent only on a change of venue that reloads the page anyway.
     letScreensClose: () => new Promise(resolve => { window.setTimeout(resolve, SCREENS_CLOSE_MS); }),
+    forgetThisPhone,
     warn: (message, detail) => { console.warn(message, detail ?? ''); },
   };
 }

@@ -483,6 +483,15 @@ export function createSession(backend: SessionBackend, env: SessionEnv): Session
       // terminates Firestore, which errors every live listener, and nothing may rely on React having unmounted by then.
       setSession({ leaving: true });
       await env.letScreensClose();
+      // ⚠️ THIS PHONE'S PUSH ROW GOES BEFORE THE ACCOUNT (security audit A2-1): on a shared phone that changes hands the server
+      // would otherwise keep sending the previous person's alerts to it. The delete needs the signed-in account and live Firestore,
+      // so it cannot come after `backend.signOut()`. Best effort: a failure never stops the sign-out; if the sign-out then fails
+      // the deleted row is harmless, the phone registers again from Orders → Settings. Injected, so the session imports no push code.
+      try {
+        await env.forgetThisPhone();
+      } catch (err) {
+        env.warn('Could not forget this phone for push', err);
+      }
       try {
         await backend.signOut();
       } catch (err) {
