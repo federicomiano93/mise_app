@@ -62,6 +62,11 @@ export function bootstrapScript(): string {
   const [head, tail] = POLICY.split(' https://www.gov.uk');
   return [
     '(function () {',
+    // Frame-buster (clickjacking): GitHub Pages sends no X-Frame-Options and a <meta> frame-ancestors is ignored.
+    '  if (window.top !== window.self) {',
+    "    document.documentElement.style.visibility = 'hidden';",
+    '    try { window.top.location = window.self.location; } catch (e) {}',
+    '  }',
     "  var local = ['localhost', '127.0.0.1', '::1', '[::1]'].indexOf(location.hostname) !== -1;",
     `  var emu = local ? ' ${EMULATORS}' : '';`,
     "  var printer = '';",

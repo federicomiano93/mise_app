@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v777';
+const CACHE_NAME = 'theitalianclub-v778';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -15,7 +15,7 @@ const CACHE_NAME = 'theitalianclub-v777';
 // itself failed.
 // So between activate() and that first load, a phone that is OFFLINE cannot boot:
 // the code asks for the new version and nothing has it. In practice the window is very
-// small — activate() only happens after a successful 72-file precache, i.e.
+// small — activate() only happens after a successful 73-file precache, i.e.
 // online, and tapping the update banner reloads the page immediately — but it is
 // not zero, and it is the reason to bump the SDK deliberately rather than often.
 // Leaving the name unchanged would close the window and cost ~1 MB of dead
@@ -57,6 +57,7 @@ const ASSETS = [
   './orders.html',
   './suppliers.html',
   './install-guide.html',
+  './js/frame-buster.js',
   './reset-password.html',
   // The page scripts. Each page loads ONE bundle (js/pages/<page>.js, built by
   // scripts/build-bundles.mjs) holding every module it imports, the lazy ones too, so the
@@ -156,8 +157,9 @@ const ASSET_HASHES = {
   "./clients.html": '2b9ced34e0331c4e',
   "./orders.html": 'f813059be1fb4c15',
   "./suppliers.html": '0f24580d8d5a1e05',
-  "./install-guide.html": '322c79acf63896ef',
-  "./reset-password.html": '298724d76511df05',
+  "./install-guide.html": 'd91cc0f2ad6ee497',
+  "./js/frame-buster.js": '3a3ddd85bf56a39c',
+  "./reset-password.html": '586afe6261aa10f9',
   "./dist/i18n.js": 'f0ebe202cb983e3e',
   "./dist/index.js": '1316caefe3d6a702',
   "./dist/calculator.js": '494ecdc9849ce260',
@@ -251,7 +253,7 @@ const ASSET_HASHES = {
 // code against rules that deployed instantly, which is the very thing the gate exists
 // to prevent. Two things stand between that and a release: the test that every ASSETS
 // entry EXISTS (a mistyped path being the likeliest permanent cause), and this
-// project's post-deploy sweep, which already asks the live site for all 72 files.
+// project's post-deploy sweep, which already asks the live site for all 73 files.
 // ⚠️ NEITHER covers a device-specific failure — nobody has yet confirmed an update
 // landing on a real iPhone under this code.
 //

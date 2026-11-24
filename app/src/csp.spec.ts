@@ -9,10 +9,14 @@ import { describe, expect, test } from 'vitest';
 import { readdirSync, statSync } from 'node:fs';
 import { bootstrapScript, EMULATORS, FUNCTIONS_HOST, POLICY, REACT_ARIA_STYLES, withPolicy } from '../csp-plugin';
 
+const topLevel: Record<string, unknown> = {};
+topLevel.top = topLevel;
+topLevel.self = topLevel;
+
 function policyOn(hostname: string, stored: Record<string, string> | null = null): string {
   const written: string[] = [];
   const localStorage = stored === null ? undefined : { getItem: (key: string) => stored[key] ?? null };
-  vm.runInNewContext(bootstrapScript(), { location: { hostname }, localStorage, document: { write: (s: string) => written.push(s) } });
+  vm.runInNewContext(bootstrapScript(), { window: topLevel, location: { hostname }, localStorage, document: { write: (s: string) => written.push(s), documentElement: { style: {} } } });
   expect(written).toHaveLength(1);
   const meta = written[0]!.match(/^<meta http-equiv="Content-Security-Policy" content="([^"]+)">$/);
   expect(meta, written[0]).not.toBeNull();
@@ -103,8 +107,31 @@ describe('the CSP of Mise 2\'s page', () => {
     vm.runInNewContext(bootstrapScript(), {
       location: { hostname: site },
       localStorage: { getItem: () => { throw new Error('blocked'); } },
-      document: { write: (text: string) => written.push(text) },
+      window: topLevel,
+      document: { write: (text: string) => written.push(text), documentElement: { style: {} } },
     });
     expect(written[0]).toContain(POLICY.split('; ')[0]);
+  });
+  test('a framed page hides itself and tries to take over the window; a top-level page is left alone', () => {
+    const run = (win: Record<string, unknown>) => {
+      const root = { style: {} as Record<string, string> };
+      vm.runInNewContext(bootstrapScript(), {
+        window: win, location: { hostname: 'federicomiano93.github.io' }, document: { write: () => undefined, documentElement: root },
+      });
+      return root.style;
+    };
+    const free: Record<string, unknown> = {};
+    free.top = free; free.self = free; free.location = 'https://example.test/';
+    expect(run(free).visibility).toBeUndefined();
+    const parent: Record<string, unknown> = { location: 'https://evil.test/' };
+    const framed: Record<string, unknown> = { top: parent, location: 'https://federicomiano93.github.io/mise_app/' };
+    framed.self = framed;
+    expect(run(framed).visibility).toBe('hidden');
+    expect(parent.location).toBe('https://federicomiano93.github.io/mise_app/');
+    // A top window that refuses the navigation (sandboxed frame) leaves the page hidden, never an error.
+    const stubborn = { get location() { return ''; }, set location(_v: string) { throw new Error('blocked'); } };
+    const sandboxed: Record<string, unknown> = { top: stubborn, location: 'x' };
+    sandboxed.self = sandboxed;
+    expect(run(sandboxed).visibility).toBe('hidden');
   });
 });
