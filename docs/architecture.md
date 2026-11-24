@@ -69,7 +69,8 @@ both, and the switch keeps the address) and it has consequences that every chang
   current app's caches alone.
 - **No App Check, no reCAPTCHA** (his decision, PR #212) — in either app.
 - **The same kind of Content-Security-Policy** (`app/csp-plugin.ts`): a classic script right after `<meta charset>`
-  writes the `<meta>` policy, byte-identical on every host but localhost, where the emulators (9099, 8080, 5001) are
+  first hides the page if another site frames it (frame-buster, security plan B1-2, as on `order.html`,
+  `reset-password.html` and `install-guide.html`), then writes the `<meta>` policy, byte-identical on every host but localhost, where the emulators (9099, 8080, 5001) are
   added — as the current app's pages do — with ONE exception since bookings step 3: a device that saved a receipt printer
   (`bookings-printer-host`) adds `https://<that address>` to `connect-src`, only when it matches the strict pattern of a private
   network address (`app/src/bookings/printerHost.ts`, the same pattern the screen checks). `script-src 'self'` (the SDK is bundled, no gstatic), `connect-src` Firestore,

@@ -18,6 +18,9 @@
 // kind of reason (confirm-dialog.js, dom.js) and already has the sentinel that
 // stops them drifting: tests/copie-allineate.test.mjs.
 
+// ⚠️ FIRST, before every other import: it sets the ceiling every function is
+// defined with (why the order matters: the file's own header).
+import './global-options.js';
 import { onDocumentCreated } from 'firebase-functions/v2/firestore';
 import { onTaskDispatched } from 'firebase-functions/v2/tasks';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
@@ -35,6 +38,7 @@ import {
 import { isAway, receivesOrderLists, personName } from './away-model.js';
 import { isHiddenForStaff, mayBeTold } from './home-cards.js';
 import { membershipIn } from './onboarding.js';
+import { redactTokenPath } from './log-redact.js';
 import { deleteOldBookings as deleteOldBookingsIn, TIME_ZONE as BOOKINGS_TIME_ZONE } from './booking-cleanup-model.js';
 
 initializeApp();
@@ -72,7 +76,8 @@ async function sendTo(token, { title, body }, { tag, url, path }) {
     // ERROR shapes it reports have been re-read, not only the calls made into it.
     const code = (err && err.code) || '';
     if (code.includes('registration-token-not-registered') || code.includes('invalid-argument')) {
-      logger.info('Dropping a dead registration', { path });
+      // The path ends in the device token; the log gets the venue and a hash tag only.
+      logger.info('Dropping a dead registration', redactTokenPath(path));
       if (path) await getFirestore().doc(path).delete().catch(() => {});
       return false;
     }
