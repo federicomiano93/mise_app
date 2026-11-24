@@ -37,6 +37,7 @@ function setup(over: Partial<PhonePushDeps> = {}, stored: Record<string, string>
   const writeRow = vi.fn<PhonePushDeps['writeRow']>(async () => undefined);
   const deleteRow = vi.fn<PhonePushDeps['deleteRow']>(async () => undefined);
   const getToken = vi.fn(async () => 'tok-1');
+  const dropToken = vi.fn(async () => undefined);
   const deps: PhonePushDeps = {
     env: env({ permission: 'granted' }),
     vapidKey: 'KEY',
@@ -45,11 +46,12 @@ function setup(over: Partial<PhonePushDeps> = {}, stored: Record<string, string>
     online: () => true,
     now: () => 1234,
     getToken,
+    dropToken,
     writeRow,
     deleteRow,
     ...over,
   };
-  return { push: createPhonePush(deps), storage, writeRow, deleteRow, getToken, deps };
+  return { push: createPhonePush(deps), storage, writeRow, deleteRow, getToken, dropToken, deps };
 }
 
 afterEach(() => { vi.restoreAllMocks(); });
@@ -176,13 +178,13 @@ describe('register', () => {
   test('⚠️ a failure answers failed, never throws, and logs the error CODE only — never the token', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const writeRow = vi.fn(async () => {
-      throw Object.assign(new Error('Missing permissions at locations/bakery/fcm-tokens/tok-1'), { code: 'permission-denied' });
+      throw Object.assign(new Error('Unavailable at locations/bakery/fcm-tokens/tok-1'), { code: 'unavailable' });
     });
     const run = setup({ writeRow });
     await expect(run.push.register()).resolves.toBe('failed');
     expect(warn).toHaveBeenCalledTimes(1);
     const logged = JSON.stringify(warn.mock.calls);
-    expect(logged).toContain('permission-denied');
+    expect(logged).toContain('unavailable');
     expect(logged).not.toContain('tok-1');
     expect(run.storage.data.size).toBe(0);
   });
@@ -222,6 +224,79 @@ describe('register', () => {
     storage.setItem = () => { throw new Error('quota'); };
     const run = setup({ storage });
     expect(await run.push.register()).toBe('failed');
+  });
+});
+
+// ⚠️⚠️ AUDIT A2-1, step 2: the rules refuse to re-register a row stored under somebody else's uid (firestore.rules, fcm-tokens).
+// A phone that changed hands with such a row left behind drops its token and registers a new one, once.
+describe('register: a phone that changed hands (A2-1)', () => {
+  const refusal = () => Object.assign(new Error('Missing permissions'), { code: 'permission-denied' });
+
+  test('⚠️ a refused row: the token is dropped, a NEW token is registered, and that one is remembered', async () => {
+    const writeRow = vi.fn<PhonePushDeps['writeRow']>()
+      .mockRejectedValueOnce(refusal())
+      .mockResolvedValueOnce(undefined);
+    const getToken = vi.fn<() => Promise<string>>().mockResolvedValueOnce('tok-old').mockResolvedValueOnce('tok-new');
+    const run = setup({ writeRow, getToken });
+    expect(await run.push.register()).toBe('on');
+    expect(run.dropToken).toHaveBeenCalledTimes(1);
+    // dropped AFTER the refusal and BEFORE the second token was asked for
+    expect(run.dropToken.mock.invocationCallOrder[0]).toBeGreaterThan(writeRow.mock.invocationCallOrder[0] ?? 0);
+    expect(run.dropToken.mock.invocationCallOrder[0]).toBeLessThan(getToken.mock.invocationCallOrder[1] ?? 0);
+    expect(writeRow.mock.calls.map(call => call[1])).toEqual(['tok-old', 'tok-new']);
+    expect(writeRow.mock.calls[1]?.[2]).toMatchObject({ bakery: 'bakery', uid: 'u1' });
+    expect(run.storage.data.get('push-token')).toBe('tok-new');
+    expect(run.storage.data.get('push-token-uid')).toBe('u1');
+  });
+
+  test('only ONCE per tap: a second refusal answers failed and remembers nothing', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const writeRow = vi.fn<PhonePushDeps['writeRow']>(async () => { throw refusal(); });
+    const getToken = vi.fn<() => Promise<string>>().mockResolvedValueOnce('tok-old').mockResolvedValueOnce('tok-new');
+    const run = setup({ writeRow, getToken });
+    expect(await run.push.register()).toBe('failed');
+    expect(writeRow).toHaveBeenCalledTimes(2);
+    expect(run.dropToken).toHaveBeenCalledTimes(1);
+    expect(run.storage.data.size).toBe(0);
+  });
+
+  test('the same token back after the drop: failed, not written again', async () => {
+    const writeRow = vi.fn<PhonePushDeps['writeRow']>(async () => { throw refusal(); });
+    const run = setup({ writeRow, getToken: vi.fn(async () => 'tok-same') });
+    expect(await run.push.register()).toBe('failed');
+    expect(writeRow).toHaveBeenCalledTimes(1);
+    expect(run.storage.data.size).toBe(0);
+  });
+
+  test('⚠️ a time-out or a network error is NOT a refusal: the token is kept', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    for (const code of ['unavailable', 'timeout', 'deadline-exceeded']) {
+      const run = setup({ writeRow: vi.fn(async () => { throw Object.assign(new Error('x'), { code }); }) });
+      expect(await run.push.register()).toBe('failed');
+      expect(run.dropToken).not.toHaveBeenCalled();
+      expect(run.getToken).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  test('⚠️ the person or the venue changed during the refused write: nothing is dropped', async () => {
+    let current: { status: string; locationId: string; user: { uid: string } } = { ...READY, user: { uid: 'u1' } };
+    const writeRow = vi.fn(async () => { current = { ...current, user: { uid: 'u2' } }; throw refusal(); });
+    const run = setup({ writeRow, session: () => current });
+    expect(await run.push.register()).toBe('failed');
+    expect(run.dropToken).not.toHaveBeenCalled();
+    expect(run.storage.data.size).toBe(0);
+  });
+
+  test('a drop that fails answers failed, never throws, and logs the code only', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const run = setup({
+      writeRow: vi.fn(async () => { throw refusal(); }),
+      dropToken: vi.fn(async () => { throw Object.assign(new Error('tok-1 gone'), { code: 'messaging/token-unsubscribe-failed' }); }),
+    });
+    await expect(run.push.register()).resolves.toBe('failed');
+    const logged = JSON.stringify(warn.mock.calls);
+    expect(logged).toContain('messaging/token-unsubscribe-failed');
+    expect(logged).not.toContain('tok-1');
   });
 });
 

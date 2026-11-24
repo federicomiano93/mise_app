@@ -3256,14 +3256,25 @@ service cloud.firestore {
       // a delete carries no request.resource.
       // ⚠️⚠️ READ ONLY YOUR OWN (security audit, 23 Sep 2026). The token is the
       // document id AND the key to a phone: whoever knows one can take over that
-      // phone's registration (the write below checks the NEW uid, which is what lets
-      // a shared phone change hands) or silence it with muteOrderRequests. Readable by
+      // phone's registration or silence it with muteOrderRequests (until Nov 2026 the
+      // write checked only the NEW uid — closed by A2-1, below). Readable by
       // every member, every token in the venue was one list away. The app never
       // reads these documents — the server does, with the Admin SDK — so nothing is
       // lost by closing them.
+      // ⚠️⚠️ AN UPDATE MUST ALSO FIND THE STORED uid THE WRITER'S OWN (security audit
+      // A2-1, Nov 2026). Checking only the NEW uid let a member who knew a colleague's
+      // token re-register that phone in their own name: their alerts, and any «timer»
+      // text they wrote (the server sends a timer only to a row under its uid), then
+      // reached the colleague's phone, and the colleague's own alerts stopped. A
+      // shared phone still changes hands, through DELETE + CREATE: a sign-out or a
+      // venue switch deletes the row (Mise 2 since v2.17.0), and where a row was left
+      // behind the app asks Cloud Messaging for a NEW token on this refusal
+      // (app/src/push/phonePush.ts) — a new token is a new document, i.e. a create.
+      // The old token dies with it, and the server deletes its row on the next send.
       match /fcm-tokens/{token} {
         allow read: if member(lid) && resource.data.uid == request.auth.uid;
         allow create, update: if member(lid)
+          && (resource == null || resource.data.get('uid', '') == request.auth.uid)
           && stampedFor(lid)
           && request.resource.data.keys().hasOnly(['bakery', 'uid', 'updatedAt', 'muteOrderRequests'])
           && request.resource.data.uid == request.auth.uid

@@ -68,6 +68,8 @@ const phonePush = createPhonePush({
   online: () => navigator.onLine !== false,
   now: () => Date.now(),
   getToken: backend.pushToken,
+  // A row refused as somebody else's (a phone that changed hands): drop the token and register a new one (audit A2-1).
+  dropToken: backend.dropPushToken,
   // ⚠️ NOT ON A LOCAL ADDRESS: its token is made up and has no browser subscription, so the check would take it back at once.
   hasSubscription: backend.isEmulator ? undefined : browserHasSubscription,
   ...rowWriter(backend.firestore),

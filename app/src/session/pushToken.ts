@@ -12,6 +12,8 @@
 
 export interface MessagingToken {
   getToken(options: { vapidKey: string; serviceWorkerRegistration: ServiceWorkerRegistration }): Promise<string>;
+  // Firebase's deleteToken(): unsubscribes this browser, so the next getToken() makes a NEW token.
+  deleteToken(): Promise<boolean>;
 }
 
 export interface PushTokenDeps {
@@ -40,5 +42,21 @@ export function createPushToken(deps: PushTokenDeps): () => Promise<string> {
     if (deps.isEmulator) return emulatorPushToken(deps.randomBytes);
     const [messaging, registration] = await Promise.all([deps.load(), deps.serviceWorkerReady()]);
     return messaging.getToken({ vapidKey: deps.vapidKey, serviceWorkerRegistration: registration });
+  };
+}
+
+// ⚠️ THROWING THE TOKEN AWAY (security audit A2-1). The rules refuse to re-register a row stored under somebody else's uid,
+// so a phone that changed hands while a row was left behind (an offline sign-out, the old app, a session that expired)
+// would be locked out of notifications for good. Instead the phone drops its token and asks for a new one: a new token is
+// a new document, which the next person may create, and the old one dies — the server deletes its row on the next send.
+// On a local address there is nothing to drop: every emulator token is made up afresh (see the header).
+// ⚠️⚠️ CALL IT ONLY AFTER pushToken() SUCCEEDED ON THE SAME PAGE (code review, 24 Nov 2026). deleteToken() is handed no
+// service-worker registration: it reuses the one getToken() stored on the same messaging object. Called first (say, at
+// sign-out), Firebase would register its own default worker at the SITE ROOT, which 404s on GitHub Pages, and throw.
+export function createDropPushToken(deps: Pick<PushTokenDeps, 'isEmulator' | 'load'>): () => Promise<void> {
+  return async () => {
+    if (deps.isEmulator) return;
+    const messaging = await deps.load();
+    await messaging.deleteToken();
   };
 }

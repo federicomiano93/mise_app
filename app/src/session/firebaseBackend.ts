@@ -36,7 +36,7 @@ import {
 import type { Firestore } from 'firebase/firestore';
 import { configForHost, LOCAL_HOSTS, vapidKeyForHost } from '@mise/shared/firebase-target';
 import type { DocData, SessionBackend, WipeResult } from './backend';
-import { createPushToken } from './pushToken';
+import { createDropPushToken, createPushToken, type MessagingToken } from './pushToken';
 
 // The Firestore SDK's functions, from the lazily loaded module, and the one client.
 export type FirestoreSdk = typeof import('firebase/firestore');
@@ -62,6 +62,9 @@ export interface FirebaseBackend extends SessionBackend {
   // emulator-only made-up token and the real getToken() is never called (pushToken.ts). Rejects when the browser or the
   // network refuses. Must be called from a tap that has already been granted the notification permission.
   pushToken(): Promise<string>;
+  // Drops this phone's token (Firebase deleteToken), so the next pushToken() is a new one: how a phone that changed hands
+  // re-registers when the rules refuse the row left under the person before (audit A2-1, pushToken.ts). A no-op locally.
+  dropPushToken(): Promise<void>;
   // Creates the account behind a client's ordering link and resolves with its uid, WITHOUT touching the
   // signed-in person's own session (see the function). Rejects when Auth refuses or cannot be reached.
   createLinkAccount(email: string, password: string): Promise<string>;
@@ -177,19 +180,25 @@ export function createFirebaseBackend(hostname: string): FirebaseBackend {
 
   // ⚠️ FIREBASE MESSAGING IS LOADED ONLY WHEN A PHONE IS BEING REGISTERED (the one dynamic import of it), and only on a real
   // address: see pushToken.ts for why a local page never reaches it.
+  const loadMessaging = (): Promise<MessagingToken> => import('firebase/messaging').then(sdk => {
+    const messaging = sdk.getMessaging(app);
+    return {
+      getToken: options => sdk.getToken(messaging, options),
+      deleteToken: () => sdk.deleteToken(messaging),
+    };
+  });
   const pushToken = createPushToken({
     isEmulator,
     vapidKey: vapidKeyForHost(hostname),
-    load: () => import('firebase/messaging').then(sdk => {
-      const messaging = sdk.getMessaging(app);
-      return { getToken: options => sdk.getToken(messaging, options) };
-    }),
+    load: loadMessaging,
     serviceWorkerReady: () => navigator.serviceWorker.ready,
   });
+  const dropPushToken = createDropPushToken({ isEmulator, load: loadMessaging });
 
   return {
     firestore,
     pushToken,
+    dropPushToken,
     firestoreIfReady: () => ready,
     createLinkAccount,
     callFunction,
