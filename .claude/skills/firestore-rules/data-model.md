@@ -393,6 +393,10 @@ Mise 2's `app/src/push/phonePush.ts` — both on a TAP in Orders → Settings, b
 phone under `push-token` / `push-token-uid`. `pushTokenRefresh.ts` then only re-stamps `updatedAt` (an update, never a create).
 Since v2.17 (audit A2-1) Mise 2's sign-out AND leaving a venue (a switch) DELETE this phone's row in the venue being left,
 online only, owner only (the rules' `delete` already requires the stored uid); the current app's sign-out still does not.
+⚠️ Since A2-1 step 2 (Nov 2026) an UPDATE also requires the STORED `uid` to be the writer's (a row with none is nobody's), so
+nobody can take over or mute a colleague's row; a phone changes hands by DELETE + CREATE. Where a row was left behind under
+somebody else, Mise 2's `register()` gets `permission-denied`, drops the token (`dropPushToken`, Firebase `deleteToken`), takes
+a new one and creates a new row, once per tap. The current app does not: it answers «unsupported» on that phone.
 
 ⚠️ **Who writes `push-timers/{id}`**: the current app's `js/push.js` and, since 20 Nov 2026, Mise 2's `app/src/push/timerPush.ts` (the guided mix's timer): a CREATE of exactly the 8 keys `bakery, uid, token, fireAt, title, body, active, createdAt` under a fresh id (an existing id cannot be re-created), and later an UPDATE of `active` alone (`false` = cancelled, never a delete), by the same uid. Mise 2 books only for a phone registered to the person signed in, and never offline.
 

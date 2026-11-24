@@ -3256,8 +3256,8 @@ service cloud.firestore {
       // a delete carries no request.resource.
       // ⚠️⚠️ READ ONLY YOUR OWN (security audit, 23 Sep 2026). The token is the
       // document id AND the key to a phone: whoever knows one can take over that
-      // phone's registration (the write below checks the NEW uid, which is what lets
-      // a shared phone change hands) or silence it with muteOrderRequests. Readable by
+      // phone's registration or silence it with muteOrderRequests (until Nov 2026 the
+      // write checked only the NEW uid — closed by A2-1, below). Readable by
       // every member, every token in the venue was one list away. The app never
       // reads these documents — the server does, with the Admin SDK — so nothing is
       // lost by closing them.

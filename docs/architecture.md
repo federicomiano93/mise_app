@@ -718,6 +718,9 @@ and where each comes from:
 - Sign-out first deletes this phone's push row in the open venue (`phonePush.forgetThisPhone`, audit A2-1): only the
   signer's own row (or one with no recorded owner), only online, at most 3 s, never blocking the sign-out. Leaving a venue
   (a switch, or opening a venue just joined) does the same in the venue being left (his decision, 24 Nov 2026).
+- A registration refused as somebody else's row (A2-1 step 2: the rules update a row only under its stored owner) drops the
+  token (`backend.dropPushToken`, Firebase `deleteToken`, only after a `pushToken()` on the same page) and registers a new one,
+  once per tap, only on `permission-denied` and only while the same session holds (`phonePush.register`).
 - It is NOT a security boundary (P2): `firestore.rules` judges every read and write.
 
 ## Rules for every new screen (step 3 onwards)
