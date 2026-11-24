@@ -85,5 +85,8 @@ export interface SessionEnv {
   // change of venue: the app is taken off the screen first, so every listener of every section unsubscribes BEFORE the
   // client is terminated (session.ts `leaving`).
   letScreensClose(): Promise<void>;
+  // Sign-out only, after the screens close and BEFORE the account goes: forget this phone's server push registration (security
+  // audit A2-1). Best effort and bounded; it must never throw (session.ts still guards it).
+  forgetThisPhone(): Promise<void>;
   warn(message: string, detail?: unknown): void;
 }

@@ -95,6 +95,7 @@ function setup() {
     warn: () => {},
     // The browser's own wait (browserEnv.ts): a short timer, in which React redraws.
     letScreensClose: () => new Promise(resolve => { setTimeout(resolve, 10); }),
+    forgetThisPhone: async () => {},
   };
   const store = createSession(backend, env);
   const flow = createJoinFlow(memoryStorage());

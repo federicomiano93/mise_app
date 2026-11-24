@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import type { KeyValueStorage } from '../session/backend';
-import { browserPushEnv, createPhonePush, rowWriter } from './phonePush';
+import { browserPushEnv, createPhonePush, FORGET_TIMEOUT_MS, rowWriter } from './phonePush';
 import type { PhonePushDeps, PushEnv } from './phonePush';
 
 // Registering this phone for server push: js/push.js's pushSupport / enablePush / rememberToken / pushOnForMe, with the browser
@@ -343,6 +343,89 @@ describe('onForMe', () => {
     expect(setup({}, { 'push-token': 'tok-1', 'push-token-uid': 'u1' }).push.onForMe('')).toBe(false);
     expect(setup({ env: env({ permission: 'denied' }) }, { 'push-token': 'tok-1', 'push-token-uid': 'u1' }).push.onForMe('u1')).toBe(false);
     expect(setup({ storage: null }, {}).push.onForMe('u1')).toBe(false);
+  });
+});
+
+// ⚠️ Security audit A2-1: sign-out deletes this phone's row, only when it is this account's, and never traps the sign-out.
+describe('forgetThisPhone', () => {
+  const OWNED = { 'push-token': 'tok-1', 'push-token-uid': 'u1' };
+
+  test('deletes exactly this phone\'s row when the owner matches', async () => {
+    const { push, deleteRow } = setup({}, OWNED);
+    await push.forgetThisPhone();
+    expect(deleteRow).toHaveBeenCalledOnce();
+    expect(deleteRow).toHaveBeenCalledWith('bakery', 'tok-1');
+  });
+
+  // Should the sign-out then fail, Settings must offer «Enable» again, not draw «on» for a row that is gone.
+  test('after the row is gone, this phone no longer says it is registered', async () => {
+    const { push, storage } = setup({}, OWNED);
+    expect(push.onForMe('u1')).toBe(true);
+    await push.forgetThisPhone();
+    expect(storage.getItem('push-token')).toBeNull();
+    expect(storage.getItem('push-token-uid')).toBeNull();
+    expect(push.onForMe('u1')).toBe(false);
+  });
+
+  test('a delete that fails leaves the registration as it was', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { push, storage } = setup({ deleteRow: vi.fn(async () => { throw new Error('x'); }) }, OWNED);
+    await push.forgetThisPhone();
+    expect(storage.getItem('push-token')).toBe('tok-1');
+  });
+
+  // A phone the current app registered before `push-token-uid` existed: the rules refuse anybody else's row, so trying is safe.
+  test('a stored token with no recorded owner is tried too', async () => {
+    const { push, deleteRow } = setup({}, { 'push-token': 'tok-1' });
+    await push.forgetThisPhone();
+    expect(deleteRow).toHaveBeenCalledWith('bakery', 'tok-1');
+  });
+
+  test.each([
+    ['another account owns the stored token', {}, { 'push-token': 'tok-1', 'push-token-uid': 'other' }],
+    ['the stored token is empty', {}, { 'push-token': '', 'push-token-uid': 'u1' }],
+    ['no token is stored', {}, {}],
+    ['only an owner is stored', {}, { 'push-token-uid': 'u1' }],
+    ['the phone is offline', { online: () => false }, OWNED],
+    ['no venue is open', { session: () => ({ status: 'ready', user: { uid: 'u1' } }) as never }, OWNED],
+    ['nobody is signed in', { session: () => ({ status: 'ready', locationId: 'bakery' }) as never }, OWNED],
+  ])('no delete when %s', async (_name, over, stored) => {
+    const { push, deleteRow } = setup(over as Partial<PhonePushDeps>, stored);
+    await push.forgetThisPhone();
+    expect(deleteRow).not.toHaveBeenCalled();
+  });
+
+  test('a delete that rejects never throws, and the log carries the code alone', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const err = Object.assign(new Error('locations/bakery/fcm-tokens/tok-1 refused'), { code: 'permission-denied' });
+    const { push } = setup({ deleteRow: vi.fn(async () => { throw err; }) }, OWNED);
+    await expect(push.forgetThisPhone()).resolves.toBeUndefined();
+    expect(warn).toHaveBeenCalledOnce();
+    expect(JSON.stringify(warn.mock.calls)).toContain('permission-denied');
+    expect(JSON.stringify(warn.mock.calls)).not.toContain('tok-1');
+  });
+
+  test('a delete that hangs is given up on after the time limit', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const { push } = setup({ deleteRow: () => new Promise(() => {}) }, OWNED);
+      let done = false;
+      const run = push.forgetThisPhone().then(() => { done = true; });
+      await vi.advanceTimersByTimeAsync(FORGET_TIMEOUT_MS - 1);
+      expect(done).toBe(false);
+      await vi.advanceTimersByTimeAsync(2);
+      await run;
+      expect(done).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('a deleteRow that throws at once (not a rejected promise) still does not throw', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { push } = setup({ deleteRow: () => { throw new Error('sync'); } }, OWNED);
+    await expect(push.forgetThisPhone()).resolves.toBeUndefined();
   });
 });
 

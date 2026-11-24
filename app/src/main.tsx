@@ -42,7 +42,8 @@ if (!container) {
 // ONE backend: the session reads through it, and the telemetry writes through the same Firestore
 // and Auth (a second one would be a second connection and a second offline cache).
 const backend = createFirebaseBackend(location.hostname);
-const store = createSession(backend, createBrowserEnv());
+// ⚠️ `phonePush` is made below (it reads this store); the sign-out calls it lazily, long after both exist (security audit A2-1).
+const store = createSession(backend, createBrowserEnv(() => phonePush.forgetThisPhone()));
 const sinks = createTelemetrySinks(backend, () => {
   const session = store.getSnapshot();
   return session.status === 'ready' ? session.locationId : null;
