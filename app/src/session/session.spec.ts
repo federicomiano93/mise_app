@@ -530,7 +530,32 @@ describe('leaving', () => {
     await s.store.switchLocation('restaurant');
     expect(s.localStore.getItem(ACTIVE_LOCATION_KEY)).toBe('restaurant');
     expect(s.localStore.getItem('orders-draft')).toBeNull();
-    expect(s.calls.slice(-3)).toEqual(['screens closed (leaving: true)', 'wipe', 'reload']);
+    expect(s.calls.slice(-4)).toEqual(['screens closed (leaving: true)', 'forget this phone', 'wipe', 'reload']);
+  });
+
+  // ⚠️ A2-1, his decision (24 Nov 2026): leaving a venue forgets this phone there, as a sign-out does — while the session still
+  // names the venue being left and before the wipe takes the phone's keys.
+  test('switching venue forgets this phone in the venue being LEFT, before the keys are wiped', async () => {
+    const s = setup(world(docs), { local: { [ACTIVE_LOCATION_KEY]: 'bakery', 'push-token': 'tok-1', 'push-token-uid': 'alice' } });
+    s.auth(ALICE);
+    await settle();
+    let seen: { venue?: string | null; token: string | null } | undefined;
+    vi.mocked(s.env.forgetThisPhone).mockImplementationOnce(async () => {
+      seen = { venue: s.store.getSnapshot().locationId, token: s.localStore.getItem('push-token') };
+    });
+    await s.store.switchLocation('restaurant');
+    expect(seen).toEqual({ venue: 'bakery', token: 'tok-1' });
+    expect(s.localStore.getItem('push-token')).toBeNull();
+  });
+
+  test('a forget that rejects still switches venue', async () => {
+    const s = setup(world(docs), { local: { [ACTIVE_LOCATION_KEY]: 'bakery' } });
+    s.auth(ALICE);
+    await settle();
+    vi.mocked(s.env.forgetThisPhone).mockRejectedValueOnce(new Error('boom'));
+    await s.store.switchLocation('restaurant');
+    expect(s.localStore.getItem(ACTIVE_LOCATION_KEY)).toBe('restaurant');
+    expect(s.env.reload).toHaveBeenCalledOnce();
   });
 
   // ⚠️ terminate() errors every listener still live, and the to-do list said so in the console (and the error reports) at
@@ -668,7 +693,7 @@ describe('joining with a code (staff slice 1)', () => {
     await s.store.openJoinedVenue('newplace', 'alice');
     expect(s.localStore.getItem(ACTIVE_LOCATION_KEY)).toBe('newplace');
     expect(s.localStore.getItem('orders-draft')).toBeNull();
-    expect(s.calls.slice(-3)).toEqual(['screens closed (leaving: true)', 'wipe', 'reload']);
+    expect(s.calls.slice(-4)).toEqual(['screens closed (leaving: true)', 'forget this phone', 'wipe', 'reload']);
   });
 
   // The call can take a minute: a sign-out and another sign-in meanwhile must not have the OTHER person's venue switched.

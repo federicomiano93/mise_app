@@ -442,6 +442,16 @@ export function createSession(backend: SessionBackend, env: SessionEnv): Session
   async function leaveVenue(locationId: string, { justJoined = false } = {}): Promise<void> {
     setSession({ leaving: true });
     await env.letScreensClose();
+    // ⚠️ A2-1, HIS DECISION (24 Nov 2026): LEAVING A VENUE FORGETS THIS PHONE THERE TOO, as a sign-out does. The wipe below
+    // takes this phone's push keys, so the phone could never find that row again: back in the venue Settings would offer
+    // «Enable» while the alerts kept coming, and a later sign-out from the other venue could not delete it. The price, his
+    // call: somebody with two venues stops getting the first one's alerts on this phone until they enable them there again.
+    // Before the wipe (it reads the keys) and while the session still names the venue being left; it never throws.
+    try {
+      await env.forgetThisPhone();
+    } catch (err) {
+      env.warn('Could not forget this phone in the venue being left', err);
+    }
     clearLocalData();
     write(env.local, ACTIVE_LOCATION_KEY, locationId);
     await backend.wipeOfflineCache();

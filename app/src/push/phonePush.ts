@@ -31,6 +31,8 @@
 // that has since changed hands. forgetThisPhone() runs BEFORE the account goes (the delete needs the signed-in account and live
 // Firestore), only for a row this account owns, only online, bounded by FORGET_TIMEOUT_MS, and never throws or blocks longer.
 // A row deleted by a sign-out that then fails is harmless: the phone registers again from Orders → Settings.
+// LEAVING A VENUE (a switch) calls it too, in the venue being left (his decision, 24 Nov 2026, session.ts leaveVenue): the switch
+// wipes the keys, so the row would otherwise be orphaned there.
 
 import { INSTALLED_DISPLAY_QUERY } from '../session/displayMode';
 import { sameSession } from '@mise/shared/device-model';
