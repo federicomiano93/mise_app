@@ -3084,6 +3084,36 @@ async function pushNotifications() {
   await expectDenied('deleting somebody else\'s registration', () =>
     deleteWrite(`${L}/fcm-tokens/${TOKEN_B}`));
 
+  // ⚠️⚠️ AUDIT A2-1: the update checks the STORED uid too. Before, ALICE knowing her
+  // colleague SAM's token could re-register his phone under her own uid (whole write
+  // AND merge), and then aim «timers» with her own words at it — the server sends a
+  // timer only to a row under the timer's uid, which this takeover had just made true.
+  const TOKEN_SAM = 'device-token-sam';
+  await seedDoc(`${L}/fcm-tokens/${TOKEN_SAM}`, { bakery: 'main', uid: SAM.uid, updatedAt: Date.now() });
+  await expectDenied("A2-1: taking over a colleague's phone registration (whole write)", () =>
+    wholeWrite(`${L}/fcm-tokens/${TOKEN_SAM}`, tokenDoc()));
+  await expectDenied("A2-1: taking over a colleague's phone registration (merge)", () =>
+    mergeWrite(`${L}/fcm-tokens/${TOKEN_SAM}`, tokenDoc()));
+  await expectDenied("A2-1: silencing a colleague's phone through its registration", () =>
+    mergeWrite(`${L}/fcm-tokens/${TOKEN_SAM}`, { muteOrderRequests: true }));
+  await seedDoc(`${L}/fcm-tokens/legacy-no-uid`, { bakery: 'main', updatedAt: Date.now() });
+  await expectDenied("A2-1: a row with no stored owner is nobody's to take over", () =>
+    wholeWrite(`${L}/fcm-tokens/legacy-no-uid`, tokenDoc()));
+  // Her own row still updates: registering again, the weekly refresh, the mute switch.
+  await seedDoc(`${L}/fcm-tokens/${TOKEN_A}`, tokenDoc({ updatedAt: 1 }));
+  await expectAllowed('A2-1: a phone re-registers its own row', () =>
+    wholeWrite(`${L}/fcm-tokens/${TOKEN_A}`, tokenDoc()));
+  await expectAllowed('A2-1: the weekly refresh stamps its own row', () =>
+    mergeWrite(`${L}/fcm-tokens/${TOKEN_A}`, { uid: ALICE.uid, updatedAt: Date.now() }));
+  await expectAllowed('A2-1: the mute switch merges into its own row', () =>
+    mergeWrite(`${L}/fcm-tokens/${TOKEN_A}`, { muteOrderRequests: true }));
+  // A shared phone changes hands through delete + create: once SAM's row is gone,
+  // ALICE may register that same token as a NEW row.
+  await expectAllowed('A2-1: a phone changes hands — its owner deletes his row…', () =>
+    deleteWrite(`${L}/fcm-tokens/${TOKEN_SAM}`, asAccount(SAM)));
+  await expectAllowed('A2-1: …and the next person registers it as a new row', () =>
+    wholeWrite(`${L}/fcm-tokens/${TOKEN_SAM}`, tokenDoc()));
+
   // ⚠️⚠️ READ ONLY YOUR OWN (security audit, 23 Sep 2026). A token is the key to a
   // phone: knowing one is enough to take its registration over or silence it.
   await seedDoc(`${L}/fcm-tokens/${TOKEN_A}`, tokenDoc());
