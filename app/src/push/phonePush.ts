@@ -243,11 +243,20 @@ export function createPhonePush(deps: PhonePushDeps): PhonePush {
       const uid = session?.user?.uid;
       if (!lid || !uid) return;
       const token = read(PUSH_TOKEN_KEY);
-      // Only the row this account registered: a stored token under somebody else's uid is not ours to delete.
-      if (!usableToken(token) || read(PUSH_TOKEN_OWNER_KEY) !== uid) return;
+      // Only the row this account registered: a stored token under somebody else's uid is not ours to delete. An EMPTY owner
+      // is tried too — a phone the current app registered before `push-token-uid` existed — because the rules delete only
+      // a row whose stored uid is the signer's own (firestore.rules, fcm-tokens), so somebody else's row is refused there.
+      const owner = read(PUSH_TOKEN_OWNER_KEY);
+      if (!usableToken(token) || (owner !== uid && owner !== '')) return;
       // Offline a delete never settles and would sit in Firestore's queue, to be warned about as unsent work.
       if (!deps.online()) return;
       await withTimeout(Promise.resolve(deps.deleteRow(lid, token)), FORGET_TIMEOUT_MS);
+      // The row is gone, so this phone must stop saying it is registered: should the sign-out itself then fail, the app
+      // comes back as it was, and Settings must offer «Enable» again rather than draw «on» for a row that no longer exists.
+      try {
+        deps.storage?.removeItem(PUSH_TOKEN_KEY);
+        deps.storage?.removeItem(PUSH_TOKEN_OWNER_KEY);
+      } catch { /* storage refused: the sign-out's own wipe clears it */ }
     } catch (err) {
       // The code alone: a message can name the document path, and that path IS the token.
       console.warn('Phone push sign-out cleanup failed:', errorCode(err));

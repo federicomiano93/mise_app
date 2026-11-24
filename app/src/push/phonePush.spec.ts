@@ -357,10 +357,35 @@ describe('forgetThisPhone', () => {
     expect(deleteRow).toHaveBeenCalledWith('bakery', 'tok-1');
   });
 
+  // Should the sign-out then fail, Settings must offer «Enable» again, not draw «on» for a row that is gone.
+  test('after the row is gone, this phone no longer says it is registered', async () => {
+    const { push, storage } = setup({}, OWNED);
+    expect(push.onForMe('u1')).toBe(true);
+    await push.forgetThisPhone();
+    expect(storage.getItem('push-token')).toBeNull();
+    expect(storage.getItem('push-token-uid')).toBeNull();
+    expect(push.onForMe('u1')).toBe(false);
+  });
+
+  test('a delete that fails leaves the registration as it was', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { push, storage } = setup({ deleteRow: vi.fn(async () => { throw new Error('x'); }) }, OWNED);
+    await push.forgetThisPhone();
+    expect(storage.getItem('push-token')).toBe('tok-1');
+  });
+
+  // A phone the current app registered before `push-token-uid` existed: the rules refuse anybody else's row, so trying is safe.
+  test('a stored token with no recorded owner is tried too', async () => {
+    const { push, deleteRow } = setup({}, { 'push-token': 'tok-1' });
+    await push.forgetThisPhone();
+    expect(deleteRow).toHaveBeenCalledWith('bakery', 'tok-1');
+  });
+
   test.each([
     ['another account owns the stored token', {}, { 'push-token': 'tok-1', 'push-token-uid': 'other' }],
     ['the stored token is empty', {}, { 'push-token': '', 'push-token-uid': 'u1' }],
     ['no token is stored', {}, {}],
+    ['only an owner is stored', {}, { 'push-token-uid': 'u1' }],
     ['the phone is offline', { online: () => false }, OWNED],
     ['no venue is open', { session: () => ({ status: 'ready', user: { uid: 'u1' } }) as never }, OWNED],
     ['nobody is signed in', { session: () => ({ status: 'ready', locationId: 'bakery' }) as never }, OWNED],

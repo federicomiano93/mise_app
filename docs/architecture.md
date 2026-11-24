@@ -715,6 +715,9 @@ and where each comes from:
   30 seconds, and never while somebody is editing (`busy.ts`).
 - Sign-out and a venue switch wipe both copies and reload; both ask first, and warn when something
   typed has not reached the server.
+- Sign-out first deletes this phone's push row in the open venue (`phonePush.forgetThisPhone`, audit A2-1): only the
+  signer's own row (or one with no recorded owner), only online, at most 3 s, never blocking the sign-out. A venue switch
+  does NOT delete it (open decision for step 2 of A2-1).
 - It is NOT a security boundary (P2): `firestore.rules` judges every read and write.
 
 ## Rules for every new screen (step 3 onwards)

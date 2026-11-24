@@ -391,6 +391,8 @@ the Auth accounts of people who left) is one more `KINDS` entry and one more swi
 Mise 2's `app/src/push/phonePush.ts` — both on a TAP in Orders → Settings, both a MERGE of exactly `{ bakery, uid, updatedAt }`
 (never a whole write: the same document carries `muteOrderRequests`, written by the mute switch), and both remember it on the
 phone under `push-token` / `push-token-uid`. `pushTokenRefresh.ts` then only re-stamps `updatedAt` (an update, never a create).
+Since v2.17 (audit A2-1) Mise 2's sign-out DELETES this phone's row in the open venue, online only, owner only (the rules'
+`delete` already requires the stored uid); the current app's sign-out still does not.
 
 ⚠️ **Who writes `push-timers/{id}`**: the current app's `js/push.js` and, since 20 Nov 2026, Mise 2's `app/src/push/timerPush.ts` (the guided mix's timer): a CREATE of exactly the 8 keys `bakery, uid, token, fireAt, title, body, active, createdAt` under a fresh id (an existing id cannot be re-created), and later an UPDATE of `active` alone (`false` = cancelled, never a delete), by the same uid. Mise 2 books only for a phone registered to the person signed in, and never offline.
 

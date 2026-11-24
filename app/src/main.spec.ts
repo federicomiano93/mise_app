@@ -64,6 +64,11 @@ describe('main.tsx', () => {
     expect(main).toMatch(/<PhonePushProvider phonePush=\{phonePush\} timerPush=\{timerPush\}>/);
   });
 
+  // ⚠️ A2-1: every spec of the sign-out uses a fake, so only this line proves the real session deletes the real row.
+  test('gives the session the real «forget this phone» for sign-out', () => {
+    expect(main).toMatch(/createBrowserEnv\(\(\) => phonePush\.forgetThisPhone\(\)\)/);
+  });
+
   // A second backend would be a second Firebase connection and a second offline cache.
   test('creates one backend and gives it to both the session and the telemetry writes', () => {
     expect(main.match(/createFirebaseBackend\(/g)).toHaveLength(1);
