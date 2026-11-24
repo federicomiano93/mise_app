@@ -163,6 +163,13 @@ jobs:
       - name: Every function has a ceiling on its copies
         run: node tests/rules/functions-options-check.mjs
 
+      # The onboarding callables (functions/onboarding.js) run for real against the emulator: who
+      # is let in, who is refused, what the database holds after a refusal. Every other test of
+      # that file only reads its source, so a guard turned into a no-op passed them all. Same
+      # packages as the step above, same `demo-` project id.
+      - name: Run the onboarding callables against the emulator
+        run: firebase emulators:exec --only auth,firestore --project demo-theitalianclub "npm run test:callables"
+
   # ── Mise 2: the rewrite (app/ + shared/) ─────────────────────────────────────
   #
   # ITS OWN JOB, so the two checks above stay exactly what they were: `test` installs
