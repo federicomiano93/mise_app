@@ -319,3 +319,20 @@ test('the bookings price list costs at most 4 reads: usesBookings() 2 and cardAc
   assert.equal((write.match(/\bcardAccess\(/g) || []).length, 1);
   assert.doesNotMatch(write, /\bcanManage\(|\bmember\(/);
 });
+
+test('the recipes create/update rule asks canManage exactly ONCE, so its worst case is canUse 2 + canManage 3 = 5 of 10 (allergen book)', () => {
+  // ⚠️ `archived` and `inBook` are both «for whoever runs the place», asked only when the flag
+  // MOVES. They share ONE combined clause on purpose: two separate `|| canManage(...)` clauses
+  // would cost 2 + 3 + 3 = 8 in the worst case and leave no room for the next flag.
+  const MATCH = 'match /recipes/{id}';
+  const at = CODE.indexOf(MATCH);
+  assert.ok(at > 0, 'firestore.rules has no match /recipes/{id} — this test is checking nothing');
+  const from = CODE.indexOf('allow create, update', at);
+  const to = CODE.indexOf('allow update', from + 1);
+  assert.ok(from > 0 && to > from, 'the recipes create/update rule was not found');
+  const rule = CODE.slice(from, to);
+  assert.equal((rule.match(/\bcanManage\(/g) || []).length, 1, 'canManage must be asked once, for both flags together');
+  assert.equal((rule.match(/\bcanUse\(/g) || []).length, 1);
+  assert.match(rule, /get\('inBook', false\)/, 'the inBook flag must be part of the combined clause');
+  assert.equal(accessesIn(rule).length, 0, 'the rule reads through the helpers, never by itself');
+});

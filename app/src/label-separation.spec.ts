@@ -37,6 +37,7 @@ const LABEL_FILES: readonly string[] = [
   './cakes/CakeLabelRow.tsx', // the cake editor's «Cake label» row: Contains, with the allergen names in the venue's country's words
   './recipes/HaccpLabelBody.tsx', // the HACCP label: its captions and values in the country's words, the allergens' names
   './recipes/ImageLabelBody.tsx', // the «with logo» image label: PRODOTTO IL, the allergen name in the text check, the typed ingredients
+  './allergenBook/bookEntry.ts', // the allergen book's one label file: each product's ingredient line, Contains / May contain, and the paper's own words in the country's language
   './recipes/LabelCard.tsx', // the label as words: the ingredients, Contains, May contain and the nutrition table
   './records/AllergenSections.tsx', // the ingredient card's allergen rows, their group headings and the nutrient names, where an allergen is DECLARED
 ];

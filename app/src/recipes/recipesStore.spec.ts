@@ -1359,6 +1359,80 @@ describe('the Recipe catalogue store', () => {
     });
   });
 
+  describe('the allergen book: inBook (Mise 2 only, 27 Nov 2026)', () => {
+    const TORTA: StoredDoc = { id: 'B1', name: 'Torta di prova', ingredients: [], inBook: true };
+    const BISCOTTO: StoredDoc = { id: 'B2', name: 'Biscotto test', ingredients: [] };
+
+    test('⚠️ the store keeps a literal true (the shared normaliser drops it), in the list and the phone’s copy; false and a word are no field', () => {
+      const { store, server, data } = makeStore();
+      store.start();
+      server([TORTA, { id: 'B3', name: 'Pane prova', ingredients: [], inBook: false }, { id: 'B4', name: 'Pane due', ingredients: [], inBook: 'yes' }]);
+      const held = store.getSnapshot().recipes as unknown as Array<Record<string, unknown>>;
+      expect(held[0]!.inBook).toBe(true);
+      expect('inBook' in held[1]!).toBe(false);
+      expect('inBook' in held[2]!).toBe(false);
+      expect(JSON.parse(data.get(RECIPES_KEY)!)[0].inBook).toBe(true);
+    });
+
+    test('adding writes { inBook: true } and removing { inBook: null }, ONLY for changed ids, each as its own call; the copy changes at once', async () => {
+      const { store, server, saveRecipeDoc } = makeStore();
+      store.start();
+      server([TORTA, BISCOTTO, { id: 'B3', name: 'Pane prova', ingredients: [] }]);
+      const done = store.saveBookChoices([
+        { id: 'B1', inBook: false }, { id: 'B2', inBook: true }, { id: 'B3', inBook: false }, { id: 'nope', inBook: true },
+      ]);
+      const held = store.getSnapshot().recipes as unknown as Array<Record<string, unknown>>;
+      expect('inBook' in held.find(r => r.id === 'B1')!).toBe(false);
+      expect(held.find(r => r.id === 'B2')!.inBook).toBe(true);
+      expect(await done).toBe(true);
+      expect(saveRecipeDoc.mock.calls).toEqual([['B1', { inBook: null }], ['B2', { inBook: true }]]);
+      expect(store.refusedBookChoices().size).toBe(0);
+    });
+
+    test('a refused write puts that recipe back, says book-not-saved, resolves false and remembers the choice; a later success clears it', async () => {
+      const { store, server, saveRecipeDoc, warn } = makeStore();
+      saveRecipeDoc.mockImplementation(id => (id === 'B2' ? Promise.reject(new Error('permission-denied')) : Promise.resolve()));
+      const said = vi.fn();
+      store.onMessage(said);
+      store.start();
+      server([TORTA, BISCOTTO]);
+      expect(await store.saveBookChoices([{ id: 'B1', inBook: false }, { id: 'B2', inBook: true }])).toBe(false);
+      const held = store.getSnapshot().recipes as unknown as Array<Record<string, unknown>>;
+      expect('inBook' in held.find(r => r.id === 'B2')!).toBe(false);
+      expect('inBook' in held.find(r => r.id === 'B1')!).toBe(false);
+      expect(said).toHaveBeenCalledWith({ kind: 'book-not-saved' });
+      expect(warn).toHaveBeenCalled();
+      expect([...store.refusedBookChoices()]).toEqual([['B2', true]]);
+      saveRecipeDoc.mockImplementation(() => Promise.resolve());
+      expect(await store.saveBookChoices([{ id: 'B2', inBook: true }])).toBe(true);
+      expect(store.refusedBookChoices().size).toBe(0);
+    });
+
+    test('⚠️ a refusal does not undo a change made after it', async () => {
+      const { store, server, saveRecipeDoc } = makeStore();
+      let refuse: (err: unknown) => void = () => undefined;
+      saveRecipeDoc.mockImplementationOnce(() => new Promise((_, reject) => { refuse = reject; }));
+      store.start();
+      server([BISCOTTO]);
+      const first = store.saveBookChoices([{ id: 'B2', inBook: true }]);
+      void store.saveBookChoices([{ id: 'B2', inBook: false }]);
+      refuse(new Error('offline too long'));
+      await first;
+      expect('inBook' in (store.getSnapshot().recipes[0] as unknown as Record<string, unknown>)).toBe(false);
+    });
+
+    test('⚠️ an editor save of an in-book recipe keeps the flag in the local copy and never sends it', () => {
+      const { store, server, saveRecipeDoc } = makeStore();
+      store.start();
+      server([TORTA]);
+      store.saveRecipe({ id: 'B1', name: 'Torta di prova 2', ingredients: [] });
+      expect('inBook' in saveRecipeDoc.mock.calls[0]![1]).toBe(false);
+      const held = store.getSnapshot().recipes.find(r => r.id === 'B1') as unknown as Record<string, unknown>;
+      expect(held.name).toBe('Torta di prova 2');
+      expect(held.inBook).toBe(true);
+    });
+  });
+
   describe('the suppliers (names for the link chooser)', () => {
     test('are watched, kept by id, and written to the current app\'s key as an array', () => {
       const { store, supServer, data, watchSuppliers } = makeStore();

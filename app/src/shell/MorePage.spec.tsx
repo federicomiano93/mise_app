@@ -10,11 +10,11 @@ const nameOf = (row: HTMLElement) => row.textContent;
 const EMPLOYEE = { canManage: false, isOwner: false, role: 'staff' as const, location: {} };
 
 describe('the «More» page', () => {
-  it('marks every row for the phone, and the two last rail sections as the ones the rail spills', () => {
+  it('marks every row for the phone, and the three last rail sections as the ones the rail spills', () => {
     renderApp('/more');
-    expect(rows().map(nameOf)).toEqual(['Bookings', 'Suppliers', 'Labels', 'Pastries', 'Stocktake', 'Food cost', 'Cakes', 'Settings']);
+    expect(rows().map(nameOf)).toEqual(['Bookings', 'Suppliers', 'Labels', 'Allergens', 'Pastries', 'Stocktake', 'Food cost', 'Cakes', 'Settings']);
     for (const row of rows()) expect(row).toHaveAttribute('data-phone');
-    expect(rows().filter(row => row.hasAttribute('data-spill')).map(nameOf)).toEqual(['Food cost', 'Cakes']);
+    expect(rows().filter(row => row.hasAttribute('data-spill')).map(nameOf)).toEqual(['Stocktake', 'Food cost', 'Cakes']);
     expect(screen.getByRole('list')).toHaveAttribute('data-spill');
   });
 
@@ -28,7 +28,7 @@ describe('the «More» page', () => {
     renderApp('/more', { session: EMPLOYEE });
     expect(screen.getByText('All sections are in the rail')).toBeInTheDocument();
     expect(screen.getByRole('list')).not.toHaveAttribute('data-spill');
-    expect(rows().map(nameOf)).toEqual(['Bookings', 'Suppliers', 'Labels', 'Pastries', 'Settings']);
+    expect(rows().map(nameOf)).toEqual(['Bookings', 'Suppliers', 'Labels', 'Allergens', 'Pastries', 'Settings']);
     for (const row of rows()) expect(row).not.toHaveAttribute('data-spill');
   });
 

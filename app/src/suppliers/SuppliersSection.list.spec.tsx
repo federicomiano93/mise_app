@@ -188,7 +188,8 @@ describe('the ingredients and packaging lists', () => {
     expect(router.state.location.pathname + router.state.location.search).toBe('/suppliers/ingredient/new?kind=resale');
     expect(await screen.findByRole('heading', { name: 'New resale item' }, LOAD)).toBeInTheDocument();
     expect(screen.getByRole('combobox', { name: 'Type' })).toHaveValue('resale');
-    expect(screen.queryByText(/allergen/i)).not.toBeInTheDocument();
+    // Inside the page only: the rail's «Allergens» item (the allergen book, 27 Nov 2026) is the shell's, not the card's.
+    expect(within(screen.getByRole('main')).queryByText(/allergen/i)).not.toBeInTheDocument();
   });
 
   it('draws an ingredient row as ONE button (its card opens from it), with no link inside', async () => {

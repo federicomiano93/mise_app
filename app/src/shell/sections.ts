@@ -8,6 +8,7 @@ import {
   House,
   LayoutGrid,
   Settings,
+  ShieldAlert,
   ShoppingCart,
   Tags,
   Truck,
@@ -17,6 +18,7 @@ import {
 import type { LucideIcon } from 'lucide-react';
 import { isMonthId } from '@mise/shared/inventory-model';
 import { isWeekday } from '@mise/shared/pastries-model';
+import { allergenBookScreenName } from '../allergenBook/allergenBookPath';
 import { bookingsScreenName } from '../bookings/bookingsPath';
 import { cakesScreenName } from '../cakes/cakesPath';
 import { clientsScreenName } from '../clients/clientsPath';
@@ -34,6 +36,7 @@ export type SectionId =
   | 'suppliers'
   | 'recipes'
   | 'labels'
+  | 'allergenBook'
   | 'calculator'
   | 'clients'
   | 'pastries'
@@ -73,6 +76,10 @@ export const SECTIONS: readonly Section[] = [
   // Mise 2 has no per-venue order of sections (docs/parity/home.md, D1), so nothing can ever move it away from Recipes.
   // No tab: the phone's five tabs are fixed (Home, Orders, Recipes, Calculator, More), so on a phone it is under «More».
   { id: 'labels', path: '/labels', label: 'section.labels', icon: Tags, inRail: 'top', inTabs: false },
+  // «Allergens» (27 Nov 2026, Mise 2 only): the printable allergen book kept at the counter, for the products sold loose. Another
+  // COMPANION of the catalogue, like Labels: shown to exactly whoever is shown Recipes (session/visibility.ts, no card id of its
+  // own), right after Labels because this list IS the order. No tab: the phone's tabs are fixed, so on a phone it is under «More».
+  { id: 'allergenBook', path: '/allergen-book', label: 'section.allergenBook', icon: ShieldAlert, inRail: 'top', inTabs: false },
   { id: 'calculator', path: '/calculator', label: 'section.calculator', icon: Calculator, inRail: 'top', inTabs: true },
   // The sales owner's page (Titolare vendita): the address book, the orders clients sent and their deadline. Shown to nobody
   // else (session/visibility.ts), so no other person's tab bar or rail ever holds it. A tab, because with no Calculator
@@ -177,6 +184,8 @@ export function screenNameFor(pathname: string): string | null {
   if (section.id === 'recipes') return recipesScreenName(pathname, section.path);
   // Labels: the two choices, and the list of recipes for each kind of label (the label itself is the Recipe catalogue's).
   if (section.id === 'labels') return labelsScreenName(pathname.slice(section.path.length));
+  // The allergen book (27 Nov 2026): the book and the pencil screen where the products are chosen.
+  if (section.id === 'allergenBook') return allergenBookScreenName(pathname.slice(section.path.length));
   // «Ingredients & suppliers» (step 3e): the names of docs/parity/suppliers.md, decision T1.
   if (section.id === 'suppliers') return suppliersScreenName(pathname.slice(section.path.length));
   // Bookings (18 Nov 2026): the list by day, one booking, and its editor (new or existing).

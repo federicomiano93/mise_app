@@ -24,6 +24,7 @@ export const it: Messages = {
   'section.home': 'Home',
   'section.clients': 'Clienti',
   'section.labels': 'Etichette',
+  'section.allergenBook': 'Allergeni',
   'section.cakes': 'Torte',
   'nav.moreRailNote': 'Le sezioni che non entrano nella barra di questo schermo.',
   'nav.moreAllInRail': 'Tutte le sezioni sono nella barra',
@@ -3376,6 +3377,8 @@ export const it: Messages = {
   'lab.saved.again': 'Nuova produzione',
   'lab.saved.back': 'Torna alla scheda',
 
+  // Il libro allergeni (27 nov 2026). La fase A ha solo ciò che dice lo store; le schermate aggiungono le loro chiavi.
+  'allergenBook.notSaved': 'Non è stato possibile salvare i prodotti del libro. Le tue spunte sono conservate: apri «Scegli i prodotti» e salva di nuovo.',
   'labels.choose': 'Quale etichetta?',
   'labels.product': 'Etichetta prodotto',
   'labels.product.sub': 'Ingredienti e allergeni, per quello che vendi.',

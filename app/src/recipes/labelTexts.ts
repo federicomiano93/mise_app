@@ -12,6 +12,10 @@
 //
 // The store's normaliser also puts back, for the same reason, the two fields of the recipe SHELF (25 Oct 2026,
 // @mise/shared/recipe-shelf): the category word and the archived flag.
+//
+// And the allergen book's one flag (27 Nov 2026): `inBook: true` — the loose product is in the counter's printable allergen
+// book. Only a literal `true` is ever stored or read back (`false`, 'yes' and the rest are no field), so «not in the book» is
+// always «no field»; the current app never reads or writes it and its merge saves keep it.
 
 import { normalizeCatalogueRecipe } from '@mise/shared/catalogue-model';
 import type { CatalogueRecipe } from '@mise/shared/catalogue-model';
@@ -38,6 +42,7 @@ export type LabelledRecipe = CatalogueRecipe & {
   readonly haccpStorage?: string;
   readonly category?: string;
   readonly archived?: true;
+  readonly inBook?: true;
 };
 
 // The two texts of a stored document, as stored: a string with something in it, else nothing.
@@ -55,7 +60,13 @@ function storedTexts(raw: unknown): Partial<Record<LabelTextField, string>> {
 // The store's normaliser: the shared one, then the two texts and the shelf's fields put back.
 export function normalizeStoredRecipe(raw: unknown): LabelledRecipe | null {
   const norm = normalizeCatalogueRecipe(raw);
-  return norm === null ? null : { ...norm, ...storedTexts(raw), ...shelfFieldsOf(raw) };
+  if (norm === null) return null;
+  return { ...norm, ...storedTexts(raw), ...shelfFieldsOf(raw), ...(isInBook(raw) ? { inBook: true as const } : {}) };
+}
+
+// Whether a recipe is in the allergen book: the literal `true` only.
+export function isInBook(recipe: unknown): boolean {
+  return !!recipe && typeof recipe === 'object' && (recipe as { inBook?: unknown }).inBook === true;
 }
 
 export function normalizeStoredRecipes(list: unknown): LabelledRecipe[] {

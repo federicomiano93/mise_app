@@ -40,6 +40,8 @@ const GATES: ReadonlyArray<{ id: SectionId; section: VenueSection; card: CardId 
   // when their side has no Recipes (ROLE_CARDS). ⚠️ NO CARD ID OF ITS OWN on purpose: STAFF_CARDS is the current app's list
   // and the server's, and a new id there would need a server change for a switch nobody asked for.
   { id: 'labels', section: 'catalogue', card: 'catalogue' },
+  // The allergen book is Labels' sibling: the catalogue's own gate again, and NO CARD ID OF ITS OWN for the same reason (see Labels).
+  { id: 'allergenBook', section: 'catalogue', card: 'catalogue' },
   { id: 'calculator', section: 'calculator', card: 'calculator' },
   // The sales owner's page lives in config/calculator, so it is the Calculator's SECTION (a venue without the Calculator has
   // no clients to run) behind a card of its own that only that role is shown (ROLE_ONLY_CARDS).

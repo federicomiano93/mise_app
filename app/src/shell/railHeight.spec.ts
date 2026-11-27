@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import shellCss from './AppShell.module.css?raw';
 import tokensCss from '../styles/tokens.css?raw';
-import { RAIL_PLACES_SHORT, SECTIONS } from './sections';
+import { RAIL_PLACES_SHORT, SECTIONS, arrangeSections } from './sections';
 
 // ⚠️ THE RAIL FITS THE LAB TABLET'S WINDOW. In landscape the tablet shows 648px under Chrome's bars (driven 13 Oct 2026). This adds the rail up
 // the way the stylesheet draws it and checks it against each window it is drawn for. jsdom draws nothing, so the numbers come from the CSS
-// text. Since «Cakes» (20 Nov 2026) an owner with every section sees TWELVE places in the rail: the steps for a rail of up to 11 are the
-// first set, and a rail marked `data-items="12"` has its own, one item earlier, ending in «More».
+// text. Since «Cakes» (20 Nov 2026) an owner could see TWELVE places in the rail, and since the allergen book (27 Nov 2026) THIRTEEN: the steps
+// for a rail of up to 11 are the first set, a rail marked `data-items="12"` has its own, one item earlier, and one marked `data-items="13"` another,
+// one item earlier still, ending in «More». ⚠️ THE HONEST CONSEQUENCE: on the lab tablet's 648px a venue showing everything now sees 9 sections,
+// «More» and Settings; only a rail of 12 or fewer places still shows all of them there.
 //
 // The rail of 22 Nov 2026 (the single bar) has no brand letter and no account at its foot, but a 17px rule above Settings. Its sum is
 //     padding (top + bottom) + places × (item + gap) + 17
@@ -83,10 +85,10 @@ describe('the rail on a short window (up to 11 places)', () => {
   it('counts eleven places for a rail of up to 11 (the sums below count that many)', () => {
     // Since 13 Nov 2026 «Labels» follows Recipes in the rail; since 18 Nov 2026 «Bookings» follows the Home.
     expect(RAIL_PLACES_SHORT).toBe(11);
-    // The fullest rail is one more: «Cakes» (20 Nov 2026), which is what the `data-items="12"` steps below are for.
-    expect(mostItems()).toBe(12);
+    // A rail of 12 is one more («Cakes», 20 Nov 2026: the `data-items="12"` steps below), and the fullest is 13 (the allergen book, 27 Nov 2026).
+    expect(mostItems()).toBe(13);
     // …and the sales owner's rail, with Clients, is shorter than that: Home, Bookings, Clients, Food cost, Cakes, Settings.
-    expect(SECTIONS.length).toBe(13);
+    expect(SECTIONS.length).toBe(14);
   });
 
   it('gives 64px at the top, which needs 797px', () => {
@@ -134,14 +136,15 @@ describe('the rail on a short window (up to 11 places)', () => {
   });
 });
 
-// ⚠️ THE FULLEST RAIL (12 places: every section but Clients). Each step moves down by one item; only below 633px do the last two sections
-// go under «More» (`data-spill`), leaving 11 places. Every number comes from the stylesheet text.
+// ⚠️ A RAIL OF 12 PLACES (every section but Clients and one more, e.g. a venue without Bookings; it was the fullest rail until the allergen
+// book). Each step moves down by one item; only below 633px do the last two sections go under «More» (`data-spill`), leaving 11 places.
+// Every number comes from the stylesheet text.
 describe('a rail of 12 places', () => {
   const TWELVE = 12;
   const ITEM = '.rail[data-items="12"] .railItem';
 
-  it('is the number of places the fullest rail has, one more than the short rail holds', () => {
-    expect(mostItems()).toBe(TWELVE);
+  it('is one more than the short rail holds, and one less than the fullest rail has', () => {
+    expect(mostItems()).toBe(TWELVE + 1);
     expect(TWELVE).toBe(RAIL_PLACES_SHORT + 1);
   });
 
@@ -211,8 +214,79 @@ describe('a rail of 12 places', () => {
       seen += 1;
       expect(minHeight(block[1])).toBeGreaterThanOrEqual(48);
     }
-    // The base, the four steps for up to 11 places and the four for 12.
-    expect(seen).toBe(9);
+    // The base, the four steps for up to 11 places, the four for 12 and the four for 13.
+    expect(seen).toBe(13);
+  });
+});
+
+// ⚠️ THE FULLEST RAIL (13 places: every section but Clients, since the allergen book of 27 Nov 2026). Each step moves down by one item more;
+// below 683px (what 13 places need at 48px) the last THREE sections go under «More» (`data-spill`: Stocktake, Food cost, Cakes), leaving
+// 11 places. The lab tablet's 648px is in that last step: it shows 9 sections, «More» and Settings. Every number comes from the stylesheet text.
+describe('a rail of 13 places', () => {
+  const THIRTEEN = 13;
+  const ITEM = '.rail[data-items="13"] .railItem';
+
+  it('is the fullest rail: every section but Clients, two more than the short rail holds', () => {
+    expect(mostItems()).toBe(THIRTEEN);
+    expect(THIRTEEN).toBe(RAIL_PLACES_SHORT + 2);
+  });
+
+  it('gives 64px at the top, which needs 933px', () => {
+    expect(minHeight(base)).toBe(64);
+    expect(needs(THIRTEEN, 64)).toBe(933);
+  });
+
+  it('gives 56px from 932px, which fits down to 829px', () => {
+    const item = rule(stepAt(932), ITEM);
+    expect(minHeight(item)).toBe(56);
+    expect(contentAt(item)).toBeLessThanOrEqual(56);
+    expect(needs(THIRTEEN, 64) - 1).toBe(932);
+    expect(needs(THIRTEEN, 56)).toBe(829);
+  });
+
+  it('gives 52px from 828px, which fits down to 777px', () => {
+    const item = rule(stepAt(828), ITEM);
+    expect(minHeight(item)).toBe(52);
+    expect(contentAt(item)).toBeLessThanOrEqual(52);
+    expect(needs(THIRTEEN, 56) - 1).toBe(828);
+    expect(needs(THIRTEEN, 52)).toBe(777);
+  });
+
+  it('gives 49px from 776px with the rail tightened, which fits down to 696px', () => {
+    const step = stepAt(776);
+    expect(rule(step, '.rail[data-items="13"]')).toMatch(/padding-top:\s*var\(--s2\)/);
+    expect(rule(step, '.rail[data-items="13"]')).toMatch(/padding-bottom:\s*var\(--s2\)/);
+    expect(px(/gap:\s*([^;]+);/.exec(rule(step, '.rail[data-items="13"] .railNav'))?.[1])).toBe(2);
+    expect(px(/gap:\s*([^;]+);/.exec(rule(step, '.rail[data-items="13"] .railGroup'))?.[1])).toBe(2);
+    const item = rule(step, ITEM);
+    expect(minHeight(item)).toBe(49);
+    expect(contentAt(item)).toBeLessThanOrEqual(49);
+    expect(needs(THIRTEEN, 52) - 1).toBe(776);
+    expect(needs(THIRTEEN, 49, TIGHT)).toBe(696);
+  });
+
+  it('goes to 48px from 695px, which fits down to 683px', () => {
+    expect(minHeight(rule(stepAt(695), ITEM))).toBe(48);
+    expect(needs(THIRTEEN, 49, TIGHT) - 1).toBe(695);
+    expect(needs(THIRTEEN, 48, TIGHT)).toBe(683);
+  });
+
+  it('only below 683px (682px or less) hides the spilled links and shows «More»: 11 places, which need 583px', () => {
+    const step = stepAt(682);
+    expect(rule(step, '.rail[data-items="13"] .railItem[data-spill]')).toMatch(/display:\s*none/);
+    expect(rule(step, '.rail[data-items="13"] .railItem.railMore')).toMatch(/display:\s*flex/);
+    expect(needs(THIRTEEN, 48, TIGHT) - 1).toBe(682);
+    expect(needs(RAIL_PLACES_SHORT, 48, TIGHT)).toBe(583);
+  });
+
+  // The honest consequence, pinned: 648px does not hold 13 places, so the lab tablet's rail is the spilled one.
+  it('puts the lab tablet\'s 648px in the spill step: 13 places do not fit, 11 do, and exactly Stocktake, Food cost and Cakes spill', () => {
+    expect(stepAt(682)).toMatch(/data-spill/);
+    expect(needs(THIRTEEN, 48, TIGHT)).toBeGreaterThan(648);
+    expect(needs(RAIL_PLACES_SHORT, 48, TIGHT)).toBeLessThanOrEqual(648);
+    const fullest = arrangeSections(new Set(SECTIONS.map(section => section.id).filter(id => id !== 'clients')));
+    expect(fullest.railSpill.map(section => section.id)).toEqual(['stocktake', 'foodcost', 'cakes']);
+    expect(fullest.railTop.length + fullest.railBottom.length - fullest.railSpill.length + 1).toBe(RAIL_PLACES_SHORT);
   });
 });
 

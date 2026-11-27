@@ -19,7 +19,7 @@ import type { SectionId } from './sections';
 describe('the section list', () => {
   it('is in the order the rail shows it', () => {
     expect(SECTIONS.map(section => section.id)).toEqual([
-      'home', 'bookings', 'orders', 'suppliers', 'recipes', 'labels', 'calculator', 'clients', 'pastries', 'stocktake', 'foodcost', 'cakes', 'settings',
+      'home', 'bookings', 'orders', 'suppliers', 'recipes', 'labels', 'allergenBook', 'calculator', 'clients', 'pastries', 'stocktake', 'foodcost', 'cakes', 'settings',
     ]);
   });
 
@@ -36,22 +36,28 @@ describe('the section list', () => {
   it('splits the sections between the rail, the tabs and «More»', () => {
     const arranged = arrangeSections(new Set(SECTIONS.map(section => section.id)));
     expect(arranged.railTop.map(section => section.id)).toEqual([
-      'home', 'bookings', 'orders', 'suppliers', 'recipes', 'labels', 'calculator', 'clients', 'pastries', 'stocktake', 'foodcost', 'cakes',
+      'home', 'bookings', 'orders', 'suppliers', 'recipes', 'labels', 'allergenBook', 'calculator', 'clients', 'pastries', 'stocktake', 'foodcost', 'cakes',
     ]);
     expect(arranged.railBottom.map(section => section.id)).toEqual(['settings']);
     // Nobody is shown both the Calculator and Clients (session/visibility.ts), so no real tab bar holds five.
     expect(arranged.tabs.map(section => section.id)).toEqual(['home', 'orders', 'recipes', 'calculator', 'clients']);
-    expect(arranged.more.map(section => section.id)).toEqual(['bookings', 'suppliers', 'labels', 'pastries', 'stocktake', 'foodcost', 'cakes', 'settings']);
+    expect(arranged.more.map(section => section.id)).toEqual(['bookings', 'suppliers', 'labels', 'allergenBook', 'pastries', 'stocktake', 'foodcost', 'cakes', 'settings']);
     expect(arranged.first.id).toBe('home');
   });
 
   // The rail holds RAIL_PLACES_SHORT places on the shortest windows: the last sections before the bottom group spill under «More».
-  it('spills the last two sections of the fullest rail, and nothing from a rail of 11 or fewer', () => {
+  // ⚠️ The allergen book (27 Nov 2026) made the fullest rail 13 places, so ITS spill is three sections (Stocktake, Food cost, Cakes):
+  // the mechanism is unchanged, only the arithmetic moved. A rail of 12 places (a venue without Bookings, say) still spills two.
+  it('spills the last three sections of the fullest rail, two from a rail of 12, and nothing from a rail of 11 or fewer', () => {
     expect(RAIL_PLACES_SHORT).toBe(11);
-    expect(fullest.railTop.length + fullest.railBottom.length).toBe(12);
-    expect(ids(fullest.railSpill)).toEqual(['foodcost', 'cakes']);
-    // Without Cakes (or without Food cost) the rail has 11 places and nothing spills.
-    const noCakes = arrangeSections(new Set(SECTIONS.map(section => section.id).filter(id => id !== 'clients' && id !== 'cakes')));
+    expect(fullest.railTop.length + fullest.railBottom.length).toBe(13);
+    expect(ids(fullest.railSpill)).toEqual(['stocktake', 'foodcost', 'cakes']);
+    // Every section but Clients and Bookings: 12 places, as the fullest rail was before the allergen book.
+    const noBookings = arrangeSections(new Set(SECTIONS.map(section => section.id).filter(id => id !== 'clients' && id !== 'bookings')));
+    expect(noBookings.railTop.length + noBookings.railBottom.length).toBe(12);
+    expect(ids(noBookings.railSpill)).toEqual(['foodcost', 'cakes']);
+    // Without Cakes and Bookings (or without Food cost) the rail has 11 places and nothing spills.
+    const noCakes = arrangeSections(new Set(SECTIONS.map(section => section.id).filter(id => id !== 'clients' && id !== 'bookings' && id !== 'cakes')));
     expect(noCakes.railTop.length + noCakes.railBottom.length).toBe(11);
     expect(noCakes.railSpill).toEqual([]);
     const employee = arrangeSections(new Set<SectionId>(['home', 'orders', 'suppliers', 'recipes', 'calculator', 'pastries', 'settings']));
@@ -92,7 +98,7 @@ describe('the section list', () => {
 
 const everything = arrangeSections(new Set(SECTIONS.map(section => section.id)));
 const ids = (list: readonly { id: SectionId }[]) => list.map(section => section.id);
-// Nobody is shown Clients with the Calculator, so the fullest rail is every section but Clients: 12 places.
+// Nobody is shown Clients with the Calculator, so the fullest rail is every section but Clients: 13 places.
 const fullest = arrangeSections(new Set(SECTIONS.map(section => section.id).filter(id => id !== 'clients')));
 
 describe('arrangeSections', () => {
@@ -132,6 +138,7 @@ describe('moreIsCurrent', () => {
     ['/food-cost', true],
     ['/cakes', true],
     ['/cakes/reference', true],
+    ['/allergen-book', true],
     ['/settings', true],
     ['/settings/language', true],
     ['/orders', false],
@@ -160,7 +167,10 @@ describe('moreIsCurrent', () => {
     expect(moreIsCurrent('/cakes', fullest.railSpill)).toBe(true);
     expect(moreIsCurrent('/food-cost/product/p1', fullest.railSpill)).toBe(true);
     expect(moreIsCurrent('/more', fullest.railSpill)).toBe(true);
-    expect(moreIsCurrent('/stocktake', fullest.railSpill)).toBe(false);
+    // Stocktake spills now (13 places: three sections go under «More»); the allergen book, Labels and Pastries stay on the rail.
+    expect(moreIsCurrent('/stocktake', fullest.railSpill)).toBe(true);
+    expect(moreIsCurrent('/pastries', fullest.railSpill)).toBe(false);
+    expect(moreIsCurrent('/allergen-book', fullest.railSpill)).toBe(false);
     expect(moreIsCurrent('/settings', fullest.railSpill)).toBe(false);
   });
 });
@@ -197,8 +207,23 @@ describe('screenNameFor', () => {
     expect(screenNameFor('/')).toBeNull();
   });
 
-  it('names every section by its id', () => {
-    for (const section of SECTIONS) expect(screenNameFor(section.path)).toBe(section.id);
+  // The allergen book is the one section whose usage name is its address, not its id (`allergenBook` has a capital, which the
+  // usage record refuses): `allergen-book`.
+  it('names every section by its id, the allergen book by its address', () => {
+    for (const section of SECTIONS) expect(screenNameFor(section.path)).toBe(section.id === 'allergenBook' ? 'allergen-book' : section.id);
+  });
+
+  // The allergen book is two screens in one section: the book and the pencil screen; junk is sent back to the book.
+  it.each([
+    ['/allergen-book', 'allergen-book'],
+    ['/allergen-book/', 'allergen-book'],
+    ['/allergen-book/choose', 'allergen-book-choose'],
+    ['/allergen-book/choose/', 'allergen-book-choose'],
+    ['/allergen-book/junk', 'allergen-book'],
+    ['/allergen-book/choose/more', 'allergen-book'],
+    ['/allergen-bookX', 'not-found'],
+  ])('%s → %s', (pathname, expected) => {
+    expect(screenNameFor(pathname)).toBe(expected);
   });
 
   // The Recipe catalogue is two screens in one section: the list and one recipe.
@@ -330,11 +355,12 @@ describe('screenNameFor', () => {
   // rule would simply never be counted.
   it('only ever gives a name the usage record accepts, «m2:» included', () => {
     const names = [
-      ...SECTIONS.map(section => section.id), 'pastries-records', 'pastries-editor', 'more', 'not-found',
+      // The names the sections really get (the allergen book's is its address: its id has a capital).
+      ...SECTIONS.map(section => screenNameFor(section.path)), 'pastries-records', 'pastries-editor', 'more', 'not-found',
       'stocktake-product', 'stocktake-cost', STOCKTAKE_UNAVAILABLE_SCREEN,
       'foodcost-product', 'foodcost-history', 'foodcost-settings', 'client-orders',
       'clients-editor', 'clients-orders', 'clients-ordering',
-      'cakes-editor', 'cakes-reference',
+      'cakes-editor', 'cakes-reference', 'allergen-book', 'allergen-book-choose',
     ];
     for (const name of names) expect(`m2:${name}`).toMatch(SCREEN_RE);
   });
@@ -346,6 +372,8 @@ describe('titleKeyFor', () => {
     ['/orders', 'section.orders'],
     ['/food-cost', 'section.foodcost'],
     ['/cakes/reference', 'section.cakes'],
+    ['/allergen-book', 'section.allergenBook'],
+    ['/allergen-book/choose', 'section.allergenBook'],
     ['/settings/language', 'section.settings'],
     ['/more', 'section.more'],
     ['/', 'notFound.title'],

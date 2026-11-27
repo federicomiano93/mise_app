@@ -136,6 +136,12 @@ Catalogue Settings, canManage like the rest of that document). An archived recip
 (Calculator tabs, Food cost lines, sub-recipe rows, labels); only the list and the pickers for NEW links leave it out
 (`shared/src/recipe-shelf.ts`). The current app neither reads nor writes them; its merge saves keep them.
 
+**Allergen book (Mise 2, 27 Nov 2026, rules not yet deployed).** Recipes may carry `inBook` (bool, only `true` is
+stored; absent = not in the book; removing it is a removal, never `false`). The rules ask `canManage(catalogue)` only when
+it MOVES, in the same single clause as `archived` (so canManage is called at most once). It is written ONLY as a merge of
+`{ inBook: true }` or a `deleteField()` by the allergen book's «Prodotti nel libro». An archived recipe keeps its flag but
+is hidden from the book. The current app neither reads nor writes it; its merge saves keep it.
+
 **HACCP label (Mise 2, 26 Oct 2026, rules not yet deployed).** Recipes may carry `haccpStorage` (string ≤200, how the
 semi-finished good is kept; employees may edit it). `config/labels` gains `haccpFields` (a FLAT map, keys from the eleven
 field ids of `shared/src/haccp-label.ts`, values `'off'` | `'print'` | `'blank'`; a missing id = that field's default),

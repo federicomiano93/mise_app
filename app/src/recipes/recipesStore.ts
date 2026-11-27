@@ -34,7 +34,7 @@ import type { CalculatorImportKind, CatalogueRecipe, ImportAction } from '@mise/
 import { normalizeEndNote, normalizeSteps, ridOf, withRowIds } from '@mise/shared/guided-model';
 import { categoryKey, isArchivedRecipe, normalizeRecipeCategories, removeCategory } from '@mise/shared/recipe-shelf';
 import type { KeyValueStorage } from '../session/backend';
-import { LABEL_TEXT_FIELDS, normalizeStoredRecipe, normalizeStoredRecipes } from './labelTexts';
+import { isInBook, LABEL_TEXT_FIELDS, normalizeStoredRecipe, normalizeStoredRecipes } from './labelTexts';
 import { recipeDataOf } from './recipeDocument';
 import { newRecipeId, withoutPrice } from './recipesSource';
 import type { RecipesMeta, RecipesSource, StoredDoc } from './recipesSource';
@@ -124,7 +124,9 @@ export type RecipesMessage =
   // A delete the database refused: the recipe is back.
   | { readonly kind: 'recipe-not-deleted' }
   // An archive (`archived` true) or a restore (false) the database refused: the recipe is back where it was.
-  | { readonly kind: 'recipe-not-archived'; readonly name: string; readonly archived: boolean };
+  | { readonly kind: 'recipe-not-archived'; readonly name: string; readonly archived: boolean }
+  // The allergen book's products the database refused (the choices are kept in memory: refusedBookChoices).
+  | { readonly kind: 'book-not-saved' };
 
 export interface ScaledEntry {
   readonly target: number;
@@ -249,6 +251,16 @@ export interface RecipesStore {
   // it). A refusal puts the recipe back as it was and says `recipe-not-archived`. Returns false, and writes nothing, when the
   // recipe is not held or is already where it was asked to go. The rules let only an owner or a manager move the flag.
   setArchived(id: string, archived: boolean): boolean;
+  // Puts recipes in the allergen book (`inBook` true) or takes them out (the field removed), LOCAL-FIRST like setArchived. Only
+  // a change that differs from what is held is written, each as a merge of the flag ALONE (its own saveRecipeDoc call).
+  // Resolves true when every write was accepted; when any is refused it puts those recipes back (only where the flag is still
+  // where this call put it), keeps the refused choices in memory (refusedBookChoices), says `book-not-saved` and resolves
+  // false. Offline the promise simply waits: nobody awaits it to leave a screen. The rules let only an owner or a manager
+  // move the flag.
+  saveBookChoices(changes: ReadonlyArray<{ readonly id: string; readonly inBook: boolean }>): Promise<boolean>;
+  // The allergen book choices the database refused and this store still remembers (id → wanted state), for as long as the
+  // section is open; empty when none. A plain getter.
+  refusedBookChoices(): ReadonlyMap<string, boolean>;
   // Adds (or takes off) ONE word of the venue's list of recipe categories (config/labels.recipeCategories), LOCAL-FIRST: the
   // list changes at once, offline too (the promise stays pending until the network is back; nothing waits for it), then the
   // source is asked to arrayUnion / arrayRemove that word alone. ⚠️ A REFUSAL PUTS BACK ONLY THAT WORD, on the list as it is
@@ -389,6 +401,8 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
   // Per key, while some patch on it is still in the air: the value it held before the first of them (`base`, the
   // confirmed one) and every patch's value with how it ended.
   type KeyEntry = { n: number; value: unknown; state: 'pending' | 'ok' | 'refused' };
+  // The allergen book choices the database refused (id → wanted state), kept for as long as the store lives.
+  const refusedBook = new Map<string, boolean>();
   const labelKeyLog = new Map<string, { base: { had: boolean; value: unknown }; entries: KeyEntry[] }>();
   // Whether the venue had no label document when the first patch in the air was made.
   let labelNoneBeforeLog = false;
@@ -767,7 +781,8 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
         for (const key of KEPT_FIELDS) if (held[key] !== undefined) kept[key] = held[key];
         // The image label's texts this save does not send stay as the phone held them, until the next snapshot — and so do the
         // category (when not sent) and the archived flag (never sent by a save: an archived recipe edited stays archived).
-        for (const key of [...LABEL_TEXT_FIELDS, 'category', 'archived'] as const) {
+        // The allergen book's flag is never sent by a save either (saveBookChoices owns it): the phone's copy keeps it.
+        for (const key of [...LABEL_TEXT_FIELDS, 'category', 'archived', 'inBook'] as const) {
           if (!(key in data) && held[key] !== undefined) kept[key] = held[key];
         }
       }
@@ -902,6 +917,54 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
         say({ kind: 'recipe-not-archived', name: prev.name, archived });
       });
       return true;
+    },
+
+    // ⚠️ EACH FLAG TRAVELS ALONE, like setArchived: a merge of `inBook: true`, or a removal (null → deleteField in the source).
+    // Only the ids whose stored state differs are written. On a refusal the recipe goes back as it was where the flag is still
+    // where this call put it, and the choice is remembered so the pencil screen can reopen from it.
+    saveBookChoices(changes) {
+      const attempts: Array<{ id: string; inBook: boolean; written: Promise<void> }> = [];
+      for (const change of changes) {
+        const prev = recipes.find(candidate => candidate.id === change.id) ?? null;
+        if (!prev || isInBook(prev) === change.inBook) continue;
+        const next: Record<string, unknown> = { ...(prev as unknown as Record<string, unknown>) };
+        if (change.inBook) next.inBook = true; else delete next.inBook;
+        upsertLocal(next);
+        let written: Promise<void>;
+        try {
+          written = source.saveRecipeDoc(change.id, { inBook: change.inBook ? true : null });
+        } catch (err) {
+          written = Promise.reject(err);
+        }
+        attempts.push({ id: change.id, inBook: change.inBook, written });
+      }
+      return Promise.allSettled(attempts.map(attempt => attempt.written)).then(results => {
+        let refused = false;
+        results.forEach((result, index) => {
+          const attempt = attempts[index];
+          if (!attempt) return;
+          if (result.status === 'fulfilled') {
+            refusedBook.delete(attempt.id);
+            return;
+          }
+          refused = true;
+          deps.warn('Recipe allergen book flag did not sync to Firestore:', result.reason);
+          refusedBook.set(attempt.id, attempt.inBook);
+          // Only when the flag is still where this call put it: a later change made since owns it.
+          const now = recipes.find(candidate => candidate.id === attempt.id);
+          if (now && isInBook(now) === attempt.inBook) {
+            const back: Record<string, unknown> = { ...(now as unknown as Record<string, unknown>) };
+            if (attempt.inBook) delete back.inBook; else back.inBook = true;
+            upsertLocal(back);
+          }
+        });
+        if (refused) say({ kind: 'book-not-saved' });
+        return !refused;
+      });
+    },
+
+    refusedBookChoices() {
+      return new Map(refusedBook);
     },
 
     addRecipeCategory(word) {

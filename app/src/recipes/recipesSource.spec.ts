@@ -365,6 +365,21 @@ describe('the Recipe catalogue source', () => {
     );
   });
 
+  test('⚠️ the allergen book’s flag travels ALONE as a merge: true as it is, null as a removal, the venue stamp last', async () => {
+    const { kit, fs } = fakeKit();
+    const removal = { removal: true };
+    (fs as unknown as { deleteField: () => unknown }).deleteField = vi.fn(() => removal);
+    const source = createFirestoreRecipesSource(() => Promise.resolve(kit), 'bakery');
+    await source.saveRecipeDoc('R1', { inBook: true });
+    expect(fs.setDoc).toHaveBeenLastCalledWith(
+      { kind: 'doc', path: 'locations/bakery/recipes/R1' }, { inBook: true, bakery: 'bakery' }, { merge: true },
+    );
+    await source.saveRecipeDoc('R1', { inBook: null });
+    expect(fs.setDoc).toHaveBeenLastCalledWith(
+      { kind: 'doc', path: 'locations/bakery/recipes/R1' }, { inBook: removal, bakery: 'bakery' }, { merge: true },
+    );
+  });
+
   test('the logo is ONE document, label-assets/logo, watched with metadata changes; missing = null', async () => {
     const { kit, listeners } = fakeKit();
     const source = createFirestoreRecipesSource(() => Promise.resolve(kit), 'bakery');

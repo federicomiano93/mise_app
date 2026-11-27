@@ -38,6 +38,7 @@ export const en = {
   'section.home': 'Home',
   'section.clients': 'Clients',
   'section.labels': 'Labels',
+  'section.allergenBook': 'Allergens',
   'section.cakes': 'Cakes',
   'nav.moreRailNote': 'The sections that don’t fit in this screen’s rail.',
   'nav.moreAllInRail': 'All sections are in the rail',
@@ -3620,6 +3621,8 @@ export const en = {
   'lab.saved.back': 'Back to the card',
 
   // «Labels» (13 Nov 2026): the two choices and the list of recipes for each (labels/LabelsSection.tsx).
+  // The allergen book (27 Nov 2026). Phase A holds only what the store says; the screens add their own keys.
+  'allergenBook.notSaved': 'The products in the book could not be saved. Your ticks are kept: open “Choose the products” and save again.',
   'labels.choose': 'Which label?',
   'labels.product': 'Product label',
   'labels.product.sub': 'Ingredients and allergens, for what you sell.',
