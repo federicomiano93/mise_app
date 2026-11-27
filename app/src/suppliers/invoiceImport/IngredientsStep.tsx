@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import type { ReactNode, Ref } from 'react';
 import type { FileIngredient } from '@mise/shared/invoice-import-model';
-import { bucketOf, entriesFor, filterCounts, priceChange, visibleFilters } from '@mise/shared/invoice-import-plan';
+import { bucketOf, entriesFor, filterCounts } from '@mise/shared/invoice-import-plan';
 import type { PlanEntry } from '@mise/shared/invoice-import-plan';
 import { supplierLabel } from '@mise/shared/supplier-label';
 import type { MessageKey } from '../../i18n/en';
@@ -10,7 +10,8 @@ import { useMoney } from '../../session/useMoney';
 import { Button } from '../../ui/Button';
 import type { StoredDoc } from '../suppliersSource';
 import { IngredientRow } from './IngredientRow';
-import { filterKey } from './importWords';
+import { PRICE_CONFIRMED, filterKey } from './importWords';
+import { isPriceConfirmed, replacedPrice } from './priceConfirmed';
 import type { ImportFile } from './importRun';
 import type { IngredientDecision } from './ingredientAnswers';
 import type { IngredientAnswers, IngredientPlan } from './ingredientsRun';
@@ -58,6 +59,9 @@ const GROUPS = [
   ['error', 'sup.imp.ing.group.errors'],
 ] as const satisfies readonly (readonly [string, MessageKey])[];
 
+// The chips in order: the model's FILTERS, with «Price confirmed» (a screen-only chip) next to «New price».
+const CHIP_ORDER = ['all', 'new', 'update-price', PRICE_CONFIRMED, 'history-only', 'unchanged', 'check', 'decide', 'error'];
+
 // Step 3 of 3: the ingredients of the file. Chips to filter; the rows that need a decision or will be written; the ones already
 // in Mise, the ones to check and the errors in closed groups. All the data is handed in: this step reads nothing itself.
 export function IngredientsStep(props: Props) {
@@ -90,7 +94,6 @@ function Rows({
   const { t } = useT();
   const money = useMoney();
   const fileByKey = useMemo(() => new Map(file.ingredients.map(ingredient => [ingredient.key, ingredient])), [file]);
-  const counts = filterCounts(entries);
 
   // The supplier of a row: the one in Mise (by its id) as the section names it, else the file's own name for it.
   const supplierNameOf = (fileIngredient: FileIngredient | undefined): string => {
@@ -113,22 +116,36 @@ function Rows({
     if (!fileIngredient || !last) return '';
     const unit = fileIngredient.priceUnit;
     const now = pricePerUnitText({ pricePerUnit: last.pricePerUnit, priceUnit: unit }, money, t);
-    if (effective.status === 'update-price' && plan) {
-      // The plan holds the prices as a plain object keyed by ingredient id (planIngredientStep builds it so).
-      const prices = plan.ctx.pricesById as Readonly<Record<string, { pricePerUnit?: unknown; priceUnit?: unknown } | undefined>> | undefined;
-      const stored = prices?.[effective.ingredientId as string];
-      const next = effective.newPoints[effective.newPoints.length - 1];
-      const change = next ? priceChange(stored, next.pricePerUnit, unit) : null;
-      if (stored && next && change) {
-        const sign = change.percent === 0 ? '=' : `${change.percent > 0 ? '+' : '-'}${Math.abs(change.percent)}%`;
-        return t('sup.imp.ing.priceChange', {
-          from: pricePerUnitText(stored, money, t),
-          to: pricePerUnitText({ pricePerUnit: next.pricePerUnit, priceUnit: unit }, money, t),
-          change: sign,
-        });
-      }
+    const replaced = plan ? replacedPrice(effective, plan.ctx.pricesById, unit) : null;
+    if (replaced) {
+      const sign = replaced.percent === 0 ? '=' : `${replaced.percent > 0 ? '+' : '-'}${Math.abs(replaced.percent)}%`;
+      return t('sup.imp.ing.priceChange', {
+        from: pricePerUnitText(replaced.stored, money, t),
+        to: pricePerUnitText({ pricePerUnit: replaced.next.pricePerUnit, priceUnit: unit }, money, t),
+        change: sign,
+      });
     }
     return now;
+  };
+
+  // «Price confirmed»: the row's price is the one in force («(=)» above), only the invoice is newer.
+  const confirmedOf = ({ planned, row }: PlanEntry): boolean => {
+    const fileIngredient = fileByKey.get(planned.key);
+    return Boolean(plan && fileIngredient && isPriceConfirmed(row, plan.ctx.pricesById, fileIngredient.priceUnit));
+  };
+  const confirmedKeys = new Set(entries.filter(confirmedOf).map(entry => entry.planned.key));
+  const isConfirmed = (entry: PlanEntry): boolean => confirmedKeys.has(entry.planned.key);
+
+  // The chips: a same-price row is counted under «Price confirmed», not «New price» (the rows themselves are the same).
+  const counts = filterCounts(entries);
+  counts['update-price'] = (counts['update-price'] ?? 0) - entries.filter(entry => isConfirmed(entry) && bucketOf(entry) === 'update-price').length;
+  counts[PRICE_CONFIRMED] = entries.filter(entry => isConfirmed(entry) && bucketOf(entry) === 'update-price').length;
+  // Same rule as the model's visibleFilters («All», the one that is on, every other with something under it).
+  const chips = CHIP_ORDER.filter(name => name === 'all' || name === filter || (counts[name] ?? 0) > 0);
+  const rowsFor = (name: string): PlanEntry[] => {
+    if (name === PRICE_CONFIRMED) return entries.filter(entry => isConfirmed(entry) && bucketOf(entry) === 'update-price');
+    if (name === 'update-price') return entriesFor(entries, name).filter(entry => !isConfirmed(entry));
+    return entriesFor(entries, name);
   };
 
   const rowOf = (entry: PlanEntry) => {
@@ -141,6 +158,7 @@ function Rows({
         entry={entry}
         supplierName={supplierNameOf(fileByKey.get(key))}
         priceText={priceTextOf(entry)}
+        priceConfirmed={isConfirmed(entry)}
         decision={answers.decisions[key]}
         forgotten={answers.forgetKeys.has(key)}
         confirmed={answers.confirmKeys.has(key)}
@@ -161,7 +179,7 @@ function Rows({
       {heading}
       <p className={styles.note}>{t('sup.imp.ing.note')}</p>
       <div role="group" aria-label={t('sup.imp.filter.label')} className={styles.chips}>
-        {visibleFilters(counts, filter).map(name => (
+        {chips.map(name => (
           <button key={name} type="button" className={styles.chip} aria-pressed={filter === name} onClick={() => { onFilter(name); }}>
             {`${t(filterKey(name))} (${counts[name] ?? 0})`}
           </button>
@@ -194,7 +212,7 @@ function Rows({
           </div>
         </>
       ) : (() => {
-        const rows = entriesFor(entries, filter);
+        const rows = rowsFor(filter);
         return rows.length === 0 ? <p className={styles.empty}>{t('sup.imp.ing.emptyFilter')}</p> : list(rows);
       })()}
     </>

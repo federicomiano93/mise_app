@@ -18,18 +18,41 @@ const planned = (over: Record<string, unknown> = {}) => ({
   allPoints: [], priceCheck: '', candidates: [{ id: 'a', label: 'Burro A' }, { id: 'b', label: 'Burro B' }], ...over,
 }) as unknown as PlanEntry['planned'];
 
-function draw(entry: PlanEntry, lang: 'en' | 'it' = 'en') {
+function draw(entry: PlanEntry, lang: 'en' | 'it' = 'en', priceConfirmed = false) {
   const onRename = vi.fn();
   render(
     <I18nProvider initialLanguage={lang} initialMessages={lang === 'en' ? en : italian}>
       <ul>
-        <IngredientRow entry={entry} supplierName="Fornitore Esempio" priceText="" decision={undefined} forgotten={false} confirmed={false}
+        <IngredientRow entry={entry} supplierName="Fornitore Esempio" priceText="" priceConfirmed={priceConfirmed} decision={undefined} forgotten={false} confirmed={false}
           renameChosen={false} onDecision={() => undefined} onForget={() => undefined} onConfirm={() => undefined} onRename={onRename} />
       </ul>
     </I18nProvider>,
   );
   return { onRename };
 }
+
+describe('the pill of a price update', () => {
+  const updating = () => planned({ status: 'update-price', ingredientId: 'a', candidates: [] });
+
+  it('says «New price» in the green tone when the price changes', () => {
+    const row = updating();
+    draw({ planned: row, row, waiting: false });
+    expect(screen.getByText('New price')).toHaveAttribute('data-tone', 'ok');
+  });
+
+  it('says «Price confirmed» in the quiet tone when a newer invoice repeats the price', () => {
+    const row = updating();
+    draw({ planned: row, row, waiting: false }, 'en', true);
+    expect(screen.getByText('Price confirmed')).toHaveAttribute('data-tone', 'quiet');
+    expect(screen.queryByText('New price')).toBeNull();
+  });
+
+  it('speaks Italian', () => {
+    const row = updating();
+    draw({ planned: row, row, waiting: false }, 'it', true);
+    expect(screen.getByText('Prezzo confermato')).toHaveAttribute('data-tone', 'quiet');
+  });
+});
 
 describe('a question row', () => {
   it('offers «Create a new product» unless the row names the ingredient it belongs to («unisci con»)', () => {
