@@ -1,0 +1,7 @@
+/* The page the allergen book prints on (27 Nov 2026): A4 with a 12 mm margin.
+
+   ⚠️⚠️ SWITCHED ON ONLY WHILE THE BOOK PRINTS. bookPrintHost.tsx links this file with media="not all" when it first loads and sets
+   media="print" for exactly as long as the book's host lives, the label's and the booking slip's way (recipes/printHost.tsx,
+   bookings/slipHost.tsx): this single-page app cannot keep a page size in a stylesheet that is always on, or every other print it
+   makes would come out with this margin. */
+@page { size: A4; margin: 12mm; }

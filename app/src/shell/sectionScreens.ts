@@ -28,6 +28,7 @@ export const SECTION_SCREENS: Readonly<Partial<Record<SectionId, LazyExoticCompo
   clients: lazyScreen(() => import('../clients/ClientsSection')),
   recipes: lazyScreen(() => import('../recipes/RecipesSection')),
   labels: lazyScreen(() => import('../labels/LabelsSection')),
+  allergenBook: lazyScreen(() => import('../allergenBook/AllergenBookSection')),
   suppliers: lazyScreen(() => import('../suppliers/SuppliersSection')),
   orders: lazyScreen(() => import('../orders/OrdersSection')),
 };

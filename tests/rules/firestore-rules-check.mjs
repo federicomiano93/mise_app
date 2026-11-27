@@ -1817,6 +1817,51 @@ async function configAndLogs() {
   check('recipes: the restored recipe holds no archived flag and keeps its name',
     !('archived' in (shelf.fields ?? {})) && shelf.fields?.name?.stringValue === 'Panettone classico');
 
+  // ── Mise 2's allergen book: `inBook` (27 Nov 2026) ────────────────────────
+  //
+  // Whether a loose product is in the counter's printable allergen book. Only `true` is
+  // ever stored; absent is «not in the book». Like archiving it is for whoever runs the
+  // place — the role is asked only when the flag MOVES — and the one combined clause
+  // asks canManage at most once.
+  await expectAllowed('recipes: the owner creates a recipe for the allergen book', () =>
+    wholeWrite(`${A}/recipes/R_BOOK`, { bakery: 'main', name: 'Torta di prova', ingredients: [] }));
+  await expectAllowed('recipes: the owner puts it in the allergen book', () =>
+    mergeWrite(`${A}/recipes/R_BOOK`, { bakery: 'main', inBook: true }));
+  await expectAllowed('recipes: an employee saves it with the flag untouched', () =>
+    mergeWrite(`${A}/recipes/R_BOOK`, { bakery: 'main', name: 'Torta di prova', ingredients: [] }, asAccount(SAM)));
+  await expectAllowed('recipes: …and with the flag carried as stored', () =>
+    mergeWrite(`${A}/recipes/R_BOOK`, { bakery: 'main', name: 'Torta di prova 2', inBook: true }, asAccount(SAM)));
+  await expectDenied('recipes: an employee cannot take it out of the allergen book',
+    () => clearWrite(`${A}/recipes/R_BOOK`, { bakery: 'main' }, ['inBook'], asAccount(SAM)));
+  await expectAllowed('recipes: the manager takes it out of the allergen book', () =>
+    clearWrite(`${A}/recipes/R_BOOK`, { bakery: 'main' }, ['inBook'], asAccount(MAYA)));
+  const bookOut = await fetch(`${FS}/${A}/recipes/R_BOOK`, { headers: asUser() }).then(r => r.json());
+  check('recipes: the removed flag is no field at all',
+    !('inBook' in (bookOut.fields ?? {})) && bookOut.fields?.name?.stringValue === 'Torta di prova 2');
+  await expectAllowed('recipes: the manager puts it back', () =>
+    mergeWrite(`${A}/recipes/R_BOOK`, { bakery: 'main', inBook: true }, asAccount(MAYA)));
+  const bookIn = await fetch(`${FS}/${A}/recipes/R_BOOK`, { headers: asUser() }).then(r => r.json());
+  check('recipes: the added flag is stored as true',
+    bookIn.fields?.inBook?.booleanValue === true);
+  await expectAllowed('recipes: an employee creates a recipe for another test', () =>
+    wholeWrite(`${A}/recipes/R_BOOK2`, { bakery: 'main', name: 'Biscotto di prova', ingredients: [] }, asAccount(SAM)));
+  await expectDenied('recipes: an employee cannot put a recipe in the allergen book',
+    () => mergeWrite(`${A}/recipes/R_BOOK2`, { bakery: 'main', inBook: true }, asAccount(SAM)));
+  await expectDenied('recipes: an employee cannot create a recipe already in the book',
+    () => wholeWrite(`${A}/recipes/R_BOOK_NEW`, { bakery: 'main', name: 'Pane di prova', ingredients: [], inBook: true },
+      asAccount(SAM)));
+  await expectDenied('recipes: the flag is never false, even for the owner',
+    () => mergeWrite(`${A}/recipes/R_BOOK2`, { bakery: 'main', inBook: false }));
+  await expectDenied('recipes: the flag sent as a word',
+    () => mergeWrite(`${A}/recipes/R_BOOK2`, { bakery: 'main', inBook: 'yes' }));
+  await expectDenied('recipes: a member of another venue cannot put it in the book',
+    () => mergeWrite(`${A}/recipes/R_BOOK2`, { bakery: 'main', inBook: true }, asAccount(BOB)));
+  await expectDenied('recipes: signed out cannot put it in the book',
+    () => mergeWrite(`${A}/recipes/R_BOOK2`, { bakery: 'main', inBook: true }, noAuth()));
+  const bookEnd = await fetch(`${FS}/${A}/recipes/R_BOOK2`, { headers: asUser() }).then(r => r.json());
+  check('recipes: the refused writes left the second recipe out of the book',
+    !('inBook' in (bookEnd.fields ?? {})));
+
   await expectAllowed('labels: the venue\'s list of recipe categories', () =>
     mergeWrite(`${A}/config/labels`, { bakery: 'main', recipeCategories: ['Natale', 'Estate', 'Pane'] }));
   await expectAllowed('labels: …and an empty one', () =>

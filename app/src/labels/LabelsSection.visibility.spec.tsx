@@ -79,18 +79,18 @@ describe('where «Labels» sits', () => {
     }
   });
 
-  it('in the rail of an employee, between Recipes and Calculator, with the same look as every other item', () => {
+  it('in the rail of an employee, between Recipes and the allergen book, with the same look as every other item', () => {
     renderApp('/home', { session: { ...EMPLOYEE, location: { homeCardOrder: ['pastries', 'catalogue'] } } });
-    expect(linkNames(rail())).toEqual(['Home', 'Bookings', 'Orders', 'Suppliers', 'Recipes', 'Labels', 'Calculator', 'Pastries', 'Settings']);
+    expect(linkNames(rail())).toEqual(['Home', 'Bookings', 'Orders', 'Suppliers', 'Recipes', 'Labels', 'Allergens', 'Calculator', 'Pastries', 'Settings']);
     const labels = rail().getByRole('link', { name: 'Labels' });
     expect(labels).toHaveAttribute('href', '/labels');
     expect(labels.className).toBe(rail().getByRole('link', { name: 'Recipes' }).className);
   });
 
-  it('on a phone: under «More» (the five tabs are fixed), between Suppliers and Pastries as the list orders them', () => {
+  it('on a phone: under «More» (the five tabs are fixed), between Suppliers and Pastries as the list orders them (the allergen book follows Labels)', () => {
     const { more, tabs } = arrangeSections(visibleSectionIds({}, true, 'owner'));
     expect(tabs.map(section => section.id)).toEqual(['home', 'orders', 'recipes', 'calculator']);
-    expect(more.map(section => section.id)).toEqual(['bookings', 'suppliers', 'labels', 'pastries', 'stocktake', 'foodcost', 'cakes', 'settings']);
+    expect(more.map(section => section.id)).toEqual(['bookings', 'suppliers', 'labels', 'allergenBook', 'pastries', 'stocktake', 'foodcost', 'cakes', 'settings']);
   });
 
   it('is current in the rail on its own screens', async () => {

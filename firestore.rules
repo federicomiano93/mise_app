@@ -2581,7 +2581,12 @@ service cloud.firestore {
                                                    // semi-finished good is kept («In frigorifero a
                                                    // +4 °C»), printed when the venue prints that
                                                    // field. Optional both ways; the merge keeps it.
-                                                   'haccpStorage'])
+                                                   'haccpStorage',
+                                                   // Mise 2's allergen book (27 Nov 2026): the loose
+                                                   // product is in the counter's printable allergen book.
+                                                   // Only `true` is stored; absent = not in the book.
+                                                   // Optional both ways; the current app's merge keeps it.
+                                                   'inBook'])
           && stampedFor(lid)
           && request.resource.data.name is string
           && request.resource.data.name.size() > 0
@@ -2639,14 +2644,24 @@ service cloud.firestore {
           && (!('haccpStorage' in request.resource.data)
               || (request.resource.data.haccpStorage is string
                   && request.resource.data.haccpStorage.size() <= 200))
-          // ⚠️ ARCHIVING AND RESTORING ARE FOR WHOEVER RUNS THE PLACE (Federico, 24 Oct
-          // 2026), but the rest of a recipe is everybody's work. So the role is asked only
-          // when the archived state MOVES — a recipe created archived, archived, or
-          // restored — and an employee's save of an archived recipe, which leaves the flag
-          // as it is, still passes. Absent reads as «not archived» both sides. The
-          // short-circuit keeps canManage's reads off every ordinary save.
-          && (request.resource.data.get('archived', false)
-                == (resource == null ? false : resource.data.get('archived', false))
+          // Only ever `true`: absent means «not in the book», and taking a product out
+          // removes the field, never writes false.
+          && (!('inBook' in request.resource.data)
+              || (request.resource.data.inBook is bool
+                  && request.resource.data.inBook == true))
+          // ⚠️ ARCHIVING AND RESTORING, AND PUTTING A PRODUCT IN OR OUT OF THE ALLERGEN
+          // BOOK, ARE FOR WHOEVER RUNS THE PLACE (Federico, 24 Oct 2026), but the rest of
+          // a recipe is everybody's work. So the role is asked only when one of the two
+          // flags MOVES — a recipe created archived or in the book, archived, restored,
+          // added, removed — and an employee's save that leaves both flags as stored
+          // still passes. Absent reads as «false» both sides. ONE clause for both flags
+          // on purpose: canManage is 3 reads, and it is called at most once (canUse 2 +
+          // canManage 3 = 5 of the 10 allowed). The short-circuit keeps canManage's reads
+          // off every ordinary save.
+          && ((request.resource.data.get('archived', false)
+                 == (resource == null ? false : resource.data.get('archived', false))
+               && request.resource.data.get('inBook', false)
+                 == (resource == null ? false : resource.data.get('inBook', false)))
               || canManage(lid, 'catalogue'));
         // The owner of the sales side, through Food cost: those three numbers and nothing
         // else of a recipe that already exists.

@@ -21,7 +21,7 @@ const RESTAURANT = {
 describe('the shell for an employee', () => {
   it('keeps Food cost and Stocktake out of the rail', () => {
     renderApp('/orders', { session: EMPLOYEE });
-    expect(linkNames(rail())).toEqual(['Home', 'Bookings', 'Orders', 'Suppliers', 'Recipes', 'Labels', 'Calculator', 'Pastries', 'Settings']);
+    expect(linkNames(rail())).toEqual(['Home', 'Bookings', 'Orders', 'Suppliers', 'Recipes', 'Labels', 'Allergens', 'Calculator', 'Pastries', 'Settings']);
   });
 
   it('keeps Stocktake out of the tab bar and both out of «More»', async () => {
@@ -31,7 +31,7 @@ describe('the shell for an employee', () => {
     await user.click(tabs().getByRole('link', { name: 'More' }));
 
     const list = within(await screen.findByRole('list'));
-    expect(list.getAllByRole('link').map(link => link.textContent)).toEqual(['Bookings', 'Suppliers', 'Labels', 'Pastries', 'Settings']);
+    expect(list.getAllByRole('link').map(link => link.textContent)).toEqual(['Bookings', 'Suppliers', 'Labels', 'Allergens', 'Pastries', 'Settings']);
   });
 
   it('shows Food cost when the venue chose to show it to staff, but not Stocktake', () => {
@@ -42,8 +42,8 @@ describe('the shell for an employee', () => {
 
   it('shows a manager everything the venue bought', () => {
     renderApp('/orders', { session: { ...EMPLOYEE, canManage: true, role: 'manager' } });
-    // Twelve places, plus the rail's «More» item (always in the DOM when a place can spill; jsdom applies no media query).
-    expect(linkNames(rail())).toHaveLength(13);
+    // Thirteen places (the allergen book made it one more, 27 Nov 2026), plus the rail's «More» item (always in the DOM when a place can spill; jsdom applies no media query).
+    expect(linkNames(rail())).toHaveLength(14);
     expect(linkNames(rail())).toContain('Cakes');
     expect(linkNames(rail()).at(-2)).toBe('More');
   });
@@ -56,7 +56,7 @@ describe('the shell for an employee', () => {
     // Not the placeholder a shown section has.
     expect(screen.queryByText(/will arrive in one of the next steps/)).not.toBeInTheDocument();
     // The navigation is still around it, and «More» does not claim a section it does not hold.
-    expect(rail().getAllByRole('link')).toHaveLength(9);
+    expect(rail().getAllByRole('link')).toHaveLength(10);
     expect(tabs().getByRole('link', { name: 'More' })).not.toHaveAttribute('aria-current');
 
     await user.click(screen.getByRole('link', { name: 'Go to the start' }));
@@ -236,20 +236,22 @@ describe('the rail «More» item', () => {
     const more = rail().getByRole('link', { name: 'More' });
     expect(more).toHaveAttribute('href', expect.stringMatching(/\/more$/));
     expect(more).not.toHaveAttribute('aria-current');
+    // 13 places: the last THREE sections before Settings spill (the allergen book, 27 Nov 2026).
+    expect(rail().getByRole('link', { name: 'Stocktake' })).toHaveAttribute('data-spill');
     expect(rail().getByRole('link', { name: 'Food cost' })).toHaveAttribute('data-spill');
     expect(rail().getByRole('link', { name: 'Cakes' })).toHaveAttribute('data-spill');
-    expect(rail().getByRole('link', { name: 'Stocktake' })).not.toHaveAttribute('data-spill');
+    expect(rail().getByRole('link', { name: 'Pastries' })).not.toHaveAttribute('data-spill');
     expect(rail().getByRole('link', { name: 'Settings' })).not.toHaveAttribute('data-spill');
-    expect(rail().getAllByRole('link').filter(link => link.hasAttribute('data-spill'))).toHaveLength(2);
+    expect(rail().getAllByRole('link').filter(link => link.hasAttribute('data-spill'))).toHaveLength(3);
   });
 
-  it.each(['/cakes', '/food-cost', '/more'])('is the current item on %s', path => {
+  it.each(['/cakes', '/food-cost', '/stocktake', '/more'])('is the current item on %s', path => {
     renderApp(path, { session: { ...EMPLOYEE, canManage: true, role: 'manager' } });
     expect(rail().getByRole('link', { name: 'More' })).toHaveAttribute('aria-current', 'page');
   });
 
   it('is not the current item on a section that stays in the rail', () => {
-    renderApp('/stocktake', { session: { ...EMPLOYEE, canManage: true, role: 'manager' } });
+    renderApp('/pastries', { session: { ...EMPLOYEE, canManage: true, role: 'manager' } });
     expect(rail().getByRole('link', { name: 'More' })).not.toHaveAttribute('aria-current');
   });
 
@@ -257,11 +259,11 @@ describe('the rail «More» item', () => {
     renderApp('/orders', { session: EMPLOYEE });
     expect(rail().queryByRole('link', { name: 'More' })).not.toBeInTheDocument();
     expect(rail().getAllByRole('link').some(link => link.hasAttribute('data-spill'))).toBe(false);
-    expect(document.querySelector('[data-items]')).toHaveAttribute('data-items', '9');
+    expect(document.querySelector('[data-items]')).toHaveAttribute('data-items', '10');
   });
 
   it('counts the places on the rail, for the stylesheet', () => {
     renderApp('/orders', { session: { ...EMPLOYEE, canManage: true, role: 'manager' } });
-    expect(document.querySelector('[data-items]')).toHaveAttribute('data-items', '12');
+    expect(document.querySelector('[data-items]')).toHaveAttribute('data-items', '13');
   });
 });

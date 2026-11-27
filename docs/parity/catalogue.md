@@ -2272,3 +2272,45 @@ The card no longer stops at eight rows with «and N more»: it names EVERY gap, 
 - The target of each gap is worked out in the app (`allergenGaps.ts`: `rows` is one per recipe row in order, `gaps` is the model's own
   filter of it); the shared model's output is unchanged. The gap rows tapped live in a stack of their own in the recipes section
   (`rememberGap`), carried across sections only for the Suppliers trip.
+
+## Allergen book as built (27 Nov 2026) — NEW IN MISE 2, no original in the current app
+
+The owner approved it from a mockup. A printable book of the products a venue sells loose (the counter's allergen book), chosen by
+whoever runs the place, read by everybody shown Recipes. Section `allergenBook` («Allergens» in the rail, «Allergen book» / «Libro
+allergeni» as the title), right after Labels; `/allergen-book` and `/allergen-book/choose`. The data is one optional field,
+`recipes/{id}.inBook` (only `true`), whose rule is `canManage(catalogue)` only when it moves; rules not yet deployed. The current app
+neither reads nor writes it and its merge saves keep it.
+
+Decisions taken before the build (the PR lists them):
+
+- **D1, the rail.** The fullest rail is now 13 places. The existing spill is kept: for 13 places `railSpill` is the last three sections
+  before the bottom group (Stocktake, Food cost, Cakes), hidden together under «More» when 13 places do not fit; the rail marked
+  `data-items="13"` has its own steps (`railHeight.spec.ts`). Honest consequence: on the lab tablet's 648 px a venue showing everything
+  now sees 9 sections, «More» and Settings; a rail of 12 places still shows all 12 at 648 px.
+- **D2, the name** in the book is the hand-typed label name when there is one, else the recipe's name as written (never upper-cased: on
+  paper capitals mean «allergen»).
+- **D3, the ingredient line.** A hand-typed ingredients text wins only when its check RAN and found no error. ⚠️ THIS REVERSES THE FIRST
+  VERSION OF D3, which used the typed text of a venue whose labels are not Italian because that venue has no check and so no errors: a
+  text nobody can vouch for is not printed in a legal book. Such a venue's typed text is not used (`typedText` is `unchecked`) and the
+  line composed from the recipe is, with its allergens in bold; the screen, never the paper, says so in one quiet line under the product
+  (`allergenBook.typedUnchecked`), as it does for a text with errors (`typedRefused`).
+- **D4, complete or incomplete** = whether the product label can be made; the reason shown is the label's own refusal sentence.
+- **D5, an incomplete product on paper** = its name, an ingredient line (a clean typed text, else the recipe's own rows as typed, heaviest
+  first, no bold) and the boxed «Allergeni da verificare: chiedere al personale» instead of Contains / May contain.
+- **D6, archived** recipes are hidden from the book, the count, the print and the pencil list even when `inBook` is stored.
+- **D7, a refused save** keeps the person's ticks in the store's memory while the section is open, says so in the status line, and the
+  pencil reopens from them, dirty.
+- **D8, the paper's words** (title, «Aggiornato al …», the legend, the box, «Altri prodotti») follow the venue's COUNTRY, from a small
+  table in `bookEntry.ts`.
+
+What was built beyond the data layer: the book screen (the label's own refusals for allergens off and no country; «Loading…»; the two
+empty states; the red «Da completare · N» block on top, each row a button to its recipe; the count; the categories in the Recipe
+book's order); the pencil screen (a working copy made once, real checkboxes, «allergeni incompleti» beside a product whose label cannot
+be made, a polite count, a search that never drops a tick, Save asks and writes only what changed, leaving with unsaved ticks asks);
+the title band (pencil and Print for `canManage` only; icon alone under 700 px with the words kept in the DOM as the name); and the
+print (a question when some products are incomplete, then the label's print-host pattern with an A4 page).
+
+Not driven: the emulator against the new rules (Phase A's run is reported separately), the paper itself (no printer was used: only the
+host, the classes and the stylesheet's text are specified), the lab tablet (Chrome 101) at 648 px, and a phone's icon-only band at the
+real widths. The focus is not promised back to the incomplete row a person opened when they come back from its recipe (the Labels
+list does; here the book simply reopens), a small known gap.

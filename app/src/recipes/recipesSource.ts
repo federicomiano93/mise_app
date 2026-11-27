@@ -123,9 +123,10 @@ export interface RecipesSource {
 // so an emptied box travels as a removal (js/catalogue/firebase-catalogue.js, CLEARABLE_RECIPE_FIELDS).
 // ⚠️ THE LAST FOUR ARE MISE 2'S: the image label's texts (labelTexts.ts) — an emptied box removes the field, so «nothing
 // typed» is never a stored empty string — and the shelf's two (@mise/shared/recipe-shelf): «no category» and «not
-// archived» are NO FIELD, so a cleared category and a restore travel as removals too.
+// archived» are NO FIELD, so a cleared category and a restore travel as removals too. `inBook` (27 Nov 2026, the allergen
+// book) is the same kind of flag: only `true` is stored, so taking a product out of the book travels as a removal.
 export const CLEARABLE_RECIPE_FIELDS = [
-  'netWeightG', 'shelfLifeDays', 'labelName', 'labelIngredientsText', 'category', 'archived', 'haccpStorage',
+  'netWeightG', 'shelfLifeDays', 'labelName', 'labelIngredientsText', 'category', 'archived', 'haccpStorage', 'inBook',
 ] as const;
 
 // The label profile's keys a person can take away (config/labels): the HACCP list's category — «every recipe» is NO

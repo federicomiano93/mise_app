@@ -29,6 +29,9 @@ export type FakeRecipesSource = RecipesSource & {
   holdQueue(): () => void;
   // Tells every watcher again (as another phone's write would).
   push(): void;
+  // Tells the RECIPES watchers alone, whatever `hold()` says: `fromServer: false` is the phone's own copy answering before the
+  // server has (the list given instead of the stored recipes when it differs, as an older local copy would be).
+  pushRecipes(fromServer: boolean, list?: StoredDoc[]): void;
   // Kills every live RECIPES stream, as a lost permission would.
   breakStream(): void;
   // Holds back the first answers until release() (Firestore still loading).
@@ -201,6 +204,9 @@ export function fakeRecipesSource(
       for (const w of supplierWatchers) w.onChange([...suppliers.values()], FROM_SERVER);
       if (!labelHeld) for (const w of labelWatchers) w.onChange(fake.labelConfig, FROM_SERVER);
       tellLogo();
+    },
+    pushRecipes(fromServer, list) {
+      for (const w of watchers) w.onChange(list ?? [...recipes.values()], fromServer ? FROM_SERVER : { fromServer: false });
     },
     breakStream() {
       for (const w of [...watchers]) {

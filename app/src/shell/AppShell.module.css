@@ -113,7 +113,7 @@
    target. For a rail of up to 11 places (this set; the 11 places are everything an owner sees but the newest section): 64px needs 797, so
    from 796px of height down 56px an item (it needs 709); from 708px 52px (665); from 664px 49px with the rail's own padding and gaps
    tightened (594); from 593px 48px (583). The lab tablet's 648 gets 49px.
-   The fullest rail (12 places) has its own, one item earlier, in the next block. railHeight.spec.ts adds it all up. */
+   A rail of 12 places has its own, one item earlier, in the next block, and the fullest (13) one more after it. railHeight.spec.ts adds it all up. */
 @media (max-height: 796px) {
   .railItem {
     min-height: 56px;
@@ -154,10 +154,11 @@
   }
 }
 
-/* ⚠️ TWELVE PLACES (Cakes, 20 Nov 2026): the fullest rail holds 12, one item more than the steps above were written for, so a rail marked
+/* ⚠️ TWELVE PLACES (Cakes, 20 Nov 2026; since the allergen book, 27 Nov 2026, the fullest rail is 13 and has its own block below, but a venue
+   without Bookings, say, still has 12): a rail of 12 holds one item more than the steps above were written for, so a rail marked
    `data-items="12"` (AppShell.tsx) steps down one item earlier. Same sums with 12 places: 64px needs 865, so 56px from 864px of height (769);
-   52px from 768px (721); 49px tightened from 720px (645); 48px from 644px (633). THE LAB TABLET'S 648px SHOWS ALL 12, SETTINGS INCLUDED, AT 49px,
-   AND NO «MORE». Only below what 12 places need at 48px (633px) THE LAST TWO SECTIONS (`data-spill`: the ones arrangeSections puts in
+   52px from 768px (721); 49px tightened from 720px (645); 48px from 644px (633). A RAIL OF 12 SHOWS ALL 12, SETTINGS INCLUDED, AT 49px ON THE LAB
+   TABLET'S 648px, AND NO «MORE». Only below what 12 places need at 48px (633px) THE LAST TWO SECTIONS (`data-spill`: the ones arrangeSections puts in
    railSpill) go under «More», and the rail holds 11 places, which need 583. A rail of 11 or fewer carries `data-items="11"` (its own count), which no
    rule below matches (they match only "12"), so it keeps the steps above exactly. The data says which links CAN spill; these queries decide
    WHEN. Qualified by the attribute, so they outrank the unqualified steps (whose heights are all lower). railHeight.spec.ts adds it up. */
@@ -211,6 +212,62 @@
   }
 
   .rail[data-items="12"] .railItem.railMore {
+    display: flex;
+  }
+}
+
+/* ⚠️ THIRTEEN PLACES (the allergen book, 27 Nov 2026): the fullest rail, every section but Clients. Same sums with 13 places (padding + places ×
+   (item + gap) + 17): 64px needs 933, so 56px from 932px of height (829); 52px from 828px (777); 49px tightened from 776px (696); 48px from
+   695px (683). THE LAB TABLET'S 648px IS BELOW 683, SO IT SHOWS 9 SECTIONS, «MORE» AND SETTINGS (11 places, which need 583 at 48px): the last THREE
+   sections (`data-spill`: Stocktake, Food cost and Cakes, what arrangeSections puts in railSpill) go under «More» from 682px down. That is
+   the stated cost of the new section; a rail of 12 (above) still shows everything at 648px. A rail marked "13" matches only these rules.
+   railHeight.spec.ts adds it up. */
+@media (max-height: 932px) {
+  .rail[data-items="13"] .railItem {
+    min-height: 56px;
+    padding: 4px 0;
+    gap: 3px;
+  }
+}
+
+@media (max-height: 828px) {
+  .rail[data-items="13"] .railItem {
+    min-height: 52px;
+    padding: 3px 0;
+    gap: 2px;
+  }
+}
+
+@media (max-height: 776px) {
+  .rail[data-items="13"] {
+    padding-top: var(--s2);
+    padding-bottom: var(--s2);
+  }
+
+  .rail[data-items="13"] .railNav,
+  .rail[data-items="13"] .railGroup {
+    gap: 2px;
+  }
+
+  .rail[data-items="13"] .railItem {
+    min-height: 49px;
+    padding: 2px 0;
+    gap: 1px;
+  }
+}
+
+@media (max-height: 695px) {
+  .rail[data-items="13"] .railItem {
+    min-height: 48px;
+  }
+}
+
+@media (max-height: 682px) {
+  .rail[data-items="13"] .railItem[data-spill] {
+    display: none;
+  }
+
+  .rail[data-items="13"] .railItem.railMore {
     display: flex;
   }
 }

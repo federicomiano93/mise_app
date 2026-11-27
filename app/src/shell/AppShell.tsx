@@ -36,7 +36,7 @@ const sectionOf = (pathname: string): string => pathname.split('/')[1] ?? '';
 // script measures the width or the height: a tablet turned from landscape to portrait, or a window resized,
 // changes the layout with no render at all, and `display: none` keeps the hidden one out of the tab order and away from screen readers. The same
 // goes for the rail's «More» item: the data says which links CAN spill
-// (`data-spill`, and `data-items` on the rail), the stylesheet decides WHEN, by window height. (The one script choice is Page's: from 700px the
+// (`data-spill`, and `data-items` on the rail), the stylesheet decides WHEN, by window height: with the allergen book the fullest rail is 13 places, and on the lab tablet's 648px the last three sections go under «More». (The one script choice is Page's: from 700px the
 // title is drawn into the bar's slot, see titleSlot.ts.)
 // This person's holiday is held here, at the venue level, so the Home's band, Settings' row and the once-a-day reminder agree.
 export function AppShell() {

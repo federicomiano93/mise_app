@@ -21,5 +21,7 @@ export function messageText(
       return t(message.archived ? 'cat.shelf.couldNotArchive' : 'cat.shelf.couldNotRestore', {
         name: message.name.trim() || t('cat.recipeWord'),
       });
+    case 'book-not-saved':
+      return t('allergenBook.notSaved');
   }
 }
