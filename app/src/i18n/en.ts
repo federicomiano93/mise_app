@@ -2758,6 +2758,7 @@ export const en = {
   'sup.imp.working': 'Importing…',
   'sup.imp.progress': 'Importing {done} of {total}…',
   'sup.imp.status.updatePrice': 'New price',
+  'sup.imp.status.priceConfirmed': 'Price confirmed',
   'sup.imp.status.historyOnly': 'History only',
   'sup.imp.status.unchanged': 'Unchanged',
   'sup.imp.status.decide': 'To decide',

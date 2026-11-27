@@ -110,6 +110,12 @@ test('classify: sugar in sacks is an ingredient, not packaging', () => {
   assert.deepEqual(kind('ZUCCHERO SACCHI DA KG 25'), ['ingrediente', '']);
 });
 
+test('classify: sfarinato is a flour, a real sack line is still packaging', () => {
+  assert.equal(kind('SFARINATO BIO INTEGRALE PERCIASACCHI')[0], 'ingrediente');
+  assert.equal(kind('Sfarinato tipo 1 bio')[0], 'ingrediente');
+  assert.equal(kind('SACCHI N.U. AMBRATI')[0], 'packaging');
+});
+
 test('classify: real packaging still is packaging', () => {
   assert.equal(kind('SACCHETTI CARTA PANE')[0], 'packaging');
   assert.equal(kind('BUSTE PLASTICA')[0], 'packaging');

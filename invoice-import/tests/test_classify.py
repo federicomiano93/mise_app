@@ -127,6 +127,11 @@ class ClassifyTest(unittest.TestCase):
     def test_sugar_in_sacks_is_an_ingredient_not_packaging(self):
         self.assertEqual(self.kind("ZUCCHERO SACCHI DA KG 25"), ("ingrediente", ""))
 
+    def test_sfarinato_is_a_flour_a_real_sack_line_is_still_packaging(self):
+        self.assertEqual(self.kind("SFARINATO BIO INTEGRALE PERCIASACCHI")[0], "ingrediente")
+        self.assertEqual(self.kind("Sfarinato tipo 1 bio")[0], "ingrediente")
+        self.assertEqual(self.kind("SACCHI N.U. AMBRATI")[0], "packaging")
+
     def test_real_packaging_still_is_packaging(self):
         self.assertEqual(self.kind("SACCHETTI CARTA PANE")[0], "packaging")
         self.assertEqual(self.kind("BUSTE PLASTICA")[0], "packaging")

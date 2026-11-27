@@ -116,6 +116,11 @@ export const STATUS = {
   error: { key: 'sup.imp.status.error', tone: 'error' },
 } as const satisfies Record<string, { key: MessageKey; tone: Tone }>;
 
+// A «New price» row whose price equals the one in force (only the invoice is newer): same write, a quiet pill. Screen only —
+// the model's status stays 'update-price'.
+export const PRICE_CONFIRMED = 'price-confirmed';
+export const PRICE_CONFIRMED_STATUS = { key: 'sup.imp.status.priceConfirmed', tone: 'quiet' } as const satisfies { key: MessageKey; tone: Tone };
+
 export type IngredientStatus = keyof typeof STATUS;
 
 export const isIngredientStatus = (value: unknown): value is IngredientStatus => typeof value === 'string' && Object.hasOwn(STATUS, value);
@@ -125,6 +130,7 @@ export const FILTER_KEYS = {
   all: 'sup.imp.filter.all',
   new: 'sup.imp.status.new',
   'update-price': 'sup.imp.status.updatePrice',
+  [PRICE_CONFIRMED]: 'sup.imp.status.priceConfirmed',
   'history-only': 'sup.imp.status.historyOnly',
   unchanged: 'sup.imp.status.unchanged',
   check: 'sup.imp.status.priceCheck',

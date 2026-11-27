@@ -8,7 +8,7 @@ import {
   ASK_NEW, ASK_NONE, ASK_SKIP, decisionOfQuestion, questionValue, sameValue,
 } from './ingredientAnswers';
 import type { IngredientDecision } from './ingredientAnswers';
-import { STATUS, codeKeys, isIngredientStatus, reasonKey } from './importWords';
+import { PRICE_CONFIRMED_STATUS, STATUS, codeKeys, isIngredientStatus, reasonKey } from './importWords';
 import styles from './InvoiceImportScreen.module.css';
 
 const CREATE = 'create';
@@ -23,6 +23,8 @@ type Props = {
   // The supplier's name and the price as the row shows them (worked out by the step: they need the venue's suppliers, prices, money).
   supplierName: string;
   priceText: string;
+  // The price is the one in force («(=)»), only the invoice is newer: the pill says «Price confirmed» instead of «New price».
+  priceConfirmed?: boolean;
   // What the person has answered so far on this row.
   decision: unknown;
   forgotten: boolean;
@@ -45,7 +47,7 @@ function shortDate(iso: unknown, locale: string): string {
 // One ingredient of the file, as step 3 shows it: who it is, what Mise makes of it (a WORD in a pill), why, and what the person
 // may answer — in THIS order: the new-row choice, the question, «This price?», the invoice name.
 export function IngredientRow({
-  entry, supplierName, priceText, decision, forgotten, confirmed, renameChosen, onDecision, onForget, onConfirm, onRename,
+  entry, supplierName, priceText, priceConfirmed = false, decision, forgotten, confirmed, renameChosen, onDecision, onForget, onConfirm, onRename,
 }: Props) {
   const { t, locale } = useT();
   const nameId = useId();
@@ -57,7 +59,8 @@ export function IngredientRow({
   // keeps the Skipped pill it always had: review 11.)
   const needsCheck = bucketOf(entry) === 'check'
     && (['new', 'unchanged'].includes(row.status) || row.held === true || needsConfirmation(row) || Boolean(row.invoiceRename));
-  const status = needsCheck ? STATUS.check : (isIngredientStatus(row.status) ? STATUS[row.status] : null);
+  const status = needsCheck ? STATUS.check
+    : (priceConfirmed && row.status === 'update-price' ? PRICE_CONFIRMED_STATUS : (isIngredientStatus(row.status) ? STATUS[row.status] : null));
 
   // Why a price waits for a look (the model's checkOf): one sentence, the date in the person's format.
   const checkText = (): string => {
