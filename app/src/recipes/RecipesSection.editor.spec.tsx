@@ -276,7 +276,7 @@ describe('the checks before saving', () => {
 
 describe('Save', () => {
   it('⚠️ asks, then writes exactly the hand-listed fields, says «Recipe added.» and goes back to the list on the new row', async () => {
-    const { region, user, router, source } = await openEditor('/recipes/new');
+    const { region, user, router, source } = await openEditor('/recipes/new', { session: { location: { sections: { foodcost: false } } } });
     await user.type(nameBox(region), '  Pane  ');
     await user.type(ingredientBoxes(region)[0]!, 'Farina');
     await user.type(amountBoxes(region)[0]!, '500');
@@ -373,7 +373,7 @@ describe('Save', () => {
   });
 
   it('⚠️ a new recipe whose save is refused is not left in the list', async () => {
-    const { region, user, source } = await openEditor('/recipes/new');
+    const { region, user, source } = await openEditor('/recipes/new', { session: { location: { sections: { foodcost: false } } } });
     source.refuseRecipeWrites.save = true;
     await user.type(nameBox(region), 'Pane');
     await user.type(ingredientBoxes(region)[0]!, 'Farina');

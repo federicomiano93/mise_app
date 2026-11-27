@@ -1751,6 +1751,12 @@ export const en = {
   'cat.saveTheseChanges': 'Save these changes?',
   'cat.recipeSaved': 'Recipe saved.',
   'cat.recipeAdded': 'Recipe added.',
+  'cat.card.title': 'Food cost card',
+  'cat.card.finished': 'Finished product',
+  'cat.card.semi': 'Semi-finished',
+  'cat.card.none': 'No card',
+  'cat.recipeAddedCard': 'Recipe added. Food cost card created.',
+  'cat.recipeAddedNoCard': 'Recipe added. Food cost card not created.',
   'cat.discardChanges': 'Discard changes?',
   'cat.youHaveUnsavedChanges': 'You have unsaved changes. Discard them?',
   // New in Mise 2 (owner's decision, 18 Oct 2026): «Duplicate» on the recipe page opens a new recipe filled in from this one.
