@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bookShelf, chooseShelf } from './bookShelf';
+import { bookShelf, chooseShelf, layOut } from './bookShelf';
 
 // The allergen book's shelf: who is in it, in what order, and what the pencil screen offers. Invented products only.
 
@@ -82,5 +82,13 @@ describe('chooseShelf', () => {
   it('still leaves the archived out when the query matches them', () => {
     const groups = chooseShelf(CATALOGUE, CATEGORIES, 'it', 'archiviata');
     expect(groups).toEqual([]);
+  });
+});
+
+describe('layOut', () => {
+  it('lays any recipes out the same way: categories alphabetical, no category last, names alphabetical', () => {
+    const groups = layOut(CATALOGUE.filter(r => r.id !== 'g'), CATEGORIES, 'it');
+    expect(groups.map(group => group.category)).toEqual(['Biscotti', 'Pane', 'Torte', '']);
+    expect(names(groups[2]!.recipes)).toEqual(['Altra torta di prova', 'Torta della nonna di prova', 'Torta fuori dal libro']);
   });
 });

@@ -1,0 +1,39 @@
+/* One product of the allergen book on the screen: a quiet block, the allergens in bold (on paper they are bold capitals). */
+
+.product {
+  padding: var(--s3) 0;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.product p {
+  margin: 0;
+}
+
+.name {
+  font-size: var(--fs-lg);
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.ingredients {
+  margin-top: var(--s1);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.allergen {
+  font-weight: 800;
+}
+
+.contains {
+  margin-top: var(--s2);
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.traces {
+  margin-top: var(--s1);
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+}

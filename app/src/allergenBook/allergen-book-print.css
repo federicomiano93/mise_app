@@ -1,0 +1,110 @@
+/*
+  allergen-book-print.css — the allergen book as a sheet of paper (27 Nov 2026).
+
+  ⚠️⚠️ A PLAIN GLOBAL STYLESHEET, NOT A CSS MODULE, like the booking slip's booking-slip.css and the label's label-print.css, for
+  the same reason: the host (`#allergenBookPrint`, bookPrintHost.tsx) lives outside the app's tree, a direct child of <body>, and
+  the print rule below finds it by id and its pieces by class; a module would hash those names. Imported once, for its side effect,
+  by BookSheet.tsx.
+
+  ⚠️ BLACK ON WHITE AND NO TOKEN, ON PURPOSE: this is paper. The design system's colours mean nothing on it, and on paper the only
+  thing that may stand out is an allergen (bold capitals), so there is no colour to tell the app's greys from it.
+
+  ⚠️ NO PAGE NUMBERS: Chrome 101 (the lab tablet) cannot number pages from CSS (no `@page` margin boxes, no counter(page)), so the
+  sheet carries none rather than a number that is wrong on some devices.
+
+  ⚠️ NEVER `:has` (Chrome 101 does not know it): the «hide everything else» rule is scoped by a class on <html>
+  (`book-printing`), which bookPrintHost.tsx adds and removes together with the host.
+
+  The page itself (A4, 12 mm) is allergen-book-page.css, switched on only while the book prints.
+*/
+
+/* On screen the host is never seen. */
+#allergenBookPrint {
+  display: none;
+}
+
+@media print {
+  .book-printing body > *:not(#allergenBookPrint) {
+    display: none !important;
+  }
+
+  .book-printing #allergenBookPrint {
+    display: block;
+  }
+
+  .book-sheet {
+    background: #fff;
+    color: #000;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 11pt;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+  }
+
+  .book-venue {
+    margin: 0;
+    font-size: 11pt;
+    font-weight: 400;
+  }
+
+  .book-title {
+    margin: 1mm 0 0;
+    font-size: 22pt;
+    font-weight: 700;
+  }
+
+  .book-updated,
+  .book-legend {
+    margin: 1mm 0 0;
+    font-size: 10pt;
+  }
+
+  .book-legend {
+    margin-bottom: 5mm;
+    padding-bottom: 3mm;
+    border-bottom: 0.4mm solid #000;
+  }
+
+  .book-category {
+    margin: 6mm 0 2mm;
+    font-size: 14pt;
+    font-weight: 700;
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  /* A product is never cut across two pages. Both spellings: Chrome 101 knows the older one. */
+  .book-product {
+    margin: 0 0 4mm;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .book-product-name {
+    margin: 0;
+    font-size: 12pt;
+    font-weight: 700;
+  }
+
+  .book-product p {
+    margin: 0.5mm 0 0;
+  }
+
+  /* An allergen: bold capitals, in the ingredient line. */
+  .book-allergen {
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+
+  .book-contains {
+    font-weight: 700;
+  }
+
+  /* An incomplete product: the box takes the place of «Contains» and «May contain». */
+  .book-verify {
+    margin: 1.5mm 0 0;
+    padding: 1.5mm 2mm;
+    border: 0.5mm solid #000;
+    font-weight: 700;
+  }
+}

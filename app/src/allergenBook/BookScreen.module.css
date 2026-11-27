@@ -1,0 +1,151 @@
+/* The allergen book on the screen: one readable column, the to-complete block in the danger tokens on top, then each category. */
+
+.book {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+}
+
+.quiet {
+  margin: 0;
+  color: var(--ink-2);
+}
+
+/* The label's own refusal (allergens off, no country): the label screen's warn box. */
+.blocked {
+  padding: var(--s4);
+  border-radius: var(--r-md);
+  background: var(--warn-tint);
+  color: var(--warn-ink);
+}
+
+.blockedTitle {
+  margin: 0;
+  font-size: var(--fs-lg);
+  font-weight: 700;
+}
+
+.blockedText {
+  margin: var(--s2) 0 0;
+  line-height: 1.45;
+}
+
+/* Products whose allergens cannot be declared yet: the red a warning is drawn in. Each row is a button to the recipe. */
+.todo {
+  border: 1px solid var(--danger);
+  border-radius: var(--r-lg);
+  background: var(--danger-tint);
+  color: var(--danger-ink);
+}
+
+.todoTitle {
+  margin: 0;
+  padding: var(--s3) var(--s4) var(--s2);
+  font-size: var(--fs-lg);
+  font-weight: 700;
+}
+
+.todoRows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.todoRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  box-sizing: border-box;
+  width: 100%;
+  min-height: var(--hit-lg);
+  padding: var(--s2) var(--s4);
+  border: 0;
+  border-top: 1px solid var(--danger);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.todoRow:active {
+  background: var(--surface);
+}
+
+.todoRow:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
+}
+
+@media (hover: hover) {
+  .todoRow:hover {
+    background: var(--surface);
+  }
+}
+
+.todoText {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+  min-width: 0;
+}
+
+.todoName {
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.todoReason {
+  font-size: var(--fs-sm);
+  overflow-wrap: anywhere;
+}
+
+/* Qualified, so it outranks base.css's `svg.lucide` size of 20px. */
+.todoRow .chevron {
+  flex: none;
+  width: 18px;
+  height: 18px;
+}
+
+.count {
+  margin: 0;
+  color: var(--ink-2);
+  font-weight: 600;
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+.category {
+  margin: 0;
+  font-size: var(--fs-lg);
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.products {
+  padding: 0 var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+.products > div {
+  border-bottom: 1px solid var(--line);
+}
+
+.products > div:last-child {
+  border-bottom: 0;
+}
+
+/* The quiet line under a product whose hand-typed label text had mistakes. */
+.refused {
+  margin: 0 0 var(--s3);
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}

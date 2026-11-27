@@ -3620,9 +3620,29 @@ export const en = {
   'lab.saved.again': 'New production',
   'lab.saved.back': 'Back to the card',
 
-  // «Labels» (13 Nov 2026): the two choices and the list of recipes for each (labels/LabelsSection.tsx).
-  // The allergen book (27 Nov 2026). Phase A holds only what the store says; the screens add their own keys.
+  // The allergen book (27 Nov 2026): allergenBook/AllergenBookSection.tsx and its two screens.
+  'allergenBook.title': 'Allergen book',
+  'allergenBook.choose': 'Choose the products',
+  'allergenBook.print': 'Print',
+  'allergenBook.count': { one: '{n} product in the book', other: '{n} products in the book' },
+  'allergenBook.empty.manager': 'No product is in the book yet. Tap the pencil, “Choose the products”, to pick the ones you sell loose.',
+  'allergenBook.empty.staff': 'No product has been chosen for the book yet.',
+  'allergenBook.incomplete.title': 'To complete · {n}',
+  'allergenBook.typedRefused': 'The label text written by hand has mistakes, so the book shows the ingredients worked out from the recipe.',
   'allergenBook.notSaved': 'The products in the book could not be saved. Your ticks are kept: open “Choose the products” and save again.',
+  'allergenBook.choose.title': 'Products in the book',
+  'allergenBook.choose.incomplete': 'allergens incomplete',
+  'allergenBook.choose.count': { one: '{n} chosen', other: '{n} chosen' },
+  'allergenBook.choose.confirm.title': 'Save the products in the book?',
+  'allergenBook.choose.confirm.message': { one: 'The book will hold {n} product.', other: 'The book will hold {n} products.' },
+  'allergenBook.choose.discardBody': 'The products you ticked or unticked will not be saved.',
+  'allergenBook.print.title': 'Print the book?',
+  'allergenBook.print.message': { one: '{n} product has incomplete allergens: {names}.', other: '{n} products have incomplete allergens: {names}.' },
+  'allergenBook.print.boxNote': 'Printed, they say “Allergens to be checked: ask the staff” instead of “Contains”.',
+  'allergenBook.print.onlyComplete': { one: 'Only the complete one', other: 'Only the {n} complete' },
+  'allergenBook.print.all': { one: 'Print it anyway', other: 'Print all {n}' },
+
+  // «Labels» (13 Nov 2026): the two choices and the list of recipes for each (labels/LabelsSection.tsx).
   'labels.choose': 'Which label?',
   'labels.product': 'Product label',
   'labels.product.sub': 'Ingredients and allergens, for what you sell.',

@@ -1,0 +1,6 @@
+/* The allergen book: one readable column (the Home's width), full width on a phone. */
+
+.column {
+  width: 100%;
+  max-width: 40rem;
+}

@@ -19,7 +19,8 @@ function byName<T extends Named>(list: readonly T[], locale: string): T[] {
   return list.slice().sort((a, b) => a.name.localeCompare(b.name, locale, { sensitivity: 'base' }));
 }
 
-function shelve<T extends Named>(list: readonly T[], categories: readonly string[], locale: string): ShelfGroup<T>[] {
+// Any recipes laid out the Recipe book's way (the print uses it to put the incomplete products back among the others).
+export function layOut<T extends Named>(list: readonly T[], categories: readonly string[], locale: string): ShelfGroup<T>[] {
   return shelveRecipes(byName(list, locale), sortedCategories(categories, locale)).groups;
 }
 
@@ -36,7 +37,7 @@ export function bookShelf<T extends Named>(
   const done: T[] = [];
   const incomplete: T[] = [];
   for (const recipe of held) (complete(recipe) ? done : incomplete).push(recipe);
-  return { groups: shelve(done, categories, locale), incomplete, count: held.length };
+  return { groups: layOut(done, categories, locale), incomplete, count: held.length };
 }
 
 // The pencil screen's list: every recipe that is not archived, filtered by what was typed, laid out the same way.
@@ -46,5 +47,5 @@ export function chooseShelf<T extends Named>(
   locale: string,
   query: unknown,
 ): ShelfGroup<T>[] {
-  return shelve(filterByName(withoutArchived(recipes), query), categories, locale);
+  return layOut(filterByName(withoutArchived(recipes), query), categories, locale);
 }

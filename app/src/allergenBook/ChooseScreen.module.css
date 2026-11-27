@@ -1,0 +1,144 @@
+/* «Prodotti nel libro»: a card with the form bar on top, a search, and a tick-list per category. ⚠️ NOTHING ON THE CARD MAY CLIP (no
+   `overflow`): the form bar sticks to the top of the shell's scrolling area, and a clipping ancestor would turn it into an ordinary row. */
+
+.card {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+  padding: var(--s4);
+}
+
+.quiet {
+  margin: 0;
+  color: var(--ink-2);
+}
+
+.count {
+  margin: 0;
+  color: var(--ink-2);
+  font-weight: 600;
+}
+
+.search {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  min-height: var(--hit);
+  padding: 0 var(--s3);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink-3);
+}
+
+.search:focus-within {
+  border-color: var(--accent);
+}
+
+.search svg {
+  flex: none;
+  width: 18px;
+  height: 18px;
+}
+
+.input {
+  flex: 1;
+  min-width: 0;
+  min-height: var(--hit);
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: none;
+  color: var(--ink);
+  font: var(--fs-md)/1.2 var(--font);
+}
+
+.input::placeholder {
+  color: var(--ink-3);
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+.category {
+  margin: 0;
+  font-size: var(--fs-lg);
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.rows {
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  list-style: none;
+}
+
+.item {
+  border-bottom: 1px solid var(--line);
+}
+
+.item:last-child {
+  border-bottom: 0;
+}
+
+/* The whole row is the target: a real checkbox in a label, 48px tall at least. */
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  box-sizing: border-box;
+  min-height: var(--hit);
+  padding: var(--s2) var(--s3);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.row:focus-within {
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
+}
+
+.box {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-weight: 600;
+}
+
+/* «allergens incomplete»: amber, the app's to-check colour. */
+.incomplete {
+  flex: none;
+  padding: var(--s1) var(--s2);
+  border-radius: var(--r-sm);
+  background: var(--warn-tint);
+  color: var(--warn-ink);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+@media (min-width: 1000px) {
+  .body {
+    padding: var(--s6);
+  }
+}
