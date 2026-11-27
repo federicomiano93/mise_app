@@ -10,7 +10,7 @@
 // ran AND found no error in it. For a venue whose labels are not Italian the check is «not available» (`available: false`): nothing can
 // vouch for the text, so it is NOT used ('unchecked') and the line `buildLabel` composes is, with its allergens in bold. With errors the
 // book falls back to that composed line too ('refused'). An INCOMPLETE product (its
-// allergens cannot be declared) gets either a clean typed text, or the recipe's own rows as typed, heaviest first, with no bold: the
+// allergens cannot be declared) gets either a clean typed text, or the recipe's own rows as typed, heaviest first, both with NO bold at all: the
 // app cannot vouch for them and the box on the paper says so.
 import { labelWord, outputLanguage } from '@mise/shared/market';
 import { buildLabel, containsLine, mayContainLine } from '@mise/shared/recipe-label-model';
@@ -119,7 +119,8 @@ export function bookEntryOf(recipe: unknown, tables: RecipeLabelTables, location
     id,
     name,
     ingredientsWord,
-    runs: typedText === 'used' ? typedRuns(typed) : plainRuns(rows),
+    // ⚠️ NEVER BOLD for an incomplete product: bold capitals under the legend would read as an allergen declaration it cannot make.
+    runs: typedText === 'used' ? [{ text: typed.normalize('NFC'), bold: false }] : plainRuns(rows),
     contains: '',
     mayContain: '',
     complete: false,

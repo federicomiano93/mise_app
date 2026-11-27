@@ -151,8 +151,23 @@ describe('an incomplete product', () => {
     const used = bookEntryOf({ ...UNLINKED, labelIngredientsText: 'FARINA, zucchero' }, TABLES, IT);
     expect(used.typedText).toBe('used');
     expect(joined(used.runs)).toBe('FARINA, zucchero');
+    expect(used.runs.some(run => run.bold)).toBe(false);
     expect(used.complete).toBe(false);
     expect(used.contains).toBe('');
+  });
+
+  it('never yields a bold run in any path: typed text used, typed text refused, rows, no rows', () => {
+    const variants = [
+      { ...UNLINKED, labelIngredientsText: 'FARINA, zucchero' },
+      { ...UNLINKED, labelIngredientsText: 'farina di grano, zucchero' },
+      UNLINKED,
+      { id: 'v', name: 'Pane vuoto di prova', ingredients: [] },
+    ];
+    for (const recipe of variants) {
+      const entry = bookEntryOf(recipe, TABLES, IT);
+      expect(entry.complete).toBe(false);
+      expect(entry.runs.some(run => run.bold)).toBe(false);
+    }
   });
 });
 

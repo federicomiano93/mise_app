@@ -182,7 +182,7 @@ export function ChooseScreen() {
       try {
         yes = await confirm({
           title: t('allergenBook.choose.confirm.title'),
-          message: t('allergenBook.choose.confirm.message', { n: working.chosen.size }),
+          message: t('allergenBook.choose.confirm.message', { n: chosenCount }),
           okLabel: t('ui.save'),
           cancelLabel: t('common.cancel'),
         });
@@ -209,12 +209,32 @@ export function ChooseScreen() {
 
   // Which recipes cannot have their label made today (only once the ingredients have answered: before that every row would read
   // «not declared» only because nothing had come yet).
+  const reported = useRef(new Set<string>());
   const incompleteIds = useMemo(() => {
     const ids = new Set<string>();
     if (!ingredientsLoaded) return ids;
-    for (const recipe of withoutArchived(recipes)) if (!isBookComplete(recipe, tables)) ids.add(recipe.id);
+    for (const recipe of withoutArchived(recipes)) {
+      // ⚠️ ONE MALFORMED RECIPE MUST NOT BREAK THE SCREEN: it is shown as incomplete (its allergens cannot be vouched for) and can still be
+      // unticked. Reported once per recipe, through console.error (the app's error report wraps it).
+      try {
+        if (!isBookComplete(recipe, tables)) ids.add(recipe.id);
+      } catch (error) {
+        ids.add(recipe.id);
+        if (!reported.current.has(recipe.id)) {
+          reported.current.add(recipe.id);
+          console.error('Could not check whether a recipe is complete for the allergen book:', error);
+        }
+      }
+    }
     return ids;
   }, [ingredientsLoaded, recipes, tables]);
+  // How many of the ticks are products still on offer: a recipe deleted or archived since the screen opened is not in the book.
+  const chosenCount = useMemo(() => {
+    if (working === null) return 0;
+    let n = 0;
+    for (const recipe of withoutArchived(recipes)) if (working.chosen.has(recipe.id)) n += 1;
+    return n;
+  }, [working, recipes]);
 
   const groups = useMemo(() => chooseShelf(recipes, categories, locale, query), [recipes, categories, locale, query]);
   const offered = withoutArchived(recipes).length;
@@ -235,7 +255,7 @@ export function ChooseScreen() {
       />
       <div className={styles.body}>
         <p className={styles.count} role="status" aria-live="polite">
-          {t('allergenBook.choose.count', { n: working?.chosen.size ?? 0 })}
+          {t('allergenBook.choose.count', { n: chosenCount })}
         </p>
         {working === null ? (
           <p className={styles.quiet} aria-busy="true">{t('session.loading')}</p>

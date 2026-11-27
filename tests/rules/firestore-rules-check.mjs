@@ -1855,7 +1855,7 @@ async function configAndLogs() {
   await expectDenied('recipes: the flag sent as a word',
     () => mergeWrite(`${A}/recipes/R_BOOK2`, { bakery: 'main', inBook: 'yes' }));
   await expectDenied('recipes: a member of another venue cannot put it in the book',
-    () => mergeWrite(`${A}/recipes/R_BOOK`, { bakery: 'main', inBook: true }, asAccount(BOB)));
+    () => mergeWrite(`${A}/recipes/R_BOOK2`, { bakery: 'main', inBook: true }, asAccount(BOB)));
   await expectDenied('recipes: signed out cannot put it in the book',
     () => mergeWrite(`${A}/recipes/R_BOOK2`, { bakery: 'main', inBook: true }, noAuth()));
   const bookEnd = await fetch(`${FS}/${A}/recipes/R_BOOK2`, { headers: asUser() }).then(r => r.json());

@@ -1,8 +1,9 @@
-import { Component, useState } from 'react';
+import { Component, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router';
 import type { CatalogueRecipe } from '@mise/shared/catalogue-model';
 import { useT } from '../i18n/useT';
+import { useRecipes } from '../recipes/RecipesContext';
 import { useSession } from '../session/SessionContext';
 import { Button } from '../ui/Button';
 import { Dialog } from '../ui/Dialog';
@@ -21,11 +22,20 @@ import { useBook } from './useBook';
 // ⚠️ IT WORKS THE BOOK OUT FOR ITSELF (useBook) AND SITS IN A QuietBoundary: one malformed recipe that throws while the book is worked
 // out must not take the section down, and must not leave a box of error text in the title line — the buttons are simply not there (the
 // book's own screen, in its PartBoundary, says what happened).
-class QuietBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
-  override state = { failed: false };
+//
+// ⚠️ A FAILURE IS NOT FOR EVER: when `resetKey` (the recipes data) changes the buttons are tried again, so fixing or deleting the
+// malformed recipe brings them back without leaving the section.
+type QuietState = { failed: boolean; seenKey: unknown };
 
-  static getDerivedStateFromError(): { failed: boolean } {
+class QuietBoundary extends Component<{ children: ReactNode; resetKey: unknown }, QuietState> {
+  override state: QuietState = { failed: false, seenKey: undefined };
+
+  static getDerivedStateFromError(): Partial<QuietState> {
     return { failed: true };
+  }
+
+  static getDerivedStateFromProps(props: { resetKey: unknown }, state: QuietState): Partial<QuietState> | null {
+    return props.resetKey === state.seenKey ? null : { seenKey: props.resetKey, failed: false };
   }
 
   override render(): ReactNode {
@@ -36,8 +46,11 @@ class QuietBoundary extends Component<{ children: ReactNode }, { failed: boolean
 type Plan = 'complete' | 'all';
 
 export function BookControls() {
+  const { recipes, ingredients } = useRecipes();
+  // A new object only when the recipes or the ingredients change: the boundary compares it by identity.
+  const resetKey = useMemo(() => ({}), [recipes, ingredients]);
   return (
-    <QuietBoundary>
+    <QuietBoundary resetKey={resetKey}>
       <Controls />
     </QuietBoundary>
   );

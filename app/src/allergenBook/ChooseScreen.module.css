@@ -106,9 +106,10 @@
   -webkit-tap-highlight-color: transparent;
 }
 
-.row:focus-within {
+/* The keyboard frame is the checkbox's own (:focus-visible): :focus-within would also frame the last row tapped by touch. */
+.box:focus-visible {
   outline: 3px solid var(--accent);
-  outline-offset: -3px;
+  outline-offset: 3px;
 }
 
 .box {
