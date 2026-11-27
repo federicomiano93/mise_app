@@ -1517,3 +1517,11 @@ Found by code review and by driving a real drinks supplier's zip on the emulator
   languages (`sup.imp.reason.unitWeightMissing`).
 - Comments corrected: without `everyKind` the result is NOT always the original's: the «altro» line type, the soft drinks,
   `TYPE_ORDER` and the «1/2X» reading apply in the port either way.
+
+## Price changes: invoice dates as built (23 Nov 2026)
+
+- **DIFFERENCE from the original (his yes, 21 Oct 2026):** under the price line every row now says which two invoices it compares —
+  «Invoices: 1 Aug 2026 → 12 Sept 2026» / «Fatture: 1 ago 2026 → 12 set 2026», the older one left, like the prices. Display only:
+  `oldDate` is already on every `price-changes` document (the rules require it). A document without a real `YYYY-MM-DD` older date
+  gets no line, never a half one. **spec** `SuppliersSection.priceChanges` («a row names both invoices it compares…», «a change with
+  no real older date gets no invoices line…», «the row dates follow the interface language too»).

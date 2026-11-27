@@ -319,6 +319,20 @@ describe('the list', () => {
     expect(within(row).queryByText(/Different pack/)).not.toBeInTheDocument();
   });
 
+  it('a row names both invoices it compares, the older one first, like the prices', async () => {
+    open([change('c-one', {})]);
+    const inScreen = await report();
+    const row = (await inScreen.findByText('Flour 00')).closest('li') as HTMLElement;
+    expect(within(row).getByText(/^Invoices: 1 Aug.* 2026 → 12 Sep.* 2026$/)).toBeInTheDocument();
+  });
+
+  it('a change with no real older date gets no invoices line, never a half one', async () => {
+    open([change('c-a', { ingredientId: 'ing-flour', oldDate: undefined, pct: 9 }), change('c-b', { ingredientId: 'ing-sugar', oldDate: 'soon', pct: 8 })]);
+    const inScreen = await report();
+    await inScreen.findByText('Flour 00');
+    expect(inScreen.queryByText(/Invoices:/)).not.toBeInTheDocument();
+  });
+
   it('a change with no supplier says only the invoice date', async () => {
     open([change('c-one', { supplierId: undefined })]);
     const inScreen = await report();
@@ -347,6 +361,7 @@ describe('the list', () => {
     open([change('c-one', {})], '/suppliers/price-changes', { lang: 'it' });
     const inScreen = await report('Variazioni prezzi');
     expect(await inScreen.findByText(/Mill Co · fattura del 12 set 2026/)).toBeInTheDocument();
+    expect(inScreen.getByText('Fatture: 1 ago 2026 → 12 set 2026')).toBeInTheDocument();
   });
 
   it('it never writes and holds no edits', async () => {
