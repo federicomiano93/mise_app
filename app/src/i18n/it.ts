@@ -2534,6 +2534,7 @@ export const it: Messages = {
   'sup.imp.working': 'Importazione in corso…',
   'sup.imp.progress': 'Importo {done} di {total}…',
   'sup.imp.status.updatePrice': 'Nuovo prezzo',
+  'sup.imp.status.priceConfirmed': 'Prezzo confermato',
   'sup.imp.status.historyOnly': 'Solo storico',
   'sup.imp.status.unchanged': 'Invariato',
   'sup.imp.status.decide': 'Da decidere',
