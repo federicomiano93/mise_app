@@ -122,6 +122,13 @@ describe.each([
     expect(kind('ZUCCHERO SACCHI DA KG 25')).toStrictEqual(['ingrediente', '']);
   });
 
+  // 27 Nov 2026, real import: «perciasacchi» (a wheat) contains «sacch», so the flour fell through to packaging.
+  test('classify: sfarinato is a flour, a real sack line is still packaging', () => {
+    expect(kind('SFARINATO BIO INTEGRALE PERCIASACCHI')[0]).toBe('ingrediente');
+    expect(kind('Sfarinato tipo 1 bio')[0]).toBe('ingrediente');
+    expect(kind('SACCHI N.U. AMBRATI')[0]).toBe('packaging');
+  });
+
   test('classify: real packaging still is packaging', () => {
     expect(kind('SACCHETTI CARTA PANE')[0]).toBe('packaging');
     expect(kind('BUSTE PLASTICA')[0]).toBe('packaging');
