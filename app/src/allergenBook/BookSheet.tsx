@@ -19,7 +19,9 @@ export function BookSheet({ venue, words, groups }: Props) {
       <p className="book-legend">{words.legend}</p>
       {groups.map(group => (
         <section key={group.category}>
-          <h2 className="book-category">{group.category === '' ? words.noCategory : group.category}</h2>
+          {group.category !== '' || groups.length > 1 ? (
+            <h2 className="book-category">{group.category === '' ? words.noCategory : group.category}</h2>
+          ) : null}
           {group.entries.map(entry => <BookProduct key={entry.id} entry={entry} words={words} />)}
         </section>
       ))}

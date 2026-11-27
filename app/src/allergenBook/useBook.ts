@@ -16,7 +16,8 @@ import { isBookComplete } from './bookEntry';
 //
 // ⚠️ NOT A LABEL FILE: it decides nothing about food words. «Complete» is bookEntry.ts's decision (isBookComplete), and the
 // refusals are the label's (allergens switched off, no country), asked here as yes / no.
-export type BookBlock = 'allergens-off' | 'no-country' | null;
+// 'unreadable': this person's account cannot read the ingredients, so no product can be judged (every one would read «incomplete»).
+export type BookBlock = 'allergens-off' | 'no-country' | 'unreadable' | null;
 
 export type BookView = {
   readonly block: BookBlock;
@@ -32,11 +33,12 @@ export type BookView = {
 export function useBook(): BookView {
   const { locale } = useT();
   const { location } = useSession();
-  const { recipes, recipesLoaded, ingredients, ingredientsLoaded, categories } = useRecipes();
+  const { recipes, recipesLoaded, ingredients, ingredientsLoaded, ingredientsUnreadable, categories } = useRecipes();
   const tables = useAllergenTables(recipes, ingredients);
   const block: BookBlock = !allergensOn(location)
     ? 'allergens-off'
-    : outputLanguage(location) === null || !canPrintLabel(location) ? 'no-country' : null;
+    : outputLanguage(location) === null || !canPrintLabel(location) ? 'no-country'
+      : ingredientsUnreadable ? 'unreadable' : null;
   const loaded = recipesLoaded && ingredientsLoaded;
   const shelf = useMemo(
     () => (block === null && loaded

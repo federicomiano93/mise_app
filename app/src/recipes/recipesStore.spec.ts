@@ -1408,17 +1408,15 @@ describe('the Recipe catalogue store', () => {
       expect(store.refusedBookChoices().size).toBe(0);
     });
 
-    test('⚠️ a refusal does not undo a change made after it', async () => {
+    test('forgetRefusedBookChoices empties the memory', async () => {
       const { store, server, saveRecipeDoc } = makeStore();
-      let refuse: (err: unknown) => void = () => undefined;
-      saveRecipeDoc.mockImplementationOnce(() => new Promise((_, reject) => { refuse = reject; }));
+      saveRecipeDoc.mockImplementation(() => Promise.reject(new Error('permission-denied')));
       store.start();
       server([BISCOTTO]);
-      const first = store.saveBookChoices([{ id: 'B2', inBook: true }]);
-      void store.saveBookChoices([{ id: 'B2', inBook: false }]);
-      refuse(new Error('offline too long'));
-      await first;
-      expect('inBook' in (store.getSnapshot().recipes[0] as unknown as Record<string, unknown>)).toBe(false);
+      await store.saveBookChoices([{ id: 'B2', inBook: true }]);
+      expect(store.refusedBookChoices().size).toBe(1);
+      store.forgetRefusedBookChoices();
+      expect(store.refusedBookChoices().size).toBe(0);
     });
 
     test('⚠️ an editor save of an in-book recipe keeps the flag in the local copy and never sends it', () => {

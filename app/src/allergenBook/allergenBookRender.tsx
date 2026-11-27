@@ -20,10 +20,13 @@ type Options = {
   recipes?: StoredDoc[];
   location?: Record<string, unknown>;
   entries?: string[];
+  // Called with the source before anything is drawn (hold it, seed it).
+  prepare?: (source: ReturnType<typeof fakeRecipesSource>) => void;
 };
 
-export function open({ path = '/allergen-book', lang = 'it', country = 'IT', who = 'owner', recipes = RECIPES, location = {}, entries }: Options = {}) {
+export function open({ path = '/allergen-book', lang = 'it', country = 'IT', who = 'owner', recipes = RECIPES, location = {}, entries, prepare }: Options = {}) {
   const source = fakeRecipesSource({ recipes, ingredients: INGREDIENTS, labelConfig: LABEL_CONFIG });
+  prepare?.(source);
   const view = renderRecipes(path, {
     source,
     lang,

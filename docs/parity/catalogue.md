@@ -2289,9 +2289,11 @@ Decisions taken before the build (the PR lists them):
   now sees 9 sections, «More» and Settings; a rail of 12 places still shows all 12 at 648 px.
 - **D2, the name** in the book is the hand-typed label name when there is one, else the recipe's name as written (never upper-cased: on
   paper capitals mean «allergen»).
-- **D3, the ingredient line.** A hand-typed ingredients text wins when its check finds no error (a venue whose labels are not Italian has
-  no check available and no errors, so its text is used as the image label prints it). With errors the book falls back to the composed
-  line and the screen, never the paper, says so in one quiet line under the product.
+- **D3, the ingredient line.** A hand-typed ingredients text wins only when its check RAN and found no error. ⚠️ THIS REVERSES THE FIRST
+  VERSION OF D3, which used the typed text of a venue whose labels are not Italian because that venue has no check and so no errors: a
+  text nobody can vouch for is not printed in a legal book. Such a venue's typed text is not used (`typedText` is `unchecked`) and the
+  line composed from the recipe is, with its allergens in bold; the screen, never the paper, says so in one quiet line under the product
+  (`allergenBook.typedUnchecked`), as it does for a text with errors (`typedRefused`).
 - **D4, complete or incomplete** = whether the product label can be made; the reason shown is the label's own refusal sentence.
 - **D5, an incomplete product on paper** = its name, an ingredient line (a clean typed text, else the recipe's own rows as typed, heaviest
   first, no bold) and the boxed «Allergeni da verificare: chiedere al personale» instead of Contains / May contain.

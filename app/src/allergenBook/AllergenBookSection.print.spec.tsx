@@ -1,7 +1,7 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, screen, within } from '@testing-library/react';
 import { LOAD } from '../testing/renderRecipes';
-import { BOOK_HOST_ID, BOOK_PRINTING_CLASS, closeBookHost } from './bookPrintHost';
+import { BOOK_HOST_ID, BOOK_PAGE_ID, BOOK_PAGE_OFF, BOOK_PAGE_ON, BOOK_PRINTING_CLASS, closeBookHost } from './bookPrintHost';
 import { open } from './allergenBookRender';
 import { BISCOTTO, INCOMPLETO, PANE, TORTA } from './allergenBookFixtures';
 import printCss from './allergen-book-print.css?raw';
@@ -113,6 +113,19 @@ describe('printing the book', () => {
     expect(document.documentElement).not.toHaveClass(BOOK_PRINTING_CLASS);
   });
 
+  it('the A4 page file is switched on (media print) while the host lives and off (not all) after it is removed', async () => {
+    const page = () => document.getElementById(BOOK_PAGE_ID) as HTMLLinkElement;
+    const { user } = open({ recipes: [TORTA] });
+    await screen.findByRole('button', { name: 'Stampa' }, LOAD);
+    expect(page().media).toBe(BOOK_PAGE_OFF);
+    await user.click(screen.getByRole('button', { name: 'Stampa' }));
+    expect(page().media).toBe(BOOK_PAGE_ON);
+    act(() => { window.dispatchEvent(new Event('afterprint')); });
+    expect(page().media).toBe(BOOK_PAGE_ON);
+    act(() => { fireEvent.pointerDown(document.body); });
+    expect(page().media).toBe(BOOK_PAGE_OFF);
+  });
+
   it('a print() that throws leaves nothing behind', async () => {
     print.mockImplementation(() => { throw new Error('no printer'); });
     const { user } = open({ recipes: [TORTA] });
@@ -130,6 +143,15 @@ describe('printing the book', () => {
     expect(host.getByText('Allergens are in BOLD CAPITALS.')).toBeInTheDocument();
     expect(host.getByRole('heading', { level: 2, name: 'Other products' })).toBeInTheDocument();
     expect(sheet().textContent).toMatch(/Contains/);
+  });
+
+  it('the question names a product as the book shows it (the hand-typed label name), and the sheet has no heading for a single no-category group', async () => {
+    const named = { ...INCOMPLETO, category: undefined, labelName: 'Panino | speciale' } as never;
+    const { user } = open({ recipes: [named, PANE] });
+    await user.click(await screen.findByRole('button', { name: 'Stampa' }, LOAD));
+    expect(await screen.findByRole('alertdialog')).toHaveTextContent('Panino speciale.');
+    await user.click(screen.getByRole('button', { name: 'Solo quello completo' }));
+    expect(within(sheet()).queryByRole('heading', { level: 2 })).not.toBeInTheDocument();
   });
 
   it('nothing prints with no product in the book', async () => {

@@ -6,9 +6,10 @@
 // still prints «Contains». The paper's own words (the sheet's title, «Updated on», the legend, the box) are the country's too (D8),
 // from the small table below: market.ts is a paired port of js/market.js and does not grow for this.
 //
-// ⚠️ THE INGREDIENT LINE (D3, D5). A hand-typed text (`labelIngredientsText`, the «with logo» image label's) WINS when the text check
-// finds no error in it (for a venue whose labels are not Italian the check is «not available», has no errors, and the typed text is
-// used as the image label prints it). With errors the book falls back to the line `buildLabel` composes. An INCOMPLETE product (its
+// ⚠️ THE INGREDIENT LINE (D3, D5). A hand-typed text (`labelIngredientsText`, the «with logo» image label's) WINS only when the text check
+// ran AND found no error in it. For a venue whose labels are not Italian the check is «not available» (`available: false`): nothing can
+// vouch for the text, so it is NOT used ('unchecked') and the line `buildLabel` composes is, with its allergens in bold. With errors the
+// book falls back to that composed line too ('refused'). An INCOMPLETE product (its
 // allergens cannot be declared) gets either a clean typed text, or the recipe's own rows as typed, heaviest first, with no bold: the
 // app cannot vouch for them and the box on the paper says so.
 import { labelWord, outputLanguage } from '@mise/shared/market';
@@ -36,8 +37,9 @@ export type BookEntry = {
   readonly mayContain: string;
   readonly complete: boolean;
   readonly reason: BookReason | null;
-  // 'used': the hand-typed text is what `runs` holds. 'refused': there is one but its check found errors. 'none': nothing typed.
-  readonly typedText: 'used' | 'refused' | 'none';
+  // 'used': the hand-typed text is what `runs` holds. 'refused': there is one but its check found errors. 'unchecked': there is one but
+  // no check exists for the country's language, so it is not used. 'none': nothing typed.
+  readonly typedText: 'used' | 'refused' | 'unchecked' | 'none';
 };
 
 const nameOf = (recipe: unknown): string =>
@@ -72,7 +74,8 @@ export function bookEntryOf(recipe: unknown, tables: RecipeLabelTables, location
   const complete = canLabel(declared) && label.ok;
   const id = String((recipe && (recipe as { id?: unknown }).id) || '');
   const texts = labelTextsOf(recipe);
-  const name = texts.labelName.trim() || nameOf(recipe);
+  // On the image label `|` is a line break in the title; in the book it is a space.
+  const name = texts.labelName.replace(/\s*\|\s*/g, ' ').trim() || nameOf(recipe);
   const typed = texts.labelIngredientsText.trim();
   const ingredientsWord = labelWord('ingredients', lang);
 
@@ -82,7 +85,9 @@ export function bookEntryOf(recipe: unknown, tables: RecipeLabelTables, location
     : complete
       ? checkLabelText(typed, { lang, declared: declared.allergens, mayContain: declared.mayContain })
       : checkLabelText(typed, { lang, declared: null, mayContain: null });
-  const typedText: BookEntry['typedText'] = typed === '' ? 'none' : checked !== null && checked.errors.length === 0 ? 'used' : 'refused';
+  const typedText: BookEntry['typedText'] = typed === '' || checked === null
+    ? 'none'
+    : !checked.available ? 'unchecked' : checked.errors.length === 0 ? 'used' : 'refused';
 
   if (label.ok && complete) {
     const composed = label.ingredients.flatMap((item, index): BookRun[] => (

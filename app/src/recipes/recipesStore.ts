@@ -253,14 +253,15 @@ export interface RecipesStore {
   setArchived(id: string, archived: boolean): boolean;
   // Puts recipes in the allergen book (`inBook` true) or takes them out (the field removed), LOCAL-FIRST like setArchived. Only
   // a change that differs from what is held is written, each as a merge of the flag ALONE (its own saveRecipeDoc call).
-  // Resolves true when every write was accepted; when any is refused it puts those recipes back (only where the flag is still
-  // where this call put it), keeps the refused choices in memory (refusedBookChoices), says `book-not-saved` and resolves
+  // Resolves true when every write was accepted; when any is refused it puts those recipes back, keeps the refused choices in memory (refusedBookChoices), says `book-not-saved` and resolves
   // false. Offline the promise simply waits: nobody awaits it to leave a screen. The rules let only an owner or a manager
   // move the flag.
   saveBookChoices(changes: ReadonlyArray<{ readonly id: string; readonly inBook: boolean }>): Promise<boolean>;
   // The allergen book choices the database refused and this store still remembers (id → wanted state), for as long as the
   // section is open; empty when none. A plain getter.
   refusedBookChoices(): ReadonlyMap<string, boolean>;
+  // Forgets them: the pencil screen has laid them into its working copy, so they come back once and not for ever.
+  forgetRefusedBookChoices(): void;
   // Adds (or takes off) ONE word of the venue's list of recipe categories (config/labels.recipeCategories), LOCAL-FIRST: the
   // list changes at once, offline too (the promise stays pending until the network is back; nothing waits for it), then the
   // source is asked to arrayUnion / arrayRemove that word alone. ⚠️ A REFUSAL PUTS BACK ONLY THAT WORD, on the list as it is
@@ -920,8 +921,7 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
     },
 
     // ⚠️ EACH FLAG TRAVELS ALONE, like setArchived: a merge of `inBook: true`, or a removal (null → deleteField in the source).
-    // Only the ids whose stored state differs are written. On a refusal the recipe goes back as it was where the flag is still
-    // where this call put it, and the choice is remembered so the pencil screen can reopen from it.
+    // Only the ids whose stored state differs are written. On a refusal the recipe goes back as it was, and the choice is remembered so the pencil screen can reopen from it.
     saveBookChoices(changes) {
       const attempts: Array<{ id: string; inBook: boolean; written: Promise<void> }> = [];
       for (const change of changes) {
@@ -950,9 +950,8 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
           refused = true;
           deps.warn('Recipe allergen book flag did not sync to Firestore:', result.reason);
           refusedBook.set(attempt.id, attempt.inBook);
-          // Only when the flag is still where this call put it: a later change made since owns it.
           const now = recipes.find(candidate => candidate.id === attempt.id);
-          if (now && isInBook(now) === attempt.inBook) {
+          if (now) {
             const back: Record<string, unknown> = { ...(now as unknown as Record<string, unknown>) };
             if (attempt.inBook) delete back.inBook; else back.inBook = true;
             upsertLocal(back);
@@ -965,6 +964,10 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
 
     refusedBookChoices() {
       return new Map(refusedBook);
+    },
+
+    forgetRefusedBookChoices() {
+      refusedBook.clear();
     },
 
     addRecipeCategory(word) {

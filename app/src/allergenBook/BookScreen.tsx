@@ -9,20 +9,28 @@ import { useSession } from '../session/SessionContext';
 import { bookEntryOf } from './bookEntry';
 import type { BookEntry } from './bookEntry';
 import { BookProduct } from './BookProduct';
-import type { BookView } from './useBook';
+import { useBook } from './useBook';
 import styles from './BookScreen.module.css';
 
 // The book as the staff read it: the products that are in it, with their allergens, laid out as the paper will be (the Recipe book's
-// order). NOT a label file: every food word arrives composed in the entries (bookEntry.ts), in the venue's COUNTRY'S language.
+// order). It works the shelf out itself (useBook), so a failure there is the PartBoundary's, not the section's. NOT a label file: every food word arrives composed in the entries (bookEntry.ts), in the venue's COUNTRY'S language.
 //
 // Order of what can be on screen, the first that applies: allergens switched off and no country are the LABEL'S OWN refusals (the
 // same title and sentences), then «Loading…», then the empty book (said differently to whoever can fill it), then the book. The
 // products whose allergens cannot be declared yet stand in a red block at the TOP, each a button to its recipe, and are not repeated
 // below: a book that looked finished with a product missing from it would be the one way this screen can do harm.
-export function BookScreen({ book, canManage }: { book: BookView; canManage: boolean }) {
+const BLOCKED_TEXT = {
+  'allergens-off': 'label.blocked.allergensOff',
+  'no-country': 'label.blocked.noCountry',
+  // The recipe screens' own sentence for an ingredient list that could not be read.
+  unreadable: 'cat.alg.unreadable',
+} as const;
+
+export function BookScreen({ canManage }: { canManage: boolean }) {
   const { t } = useT();
   const navigate = useNavigate();
   const { location } = useSession();
+  const book = useBook();
   const todoId = useId();
   const { block, loaded, tables, groups, incomplete, count } = book;
 
@@ -38,7 +46,7 @@ export function BookScreen({ book, canManage }: { book: BookView; canManage: boo
     return (
       <div className={styles.blocked}>
         <p className={styles.blockedTitle}>{t('label.blocked')}</p>
-        <p className={styles.blockedText}>{t(block === 'allergens-off' ? 'label.blocked.allergensOff' : 'label.blocked.noCountry')}</p>
+        <p className={styles.blockedText}>{t(BLOCKED_TEXT[block])}</p>
       </div>
     );
   }
@@ -94,6 +102,7 @@ export function BookScreen({ book, canManage }: { book: BookView; canManage: boo
                   <div key={recipe.id}>
                     <BookProduct entry={entry} />
                     {entry.typedText === 'refused' ? <p className={styles.refused}>{t('allergenBook.typedRefused')}</p> : null}
+                    {entry.typedText === 'unchecked' ? <p className={styles.refused}>{t('allergenBook.typedUnchecked')}</p> : null}
                   </div>
                 );
               })}

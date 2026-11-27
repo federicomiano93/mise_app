@@ -3386,6 +3386,7 @@ export const it: Messages = {
   'allergenBook.empty.staff': 'Non è ancora stato scelto nessun prodotto per il libro.',
   'allergenBook.incomplete.title': 'Da completare · {n}',
   'allergenBook.typedRefused': 'Il testo dell’etichetta scritto a mano ha degli errori: il libro mostra gli ingredienti ricavati dalla ricetta.',
+  'allergenBook.typedUnchecked': 'Il testo dell’etichetta scritto a mano non si può controllare nella lingua di questo paese: il libro mostra gli ingredienti ricavati dalla ricetta.',
   'allergenBook.notSaved': 'Non è stato possibile salvare i prodotti del libro. Le tue spunte sono conservate: apri «Scegli i prodotti» e salva di nuovo.',
   'allergenBook.choose.title': 'Prodotti nel libro',
   'allergenBook.choose.incomplete': 'allergeni incompleti',

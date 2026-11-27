@@ -3,7 +3,7 @@ import { act, screen, waitFor, within } from '@testing-library/react';
 import { LOAD } from '../testing/renderRecipes';
 import type { StoredDoc } from '../recipes/recipesSource';
 import { closeBookHost } from './bookPrintHost';
-import { RECIPES } from './allergenBookFixtures';
+import { RECIPES, TORTA } from './allergenBookFixtures';
 import { open, type Who } from './allergenBookRender';
 
 // The allergen book's screen (27 Nov 2026): who sees the pencil and Print, what is on the page, in which order, and the label's own
@@ -139,6 +139,25 @@ describe('the empty book and the label’s own refusals', () => {
     expect(await screen.findByText(/nessuno ha detto in che paese vende/)).toBeInTheDocument();
     expect(main().queryByText('Pane prova')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Stampa' })).toBeDisabled();
+  });
+});
+
+describe('an ingredient list that cannot be read', () => {
+  it('says so with the recipe screens’ sentence instead of listing every product as incomplete, and Print is off', async () => {
+    open({ prepare: source => { source.refuse.ingredients = true; } });
+    expect(await screen.findByText('Non riesco a leggere l’elenco degli ingredienti, quindi non posso controllare gli allergeni.', undefined, LOAD)).toBeInTheDocument();
+    expect(screen.queryByText(/Da completare/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Stampa' })).toBeDisabled();
+  });
+});
+
+describe('a hand-typed text in a country with no check', () => {
+  it('is not used: the composed line is shown, with the quiet line that says why', async () => {
+    const typed = { ...TORTA, labelIngredientsText: 'typed by hand, nothing else' } as StoredDoc;
+    open({ lang: 'en', country: 'GB', recipes: [typed] });
+    const article = (await screen.findByText('Torta della nonna di prova', undefined, LOAD)).closest('article') as HTMLElement;
+    expect(article.textContent).not.toContain('typed by hand');
+    expect(screen.getByText('The label text written by hand cannot be checked in this country’s language, so the book shows the ingredients worked out from the recipe.')).toBeInTheDocument();
   });
 });
 

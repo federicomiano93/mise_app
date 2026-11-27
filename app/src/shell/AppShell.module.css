@@ -219,8 +219,8 @@
 /* ⚠️ THIRTEEN PLACES (the allergen book, 27 Nov 2026): the fullest rail, every section but Clients. Same sums with 13 places (padding + places ×
    (item + gap) + 17): 64px needs 933, so 56px from 932px of height (829); 52px from 828px (777); 49px tightened from 776px (696); 48px from
    695px (683). THE LAB TABLET'S 648px IS BELOW 683, SO IT SHOWS 9 SECTIONS, «MORE» AND SETTINGS (11 places, which need 583 at 48px): the last THREE
-   sections (`data-spill`: Stocktake, Food cost and Cakes, what arrangeSections puts in railSpill) go under «More» from 682px down. 
-   is the stated cost of the new section; a rail of 12 (above) still shows everything at 648px. A rail marked "13" matches only these rules.
+   sections (`data-spill`: Stocktake, Food cost and Cakes, what arrangeSections puts in railSpill) go under «More» from 682px down. That is
+   the stated cost of the new section; a rail of 12 (above) still shows everything at 648px. A rail marked "13" matches only these rules.
    railHeight.spec.ts adds it up. */
 @media (max-height: 932px) {
   .rail[data-items="13"] .railItem {

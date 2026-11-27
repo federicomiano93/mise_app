@@ -3,6 +3,8 @@ import { act, screen, waitFor, within } from '@testing-library/react';
 import { LOAD } from '../testing/renderRecipes';
 import { closeBookHost } from './bookPrintHost';
 import { open } from './allergenBookRender';
+import { BISCOTTO, RECIPES } from './allergenBookFixtures';
+import type { StoredDoc } from '../recipes/recipesSource';
 
 // «Prodotti nel libro», the pencil screen (27 Nov 2026): ticks that start from what is stored, nothing written before Save, Save asks
 // and writes only what changed, leaving with unsaved ticks asks, and a refused save keeps the ticks.
@@ -145,5 +147,58 @@ describe('the pencil screen', () => {
     expect(screen.getByText(/ scelt[io]$| chosen$/)).toHaveTextContent('4 chosen');
     expect(screen.getByText('allergens incomplete')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument();
+  });
+
+  it('⚠️ waits for the server before copying, and never removes a product a colleague added meanwhile', async () => {
+    // The phone's own copy still says the cake is OUT; the server then says it is IN (a colleague put it there).
+    const local = RECIPES.map(recipe => (recipe.id === 'torta' ? { ...recipe, inBook: undefined } : recipe)) as StoredDoc[];
+    const { user, source } = open({ prepare: held => { held.hold(); } });
+    await user.click(await screen.findByRole('button', { name: 'Scegli i prodotti' }, LOAD));
+    await screen.findByRole('region', { name: 'Prodotti nel libro' }, LOAD);
+    act(() => { source.pushRecipes(false, local); });
+    expect(await screen.findByText('Caricamento…', undefined, LOAD)).toBeInTheDocument();
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    act(() => { source.pushRecipes(true); });
+    await user.click(await screen.findByRole('checkbox', { name: 'Torta fuori dal libro' }, LOAD));
+    expect(box('Torta della nonna di prova')).toBeChecked();
+    await user.click(screen.getByRole('button', { name: 'Salva' }));
+    await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Salva' }));
+    await waitFor(() => { expect(source.recipeWrites).toHaveLength(1); });
+    expect(source.recipeWrites).toEqual([{ id: 'fuori', data: { inBook: true } }]);
+  });
+
+  it('a product the person did not touch is never written, even if it changed in the meantime', async () => {
+    const { user, source } = await openPencil();
+    await user.click(await screen.findByRole('checkbox', { name: 'Torta fuori dal libro' }));
+    // A colleague takes the biscuit out of the book after the copy was made: it is still ticked here, but the person did not touch it.
+    act(() => {
+      source.recipes.set('biscotto', { ...(BISCOTTO as StoredDoc), inBook: undefined } as StoredDoc);
+      source.push();
+    });
+    await user.click(screen.getByRole('button', { name: 'Salva' }));
+    await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Salva' }));
+    await waitFor(() => { expect(source.recipeWrites).toHaveLength(1); });
+    expect(source.recipeWrites.map(write => write.id)).toEqual(['fuori']);
+  });
+
+  it('the refused choices come back once: untick the refused one, leave, reopen: it is not ticked and the screen is not dirty', async () => {
+    const { user, source, router } = await openPencil();
+    source.refuseRecipeWrites.save = true;
+    await user.click(await screen.findByRole('checkbox', { name: 'Torta fuori dal libro' }));
+    await user.click(screen.getByRole('button', { name: 'Salva' }));
+    await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Salva' }));
+    await waitFor(() => { expect(router.state.location.pathname).toBe(BOOK_PATH); });
+    await waitFor(() => { expect(screen.queryByText('Torta fuori dal libro')).not.toBeInTheDocument(); });
+    await user.click(screen.getByRole('button', { name: 'Scegli i prodotti' }));
+    await user.click(await screen.findByRole('checkbox', { name: 'Torta fuori dal libro' }));
+    expect(box('Torta fuori dal libro')).not.toBeChecked();
+    await user.click(screen.getByRole('button', { name: 'Salva' }));
+    await waitFor(() => { expect(router.state.location.pathname).toBe(BOOK_PATH); });
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Scegli i prodotti' }));
+    expect(await screen.findByRole('checkbox', { name: 'Torta fuori dal libro' })).not.toBeChecked();
+    await user.click(screen.getByRole('button', { name: 'Indietro' }));
+    await waitFor(() => { expect(router.state.location.pathname).toBe(BOOK_PATH); });
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
   });
 });

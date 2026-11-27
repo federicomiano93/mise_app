@@ -95,10 +95,16 @@ describe('what the person typed', () => {
     expect(bookEntryOf({ ...TORTA, labelIngredientsText: 'farina, sale' }, TABLES, IT).typedText).toBe('refused');
   });
 
-  it('for a venue whose labels are not Italian the check is not available, so the typed text is used as typed', () => {
+  it('for a venue whose labels are not Italian no check exists, so the typed text is NOT used: the composed line is, marked unchecked', () => {
     const entry = bookEntryOf({ ...TORTA, labelIngredientsText: 'flour of grano, milk' }, TABLES, GB);
-    expect(entry.typedText).toBe('used');
-    expect(joined(entry.runs)).toBe('flour of grano, milk');
+    expect(entry.typedText).toBe('unchecked');
+    expect(joined(entry.runs)).toBe(joined(bookEntryOf(TORTA, TABLES, GB).runs));
+    expect(entry.runs.some(run => run.bold)).toBe(true);
+  });
+
+  it('a `|` in the typed label name (a line break on the image label) is a single space in the book', () => {
+    expect(bookEntryOf({ ...TORTA, labelName: 'Torta | della nonna', }, TABLES, IT).name).toBe('Torta della nonna');
+    expect(bookEntryOf({ ...TORTA, labelName: 'Torta|nonna' }, TABLES, IT).name).toBe('Torta nonna');
   });
 });
 

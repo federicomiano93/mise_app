@@ -3629,6 +3629,7 @@ export const en = {
   'allergenBook.empty.staff': 'No product has been chosen for the book yet.',
   'allergenBook.incomplete.title': 'To complete · {n}',
   'allergenBook.typedRefused': 'The label text written by hand has mistakes, so the book shows the ingredients worked out from the recipe.',
+  'allergenBook.typedUnchecked': 'The label text written by hand cannot be checked in this country’s language, so the book shows the ingredients worked out from the recipe.',
   'allergenBook.notSaved': 'The products in the book could not be saved. Your ticks are kept: open “Choose the products” and save again.',
   'allergenBook.choose.title': 'Products in the book',
   'allergenBook.choose.incomplete': 'allergens incomplete',

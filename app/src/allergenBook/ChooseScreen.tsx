@@ -6,6 +6,7 @@ import { withoutArchived } from '@mise/shared/recipe-shelf';
 import { useT } from '../i18n/useT';
 import { useAllergenTables } from '../recipes/allergenTables';
 import { isInBook } from '../recipes/labelTexts';
+import { COPY_WAIT_MS } from '../recipes/RecipeEditorScreen';
 import { useRecipes, useRecipesStore } from '../recipes/RecipesContext';
 import { markBusy } from '../session/busy';
 import { KEEP_FOCUS } from '../shell/Page';
@@ -40,7 +41,7 @@ export function ChooseScreen() {
   const store = useRecipesStore();
   const navigate = useNavigate();
   const { state } = useLocation();
-  const { recipes, recipesLoaded, ingredients, ingredientsLoaded, categories } = useRecipes();
+  const { recipes, recipesFromServer, streamBroken, ingredients, ingredientsLoaded, categories } = useRecipes();
   const tables = useAllergenTables(recipes, ingredients);
   const [confirm, confirmDialog] = useConfirm();
   const titleId = useId();
@@ -49,9 +50,25 @@ export function ChooseScreen() {
   const [query, setQuery] = useState('');
   const [working, setWorking] = useState<Working | null>(null);
 
-  // Made once, as soon as the recipes have answered.
+  // ⚠️ THE COPY IS MADE ON THE SERVER'S WORD, NOT ON THE PHONE'S LOCAL COPY (as StepsEditorScreen does): the local copy can be older than a
+  // colleague's change, and a working copy made from it would remove their product at Save. With no signal (or a stream that died) it is
+  // made after COPY_WAIT_MS on what this phone holds. Until then the screen says «Loading…».
+  const settled = recipesFromServer || streamBroken;
+  const [patienceOver, setPatienceOver] = useState(false);
   useEffect(() => {
-    if (working !== null || !recipesLoaded) return;
+    if (settled || patienceOver) return undefined;
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      setPatienceOver(true);
+      return undefined;
+    }
+    const timer = window.setTimeout(() => { setPatienceOver(true); }, COPY_WAIT_MS);
+    return () => { window.clearTimeout(timer); };
+  }, [settled, patienceOver]);
+
+  // Made once. `start` is what was stored at that moment: Save writes only the products whose tick differs from it, so a change made
+  // by somebody else since then is never undone by a tick the person did not touch.
+  useEffect(() => {
+    if (working !== null || !(settled || patienceOver)) return;
     const start = new Set(withoutArchived(recipes).filter(isInBook).map(recipe => recipe.id));
     const chosen = new Set(start);
     const refused = store.refusedBookChoices();
@@ -60,7 +77,12 @@ export function ChooseScreen() {
       else chosen.delete(id);
     }
     setWorking({ start, chosen, forced: refused.size > 0 });
-  }, [working, recipesLoaded, recipes, store]);
+  }, [working, settled, patienceOver, recipes, store]);
+  // The choices the database refused are in the working copy now: the store forgets them, so they come back once, not for ever.
+  // A separate effect (not in the one above): Strict Mode runs that one twice before the state is set.
+  useEffect(() => {
+    if (working !== null) store.forgetRefusedBookChoices();
+  }, [working, store]);
 
   const dirty = working !== null && (working.forced || !sameSet(working.start, working.chosen));
   const dirtyRef = useRef(false);
@@ -143,11 +165,11 @@ export function ChooseScreen() {
     leave();
   }
 
-  // What Save would change: every recipe on offer whose tick differs from what is stored now.
+  // What Save would change: every recipe on offer whose tick differs from what it was when the copy was made, with the ticked value.
   function changes(): Array<{ id: string; inBook: boolean }> {
     if (working === null) return [];
     return withoutArchived(recipes)
-      .filter(recipe => working.chosen.has(recipe.id) !== isInBook(recipe))
+      .filter(recipe => working.chosen.has(recipe.id) !== working.start.has(recipe.id))
       .map(recipe => ({ id: recipe.id, inBook: working.chosen.has(recipe.id) }));
   }
 
