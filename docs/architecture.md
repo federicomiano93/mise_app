@@ -448,7 +448,9 @@ Aria does not support Preact. The numbers are below.
   `ClientsSection.spec.tsx` pins it (no logs listener, no catalogue read, no stamp, no log written). The notification tap is `SectionRoute`
   (a hidden section whose `pageWhenRefused` is `clients.html#orders` is replaced by `/clients/orders`).
 - `recipes/` — the Recipe catalogue (section id `recipes`, step 3d, built in slices; its parity list is
-  `docs/parity/catalogue.md`). The data layer: `recipesSource.ts` (the Firestore half, read-only so far: the
+  `docs/parity/catalogue.md`). ⚠️ Since 27 Nov 2026 the NEW-recipe editor can make the recipe's empty Food cost card (`recipeCard.ts`): it
+  reaches Food cost only through `useDataServices().foodcost(...).createProductIfAbsent` and the shared `product-document.ts` (no import
+  from `foodcost/`), after `recipesStore.whenWritten(id)` says the server acknowledged the recipe. The data layer: `recipesSource.ts` (the Firestore half, read-only so far: the
   recipes, live, while the section is open), `recipesStore.ts` (plain TypeScript: the recipes stored NORMALISED
   under the current app's `catalogue-recipes`, the open counts `catalogue-usage` and the remembered batches
   `catalogue-scaled`, an empty answer from the browser's own database not believed, counts pruned only on the

@@ -1,5 +1,6 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
+import { mayOpenFoodCost } from '@mise/shared/recipe-link';
 import { fakeFoodcostSource } from '../testing/fakeFoodcostSource';
 import { LOAD, recipe, renderRecipes, sourceWith } from '../testing/renderRecipes';
 
@@ -50,9 +51,21 @@ describe('the «Food cost card» box', () => {
     expect(within(region).queryByRole('radiogroup', { name: 'Food cost card' })).toBeNull();
   });
 
-  it('is not drawn for an employee the venue does not show Food cost to, nor in a venue without Food cost', async () => {
-    const first = await open('/recipes/new', { session: { ...EMPLOYEE, location: {} } });
-    expect(within(first.region).queryByRole('radiogroup', { name: 'Food cost card' })).toBeNull();
+  it('is not drawn for an employee the venue does not show Food cost to', async () => {
+    const { region } = await open('/recipes/new', { session: { ...EMPLOYEE, location: {} } });
+    expect(within(region).queryByRole('radiogroup', { name: 'Food cost card' })).toBeNull();
+  });
+
+  it('is not drawn for the kitchen owner, who has no Food cost card', async () => {
+    const { region } = await open('/recipes/new', { session: { role: 'owner-kitchen', canManage: true, isOwner: false } });
+    expect(within(region).queryByRole('radiogroup', { name: 'Food cost card' })).toBeNull();
+  });
+
+  // The sales owner has no Recipes at all (the editor's address is refused), so the box cannot be reached by that role: the question
+  // the box asks is pinned instead, for both partial owners.
+  it('asks a question that is yes for the sales owner and no for the kitchen owner', () => {
+    expect(mayOpenFoodCost({}, true, 'owner-sales')).toBe(true);
+    expect(mayOpenFoodCost({}, true, 'owner-kitchen')).toBe(false);
   });
 
   it('is not drawn in a venue without Food cost', async () => {
@@ -93,6 +106,16 @@ describe('Save with the box', () => {
     await waitFor(() => { expect(source.recipeWrites).toHaveLength(1); });
     expect(await screen.findByText('Recipe added.')).toBeInTheDocument();
     expect(foodcost.createProductIfAbsent).not.toHaveBeenCalled();
+  });
+
+  it('⚠️ a refused RECIPE makes no card, and the refusal stays on screen', async () => {
+    const { region, user, source, foodcost } = await open('/recipes/new');
+    source.refuseRecipeWrites.save = true;
+    await fillAndSave(region, user);
+    expect(await screen.findByText(/Couldn.t save .Pane. — check your connection/)).toBeInTheDocument();
+    await new Promise(resolve => { setTimeout(resolve, 100); });
+    expect(foodcost.createProductIfAbsent).not.toHaveBeenCalled();
+    expect(screen.queryByText('Recipe added. Food cost card created.')).toBeNull();
   });
 
   it('⚠️ a refused card still saves the recipe, goes back to the list and says «not created»', async () => {

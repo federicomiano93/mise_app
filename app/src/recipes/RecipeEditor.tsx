@@ -500,18 +500,27 @@ export function RecipeEditor({ id, recipe, titleRef, onTyped }: Props) {
     leavingClean.current = true;
     const savedId = store.saveRecipe(clean);
     announceAction('recipe-saved');
-    // ⚠️ THE CARD NEVER HOLDS THE RECIPE BACK: it is a server transaction (it rejects offline), started after the local-first save,
-    // and the screen leaves whatever becomes of it. A failure only changes the sentence; the recipe then shows up in Food cost's
-    // «recipes without a card» box as it does for any recipe.
+    say(t(id === null ? 'cat.recipeAdded' : 'cat.recipeSaved'));
+    // ⚠️ THE CARD NEVER HOLDS THE RECIPE BACK, AND IS MADE ONLY AFTER THE SERVER HAS ACKNOWLEDGED THE RECIPE (offline: once it comes
+    // back): a refused recipe leaves no card, and the store's refusal message stays on screen. The card is a server transaction
+    // (it rejects offline). If it fails the recipe shows up in Food cost's «recipes without a card» box as any recipe does.
+    // The wait is a quiet hold, so the update banner's reload does not drop the card; if the page closes first nothing is made.
     const cardDoc = mayMakeCard && locationId ? recipeCardDocument(cardChoice, clean.name) : null;
     if (cardDoc !== null && locationId) {
-      const cardId = recipeProductId(savedId);
-      services.foodcost(locationId).createProductIfAbsent(cardId, cardDoc).then(
-        () => { say(t('cat.recipeAddedCard')); },
-        () => { say(t('cat.recipeAddedNoCard')); },
-      );
-    } else {
-      say(t(id === null ? 'cat.recipeAdded' : 'cat.recipeSaved'));
+      const release = markBusy({ quiet: true });
+      const foodcost = services.foodcost(locationId);
+      void store.whenWritten(savedId)
+        .then(async written => {
+          if (!written) return;
+          try {
+            await foodcost.createProductIfAbsent(recipeProductId(savedId), cardDoc);
+            say(t('cat.recipeAddedCard'));
+          } catch (err) {
+            console.warn('Product from a recipe was not created:', err);
+            say(t('cat.recipeAddedNoCard'));
+          }
+        })
+        .finally(release);
     }
     if (id === null) {
       landOn.current = recipeOpener(savedId);
@@ -853,6 +862,7 @@ export function RecipeEditor({ id, recipe, titleRef, onTyped }: Props) {
             ]}
             selected={cardChoice}
             onSelect={setCardChoice}
+            flush
           />
         ) : null}
 

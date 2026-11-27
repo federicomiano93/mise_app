@@ -2314,3 +2314,12 @@ Not driven: the emulator against the new rules (Phase A's run is reported separa
 host, the classes and the stylesheet's text are specified), the lab tablet (Chrome 101) at 648 px, and a phone's icon-only band at the
 real widths. The focus is not promised back to the incomplete row a person opened when they come back from its recipe (the Labels
 list does; here the book simply reopens), a small known gap.
+
+## Food cost card of a new recipe as built (27 Nov 2026) — NEW IN MISE 2, no original in the current app
+
+A NEW recipe's editor ends with «Food cost card»: «Finished product» (chosen), «Semi-finished», «No card» (`SegmentedChoice`, `flush`).
+- ⚠️ Drawn only for `mayOpenFoodCost(venue, canManage, role)` (the venue has Food cost and shows its card to this role: the rules' `cardAccess(lid, 'foodcost', 'foodcost') != 'none'` on `products` create), and never when an existing recipe is edited. The kitchen owner has no Food cost card, so no box.
+- The card is `products/recipe-<recipeId>` (the link Food cost's «recipes without a card» box looks for), written by Food cost's `createProductIfAbsent` with `recipes/recipeCard.ts`: ONLY the name, kind finished/semi, model 4, every line and price empty (`shared/product-document.ts`, the very function the Food cost store saves with; the recipe is NOT pre-loaded into «Made of», unlike «Cards from the Recipe book»).
+- ⚠️ ORDER: «Recipe added.» at once (local-first); the card is made only when `store.whenWritten(id)` says the SERVER acknowledged the recipe (offline: later), so a refused recipe leaves no card and keeps the store's refusal message. Then «Recipe added. Food cost card created.» or «... not created.» (a failure is warned in the console; the recipe is then in Food cost's box). The wait is a quiet `markBusy` hold. Closing the page first makes nothing.
+- The editor reaches Food cost only through `useDataServices().foodcost()` and `shared/product-document`; no import from `foodcost/`.
+- Not driven in a browser; specs: `recipeCard.spec.ts`, `RecipesSection.foodcostCard.spec.tsx`.

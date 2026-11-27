@@ -140,6 +140,18 @@
   font-weight: 600;
 }
 
+/* The same group inside a form (the recipe editor's «Food cost card»): no card padding and no rule line, the label as the form's other labels. */
+.flush {
+  padding: 0;
+  border-top: 0;
+}
+
+.flush .blockLabel {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  font-weight: 650;
+}
+
 /* The segments: one choice among a few, side by side, wrapping rather than shrinking below a thumb's width. */
 .segments {
   display: flex;

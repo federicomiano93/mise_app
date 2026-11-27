@@ -244,6 +244,8 @@ export interface RecipesStore {
   // the recipe's id at once (a new one is made on the phone). Never waits for the network. A REFUSED write takes the
   // change back (the version before it, or no recipe at all for a new one) and says so with a RecipesMessage.
   saveRecipe(recipe: RecipeToSave): string;
+  // Resolves true when the SERVER has acknowledged that recipe's last save (offline: whenever it comes back), false when it was refused.
+  whenWritten(id: string): Promise<boolean>;
   // Deletes a recipe, LOCAL-FIRST, with its open count and its remembered batch. A refused delete puts it back and
   // says so.
   deleteRecipe(id: string): void;
@@ -380,6 +382,8 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
   // ⚠️ ONLY A COPY THAT SAYS «NO RECIPES» MAY LET AN EMPTY CACHED ANSWER STAND (see believable()).
   const bootSaidNone = Array.isArray(bootRecipes) && bootRecipes.length === 0;
 
+  // How each recipe's last save ended, by id: true once the SERVER acknowledged it, false when it was refused (whenWritten).
+  const writes = new Map<string, Promise<boolean>>();
   let recipes: readonly CatalogueRecipe[] = normalizeStoredRecipes(bootRecipes);
   let recipesLoaded = Array.isArray(bootRecipes);
   let recipesFromServer = false;
@@ -799,8 +803,12 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
         if (prev) upsertLocal(prev as unknown as Record<string, unknown>); else removeLocal(id);
         say({ kind: 'recipe-not-saved', name: recipe.name });
       });
+      writes.set(id, written.then(() => true, () => false));
       return id;
     },
+
+    // ⚠️ Offline this waits (the write is queued until the server answers); a recipe this store never saved answers false.
+    whenWritten: id => writes.get(id) ?? Promise.resolve(false),
 
     // ⚠️ ONLY `steps` AND `endNote` TRAVEL (a merge), written even when EMPTY: a merge never deletes a field it is not
     // sent, so an omitted empty procedure would leave the old steps in the document (the current app's reason).

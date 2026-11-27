@@ -1,8 +1,7 @@
+import { toProductDocument } from '@mise/shared/product-document';
 
-
-import { toProductDocument } from '../foodcost/foodcostStore';
-
-// toProductDocument stamps the app's own model itself.
+// «Food cost card» of a NEW recipe (recipes/RecipeEditor): the pure choice → card document mapping.
+// Not a model file for money: it only fills an empty product and lets the shared product document function shape it.
 type Product = Parameters<typeof toProductDocument>[0];
 
 // The answer to «Food cost card» at the foot of a NEW recipe: a finished product, a semi-finished one, or no card.

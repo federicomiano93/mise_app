@@ -14,6 +14,8 @@ type Props<T> = {
   onSelect: (value: T) => void;
   // The note under the group, read after its name.
   note?: string;
+  // Drawn inside a form, flush with its other fields (no padding, no rule line above).
+  flush?: boolean;
   // Under the group: the custom size's two boxes.
   children?: ReactNode;
 };
@@ -21,14 +23,14 @@ type Props<T> = {
 // A single choice among a few buttons side by side (the paper, the printer, the resolution, the kind of date):
 // React Aria's toggle button group, one selected at all times, arrow keys inside it, every button a thumb's height.
 // The choices are told apart by their position, never by parsing their words back.
-export function SegmentedChoice<T>({ label, choices, selected, onSelect, note, children }: Props<T>) {
+export function SegmentedChoice<T>({ label, choices, selected, onSelect, note, flush, children }: Props<T>) {
   const ids = useId();
   const labelId = `${ids}-label`;
   const noteId = `${ids}-note`;
   const keyOf = (index: number): string => `${ids}-${index}`;
   const chosen = choices.findIndex(choice => choice.value === selected);
   return (
-    <div className={styles.block}>
+    <div className={flush === true ? `${styles.block} ${styles.flush}` : styles.block}>
       <p id={labelId} className={styles.blockLabel}>{label}</p>
       <ToggleButtonGroup
         className={styles.segments}
