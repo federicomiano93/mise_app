@@ -2314,3 +2314,17 @@ Not driven: the emulator against the new rules (Phase A's run is reported separa
 host, the classes and the stylesheet's text are specified), the lab tablet (Chrome 101) at 648 px, and a phone's icon-only band at the
 real widths. The focus is not promised back to the incomplete row a person opened when they come back from its recipe (the Labels
 list does; here the book simply reopens), a small known gap.
+
+## Recipe photos from the gallery as built (28 Nov 2026)
+
+The photo reader screen (`app/src/recipes/PhotoScreen.tsx`) had ONE file input with `capture="environment"`, which always opens the camera on a phone or tablet, so a photo already taken could not be chosen. It now has two:
+
+- **Camera** (unchanged): `capture="environment"`, label «Take a photo», then «Take another» once there is a photo (was «Add another photo»).
+- **Gallery** (new): the same `accept`, `multiple`, `onChoose` and `cannotAdd` disabled rule, and NO `capture`, so the system picker opens. Label «From gallery» / «Dalla galleria», with the `Image` icon.
+
+Both go through the same `shrinkPhoto` (canvas re-encode, which strips EXIF and GPS) and the same cap of five.
+
+- **Names:** each input carries an `aria-label` with the FULL label. The visible words are two spans, the full one and a short one («Take» / «Gallery», «Scatta» / «Galleria»), switched by CSS below 700px; both spans are `aria-hidden`.
+- **Layout:** on a tablet the camera, gallery and read buttons share one row; on a phone (below 700px) camera and gallery are half width each and «Read the recipe» spans the row below.
+- **Keys:** `cat.photo.gallery`, `cat.photo.galleryShort`, `cat.photo.takeShort`; `cat.photo.addAnother` reworded.
+- ⚠️ `cat.photo.err.badFormat` still says «take it with the camera instead of picking it from your library»; left as is (no wording change was agreed), now slightly out of date.

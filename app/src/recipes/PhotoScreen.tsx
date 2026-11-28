@@ -1,6 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
-import { Camera, Trash2 } from 'lucide-react';
+import { Camera, Image as ImageIcon, Trash2 } from 'lucide-react';
 import { useLocation, useNavigate, useNavigationType } from 'react-router';
 import { MAX_PHOTOS, base64Of, mediaTypeOf, payloadProblem } from '@mise/shared/photo-model';
 import { noRecipeKey, photoErrorKey } from '@mise/shared/catalogue-photo-model';
@@ -60,7 +60,7 @@ export function PhotoScreen() {
   const [status, setStatus] = useState<Status>(null);
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
-  const [ring, setRing] = useState(false);
+  const [ring, setRing] = useState<'camera' | 'gallery' | null>(null);
 
   const mounted = useRef(true);
   useEffect(() => {
@@ -204,23 +204,43 @@ export function PhotoScreen() {
         </p>
 
         <div className={styles.actions}>
-          {/* The real file input, inside the label that looks like a button: the camera on a phone, the picker elsewhere. */}
-          <label className={styles.take} data-focus-visible={ring ? 'true' : undefined} data-disabled={cannotAdd ? 'true' : undefined}>
+          {/* Two real file inputs, each inside a label that looks like a button: the camera (`capture`), and the picker/gallery
+              (no `capture`, so the system lets the person choose a photo already taken). The input carries the FULL name; the
+              short words are the same label drawn for a narrow screen only. */}
+          <label className={styles.take} data-focus-visible={ring === 'camera' ? 'true' : undefined} data-disabled={cannotAdd ? 'true' : undefined}>
             <Camera aria-hidden="true" />
-            <span>{t(photos.length > 0 ? 'cat.photo.addAnother' : 'cat.photo.take')}</span>
+            <span className={styles.full} aria-hidden="true">{t(photos.length > 0 ? 'cat.photo.addAnother' : 'cat.photo.take')}</span>
+            <span className={styles.short} aria-hidden="true">{t('cat.photo.takeShort')}</span>
             <input
               type="file"
               accept="image/jpeg,image/png,image/webp"
               capture="environment"
               multiple
               disabled={cannotAdd}
+              aria-label={t(photos.length > 0 ? 'cat.photo.addAnother' : 'cat.photo.take')}
               className="visually-hidden"
               onChange={event => { void onChoose(event); }}
-              onFocus={event => { setRing(isFocusVisible(event.currentTarget)); }}
-              onBlur={() => { setRing(false); }}
+              onFocus={event => { setRing(isFocusVisible(event.currentTarget) ? 'camera' : null); }}
+              onBlur={() => { setRing(null); }}
             />
           </label>
-          <Button variant="primary" isDisabled={busy || photos.length === 0} onPress={() => { void read(); }}>
+          <label className={styles.take} data-focus-visible={ring === 'gallery' ? 'true' : undefined} data-disabled={cannotAdd ? 'true' : undefined}>
+            <ImageIcon aria-hidden="true" />
+            <span className={styles.full} aria-hidden="true">{t('cat.photo.gallery')}</span>
+            <span className={styles.short} aria-hidden="true">{t('cat.photo.galleryShort')}</span>
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              multiple
+              disabled={cannotAdd}
+              aria-label={t('cat.photo.gallery')}
+              className="visually-hidden"
+              onChange={event => { void onChoose(event); }}
+              onFocus={event => { setRing(isFocusVisible(event.currentTarget) ? 'gallery' : null); }}
+              onBlur={() => { setRing(null); }}
+            />
+          </label>
+          <Button variant="primary" className={styles.read} isDisabled={busy || photos.length === 0} onPress={() => { void read(); }}>
             {t(busy ? 'cat.photo.reading' : 'cat.photo.read')}
           </Button>
         </div>
