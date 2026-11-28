@@ -90,9 +90,10 @@ describe('the «New recipe» button above the list', () => {
 });
 
 describe('linking a row', () => {
-  it('makes the link line a full-width 48px target that wraps instead of pushing the page sideways', () => {
+  it('makes the link line a 48px target only as wide as its words, wrapping instead of pushing the page sideways', () => {
     const line = rule(rowCss, '.link');
-    expect(declaration(line, 'width')).toBe('100%');
+    expect(declaration(line, 'width')).toBe('fit-content');
+    expect(declaration(line, 'max-width')).toBe('100%');
     expect(declaration(line, 'min-height')).toBe('var(--hit)');
     expect(declaration(line, 'overflow-wrap')).toBe('anywhere');
     expect(declaration(rule(rowCss, '.link:focus-visible'), 'outline')).toContain('var(--accent)');
@@ -111,6 +112,13 @@ describe('linking a row', () => {
     expect(declaration(rule(dialogCss, '.row'), 'min-height')).toBe('var(--hit)');
     expect(declaration(rule(dialogCss, '.name'), 'overflow-wrap')).toBe('anywhere');
     expect(declaration(rule(dialogCss, '.meta'), 'overflow-wrap')).toBe('anywhere');
+  });
+
+  it('underlines the link under the pointer instead of drawing a grey band behind it', () => {
+    const hovers = withoutComments(rowCss).match(/\.link:hover\s*\{[^}]*\}/g) ?? [];
+    expect(hovers.length).toBe(1);
+    expect(hovers[0]).toContain('text-decoration: underline');
+    expect(hovers[0]).not.toContain('background');
   });
 
   it('puts every hover inside (hover: hover)', () => {

@@ -97,9 +97,12 @@
   pointer-events: none;
 }
 
+/* Only the words are the tap target, never the whole width of the row: a full-width button drew a grey bar under the pointer
+   and took taps meant for the empty space beside the link (his ask, 28 Nov 2026). Still --hit tall for a finger. */
 .link {
   display: block;
-  width: 100%;
+  width: fit-content;
+  max-width: 100%;
   min-height: var(--hit);
   padding: var(--s1) var(--s2);
   border: 0;
@@ -129,16 +132,10 @@
   outline-offset: 1px;
 }
 
+/* Under the pointer the words underline, like a link: no grey band behind them. The amber note keeps its tint (set above). */
 @media (hover: hover) {
   .link:hover {
-    background: var(--sunken);
-  }
-}
-
-/* After the rule above and more specific: the amber note keeps its tint under the pointer. */
-@media (hover: hover) {
-  .link[data-stale="true"]:hover {
-    background: var(--warn-tint);
+    text-decoration: underline;
   }
 }
 
