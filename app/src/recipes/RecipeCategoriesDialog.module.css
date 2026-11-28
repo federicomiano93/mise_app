@@ -25,11 +25,14 @@
   border-top: 0;
 }
 
+/* The name wraps at WORD boundaries (break-word: «Zeta rinominata» reads «Zeta / rinominata», never «rinom / inata»; only a single word longer
+   than the column breaks). Its basis is wide enough that on a 296px phone the count and the two buttons drop to a line of their own rather
+   than squeeze the name to a few letters a line. */
 .name {
-  flex: 1;
+  flex: 1 1 calc(var(--hit) * 2.5);
   min-width: 0;
   font-weight: 600;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 
 .count {
@@ -84,17 +87,21 @@
   }
 }
 
+/* ⚠️ THE FIELD TAKES THE WHOLE LINE and the two buttons («Save the name», «Cancel») sit on the line below it, fully inside the dialog: at
+   296px a field, a confirm button and «Cancel» side by side ran 48px past the edge, and «Cancel» could not be tapped. The form itself takes
+   the row's full width (basis 100%, min-width 0) so nothing in it is wider than the dialog. */
 .editor {
   display: flex;
-  flex: 1;
+  flex: 1 1 100%;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--s2);
+  min-width: 0;
 }
 
 /* 18px on purpose: a field under 16px makes iOS zoom the page in when it is focused. */
 .input {
-  flex: 1 1 160px;
+  flex: 1 1 100%;
   min-width: 0;
   min-height: var(--hit);
   padding: 0 var(--s3);
