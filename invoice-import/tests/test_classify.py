@@ -132,6 +132,18 @@ class ClassifyTest(unittest.TestCase):
         self.assertEqual(self.kind("Sfarinato tipo 1 bio")[0], "ingrediente")
         self.assertEqual(self.kind("SACCHI N.U. AMBRATI")[0], "packaging")
 
+    def test_millerighe_vaschette_vaso_cottura_alluminio_and_coprivassoi_are_packaging(self):
+        # 28 Nov 2026, real import. A jar of honey is still an ingredient.
+        for text in ("MILLERIGHE + FINESTRA PVC SICILIA 25X16X5", "VASCH.CUORE NERO I DESS", "VASO COTTURA",
+                     "ALLUMINIO ROT.RICAMBIO OTT", "500 COPRIVASSOI 21X31"):
+            self.assertEqual(self.kind(text)[0], "packaging", text)
+        self.assertEqual(self.kind("MIELE VASO 500G")[0], "ingrediente")
+
+    def test_fruit_and_ice_cream_in_a_tray_are_ingredients(self):
+        # 28 Nov 2026: food in a tray is food.
+        for text in ("FRAGOLE VASCH. 250G", "LAMPONI VASCHETTA GR 125", "GELATO VASCHETTA 3KG", "MIRTILLI VASCHETTA 125G"):
+            self.assertEqual(self.kind(text)[0], "ingrediente", text)
+
     def test_real_packaging_still_is_packaging(self):
         self.assertEqual(self.kind("SACCHETTI CARTA PANE")[0], "packaging")
         self.assertEqual(self.kind("BUSTE PLASTICA")[0], "packaging")

@@ -1,5 +1,5 @@
-/* The categories dialog (CategoriesDialog.tsx): one row per category inside the app's dialog; the list scrolls on its own so
-   «Done» is never pushed out of reach. Targets are 48px. */
+/* The Ricettario's categories dialog (RecipeCategoriesDialog.tsx; it was Food cost's until 28 Nov 2026): one row per word inside the app's dialog; the
+   list scrolls on its own so «Done» is never pushed out of reach. Targets are 48px. */
 
 .rows {
   display: flex;
@@ -25,11 +25,23 @@
   border-top: 0;
 }
 
+/* The name wraps at WORD boundaries (break-word: «Zeta rinominata» reads «Zeta / rinominata», never «rinom / inata»; only a single word longer
+   than the column breaks). Its basis is wide enough that on a 296px phone the count and the two buttons drop to a line of their own rather
+   than squeeze the name to a few letters a line. */
 .name {
-  flex: 1;
+  flex: 1 1 calc(var(--hit) * 1.75);
   min-width: 0;
   font-weight: 600;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
+}
+
+/* The count and the two buttons never split: when the row wraps, the whole group goes under the name, to the right. */
+.tools {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--s2);
+  margin-left: auto;
 }
 
 .count {
@@ -84,17 +96,21 @@
   }
 }
 
+/* ⚠️ THE FIELD TAKES THE WHOLE LINE and the two buttons («Save the name», «Cancel») sit on the line below it, fully inside the dialog: at
+   296px a field, a confirm button and «Cancel» side by side ran 48px past the edge, and «Cancel» could not be tapped. The form itself takes
+   the row's full width (basis 100%, min-width 0) so nothing in it is wider than the dialog. */
 .editor {
   display: flex;
-  flex: 1;
+  flex: 1 1 100%;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--s2);
+  min-width: 0;
 }
 
 /* 18px on purpose: a field under 16px makes iOS zoom the page in when it is focused. */
 .input {
-  flex: 1 1 160px;
+  flex: 1 1 100%;
   min-width: 0;
   min-height: var(--hit);
   padding: 0 var(--s3);
@@ -136,11 +152,19 @@
   color: var(--ink-2);
 }
 
-.hint {
-  margin: var(--s3) 0 0;
-  padding: var(--s3);
-  border-radius: var(--r-md);
-  background: var(--sunken);
+/* «Saving…» while a rename is in the air: the line is in the page before it speaks. */
+.status {
+  margin: var(--s2) 0 0;
   color: var(--ink-2);
   font-size: var(--fs-sm);
+}
+
+/* «Food cost not updated.» and its «Retry». */
+.retry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  margin-top: var(--s2);
+  color: var(--danger-ink);
 }

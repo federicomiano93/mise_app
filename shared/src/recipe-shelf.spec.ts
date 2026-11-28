@@ -4,7 +4,7 @@
 import { describe, expect, test } from 'vitest';
 import {
   RECIPE_CATEGORIES_MAX, RECIPE_CATEGORY_MAX, addCategory, categoryKey, categoryOf, countInCategory, isArchivedRecipe,
-  normalizeRecipeCategories, removeCategory, shelfFieldsOf, shelveRecipes, sortedCategories, storedCategoryOf, withoutArchived,
+  normalizeRecipeCategories, recipesHoldingWord, removeCategory, renameCategory, shelfFieldsOf, shelveRecipes, sortedCategories, storedCategoryOf, withoutArchived,
 } from './recipe-shelf';
 
 const r = (id: string, extra: Record<string, unknown> = {}) => ({ id, name: id, ...extra });
@@ -115,5 +115,24 @@ describe('the list laid out on the shelf', () => {
     expect(countInCategory(recipes, 'natale', ['Natale', 'Estate'])).toBe(2);
     expect(countInCategory(recipes, 'Pasqua', ['Natale', 'Estate'])).toBe(0);
     expect(countInCategory(recipes, '', ['Natale'])).toBe(0);
+  });
+});
+
+describe('renaming a word', () => {
+  test('puts the new spelling where the old one was', () => {
+    expect(renameCategory(['Natale', 'Estate'], 'natale', ' Feste  di Natale ')).toEqual({ list: ['Feste di Natale', 'Estate'], word: 'Feste di Natale' });
+  });
+  test('may change its own case', () => {
+    expect(renameCategory(['natale'], 'natale', 'Natale')).toEqual({ list: ['Natale'], word: 'Natale' });
+  });
+  test('is refused when another word already has the name, or the name is empty or too long', () => {
+    expect(renameCategory(['Natale', 'Estate'], 'Natale', 'ESTATE')).toEqual({ refusal: 'taken' });
+    expect(renameCategory(['Natale'], 'Natale', '   ')).toEqual({ refusal: 'empty' });
+    expect(renameCategory(['Natale'], 'Natale', 'x'.repeat(RECIPE_CATEGORY_MAX + 1))).toEqual({ refusal: 'tooLong' });
+  });
+  test('finds the recipes holding a word, archived ones and words off the list included', () => {
+    const recipes = [r('a', { category: 'Natale' }), r('b', { category: 'natale', archived: true }), r('c', { category: 'Estate' }), r('d')];
+    expect(recipesHoldingWord(recipes, 'NATALE').map(recipe => recipe.id)).toEqual(['a', 'b']);
+    expect(recipesHoldingWord(recipes, '')).toEqual([]);
   });
 });

@@ -26,6 +26,13 @@
   }
 }
 
+/* «New recipe» and «Categories» side by side; they wrap on a very narrow phone rather than push the page sideways. */
+.buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s3);
+}
+
 .newRecipe {
   flex: none;
 }
@@ -86,19 +93,11 @@
   color: var(--ink-2);
 }
 
-/* A category's heading and its rows. */
-.group {
+/* The categories' groups (ui/CollapsibleGroup draws each), one under the other. */
+.groups {
   display: flex;
   flex-direction: column;
   gap: var(--s2);
-}
-
-.groupTitle {
-  padding: 0 var(--s1);
-  color: var(--ink-2);
-  font-size: var(--fs-sm);
-  font-weight: 650;
-  overflow-wrap: anywhere;
 }
 
 .rows {

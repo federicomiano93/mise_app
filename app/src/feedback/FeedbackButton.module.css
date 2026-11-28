@@ -1,0 +1,67 @@
+/* «Nota per Claude»: a round 48px icon button in the top bar, like the «Standby» pill under 960px, and the phone's row of «More». */
+
+.button {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: var(--hit);
+  height: var(--hit);
+  padding: 0;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.button[data-hovered] {
+  background: var(--bg);
+}
+
+.button[data-pressed] {
+  background: var(--sunken);
+}
+
+/* Qualified: base.css's `svg.lucide` (20px) would win over a lone class. */
+.button svg {
+  flex: none;
+  width: 18px;
+  height: 18px;
+}
+
+/* The same action as a row under the list of «More», for a phone: the bar is not there. */
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  width: 100%;
+  min-height: 56px;
+  margin-top: var(--s4);
+  padding: 0 var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.row[data-hovered] {
+  background: var(--sunken);
+}
+
+.label {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+}
+
+@media (min-width: 700px) {
+  .row {
+    display: none;
+  }
+}

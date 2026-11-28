@@ -6,7 +6,6 @@ import viewCss from './RecipeView.module.css?raw';
 import linkCss from './LinkSuggest.module.css?raw';
 import dialogCss from './LinkDialog.module.css?raw';
 import reorderCss from './ReorderRows.module.css?raw';
-import settingsCss from './LabelSettings.module.css?raw';
 
 // What a stylesheet decides and jsdom cannot see (see recipesCss.spec.ts): the editor's row on a 296px phone, the targets,
 // and where the «New recipe» button stands.
@@ -91,9 +90,10 @@ describe('the «New recipe» button above the list', () => {
 });
 
 describe('linking a row', () => {
-  it('makes the link line a full-width 48px target that wraps instead of pushing the page sideways', () => {
+  it('makes the link line a 48px target only as wide as its words, wrapping instead of pushing the page sideways', () => {
     const line = rule(rowCss, '.link');
-    expect(declaration(line, 'width')).toBe('100%');
+    expect(declaration(line, 'width')).toBe('fit-content');
+    expect(declaration(line, 'max-width')).toBe('100%');
     expect(declaration(line, 'min-height')).toBe('var(--hit)');
     expect(declaration(line, 'overflow-wrap')).toBe('anywhere');
     expect(declaration(rule(rowCss, '.link:focus-visible'), 'outline')).toContain('var(--accent)');
@@ -112,6 +112,13 @@ describe('linking a row', () => {
     expect(declaration(rule(dialogCss, '.row'), 'min-height')).toBe('var(--hit)');
     expect(declaration(rule(dialogCss, '.name'), 'overflow-wrap')).toBe('anywhere');
     expect(declaration(rule(dialogCss, '.meta'), 'overflow-wrap')).toBe('anywhere');
+  });
+
+  it('underlines the link under the pointer instead of drawing a grey band behind it', () => {
+    const hovers = withoutComments(rowCss).match(/\.link:hover\s*\{[^}]*\}/g) ?? [];
+    expect(hovers.length).toBe(1);
+    expect(hovers[0]).toContain('text-decoration: underline');
+    expect(hovers[0]).not.toContain('background');
   });
 
   it('puts every hover inside (hover: hover)', () => {
@@ -169,15 +176,5 @@ describe('reordering the rows', () => {
     expect(css.replace(/@media \(hover: hover\)\s*\{[\s\S]*?\}\s*\}/g, '')).not.toContain(':hover');
     expect(css).not.toMatch(/#[0-9a-f]{3,8}\b|rgb\(|hsl\(|oklch\(/i);
     expect(css).not.toMatch(/--[a-z0-9-]+\s*:/i);
-  });
-});
-
-describe('the category bin in the label Settings', () => {
-  it('⚠️ is as quiet as the recipe page’s delete icon (--ink-3, red only on hover), a 48px target with a focus ring', () => {
-    expect(declaration(rule(settingsCss, '.bin'), 'color')).toBe(declaration(rule(viewCss, '.deleteIcon'), 'color'));
-    expect(declaration(rule(settingsCss, '.bin'), 'color')).toBe('var(--ink-3)');
-    expect(declaration(rule(settingsCss, '.bin'), 'width')).toBe('var(--hit)');
-    expect(declaration(rule(settingsCss, '.bin'), 'height')).toBe('var(--hit)');
-    expect(declaration(rule(settingsCss, '.bin:focus-visible'), 'outline')).toContain('var(--accent)');
   });
 });

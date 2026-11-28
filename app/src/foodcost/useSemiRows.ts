@@ -3,14 +3,14 @@ import { semiCardCost, wouldBeTooDeep, wouldLoop } from '@mise/shared/foodcost-m
 import type { MessageKey } from '../i18n/en';
 import { useT } from '../i18n/useT';
 import { useMoney } from '../session/useMoney';
-import { categoryIdOf } from './categoriesModel';
+import { useCardCategories } from './useCardCategories';
 import { useFoodcost } from './FoodcostContext';
 import { semiFigures } from './semiWords';
 
-// One semi-finished card as a chooser offers it: its category, why it cannot be chosen (null: it can), and its figures in words.
+// One semi-finished card as a chooser offers it: its category word ('' for none), why it cannot be chosen (null: it can), and its figures in words.
 export type SemiRow = {
   card: ReturnType<typeof useFoodcost>['products'][number];
-  categoryId: string | null;
+  category: string;
   reason: Extract<MessageKey, 'fc.pick.itself' | 'fc.pick.alreadyHere' | 'fc.pick.loops' | 'fc.pick.tooDeep'> | null;
   figures: { pill: string; sub: string };
 };
@@ -21,7 +21,8 @@ export type SemiRow = {
 export function useSemiRows(cardId: string, usedSemiIds: readonly string[]): SemiRow[] {
   const { t } = useT();
   const money = useMoney();
-  const { products, categories, tables } = useFoodcost();
+  const { products, tables } = useFoodcost();
+  const categories = useCardCategories();
   return useMemo(() => products
     .filter(card => card.kind === 'semi' && card.name.trim() !== '')
     .map((card): SemiRow => {
@@ -32,7 +33,7 @@ export function useSemiRows(cardId: string, usedSemiIds: readonly string[]): Sem
             : wouldBeTooDeep(tables.products, cardId, card.id) ? 'fc.pick.tooDeep' as const
               : null;
       const figures = semiFigures(t, money, semiCardCost(card, tables));
-      return { card, categoryId: categoryIdOf(card, categories), reason, figures };
+      return { card, category: categories.wordOf(card), reason, figures };
     })
     .sort((a, b) => a.card.name.localeCompare(b.card.name)), [products, categories, tables, cardId, usedSemiIds, t, money]);
 }

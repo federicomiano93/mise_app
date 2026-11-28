@@ -1,6 +1,7 @@
 import { ChevronRight } from 'lucide-react';
 import { Link } from 'react-router';
 import { useT } from '../i18n/useT';
+import { FeedbackRow } from '../feedback/FeedbackButton';
 import { Page } from './Page';
 import { SECTIONS } from './sections';
 import { useVisibleSections } from './useVisibleSections';
@@ -39,6 +40,8 @@ export function MorePage() {
           );
         })}
       </ul>
+      {/* «Nota per Claude» on a phone, where the top bar is not: this page is a tap from every screen (feedback/). */}
+      <FeedbackRow />
     </Page>
   );
 }

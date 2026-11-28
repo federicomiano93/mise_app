@@ -1,0 +1,109 @@
+/* The pocket calculator's dialog: the sum small and muted, the result large with tabular figures, then a grid of big keys (56px from a tablet's
+   width, the kit's 48px touch target on a phone). Operators wear the accent tint, «=» the accent: the one primary action. */
+
+.display {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--s1);
+  padding: var(--s3) var(--s4);
+  border-radius: var(--r-md);
+  background: var(--sunken);
+  overflow: hidden;
+}
+
+.expression {
+  max-width: 100%;
+  margin: 0;
+  overflow: hidden;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.result {
+  max-width: 100%;
+  margin: 0;
+  overflow: hidden;
+  font-family: var(--mono);
+  font-size: var(--fs-2xl);
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.result[data-error='true'] {
+  color: var(--danger-ink);
+}
+
+.keys {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--s2);
+}
+
+.key {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-height: var(--hit);
+  padding: 0;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: 600 var(--fs-lg)/1 var(--font);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.key[data-wide='true'] {
+  grid-column: span 2;
+}
+
+.key[data-kind='operator'],
+.key[data-kind='action'] {
+  background: var(--accent-tint);
+  color: var(--accent-ink);
+}
+
+.key[data-kind='equals'] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.key[data-hovered] {
+  background: var(--bg);
+}
+
+.key[data-pressed] {
+  background: var(--sunken);
+}
+
+.key[data-kind='equals'][data-hovered] {
+  background: var(--accent-hover);
+}
+
+.key[data-kind='equals'][data-pressed] {
+  background: var(--accent-press);
+}
+
+/* Qualified: base.css's `svg.lucide` (20px) would win over a lone class. */
+.key svg {
+  flex: none;
+  width: 22px;
+  height: 22px;
+}
+
+@media (min-width: 700px) {
+  .key {
+    min-height: 56px;
+  }
+}

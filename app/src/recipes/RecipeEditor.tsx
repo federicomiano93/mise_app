@@ -7,10 +7,12 @@ import { findInvalidRecipe, linkOf, staleLinkName } from '@mise/shared/catalogue
 import type { CatalogueRecipe, InvalidRecipeProblem } from '@mise/shared/catalogue-model';
 import { normalizeLabelProfile } from '@mise/shared/label-template-model';
 import { mayEditRecords } from '@mise/shared/records';
+import { recipeProductId } from '@mise/shared/from-recipes';
 import { mayOpenFoodCost } from '@mise/shared/recipe-link';
 import { unpricedRowFlags } from '@mise/shared/unpriced-rows';
 import { haccpSettingsOf } from '@mise/shared/haccp-label';
 import { categoryOf, sortedCategories } from '@mise/shared/recipe-shelf';
+import { useDataServices } from '../data/DataContext';
 import { useT } from '../i18n/useT';
 import { markBusy } from '../session/busy';
 import { useSession } from '../session/SessionContext';
@@ -41,6 +43,9 @@ import { recipePhotoOn } from './photoGate';
 import { cameFromCake, cameFromList, cameFromRecipe, recipeCameFromGap, recipeCameFromList, useLeave } from './recipesNav';
 import { PHOTO_PATH, RECIPES_PATH, recipePath } from './recipesPath';
 import { useDeleteRecipe } from './useDeleteRecipe';
+import { recipeCardDocument } from './recipeCard';
+import type { CardChoice } from './recipeCard';
+import { SegmentedChoice } from './SegmentedChoice';
 import styles from './RecipeEditor.module.css';
 
 type Props = {
@@ -304,6 +309,12 @@ export function RecipeEditor({ id, recipe, titleRef, onTyped }: Props) {
   // and only for somebody who may read Food cost: for anyone else the rules would refuse, so no request is made at all.
   // ⚠️ ONE-SHOT, NOT A LISTENER: prices that change while the editor is open are not followed; the next editor opens afresh.
   const mayReadPrices = mayOpenFoodCost(venue, canManage, role);
+  // ⚠️ «FOOD COST CARD» (a NEW recipe only): drawn for exactly whoever the rules let create a product, cardAccess(lid, 'foodcost',
+  // 'foodcost') != 'none' — the venue has Food cost and shows its card to this person. That is the question above, and the one the rail
+  // asks about Food cost's door (visibility.ts). UX only: the rules judge the write.
+  const mayMakeCard = id === null && mayReadPrices;
+  const [cardChoice, setCardChoice] = useState<CardChoice>('finished');
+  const services = useDataServices();
   const [prices, setPrices] = useState<Readonly<Record<string, Record<string, unknown>>> | null>(null);
   useEffect(() => {
     if (!mayReadPrices) return undefined;
@@ -490,6 +501,27 @@ export function RecipeEditor({ id, recipe, titleRef, onTyped }: Props) {
     const savedId = store.saveRecipe(clean);
     announceAction('recipe-saved');
     say(t(id === null ? 'cat.recipeAdded' : 'cat.recipeSaved'));
+    // ⚠️ THE CARD NEVER HOLDS THE RECIPE BACK, AND IS MADE ONLY AFTER THE SERVER HAS ACKNOWLEDGED THE RECIPE (offline: once it comes
+    // back): a refused recipe leaves no card, and the store's refusal message stays on screen. The card is a server transaction
+    // (it rejects offline). If it fails the recipe shows up in Food cost's «recipes without a card» box as any recipe does.
+    // The wait is a quiet hold, so the update banner's reload does not drop the card; if the page closes first nothing is made.
+    const cardDoc = mayMakeCard && locationId ? recipeCardDocument(cardChoice, clean.name) : null;
+    if (cardDoc !== null && locationId) {
+      const release = markBusy({ quiet: true });
+      const foodcost = services.foodcost(locationId);
+      void store.whenWritten(savedId)
+        .then(async written => {
+          if (!written) return;
+          try {
+            await foodcost.createProductIfAbsent(recipeProductId(savedId), cardDoc);
+            say(t('cat.recipeAddedCard'));
+          } catch (err) {
+            console.warn('Product from a recipe was not created:', err);
+            say(t('cat.recipeAddedNoCard'));
+          }
+        })
+        .finally(release);
+    }
     if (id === null) {
       landOn.current = recipeOpener(savedId);
       leave();
@@ -818,6 +850,20 @@ export function RecipeEditor({ id, recipe, titleRef, onTyped }: Props) {
             />
             <p id={`${haccpStorageId}-note`} className={styles.note}>{t('cat.haccpStorageNote')}</p>
           </div>
+        ) : null}
+
+        {mayMakeCard ? (
+          <SegmentedChoice<CardChoice>
+            label={t('cat.card.title')}
+            choices={[
+              { value: 'finished', text: t('cat.card.finished') },
+              { value: 'semi', text: t('cat.card.semi') },
+              { value: 'none', text: t('cat.card.none') },
+            ]}
+            selected={cardChoice}
+            onSelect={setCardChoice}
+            flush
+          />
         ) : null}
 
         {/* ⚠️ DELETE: whoever runs the place only (the same as the recipe page), absent — not disabled — for everybody else and

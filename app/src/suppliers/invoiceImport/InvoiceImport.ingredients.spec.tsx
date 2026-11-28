@@ -289,7 +289,7 @@ describe('the price on a row (S3)', () => {
     const { user } = await open(RESCALED.venue);
     await toIngredients(user, RESCALED.zip());
     // 14.25 per sack of 25 kg, worked out again with the 20 kg sack of the venue: 0,7125 (the price of the HELD row).
-    expect(within(row('Farina tipo 00')).getByText('Fornitore Esempio · 0,7125 € / kg · 1 invoice')).toBeInTheDocument();
+    expect(within(row('Farina tipo 00')).getByText('Fornitore Esempio · 0,71 € / kg · 1 invoice')).toBeInTheDocument();
   });
 });
 

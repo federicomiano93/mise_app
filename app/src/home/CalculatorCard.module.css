@@ -1,0 +1,44 @@
+/* «Calcolatrice»: a card-sized row above the Home's cards; icon, name, chevron on one centred flex row. */
+
+.card {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  box-sizing: border-box;
+  width: 100%;
+  min-height: var(--hit);
+  padding: var(--s2) var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+  color: var(--ink);
+  font: 600 var(--fs-md)/1.2 var(--font);
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.card[data-hovered] {
+  background: var(--bg);
+}
+
+.card[data-pressed] {
+  background: var(--sunken);
+}
+
+/* Qualified: base.css's `svg.lucide` (20px) would win over a lone class. */
+.card .icon {
+  flex: none;
+  color: var(--accent);
+}
+
+.label {
+  flex: 1;
+  min-width: 0;
+}
+
+.card .chevron {
+  flex: none;
+  color: var(--ink-3);
+}

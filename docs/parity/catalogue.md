@@ -2314,3 +2314,64 @@ Not driven: the emulator against the new rules (Phase A's run is reported separa
 host, the classes and the stylesheet's text are specified), the lab tablet (Chrome 101) at 648 px, and a phone's icon-only band at the
 real widths. The focus is not promised back to the incomplete row a person opened when they come back from its recipe (the Labels
 list does; here the book simply reopens), a small known gap.
+
+## Food cost card of a new recipe as built (27 Nov 2026) — NEW IN MISE 2, no original in the current app
+
+A NEW recipe's editor ends with «Food cost card»: «Finished product» (chosen), «Semi-finished», «No card» (`SegmentedChoice`, `flush`).
+- ⚠️ Drawn only for `mayOpenFoodCost(venue, canManage, role)` (the venue has Food cost and shows its card to this role: the rules' `cardAccess(lid, 'foodcost', 'foodcost') != 'none'` on `products` create), and never when an existing recipe is edited. The kitchen owner has no Food cost card, so no box.
+- The card is `products/recipe-<recipeId>` (the link Food cost's «recipes without a card» box looks for), written by Food cost's `createProductIfAbsent` with `recipes/recipeCard.ts`: ONLY the name, kind finished/semi, model 4, every line and price empty (`shared/product-document.ts`, the very function the Food cost store saves with; the recipe is NOT pre-loaded into «Made of», unlike «Cards from the Recipe book»).
+- ⚠️ ORDER: «Recipe added.» at once (local-first); the card is made only when `store.whenWritten(id)` says the SERVER acknowledged the recipe (offline: later), so a refused recipe leaves no card and keeps the store's refusal message. Then «Recipe added. Food cost card created.» or «... not created.» (a failure is warned in the console; the recipe is then in Food cost's box). The wait is a quiet `markBusy` hold. Closing the page first makes nothing.
+- The editor reaches Food cost only through `useDataServices().foodcost()` and `shared/product-document`; no import from `foodcost/`.
+- Not driven in a browser; specs: `recipeCard.spec.ts`, `RecipesSection.foodcostCard.spec.tsx`.
+
+## Categories are made here only, and the groups fold — as built (28 Nov 2026)
+
+- **One place.** The Ricettario's list (`config/labels.recipeCategories`) is the only list of categories; Food cost follows it (parity/foodcost.md,
+  same date). The «Recipe categories» card is gone from the label Settings (and its CSS, its pinned bin spec and its keys).
+- **«Categories» button** in the list's top bar beside «New recipe», drawn for `canManage` only. It opens `RecipeCategoriesDialog` (the Food cost
+  `CategoriesDialog`, moved here): every word ALPHABETICAL (locale-aware, no reordering) with «{n} recipe(s)» (archived counted), a rename pencil, a
+  remove bin, «+ New category», «Done». Names go through `addCategory` / the new `renameCategory` (trimmed, 1–40, no duplicate ignoring case; the rename may
+  change its own case). A name half typed holds `markBusy`; «Done» asks before dropping it.
+- **Remove** asks first and says how many recipes move to «No category»; it deletes no recipe and rewrites none (the word leaves the list; it comes back
+  if restored) — `removeRecipeCategory` as before.
+- **Rename** (new): `recipesStore.renameRecipeCategory(old, new)`, local-first. The list swaps the word and EVERY recipe holding it (archived too, listed or
+  not: `recipesHoldingWord`) is filed under the new one at once. Writes, all handed over together and in this order: `arrayUnion(new)`, `category` ALONE
+  on each recipe (a merge each, never a batch: the rules' read budget) — and `haccpCategory` when the HACCP list's choice was that word — and `arrayRemove(every
+  old spelling)`. ⚠️ THREE STEPS, EACH WAITING FOR THE ONE BEFORE: (1) `arrayUnion(new)`; refused → nothing was written, all is put back, «Couldn't save the
+  categories…» (true). (2) every recipe write (and the HACCP one), all settled. (3) only if every one was accepted, `arrayRemove(old)`. If some of step 2 were
+  refused, BOTH words stay on the list (no recipe lands in «No category»), only the refused recipes go back to the old word, and the dialog says «Rename not
+  finished.» (`RenameNotFinished`).
+- **A rename needs the server and holds the app.** Offline (`useOnline`) it is refused with «Needs a connection.» and nothing is sent (the box keeps the
+  typed name). From its start until everything has settled, Food cost's half included, the dialog holds `markBusy()` (steps 2 and 3 live in page memory, so
+  an update reload must not drop them). While it is in the air the store's `renaming` flag is set: the dialog shows the words as the rename will leave them (new
+  word, not both), one «Saving…» line, every row action disabled, and no snapshot is adopted that brings the old word (or the recipes under it) back
+  (`overlayRenameLabel` / `overlayRename`; the HACCP choice only when it was the renamed word at the start). The store keeps the last RAW snapshots and,
+  when the rename ends however it ends, re-derives the recipes and the label profile from them, so the phone shows what the server holds. A write that
+  never answers is not waited for: after 20 s (`RENAME_SOFT_MS`) the controls are free again and the page says «Rename not confirmed.»; the late steps touch
+  nothing on the phone. `stop()` abandons a rename in the air (nothing is written to storage afterwards). Food cost failing is said in the dialog (Retry)
+  AND in the page's status line, for a dialog closed meanwhile. «Rename not finished.» is also said in the page's status line (seen after «Done»).
+- **Food cost follows the rename** (`renameFoodcostCategory.ts`), after the recipes' rename is whole: for somebody who `mayOpenFoodCost`, EVERY
+  `foodcost-categories` document whose name folds to the old word (`categoryKey`) is renamed (rank kept), through the data services' Food cost source (no
+  import from `foodcost/`: a declared exception of data only). It accepts only the SERVER's answer (a cache-only answer, a failed read or no answer in 10 s skips
+  it) and then says «Food cost not updated.» IN THE DIALOG with a «Retry» button that asks again for the same old→new pair; it never fails the rename itself.
+  `handBack.ts` gives a row in a closed group the focus only after the group has rendered (a frame at a time, a few at most), never while it is `hidden`.
+- **Groups fold** (`ui/CollapsibleGroup`, moved out of Food cost's list and shared): every group, «No category» included, starts CLOSED; the header is a
+  `<button aria-expanded>` with the name, «{n} recipes» and the chevron; a search opens the groups that match; the group of the open recipe opens by itself
+  and stays as the person's tap once the recipe is left (the list stays mounted, so Back and a save return to an open group). State in the component only.
+  A closed group's rows are `hidden`. «Archived» keeps its own `FoldedGroup`. With no category in use the list is flat, as before.
+- **Not covered by specs:** the real rules on a rename (a refused recipe write leaves the list with both words until the next snapshot), a very long
+  list of renamed recipes against Firestore's write rate, the dialog on a 296px phone (not measured).
+
+## Recipe photos from the gallery as built (28 Nov 2026)
+
+The photo reader screen (`app/src/recipes/PhotoScreen.tsx`) had ONE file input with `capture="environment"`, which always opens the camera on a phone or tablet, so a photo already taken could not be chosen. It now has two:
+
+- **Camera** (unchanged): `capture="environment"`, label «Take a photo», then «Take another» once there is a photo (was «Add another photo»).
+- **Gallery** (new): the same `accept`, `multiple`, `onChoose` and `cannotAdd` disabled rule, and NO `capture`, so the system picker opens. Label «From gallery» / «Dalla galleria», with the `Image` icon.
+
+Both go through the same `shrinkPhoto` (canvas re-encode, which strips EXIF and GPS) and the same cap of five.
+
+- **Names:** each input carries an `aria-label` with the FULL label. The visible words are two spans, the full one and a short one («Take» / «Gallery», «Scatta» / «Galleria»), switched by CSS below 700px; both spans are `aria-hidden`.
+- **Layout:** on a tablet the camera, gallery and read buttons share one row; on a phone (below 700px) camera and gallery are half width each and «Read the recipe» spans the row below.
+- **Keys:** `cat.photo.gallery`, `cat.photo.galleryShort`, `cat.photo.takeShort`; `cat.photo.addAnother` reworded.
+- ⚠️ `cat.photo.err.badFormat` still says «take it with the camera instead of picking it from your library»; left as is (no wording change was agreed), now slightly out of date.

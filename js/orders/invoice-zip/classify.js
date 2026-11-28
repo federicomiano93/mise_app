@@ -35,7 +35,7 @@ const DISCOUNT_RE = new RegExp(`^[^\\p{L}\\p{N}_]*(sconto|abbuono|ribasso)${B_EN
 // Checked BEFORE packaging: "ZUCCHERO SACCHI DA KG 25" is sugar in sacks, not a sack.
 const FOOD_RE = new RegExp(
   `${B_START}(zucchero|farina|sfarinat${WORD}*|semola|sale|lievito|burro|margarina|strutto|olio|uova|uovo|latte|panna`
-  + `|cacao|cioccolato|miele|mandorl${WORD}*|nocciol${WORD}*|pistacch${WORD}*|noci|uvetta|canditi|marmellata`
+  + `|cacao|cioccolato|miele|mandorl${WORD}*|nocciol${WORD}*|pistacch${WORD}*|fragol${WORD}*|lampon${WORD}*|mirtill${WORD}*|gelat${WORD}*|noci|uvetta|canditi|marmellata`
   + `|confettura|crema|ricotta|mascarpone|formaggio|mozzarella`
   // Ready-made food: «patate padellate» is not a pan, «cornetto fantasia» is not a Fanta.
   + `|patate|cornett[oi]|panzerott${WORD}*|pasticciott${WORD}*|treccia|trecce)${B_END}`, 'iu');
@@ -47,13 +47,13 @@ const FOOD_RE = new RegExp(
 const READY_RE = new RegExp(
   `${B_START}yog\\.|yogurt|kefir|dolcificante|capsul|${B_START}caps${B_END}|caff\\S*\\s*cialde`, 'iu');
 const PACKAGING_RE = new RegExp(
-  'sh\\. ml|b\\.sch|grattugia|flacone|posate|asciugamano|vasch\\.caldo|rotolo|buste|carta |carta$'
-  + '|sacch|cont\\. plastica|fogli pol|pellicola|stagnola|vaschette|box +pizza|velina|bicch|tappo'
+  'sh\\. ml|b\\.sch|grattugia|flacone|posate|asciugamano|vasch|rotolo|buste|carta |carta$'
+  + '|sacch|cont\\. plastica|fogli pol|pellicola|stagnola|millerigh|vaso cottura|box +pizza|velina|bicch|tappo'
   + '|bobina|laccetti|black nitro|carta forno|staccante'
   // Not food at all — tools, clothing, cleaning, shop bags (5 Oct 2026, from the first real
   // import). Never imported, like packaging. Food words are checked first, so «olio … ml10»
   // or «zucchero … bustina» never land here.
-  + `|alluminio|grembiul|palett|coprivassoi|carte pizzo|shopper|${B_START}borsa${B_END}|${B_START}bags${B_END}|caraffa`
+  + `|alluminio|coprivassoi|grembiul|palett|carte pizzo|shopper|${B_START}borsa${B_END}|${B_START}bags${B_END}|caraffa`
   + `|coppetta|anticalcare|detersiv|sgrassa|igienizz|candeggin|pennello|asciugaman|organza`
   + `|spolett|pentol|padell|${B_START}padel${B_END}|guanti`
   // A potato peeler (the word «patate» no longer catches it as resale).

@@ -51,7 +51,7 @@ import only PROPOSE, or write nothing at all (C105, I16).
   removed) and `suppliers`. None reads `config/orders`, and none says whether the prices REALLY answered (item S24).
 - **Shared ports** (`shared/src`): `price-model` (partial: the reading half — `roundTo`, `positiveNumber`,
   `isPriceUnit`, `normalizePrice`, `packWeightOf`, `packBaseOf`, `caseRate`, `caseOf`, `storedCaseOf`, `pricePerKg`,
-  `costState`, `isCostable`, `formatMoney`, `formatRate`, `withPrices`, `INGREDIENT_DRAINED_FIELDS`, `PRICE_FIELDS`),
+  `costState`, `isCostable`, `formatMoney`, `formatRate` (two decimals since 28 Nov 2026, a deliberate difference from the frozen js/ copy; see formatRateRun), `withPrices`, `INGREDIENT_DRAINED_FIELDS`, `PRICE_FIELDS`),
   `pack-size`, `order-unit`, `order-cost`, `ingredient-name`, `ingredient-kind`, `vat-rates`, `vat-guide`, `currency`
   (adapted, stateless), `market` (full), `allergen-model` (full), `venue-features`, `photo-model` (full),
   `home-cards`, `sections`, `local-data`, `usage-model`.

@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { formatPricePerUnit } from '@mise/shared/price-model';
+import { itemRates } from '@mise/shared/rate-items';
 import type { Money } from '@mise/shared/currency';
 import { useT } from '../i18n/useT';
 import { Button } from '../ui/Button';
@@ -56,6 +56,13 @@ export function PriceHistory({ id, money, read, onFailed }: Props) {
   }
 
   const shared = sharedTranslate(t);
+  // Neighbouring rows that would print the same price are told apart with more decimals (display only).
+  const rates = typeof state === 'string' ? [] : itemRates(state, money);
+  const rateText = (entry: Entry, index: number): string => {
+    const rate = rates[index] ?? '';
+    if (rate === '') return '';
+    return entry.priceUnit === 'pcs' ? shared('price.perEach', { rate }) : `${rate} / ${String(entry.priceUnit)}`;
+  };
   return (
     <div role="group" aria-labelledby={labelId} className={styles.history}>
       <span id={labelId} className={styles.label}>{t('sup.price.history')}</span>
@@ -74,7 +81,7 @@ export function PriceHistory({ id, money, read, onFailed }: Props) {
         <ul ref={node => { answer.current = node; }} tabIndex={-1} aria-labelledby={labelId} className={styles.historyList}>
           {state.map((entry, index) => (
             <li key={String(entry.id ?? index)} className={styles.historyRow}>
-              <span>{formatPricePerUnit(entry, money, shared)}</span>
+              <span>{rateText(entry, index)}</span>
               <span>
                 {entry.source === 'invoice' ? <span className={styles.historyTag}>{t('sup.price.history.fromInvoice')}</span> : null}
                 {shortDate(entry.recordedAt, locale)}

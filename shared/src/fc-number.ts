@@ -7,8 +7,8 @@
 // `setCurrency(symbol, layout)` / `moneyOf(symbol, layout)` and demands the same text.
 //
 // ONLY THE TEXT CHANGES: stored data, the model's sums and the boxes a person types in are untouched, and totals keep being
-// computed from exact values. ⚠️ FOOD COST ONLY: price-model.ts formatRate / formatMoney keep their decimals for the Suppliers
-// and the Stocktake on purpose (a price per gram is a tenth of a cent).
+// computed from exact values. Since 28 Nov 2026 price-model.ts formatRate shows two decimals too (a tiny
+// non-zero rate keeps its first significant digit instead of «< 0,01»).
 //
 // ⚠️ A REAL AMOUNT NEVER READS AS NOTHING: a positive value whose two-decimal text is «0.00» shows «< 0,01», never «0,00».
 // Zero stays «0,00»; a value that rounds to minus zero shows «0,00»; a real negative keeps its sign.

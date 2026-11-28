@@ -28,6 +28,7 @@ import { useStatusMessage } from '../ui/StatusMessage';
 import { useConfirm } from '../ui/useConfirm';
 import { useMediaQuery } from '../ui/useMediaQuery';
 import { useFoodcost, useFoodcostStore } from './FoodcostContext';
+import { useCardCategories } from './useCardCategories';
 import { entryPath, historyPath, productPath } from './foodcostPath';
 import type { Origin } from './foodcostPath';
 import { FROM_PRODUCT, entryState, newKindOf, pushDepth } from './foodcostNav';
@@ -127,6 +128,7 @@ export function ProductForm({ id, product, draft, origin, titleRef, onSaved, onB
   const { t, locale } = useT();
   const store = useFoodcostStore();
   const snap = useFoodcost();
+  const cardCategories = useCardCategories();
   const { canManage, location } = useSession();
   const money = useMoney();
   const say = useStatusMessage();
@@ -598,8 +600,17 @@ export function ProductForm({ id, product, draft, origin, titleRef, onSaved, onB
   const labourNeedsRate = (costed.labourMinutes ?? 0) > 0 && canManage && snap.settingsLoaded && !(Number(snap.tables.labourCostPerHour) > 0);
   const semiCard = working.kind === 'semi';
   const usedIn = id === null ? 0 : cardsUsing(snap.products, id).length;
-  // A category whose document is gone reads as none: the select then shows «No category».
-  const categoryValue = snap.categories.some(category => category.id === working.categoryId) ? working.categoryId : '';
+  // The category is a WORD of the Ricettario's list (categoriesModel.ts). A card made from a recipe takes its recipe's and only says
+  // it; any other card picks one. A name that is no word, or a document that is gone, reads as none.
+  const recipeCard = id !== null && cardCategories.followsRecipe({ id });
+  const categoryWord = cardCategories.wordOf({ id: id ?? '', categoryId: working.categoryId === '' ? null : working.categoryId });
+  // ⚠️ A WORD WITH NO CATEGORY DOCUMENT YET gets one now (the existing create path, local-first) and the card holds its id. The word
+  // is on the Ricettario's list, so the group appears at once; the document is Food cost's own link between a card and a word.
+  const pickCategory = (word: string) => {
+    // Made out here, never inside the updater: React may run an updater twice, and that would make two documents.
+    const categoryId = word === '' ? '' : cardCategories.docOf(word)?.id ?? store.saveCategory(word);
+    edit(current => ({ ...current, categoryId }));
+  };
   // Model 4: the labour of the semi-finished cards inside, apart from the card's own work (said only when both exist).
   const ownLabour = labourBatchCost(costed, snap.tables);
   const allLabour = totalLabourBatchCost(costed, snap.tables);
@@ -730,16 +741,24 @@ export function ProductForm({ id, product, draft, origin, titleRef, onSaved, onB
           </div>
 
           <div className={styles.field}>
-            <label htmlFor={`${ids}-category`} className={styles.label}>{t('fc.category.label')}</label>
-            <select
-              id={`${ids}-category`}
-              className={styles.select}
-              value={categoryValue}
-              onChange={event => { edit(current => ({ ...current, categoryId: event.target.value })); }}
-            >
-              <option value="">{t('fc.cat.none')}</option>
-              {snap.categories.map(category => <option key={category.id} value={category.id}>{category.name}</option>)}
-            </select>
+            {recipeCard
+              ? <span className={styles.label}>{t('fc.category.label')}</span>
+              : <label htmlFor={`${ids}-category`} className={styles.label}>{t('fc.category.label')}</label>}
+            {recipeCard ? (
+              <p className={styles.note}>
+                {t('fc.cat.fromBook', { name: categoryWord === '' ? t('fc.cat.none') : categoryWord })}
+              </p>
+            ) : (
+              <select
+                id={`${ids}-category`}
+                className={styles.select}
+                value={categoryWord}
+                onChange={event => { pickCategory(event.target.value); }}
+              >
+                <option value="">{t('fc.cat.none')}</option>
+                {cardCategories.words.map(word => <option key={word} value={word}>{word}</option>)}
+              </select>
+            )}
           </div>
 
           {/* How it is sold is for a card that is sold: a semi-finished one has no selling price, no pieces and no pack. */}

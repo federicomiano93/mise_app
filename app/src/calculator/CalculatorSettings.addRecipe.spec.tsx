@@ -183,7 +183,8 @@ describe('choosing a recipe of the book', () => {
     const alert = await screen.findByRole('alertdialog', undefined, LOAD);
     expect(alert).toHaveTextContent('Could not link that recipe — check the connection and try again.');
     expect(pathOf(view)).toBe(NEW);
-    expect(main().queryByText('Linking the recipe…')).not.toBeInTheDocument();
+    // The dialog is modal, so the page behind it is hidden from the accessibility tree: ask for it as hidden.
+    expect(within(screen.getByRole('main', { hidden: true })).queryByText('Linking the recipe…')).not.toBeInTheDocument();
     source.settleStamps();
   });
 

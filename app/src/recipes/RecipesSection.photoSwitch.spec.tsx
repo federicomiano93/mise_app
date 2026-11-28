@@ -95,7 +95,7 @@ describe('the kitchen owner', () => {
       session: { location: GB, role: 'owner-kitchen', canManage: true, canManageVenue: false, isOwner: false },
       data: { photo: () => photo },
     });
-    await screen.findByRole('region', { name: 'Recipe categories' }, LOAD);
+    await screen.findByRole('region', { name: 'Which label to print' }, LOAD);
     expect(screen.queryByRole('region', { name: 'Photos' })).not.toBeInTheDocument();
     expect(screen.queryByRole('switch', { name: 'Read recipes from a photo' })).not.toBeInTheDocument();
   });

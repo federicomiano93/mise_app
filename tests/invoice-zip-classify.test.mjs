@@ -116,6 +116,22 @@ test('classify: sfarinato is a flour, a real sack line is still packaging', () =
   assert.equal(kind('SACCHI N.U. AMBRATI')[0], 'packaging');
 });
 
+// 28 Nov 2026, real import: trays, jars and foil lines the reader filed as ingredients or «altro».
+test('classify: millerighe, vaschette, vaso cottura, alluminio and coprivassoi are packaging; a jar of honey is not', () => {
+  for (const text of ['MILLERIGHE + FINESTRA PVC SICILIA 25X16X5', 'VASCH.CUORE NERO I DESS', 'VASO COTTURA',
+    'ALLUMINIO ROT.RICAMBIO OTT', '500 COPRIVASSOI 21X31']) {
+    assert.equal(kind(text)[0], 'packaging', text);
+  }
+  assert.equal(kind('MIELE VASO 500G')[0], 'ingrediente');
+});
+
+// 28 Nov 2026: food in a tray is food.
+test('classify: fruit and ice cream in a tray are ingredients', () => {
+  for (const text of ['FRAGOLE VASCH. 250G', 'LAMPONI VASCHETTA GR 125', 'GELATO VASCHETTA 3KG', 'MIRTILLI VASCHETTA 125G']) {
+    assert.equal(kind(text)[0], 'ingrediente', text);
+  }
+});
+
 test('classify: real packaging still is packaging', () => {
   assert.equal(kind('SACCHETTI CARTA PANE')[0], 'packaging');
   assert.equal(kind('BUSTE PLASTICA')[0], 'packaging');

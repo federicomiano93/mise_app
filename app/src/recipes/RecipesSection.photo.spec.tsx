@@ -1,6 +1,7 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, screen, waitFor, within } from '@testing-library/react';
 import { en } from '../i18n/en';
+import { it as italian } from '../i18n/it';
 import { isBusy } from '../session/busy';
 import { fakeRecipesSource } from '../testing/fakeRecipesSource';
 import { LOAD, recipe, renderRecipes, split } from '../testing/renderRecipes';
@@ -232,13 +233,50 @@ describe('the photo screen: taking photographs', () => {
     expect(input).not.toHaveAttribute('tabindex', '-1');
   });
 
-  it('a chosen photo becomes a thumbnail from a data URL, and the button now says «Add another photo»', async () => {
+  it('the gallery has its own file input: the same images, several at once, and NO capture', async () => {
+    stubCamera();
+    const { region } = await openPhotoByAddress();
+    const gallery = takeInput(region, 'From gallery');
+    expect(gallery.type).toBe('file');
+    expect(gallery.accept).toBe('image/jpeg,image/png,image/webp');
+    expect(gallery.multiple).toBe(true);
+    expect(gallery).not.toHaveAttribute('capture');
+    expect(takeInput(region)).toHaveAttribute('capture', 'environment');
+    expect(gallery).not.toBe(takeInput(region));
+  });
+
+  it('photos chosen from the gallery become thumbnails like camera ones, and both inputs follow the cap', async () => {
+    stubCamera();
+    const { user, region } = await openPhotoByAddress();
+    await user.upload(takeInput(region, 'From gallery'), [file('a.jpg'), file('b.jpg')]);
+    await waitFor(() => { expect(region.getAllByRole('img')).toHaveLength(2); });
+    expect(region.getAllByRole('img')[0]?.getAttribute('src')).toMatch(/^data:image\/jpeg;base64,/);
+    await user.upload(takeInput(region, 'Take another'), file('c.jpg'));
+    await waitFor(() => { expect(region.getAllByRole('img')).toHaveLength(3); });
+    await user.upload(takeInput(region, 'From gallery'), [file('d.jpg'), file('e.jpg'), file('f.jpg')]);
+    await waitFor(() => { expect(region.getAllByRole('img')).toHaveLength(5); });
+    expect(takeInput(region, 'From gallery')).toBeDisabled();
+    expect(takeInput(region, 'Take another')).toBeDisabled();
+  });
+
+  it('the short words are drawn but the accessible names stay the full labels, in both languages', () => {
+    expect(en['cat.photo.gallery']).toBe('From gallery');
+    expect(en['cat.photo.galleryShort']).toBe('Gallery');
+    expect(en['cat.photo.takeShort']).toBe('Take');
+    expect(en['cat.photo.addAnother']).toBe('Take another');
+    expect(italian['cat.photo.gallery']).toBe('Dalla galleria');
+    expect(italian['cat.photo.galleryShort']).toBe('Galleria');
+    expect(italian['cat.photo.takeShort']).toBe('Scatta');
+    expect(italian['cat.photo.addAnother']).toBe('Scatta un’altra');
+  });
+
+  it('a chosen photo becomes a thumbnail from a data URL, and the button now says «Take another»', async () => {
     stubCamera();
     const { user, region } = await openPhotoByAddress();
     await user.upload(takeInput(region), file());
-    const thumb = await region.findByRole('img', { name: 'The photo you took' });
+    const thumb = await region.findByRole('img', { name: 'The chosen photo' });
     expect(thumb.getAttribute('src')).toMatch(/^data:image\/jpeg;base64,/);
-    expect(region.getByLabelText('Add another photo')).toBeInTheDocument();
+    expect(region.getByLabelText('Take another')).toBeInTheDocument();
     expect(region.getByRole('button', { name: 'Read the recipe' })).toBeEnabled();
   });
 
@@ -248,7 +286,25 @@ describe('the photo screen: taking photographs', () => {
     await user.upload(takeInput(region), Array.from({ length: 7 }, (_, i) => file(`p${i}.jpg`)));
     await waitFor(() => { expect(region.getAllByRole('img')).toHaveLength(5); });
     expect(says(region)).toHaveTextContent(en['cat.photo.err.tooMany']);
-    expect(takeInput(region, 'Add another photo')).toBeDisabled();
+    expect(takeInput(region, 'Take another')).toBeDisabled();
+  });
+
+  it('two picks that overlap share the room, and the second does not wipe «Up to 5 photos»', async () => {
+    stubCamera();
+    const { user, region } = await openPhotoByAddress();
+    await user.upload(takeInput(region), [file('a.jpg'), file('b.jpg'), file('c.jpg')]);
+    await user.upload(takeInput(region, 'From gallery'), [file('d.jpg'), file('e.jpg'), file('f.jpg')]);
+    await waitFor(() => { expect(region.getAllByRole('img')).toHaveLength(5); });
+    expect(says(region)).toHaveTextContent(en['cat.photo.err.tooMany']);
+  });
+
+  it('when the focused picker is disabled at five photos, the focus moves to «Read the recipe»', async () => {
+    stubCamera();
+    const { user, region } = await openPhotoByAddress();
+    await user.upload(takeInput(region, 'From gallery'), Array.from({ length: 5 }, (_, i) => file(`p${i}.jpg`)));
+    await waitFor(() => { expect(region.getAllByRole('img')).toHaveLength(5); });
+    await waitFor(() => { expect(region.getByRole('button', { name: 'Read the recipe' })).toHaveFocus(); });
+    expect(takeInput(region, 'From gallery').closest('label')).not.toHaveAttribute('data-focus-visible');
   });
 
   it('removes a photo, which gives the room back', async () => {
@@ -332,7 +388,7 @@ describe('the photo screen: reading', () => {
     expect(says(opened.region)).toHaveTextContent(en['cat.photo.working']);
     const reading = opened.region.getByRole('button', { name: 'Reading…' });
     expect(reading).toBeDisabled();
-    expect(takeInput(opened.region, 'Add another photo')).toBeDisabled();
+    expect(takeInput(opened.region, 'Take another')).toBeDisabled();
     expect(opened.region.getByRole('button', { name: 'Remove this photo' })).toBeDisabled();
     await act(async () => { opened.photo.calls[0]?.reject(new Error('stop')); });
     await waitFor(() => { expect(isBusy()).toBe(false); });

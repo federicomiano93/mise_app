@@ -39,7 +39,7 @@ describe('the top bar', () => {
     expect(css).toMatch(/\.topbar\s*\{[^}]*height:\s*var\(--topbar-h\)/);
   });
 
-  it('carries the kiosk pills on the Home only, even with kiosk mode on', async () => {
+  it('carries the kiosk pills on the Home, and marks the shell for a kiosk phone there', async () => {
     localStorage.setItem(KIOSK_STORAGE_KEY, ON);
     renderApp('/home');
     expect(await screen.findByRole('group', { name: 'Kiosk mode' })).toBeInTheDocument();
@@ -51,7 +51,6 @@ describe('the top bar', () => {
     renderApp('/orders');
     expect(await screen.findByRole('heading', { level: 1, name: 'Orders' })).toBeInTheDocument();
     expect(document.querySelector('[data-kiosk]')).toBeNull();
-    expect(screen.queryByRole('group', { name: 'Kiosk mode' })).not.toBeInTheDocument();
   });
 
   it('on a kiosk phone the bar shows, takes its own row, and gives way at the venue, never the page', () => {

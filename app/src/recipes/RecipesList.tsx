@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronRight, Egg, Plus, Search, Tags, Wheat } from 'lucide-react';
 import { filterByName, sortByUsage } from '@mise/shared/catalogue-model';
 import { isArchivedRecipe, shelveRecipes, sortedCategories } from '@mise/shared/recipe-shelf';
@@ -6,8 +6,10 @@ import { allergensOn } from '@mise/shared/venue-features';
 import { useT } from '../i18n/useT';
 import { useSession } from '../session/SessionContext';
 import { Button } from '../ui/Button';
+import { CollapsibleGroup } from '../ui/CollapsibleGroup';
 import { FoldedGroup, useFoldedOpen } from '../ui/FoldedGroup';
 import { useRecipes, useRecipesStore } from './RecipesContext';
+import { RecipeCategoriesDialog } from './RecipeCategoriesDialog';
 import { ALLERGENS_OPENER, HACCP_OPENER, INGREDIENTS_OPENER, NEW_OPENER, SEARCH_OPENER, recipeOpener, useHandBack } from './handBack';
 import styles from './RecipesList.module.css';
 
@@ -49,15 +51,22 @@ type Props = {
 // left; the fresh ones apply then.
 export function RecipesList({ openRecipeId, split, onOpenRecipe, sheetOpen, onOpenSheet, haccpOpen, onOpenHaccp, ingredientsOpen, onOpenIngredients, newOpen, onNew }: Props) {
   const { t, locale } = useT();
-  const { location } = useSession();
+  const { location, canManage } = useSession();
   const store = useRecipesStore();
+  const [categoriesOpen, setCategoriesOpen] = useState(false);
+  const categoriesButton = useRef<HTMLButtonElement>(null);
+  const closeCategories = () => {
+    setCategoriesOpen(false);
+    // The dialog gives the focus back to its button on its own; this keeps it there when the list changed meanwhile.
+    requestAnimationFrame(() => { categoriesButton.current?.focus(); });
+  };
   const handBack = useHandBack();
   const doorOpener = useCallback((node: HTMLButtonElement | null) => { handBack.register(ALLERGENS_OPENER, node); }, [handBack]);
   const haccpDoor = useCallback((node: HTMLButtonElement | null) => { handBack.register(HACCP_OPENER, node); }, [handBack]);
   const ingredientsDoor = useCallback((node: HTMLButtonElement | null) => { handBack.register(INGREDIENTS_OPENER, node); }, [handBack]);
   const newDoor = useCallback((node: HTMLButtonElement | null) => { handBack.register(NEW_OPENER, node); }, [handBack]);
   const searchOpener = useCallback((node: HTMLInputElement | null) => { handBack.register(SEARCH_OPENER, node); }, [handBack]);
-  const { recipes, recipesLoaded, usage, categories } = useRecipes();
+  const { recipes, recipesLoaded, usage, categories, labelConfigKnown } = useRecipes();
 
   const [text, setText] = useState('');
   const [query, setQuery] = useState('');
@@ -91,6 +100,26 @@ export function RecipesList({ openRecipeId, split, onOpenRecipe, sheetOpen, onOp
   // archived (its row must be able to take the focus), and stays as the person left it otherwise.
   const openIsArchived = openRecipeId !== null && recipes.some(recipe => recipe.id === openRecipeId && isArchivedRecipe(recipe));
   const fold = useFoldedOpen(openIsArchived || (query.trim() !== '' && shelf.archived.length > 0));
+
+  // ── The groups open and close on a tap (28 Nov 2026), as Food cost's do ──
+  // Every group starts CLOSED, «No category» too. While a search is typed the groups that match are open (only they are drawn). The
+  // group of the recipe that is open opens by itself, and stays as the person's own tap once the recipe is left, so Back, or the
+  // list after a save, never hides the row the focus goes back to. The taps live here only: nothing is stored.
+  const [openGroups, setOpenGroups] = useState<ReadonlySet<string>>(() => new Set());
+  const searching = query.trim() !== '';
+  const openHome = useMemo(() => (
+    openRecipeId === null ? null : shelf.groups.find(group => group.recipes.some(recipe => recipe.id === openRecipeId))?.category ?? null
+  ), [openRecipeId, shelf]);
+  useEffect(() => {
+    if (openHome !== null) setOpenGroups(before => (before.has(openHome) ? before : new Set(before).add(openHome)));
+  }, [openHome]);
+  const toggleGroup = (category: string) => {
+    setOpenGroups(before => {
+      const next = new Set(before);
+      if (next.has(category)) next.delete(category); else next.add(category);
+      return next;
+    });
+  };
 
   const press = (id: string) => {
     // The recipe that is already open stays as it is: nothing to open, nothing to count.
@@ -132,17 +161,27 @@ export function RecipesList({ openRecipeId, split, onOpenRecipe, sheetOpen, onOp
             onChange={event => { setText(event.target.value); }}
           />
         </div>
-        <Button
-          ref={newDoor}
-          variant="primary"
-          className={styles.newRecipe}
-          aria-current={newOpen ? 'true' : undefined}
-          onPress={onNew}
-        >
-          <Plus aria-hidden="true" />
-          <span>{t('cat.newRecipe')}</span>
-        </Button>
+        <div className={styles.buttons}>
+          <Button
+            ref={newDoor}
+            variant="primary"
+            className={styles.newRecipe}
+            aria-current={newOpen ? 'true' : undefined}
+            onPress={onNew}
+          >
+            <Plus aria-hidden="true" />
+            <span>{t('cat.newRecipe')}</span>
+          </Button>
+          {/* The one place the categories are made, renamed and removed (28 Nov 2026): for whoever runs the catalogue. */}
+          {canManage ? (
+            <Button ref={categoriesButton} variant="secondary" className={styles.newRecipe} isDisabled={!labelConfigKnown} onPress={() => { setCategoriesOpen(true); }}>
+              <Tags aria-hidden="true" />
+              <span>{t('cat.dlg.title')}</span>
+            </Button>
+          ) : null}
+        </div>
       </div>
+      {categoriesOpen ? <RecipeCategoriesDialog onClose={closeCategories} /> : null}
 
       {!recipesLoaded ? (
         <p className={styles.loading} aria-busy="true">{t('session.loading')}</p>
@@ -161,12 +200,19 @@ export function RecipesList({ openRecipeId, split, onOpenRecipe, sheetOpen, onOp
           {shelf.groups.length === 1 && shelf.groups[0]?.category === '' ? (
             <ul className={styles.rows}>{shelf.groups[0].recipes.map(rowOf)}</ul>
           ) : (
-            shelf.groups.map(group => (
-              <div key={group.category} className={styles.group}>
-                <h2 className={styles.groupTitle}>{group.category === '' ? t('cat.shelf.noCategory') : group.category}</h2>
-                <ul className={styles.rows}>{group.recipes.map(rowOf)}</ul>
-              </div>
-            ))
+            <div className={styles.groups}>
+              {shelf.groups.map(group => (
+                <CollapsibleGroup
+                  key={group.category}
+                  name={group.category === '' ? t('cat.shelf.noCategory') : group.category}
+                  count={t('cat.dlg.recipes', { n: group.recipes.length })}
+                  open={searching || openGroups.has(group.category)}
+                  onToggle={() => { toggleGroup(group.category); }}
+                >
+                  <ul className={styles.rows}>{group.recipes.map(rowOf)}</ul>
+                </CollapsibleGroup>
+              ))}
+            </div>
           )}
           {/* Everybody sees the fold: an employee may open an archived recipe to print its label. */}
           {shelf.archived.length > 0 ? (

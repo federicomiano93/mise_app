@@ -12,6 +12,7 @@ import { Button } from '../ui/Button';
 import { Dialog } from '../ui/Dialog';
 import { useFoodcost } from './FoodcostContext';
 import { supplierOf } from './supplierOf';
+import { useCardCategories } from './useCardCategories';
 import { useSemiRows } from './useSemiRows';
 import styles from './PickDialog.module.css';
 
@@ -70,7 +71,8 @@ const byName = (a: { name: string }, b: { name: string }): number => a.name.loca
 export function PickDialog({ mode, initialQuery = '', cardId = '', usedSemiIds = [], usedLabel, onChoose, onClose }: Props) {
   const { t } = useT();
   const money = useMoney();
-  const { recipes, ingredients, suppliers, categories } = useFoodcost();
+  const { recipes, ingredients, suppliers } = useFoodcost();
+  const categories = useCardCategories();
   const [query, setQuery] = useState(initialQuery);
   const [kindFilter, setKindFilter] = useState<KindFilter>(null);
   // undefined: every category.
@@ -152,7 +154,7 @@ export function PickDialog({ mode, initialQuery = '', cardId = '', usedSemiIds =
   // The semi-finished cards: one section per category that has some (the venue's order), then the ones with none. A venue with no
   // category at all has one plain section.
   const semiShown = semi.filter(row => matches({ id: row.card.id, name: row.card.name, invoiceName: '', meta: '', supplier: '' })
-    && (categoryFilter === undefined || (categoryFilter === NO_CATEGORY ? row.categoryId === null : row.categoryId === categoryFilter)));
+    && (categoryFilter === undefined || row.category === categoryFilter));
   if (showSemi) {
     const toOption = (row: (typeof semi)[number]): Option => ({
       id: row.card.id,
@@ -162,11 +164,11 @@ export function PickDialog({ mode, initialQuery = '', cardId = '', usedSemiIds =
       supplier: row.reason === null ? row.figures.sub : row.reason === 'fc.pick.alreadyHere' && usedLabel !== undefined ? usedLabel : t(row.reason),
       off: row.reason !== null,
     });
-    const groups = categories.length === 0
+    const groups = categories.words.length === 0
       ? [{ key: 'semi', heading: both ? t('fc.pick.semiTab') : '', rows: semiShown }]
       : [
-        ...categories.map(category => ({ key: `semi-${category.id}`, heading: category.name, rows: semiShown.filter(row => row.categoryId === category.id) })),
-        { key: 'semi-none', heading: t('fc.cat.none'), rows: semiShown.filter(row => row.categoryId === null) },
+        ...categories.words.map(word => ({ key: `semi-${word}`, heading: word, rows: semiShown.filter(row => row.category === word) })),
+        { key: 'semi-none', heading: t('fc.cat.none'), rows: semiShown.filter(row => row.category === '') },
       ];
     for (const group of groups) sections.push({ key: group.key, heading: group.heading, kind: 'semi', items: group.rows.map(toOption) });
   }
@@ -222,17 +224,17 @@ export function PickDialog({ mode, initialQuery = '', cardId = '', usedSemiIds =
         value={query}
         onChange={event => { setQuery(event.target.value); }}
       />
-      {showSemi && (mode === 'semi' || kindFilter === 'semi') && categories.length > 0 ? (
+      {showSemi && (mode === 'semi' || kindFilter === 'semi') && categories.words.length > 0 ? (
         <div className={styles.chips} role="group" aria-label={t('fc.category.label')}>
           <button type="button" className={styles.chip} aria-pressed={categoryFilter === undefined} onClick={() => { setCategoryFilter(undefined); }}>
             {t('fc.pick.allCategories')}
           </button>
-          {categories.filter(category => semi.some(row => row.categoryId === category.id)).map(category => (
-            <button key={category.id} type="button" className={styles.chip} aria-pressed={categoryFilter === category.id} onClick={() => { setCategoryFilter(category.id); }}>
-              {category.name}
+          {categories.words.filter(word => semi.some(row => row.category === word)).map(word => (
+            <button key={word} type="button" className={styles.chip} aria-pressed={categoryFilter === word} onClick={() => { setCategoryFilter(word); }}>
+              {word}
             </button>
           ))}
-          {semi.some(row => row.categoryId === null) ? (
+          {semi.some(row => row.category === '') ? (
             <button type="button" className={styles.chip} aria-pressed={categoryFilter === NO_CATEGORY} onClick={() => { setCategoryFilter(NO_CATEGORY); }}>
               {t('fc.cat.none')}
             </button>

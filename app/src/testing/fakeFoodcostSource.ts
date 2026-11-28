@@ -23,6 +23,9 @@ export type FakeFoodcostSource = FoodcostSource & {
   suppliers: Map<string, StoredDoc>;
   // The categories the list groups cards by (model 4), `foodcost-categories`.
   categories: Map<string, StoredDoc>;
+  // The Ricettario's category words (config/labels.recipeCategories), which Food cost groups by. null: the read is refused (the
+  // catalogue is off for this role), so Food cost falls back to its own category documents. The default: older specs need no change.
+  recipeCategories: string[] | null;
   prices: Map<string, Record<string, unknown>>;
   settings: Record<string, unknown> | null;
   history: Map<string, StoredDoc[]>;
@@ -70,6 +73,7 @@ export function fakeFoodcostSource(seed: {
   ingredients?: StoredDoc[];
   suppliers?: StoredDoc[];
   categories?: StoredDoc[];
+  recipeCategories?: string[] | null;
   prices?: Record<string, Record<string, unknown>>;
   settings?: Record<string, unknown> | null;
   history?: Record<string, StoredDoc[]>;
@@ -88,6 +92,7 @@ export function fakeFoodcostSource(seed: {
   const ingredientWatchers = new Set<ListListener>();
   const supplierWatchers = new Set<ListListener>();
   const categoryWatchers = new Set<ProductsListener>();
+  const wordWatchers = new Set<{ onChange: (words: string[]) => void; onError: (err: unknown) => void }>();
   const settingsWatchers = new Set<(data: Record<string, unknown> | null, meta: { readonly fromServer: boolean }) => void>();
   const priceListWatchers = new Set<(data: Record<string, unknown> | null, meta: { readonly fromServer: boolean }) => void>();
   const refuse = { save: false, create: false, loss: false, remove: false, rate: false, history: false, products: false, recipes: false, ingredients: false, publish: false, category: false, newRecipe: false };
@@ -105,6 +110,7 @@ export function fakeFoodcostSource(seed: {
 
   const fake: FakeFoodcostSource = {
     products, recipes, ingredients, suppliers, categories, cakes, prices, history, refuse, saved,
+    recipeCategories: seed.recipeCategories === undefined ? null : seed.recipeCategories,
     settings: seed.settings === undefined ? null : seed.settings,
     priceList: seed.priceList ?? null,
 
@@ -120,6 +126,7 @@ export function fakeFoodcostSource(seed: {
       if (!ingredientsHeld) for (const w of ingredientWatchers) w.onChange(priced());
       if (!suppliersHeld) for (const w of supplierWatchers) w.onChange([...suppliers.values()]);
       for (const w of categoryWatchers) w.onChange([...categories.values()], FROM_SERVER);
+      for (const w of wordWatchers) { if (fake.recipeCategories === null) w.onError(refused()); else w.onChange([...fake.recipeCategories]); }
       for (const w of settingsWatchers) w(fake.settings, { fromServer: true });
     },
     hold() { held = true; },
@@ -197,6 +204,16 @@ export function fakeFoodcostSource(seed: {
       categoryWatchers.add(listener);
       queueMicrotask(() => { if (categoryWatchers.has(listener)) onChange([...categories.values()], FROM_SERVER); });
       return () => { categoryWatchers.delete(listener); };
+    }),
+
+    watchRecipeCategories: vi.fn<FoodcostSource['watchRecipeCategories']>((onChange, onError) => {
+      const listener = { onChange, onError };
+      wordWatchers.add(listener);
+      queueMicrotask(() => {
+        if (!wordWatchers.has(listener)) return;
+        if (fake.recipeCategories === null) onError(refused()); else onChange([...fake.recipeCategories]);
+      });
+      return () => { wordWatchers.delete(listener); };
     }),
 
     newCategoryId: () => `cat-${++ids}`,

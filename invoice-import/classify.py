@@ -45,7 +45,7 @@ DISCOUNT_RE = re.compile(r"^\W*(sconto|abbuono|ribasso)\b", re.I)
 # Checked BEFORE packaging: "ZUCCHERO SACCHI DA KG 25" is sugar in sacks, not a sack.
 FOOD_RE = re.compile(
     r"\b(zucchero|farina|sfarinat\w*|semola|sale|lievito|burro|margarina|strutto|olio|uova|uovo|latte|panna"
-    r"|cacao|cioccolato|miele|mandorl\w*|nocciol\w*|pistacch\w*|noci|uvetta|canditi|marmellata"
+    r"|cacao|cioccolato|miele|mandorl\w*|nocciol\w*|pistacch\w*|fragol\w*|lampon\w*|mirtill\w*|gelat\w*|noci|uvetta|canditi|marmellata"
     r"|confettura|crema|ricotta|mascarpone|formaggio|mozzarella"
     # Ready-made food: «patate padellate» is not a pan, «cornetto fantasia» is not a Fanta.
     r"|patate|cornett[oi]|panzerott\w*|pasticciott\w*|treccia|trecce)\b",
@@ -61,8 +61,8 @@ READY_RE = re.compile(
     re.I,
 )
 PACKAGING_RE = re.compile(
-    r"sh\. ml|b\.sch|grattugia|flacone|posate|asciugamano|vasch\.caldo|rotolo|buste|carta |carta$"
-    r"|sacch|cont\. plastica|fogli pol|pellicola|stagnola|vaschette|box +pizza|velina|bicch|tappo"
+    r"sh\. ml|b\.sch|grattugia|flacone|posate|asciugamano|vasch|rotolo|buste|carta |carta$"
+    r"|sacch|cont\. plastica|fogli pol|pellicola|stagnola|millerigh|vaso cottura|box +pizza|velina|bicch|tappo"
     r"|bobina|laccetti|black nitro|carta forno|staccante"
     # Not food at all — tools, clothing, cleaning, shop bags (5 Oct 2026, from the first real
     # import). Never imported, like packaging. Food words are checked first, so «olio … ml10»
@@ -70,7 +70,7 @@ PACKAGING_RE = re.compile(
     # Mise 2 (14 Nov 2026) splits this part, down to the end of the pattern, from packaging: there it is
     # the line type «altro» (shared/src/invoice-zip/keywords.ts NONFOOD_RE), imported as an item of kind
     # 'other'. Here it stays packaging; keywords.spec.ts reads the two halves together against this list.
-    r"|alluminio|grembiul|palett|coprivassoi|carte pizzo|shopper|\bborsa\b|\bbags\b|caraffa"
+    r"|alluminio|coprivassoi|grembiul|palett|carte pizzo|shopper|\bborsa\b|\bbags\b|caraffa"
     r"|coppetta|anticalcare|detersiv|sgrassa|igienizz|candeggin|pennello|asciugaman|organza"
     r"|spolett|pentol|padell|\bpadel\b|guanti"
     # A potato peeler (the word «patate» no longer catches it as resale).

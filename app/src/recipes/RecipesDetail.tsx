@@ -22,6 +22,7 @@ import type { ShownView } from './recipesPath';
 import { ALLERGENS_OPENER, HACCP_OPENER, INGREDIENTS_OPENER, SETTINGS_OPENER, recipeOpener, sheetOpener, useHandBack } from './handBack';
 import { useRecipeDeletions } from './recipeDeletions';
 import { useRecipeReturn } from './recipeReturn';
+import { usePlaceName } from '../feedback/FeedbackContext';
 import styles from './RecipesDetail.module.css';
 
 // The right-hand side of the split — and, on a phone, the whole screen when a recipe is open. With
@@ -168,6 +169,8 @@ function RecipeScreen({ id, label }: { id: string; label: boolean }) {
   const title = useRef<HTMLHeadingElement>(null);
 
   const recipe = recipes.find(candidate => candidate.id === id) ?? null;
+  // «Nota per Claude» carries the name of the recipe that is open (feedback/).
+  usePlaceName(recipe?.name);
   // A recipe that is back after a delete the database refused is news again if it is deleted later (recipeDeletions.ts).
   useEffect(() => { if (recipe !== null) deletions.unmark(id); }, [recipe, deletions, id]);
 

@@ -7,6 +7,7 @@ import { useFocusOnBack } from '../shell/away/useFocusOnBack';
 import { StatusMessageProvider, useStatusMessage } from '../ui/StatusMessage';
 import { AwayBand } from './AwayBand';
 import { BookingsTodayPart } from './BookingsTodayPart';
+import { CalculatorCard } from './CalculatorCard';
 import { InstallHint } from './InstallHint';
 import { OrdersDuePart } from './OrdersDuePart';
 import { TodoCard } from './TodoCard';
@@ -43,6 +44,12 @@ export default function HomeSection() {
             <PartBoundary>
               <AwayBand onBack={armFocus} />
             </PartBoundary>
+            {/* «Calcolatrice»: one row above the cards, in a part of its own. */}
+            <div className={styles.tool}>
+              <PartBoundary>
+                <CalculatorCard />
+              </PartBoundary>
+            </div>
             {/* Two columns from the split's width: «Da fare» on the left, «Ordini da fare» on the right; one under the other on a phone.
                 Each in a part of its own: one failing must not take the other down. */}
             <div className={styles.cards} data-two={two ? 'true' : undefined}>

@@ -19,6 +19,7 @@ import { fakeMergeSource } from '../suppliers/merge/testing/fakeMergeSource';
 import { fakePriceChangesSource } from '../suppliers/priceChanges/testing/fakePriceChangesSource';
 import type { Session } from '../session/session';
 import { fakeBookingsSource } from './fakeBookingsSource';
+import { fakeFeedbackSource } from './fakeFeedbackSource';
 import { fakeCalculatorSource } from './fakeCalculatorSource';
 import { fakeClientOrdersSource } from './fakeClientOrdersSource';
 import { fakeCakesSource } from './fakeCakesSource';
@@ -75,7 +76,7 @@ export function renderApp(path: string, { lang = 'en', routes = appRoutes, sessi
     suppliers: () => fakeSuppliersSource(), invoiceImport: () => fakeImportSource(),
     priceChanges: () => fakePriceChangesSource(), merge: () => fakeMergeSource(),
     orders: () => fakeOrdersSource(), todos: () => fakeTodosSource(), ordersDue: () => fakeOrdersDueSource(), kioskOrders: () => fakeKioskOrdersSource(), kioskTodos: () => fakeKioskTodosSource(),
-    settings: () => fakeSettingsSource(), bookings: () => fakeBookingsSource(), ...data };
+    settings: () => fakeSettingsSource(), bookings: () => fakeBookingsSource(), feedback: () => fakeFeedbackSource(), ...data };
 
   render(
     <I18nProvider initialLanguage={lang} initialMessages={messages}>

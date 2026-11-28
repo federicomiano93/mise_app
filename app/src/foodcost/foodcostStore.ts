@@ -20,8 +20,9 @@
 //   • a refused save rolls back only if no later save of the same product has been made since —
 //     otherwise the rollback would put back a version older than what is now on screen.
 
-import { PRODUCT_MODEL, normalizeProduct, normalizeProducts } from '@mise/shared/foodcost-model';
+import { normalizeProduct, normalizeProducts } from '@mise/shared/foodcost-model';
 import { productFromRecipe } from '@mise/shared/from-recipes';
+import { toProductDocument } from '@mise/shared/product-document';
 import type { CostTables, Product, ProductKind } from '@mise/shared/foodcost-model';
 import { restoreAfterRefusal } from '@mise/shared/foodcost-weighing';
 import { positiveNumber } from '@mise/shared/price-model';
@@ -82,6 +83,10 @@ export interface FoodcostSnapshot {
   // the list is then drawn plain. Memory only, like the suppliers: Firestore's own copy answers the listener offline.
   readonly categories: readonly Category[];
   readonly categoriesLoaded: boolean;
+  // The Ricettario's category words (28 Nov 2026), the ONE list the cards are grouped by, in the order the Ricettario stores them (the
+  // screens sort them). null while they have not arrived and when the read is refused (the catalogue is off for this role): the
+  // screens then fall back to the names of `categories`, so nothing breaks (categoriesModel.ts).
+  readonly recipeWords: readonly string[] | null;
   // What an hour of work costs — null until it arrives, and null for ever for anybody who does not
   // run the place (nothing is ever asked for them).
   readonly labourCostPerHour: number | null;
@@ -167,35 +172,8 @@ export interface FoodcostStore {
   getProductHistory(productId: string): Promise<StoredDoc[]>;
 }
 
-// The fields of a product document, listed BY HAND: this object becomes the Firestore document and
-// the rules whitelist exactly these — spreading the product would send `id` and every save would be
-// refused. `model` is always the app's: the rules refuse a save without it over a product that has
-// it, so an older phone cannot delete ingredient lines and packs in silence.
-export function toProductDocument(product: Product): Record<string, unknown> {
-  return {
-    name: product.name,
-    components: product.components ?? [],
-    packaging: product.packaging ?? [],
-    sellingMode: product.sellingMode ?? null,
-    piecesPerBatch: product.piecesPerBatch ?? null,
-    packSize: product.packSize ?? null,
-    packUnit: product.packUnit ?? null,
-    sellingPrice: product.sellingPrice ?? null,
-    vatRate: product.vatRate ?? null,
-    foodCostTarget: product.foodCostTarget ?? null,
-    labourMinutes: product.labourMinutes ?? null,
-    labourPeople: product.labourPeople ?? null,
-    // ⚠️ NEVER WRITTEN AGAIN (model 3): the product is saved WHOLE, so the key drains from every product saved. The rules
-    // still whitelist it for the products the current app saved.
-    // ⚠️ THE PRODUCT'S OWN WEIGHING is written only when it has a value: the rules refuse a null.
-    ...(product.rawGrams !== null ? { rawGrams: product.rawGrams } : {}),
-    ...(product.cookedGrams !== null ? { cookedGrams: product.cookedGrams } : {}),
-    model: PRODUCT_MODEL,
-    // Model 4. Written on every save (the card is saved WHOLE): the kind always, the category's id or null.
-    kind: product.kind ?? 'finished',
-    categoryId: product.categoryId ?? null,
-  };
-}
+// Moved to shared/product-document.ts (the recipe editor makes a card with it too); re-exported so the store's callers and specs keep their import.
+export { toProductDocument };
 
 function indexById(list: unknown): Record<string, StoredDoc> {
   const out: Record<string, StoredDoc> = {};
@@ -250,6 +228,7 @@ export function createFoodcostStore(
   let suppliers: Readonly<Record<string, StoredDoc>> = {};
   let categories: readonly Category[] = [];
   let categoriesLoaded = false;
+  let recipeWords: readonly string[] | null = null;
   let labourCostPerHour: number | null = null;
   let settingsLoaded = !options.canManage;
   let inFlight = 0;
@@ -286,7 +265,7 @@ export function createFoodcostStore(
     }
     return {
       products, productsLoaded, productsFromServer, recipes, recipesLoaded, recipesFromServer, recipesFailed, ingredients,
-      ingredientsLoaded, ingredientsFailed, suppliers, categories, categoriesLoaded, labourCostPerHour, settingsLoaded, tables, unsent: inFlight > 0,
+      ingredientsLoaded, ingredientsFailed, suppliers, categories, categoriesLoaded, recipeWords, labourCostPerHour, settingsLoaded, tables, unsent: inFlight > 0,
     };
   }
 
@@ -452,6 +431,19 @@ export function createFoodcostStore(
         },
         () => {
           categoriesLoaded = true;
+          changed();
+        },
+      ));
+
+      // The Ricettario's category words (28 Nov 2026): the list the cards are grouped by. QUIET on failure too: a refused read leaves
+      // them null and the screens group by the names of the categories above.
+      stops.push(source.watchRecipeCategories(
+        words => {
+          recipeWords = words;
+          changed();
+        },
+        () => {
+          recipeWords = null;
           changed();
         },
       ));

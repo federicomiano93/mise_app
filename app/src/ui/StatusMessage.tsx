@@ -21,6 +21,24 @@ const StatusMessageContext = createContext<Say | null>(null);
 //
 // Wrap a section once; anything below it calls useStatusMessage().
 export function StatusMessageProvider({ children }: { children: ReactNode }) {
+  // ⚠️ ONE REGION ON THE PAGE: a provider inside another (a section's under the shell's, which also says «Note sent.») draws nothing of
+  // its own and hands its messages up, so two messages at the same moment can never sit on top of each other — the newer replaces the older.
+  const parent = useContext(StatusMessageContext);
+  return parent === null ? <OwnRegion>{children}</OwnRegion> : <Forwarding parent={parent}>{children}</Forwarding>;
+}
+
+function Forwarding({ parent, children }: { parent: Say; children: ReactNode }) {
+  // Dropped after the section has gone, as the own region does (a write answered late).
+  const live = useRef(true);
+  useEffect(() => {
+    live.current = true;
+    return () => { live.current = false; };
+  }, []);
+  const say = useCallback<Say>((text, ms) => { if (live.current) parent(text, ms); }, [parent]);
+  return <StatusMessageContext.Provider value={say}>{children}</StatusMessageContext.Provider>;
+}
+
+function OwnRegion({ children }: { children: ReactNode }) {
   const [shown, setShown] = useState<{ id: number; text: string } | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const counter = useRef(0);
