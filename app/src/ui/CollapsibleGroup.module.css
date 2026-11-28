@@ -1,0 +1,76 @@
+/* A group of a grouped list: the rows sit in one card frame under a header that is a button of 48px and more. */
+.group {
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.heading {
+  margin: 0;
+  font-size: var(--fs-md);
+}
+
+.button {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  width: 100%;
+  min-height: var(--hit);
+  padding: var(--s2) var(--s3);
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: 700 var(--fs-md) var(--font);
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.button:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
+}
+
+@media (hover: hover) {
+  .button:hover {
+    background: var(--sunken);
+  }
+}
+
+.chevron {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  color: var(--ink-3);
+  transition: transform 0.15s;
+}
+
+.chevron[data-open="true"] {
+  transform: rotate(90deg);
+}
+
+.name {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.count {
+  flex: none;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+}
+
+/* Inside a group the rows have no frame of their own: the group's is the frame. */
+/* (:is(ul, ol) outweighs the list's own single-class frame whatever the order the stylesheets load in.) */
+.body > :is(ul, ol) {
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+}
+
+.body[hidden] {
+  display: none;
+}

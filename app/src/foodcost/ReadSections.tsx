@@ -6,7 +6,6 @@ import type { MessageKey } from '../i18n/en';
 import { useT } from '../i18n/useT';
 import { useMoney } from '../session/useMoney';
 import { lineMoney, lineName, lineNote, semiLineView } from './lineNotes';
-import type { Category } from './categoriesModel';
 import { MadeOfFoot } from './MadeOfFoot';
 import type { Loaded } from './lineNotes';
 import { piecesShown } from './productEditorModel';
@@ -90,17 +89,16 @@ function NothingYet() {
 }
 
 // ── Product ───────────────────────────────────────────────────────────────────────────────────────
-export function ReadProduct({ product, working, categories }: { product: Product; working: Working; categories: readonly Category[] }) {
+export function ReadProduct({ product, working, category }: { product: Product; working: Working; category: string }) {
   const { t } = useT();
   const money = useMoney();
-  // Model 4: the kind and the category; a category whose document is gone reads as none.
-  const category = categories.find(one => one.id === product.categoryId);
+  // Model 4: the kind; the category is its word in the Ricettario's list ('' reads as none), worked out by the caller.
   const rows: Row[] = [
     { label: t('fc.name'), value: product.name.trim() || null },
     { label: t('fc.kind.label'), value: t(product.kind === 'semi' ? 'fc.kind.semi' : 'fc.kind.finished') },
   ];
   // A cake's card has no category of its own (it sits in Food cost's «Cakes» group), so the row is not printed for it.
-  if (!isCakeProductId(product.id)) rows.push({ label: t('fc.category.label'), value: category ? category.name : t('fc.cat.none') });
+  if (!isCakeProductId(product.id)) rows.push({ label: t('fc.category.label'), value: category !== '' ? category : t('fc.cat.none') });
   // How it is sold is for a card that is sold.
   if (product.kind === 'semi') return <ReadList rows={rows} />;
   rows.push({ label: t('fc.sold'), value: product.sellingMode === null ? null : t(SOLD_TEXT[product.sellingMode]) });

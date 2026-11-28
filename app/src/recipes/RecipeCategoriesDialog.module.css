@@ -1,5 +1,5 @@
-/* The categories dialog (CategoriesDialog.tsx): one row per category inside the app's dialog; the list scrolls on its own so
-   «Done» is never pushed out of reach. Targets are 48px. */
+/* The Ricettario's categories dialog (RecipeCategoriesDialog.tsx; it was Food cost's until 28 Nov 2026): one row per word inside the app's dialog; the
+   list scrolls on its own so «Done» is never pushed out of reach. Targets are 48px. */
 
 .rows {
   display: flex;
@@ -136,11 +136,19 @@
   color: var(--ink-2);
 }
 
-.hint {
-  margin: var(--s3) 0 0;
-  padding: var(--s3);
-  border-radius: var(--r-md);
-  background: var(--sunken);
+/* «Saving…» while a rename is in the air: the line is in the page before it speaks. */
+.status {
+  margin: var(--s2) 0 0;
   color: var(--ink-2);
   font-size: var(--fs-sm);
+}
+
+/* «Food cost not updated.» and its «Retry». */
+.retry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  margin-top: var(--s2);
+  color: var(--danger-ink);
 }

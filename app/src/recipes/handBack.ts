@@ -58,6 +58,23 @@ function reveal(node: HTMLElement): HTMLElement {
   return node;
 }
 
+// Gives the row the focus. ⚠️ A ROW IN A CLOSED CATEGORY GROUP (ui/CollapsibleGroup) is `hidden` (display: none), and a browser ignores
+// focus() on it: the header is tapped first, so the list's own state opens the group, and the focus is given only once the group has
+// RENDERED (React applies that update after this call, not inside it) — a frame at a time, a few frames at most.
+const FRAMES_TO_WAIT = 6;
+function focusWhenShown(node: HTMLElement): void {
+  const closed = node.closest('[data-collapsible-body][hidden]');
+  if (!closed) { node.focus(); return; }
+  closed.parentElement?.querySelector<HTMLElement>('button[aria-expanded="false"]')?.click();
+  let frames = FRAMES_TO_WAIT;
+  const attempt = () => {
+    if (node.isConnected && !node.closest('[hidden]')) { node.focus(); return; }
+    frames -= 1;
+    if (frames > 0) requestAnimationFrame(attempt);
+  };
+  requestAnimationFrame(attempt);
+}
+
 const HandBackContext = createContext<HandBack>(NOTHING);
 export const HandBackProvider = HandBackContext.Provider;
 
@@ -87,7 +104,7 @@ export function useHandBackState(): HandBack {
       wanted.current = null;
       const row = openers.current.get(name);
       if (row) {
-        reveal(row).focus();
+        focusWhenShown(reveal(row));
         return;
       }
       // ⚠️ A RECIPE THAT WAS DELETED HAS NO ROW ANY MORE. If the focus fell to the page with the screen

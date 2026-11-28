@@ -83,6 +83,10 @@ export interface FoodcostSnapshot {
   // the list is then drawn plain. Memory only, like the suppliers: Firestore's own copy answers the listener offline.
   readonly categories: readonly Category[];
   readonly categoriesLoaded: boolean;
+  // The Ricettario's category words (28 Nov 2026), the ONE list the cards are grouped by, in the order the Ricettario stores them (the
+  // screens sort them). null while they have not arrived and when the read is refused (the catalogue is off for this role): the
+  // screens then fall back to the names of `categories`, so nothing breaks (categoriesModel.ts).
+  readonly recipeWords: readonly string[] | null;
   // What an hour of work costs — null until it arrives, and null for ever for anybody who does not
   // run the place (nothing is ever asked for them).
   readonly labourCostPerHour: number | null;
@@ -224,6 +228,7 @@ export function createFoodcostStore(
   let suppliers: Readonly<Record<string, StoredDoc>> = {};
   let categories: readonly Category[] = [];
   let categoriesLoaded = false;
+  let recipeWords: readonly string[] | null = null;
   let labourCostPerHour: number | null = null;
   let settingsLoaded = !options.canManage;
   let inFlight = 0;
@@ -260,7 +265,7 @@ export function createFoodcostStore(
     }
     return {
       products, productsLoaded, productsFromServer, recipes, recipesLoaded, recipesFromServer, recipesFailed, ingredients,
-      ingredientsLoaded, ingredientsFailed, suppliers, categories, categoriesLoaded, labourCostPerHour, settingsLoaded, tables, unsent: inFlight > 0,
+      ingredientsLoaded, ingredientsFailed, suppliers, categories, categoriesLoaded, recipeWords, labourCostPerHour, settingsLoaded, tables, unsent: inFlight > 0,
     };
   }
 
@@ -426,6 +431,19 @@ export function createFoodcostStore(
         },
         () => {
           categoriesLoaded = true;
+          changed();
+        },
+      ));
+
+      // The Ricettario's category words (28 Nov 2026): the list the cards are grouped by. QUIET on failure too: a refused read leaves
+      // them null and the screens group by the names of the categories above.
+      stops.push(source.watchRecipeCategories(
+        words => {
+          recipeWords = words;
+          changed();
+        },
+        () => {
+          recipeWords = null;
           changed();
         },
       ));

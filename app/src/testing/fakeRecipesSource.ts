@@ -67,6 +67,8 @@ export type FakeRecipesSource = RecipesSource & {
   recipeWrites: Array<{ id: string; data?: Record<string, unknown>; deleted?: true }>;
   // The next recipe saves / deletes are refused (the rules said no).
   refuseRecipeWrites: { save: boolean; remove: boolean };
+  // Saves of THESE recipe ids are refused, the others accepted (one recipe of several refused).
+  refuseRecipeIds: string[];
   // The next recipe writes wait until the returned function is called (offline, or a slow network).
   holdRecipeWrites(): () => void;
   // config/calculator as stored (null = none), what the delete warning reads; `calculatorHold` makes the read hang.
@@ -151,6 +153,7 @@ export function fakeRecipesSource(
     categoryWrites: [],
     recipeWrites: [],
     refuseRecipeWrites: { save: false, remove: false },
+    refuseRecipeIds: [],
     calculatorConfig: seed.calculatorConfig ?? null,
     members: seed.members ?? {},
     prices: seed.prices ?? null,
@@ -318,7 +321,7 @@ export function fakeRecipesSource(
     // and every other stored field stays.
     saveRecipeDoc: vi.fn<RecipesSource['saveRecipeDoc']>(async (id, data) => {
       if (recipeWriteHold) await recipeWriteHold;
-      if (fake.refuseRecipeWrites.save) throw refused();
+      if (fake.refuseRecipeWrites.save || fake.refuseRecipeIds.includes(id)) throw refused();
       fake.recipeWrites.push({ id, data: { ...data } });
       const merged: Record<string, unknown> = { ...(recipes.get(id) ?? {}), ...data, id };
       for (const [key, value] of Object.entries(data)) if (value === null) delete merged[key];

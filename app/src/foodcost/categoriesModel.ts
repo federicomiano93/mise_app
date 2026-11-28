@@ -5,13 +5,16 @@
 // they were made, Date.now() at creation). Everything here is plain data in, plain data out: the store holds the state and the
 // screens draw it.
 
-import { normalizeSearchText } from '@mise/shared/catalogue-model';
 import { isCakeProductId } from '@mise/shared/cake-model';
+import { recipeIdOfProduct } from '@mise/shared/from-recipes';
 import type { Product, ProductKind } from '@mise/shared/foodcost-model';
+import { categoryKey, categoryOf, sortedCategories } from '@mise/shared/recipe-shelf';
 import type { StoredDoc } from './foodcostSource';
 
 // The rules' bound on a category name (firestore.rules, foodcost-categories).
 export const MAX_CATEGORY_NAME = 60;
+// (The Ricettario's words stop at 40 characters, the rules allow 100 and a Food cost name 60: a word always fits a document's name. The
+// limits are left as they are on purpose.)
 
 // ⚠️ A CAKE'S CARD IS A FINISHED PRODUCT whatever its `kind` says: Cakes make them, and they sit in Food cost's own «Cakes» group.
 export const kindOf = (product: Product): ProductKind => (isCakeProductId(product.id) ? 'finished' : product.kind);
@@ -37,41 +40,64 @@ export function readCategories(list: unknown): Category[] {
   return out.sort((a, b) => a.rank - b.rank || a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
 }
 
-// Why a typed name cannot be saved, or null: 'empty' (nothing but spaces), 'too-long' (over the rules' bound), 'duplicate' (another
-// category already has it, capitals and accents not counting). `ignoreId` is the category being renamed, which may keep its own name.
-export type CategoryNameProblem = 'empty' | 'too-long' | 'duplicate';
-
-export function categoryNameProblem(
-  typed: string, categories: readonly Category[], ignoreId: string | null = null,
-): CategoryNameProblem | null {
-  const name = typed.trim();
-  if (name === '') return 'empty';
-  if (name.length > MAX_CATEGORY_NAME) return 'too-long';
-  const wanted = normalizeSearchText(name);
-  if (categories.some(category => category.id !== ignoreId && normalizeSearchText(category.name) === wanted)) return 'duplicate';
-  return null;
-}
-
 // The rank a new category takes: the clock, but always after every category there is (two phones' clocks may disagree).
 export function nextRank(categories: readonly Category[], nowMs: number): number {
   const last = categories.reduce((max, category) => Math.max(max, category.rank), 0);
   return Math.max(Math.floor(nowMs), last + 1);
 }
 
-// How many cards sit in each category: only counted for a category that exists, and never a cake's card (it sits in «Cakes»).
-export function cardCounts(products: readonly Product[], categories: readonly Category[]): Map<string, number> {
-  const known = new Set(categories.map(category => category.id));
-  const counts = new Map<string, number>();
-  for (const product of products) {
-    if (isCakeProductId(product.id)) continue;
-    if (product.categoryId !== null && known.has(product.categoryId)) counts.set(product.categoryId, (counts.get(product.categoryId) ?? 0) + 1);
-  }
-  return counts;
+// ── The Ricettario's words (28 Nov 2026) ──
+// Categories are made ONLY in the Ricettario (`config/labels.recipeCategories`, a list of words) and Food cost follows them:
+//   • a card born from a recipe (`recipe-<id>`) is in ITS RECIPE's category, so moving the recipe moves the card and no card is
+//     written; a recipe with no category, or a word that is not on the list, puts the card in «No category»;
+//   • any other card holds the id of a `foodcost-categories` document, and that document's NAME, matched to a word (capitals and
+//     accents not counting), is its category; a name that is no word reads as «No category».
+// ⚠️ When the words cannot be read (`words` null: the catalogue is off for this role, or they have not arrived) Food cost falls back to
+// the names of its own category documents, in their own order, for every card: nothing breaks.
+
+// ⚠️ THE RICETTARIO'S OWN FOLD, NOT A LOOSER ONE: capitals and repeated spaces do not count, ACCENTS DO (`categoryKey`). A looser fold in Food cost
+// would match a document to a word the Ricettario treats as another one («Più» and «Piu» are two words there), and making
+// `categoryKey` ignore accents would merge such words on the venues that hold both.
+const fold = categoryKey;
+
+export interface CardCategories {
+  // The group names in the order they are drawn: the Ricettario's words alphabetically, or (fallback) the documents' names.
+  readonly words: readonly string[];
+  // Whether the words are the Ricettario's (false: the fallback).
+  readonly fromRecipeBook: boolean;
+  // The word a card is grouped under, spelled as `words` spells it, or '' for none.
+  wordOf(product: Pick<Product, 'id' | 'categoryId'>): string;
+  // Whether a card's category is its recipe's (read-only in the card's editor).
+  followsRecipe(product: Pick<Product, 'id'>): boolean;
+  // The `foodcost-categories` document that carries a word, or null when there is none yet.
+  docOf(word: string): Category | null;
 }
 
-// The id a card is grouped under: its category's, or null when it has none or the category is gone.
-export function categoryIdOf(product: Pick<Product, 'categoryId'>, categories: readonly Category[]): string | null {
-  return product.categoryId !== null && categories.some(category => category.id === product.categoryId) ? product.categoryId : null;
+export function cardCategories(input: {
+  readonly words: readonly string[] | null;
+  readonly categories: readonly Category[];
+  readonly recipes: Readonly<Record<string, StoredDoc>>;
+  readonly locale?: string;
+}): CardCategories {
+  const { categories, recipes } = input;
+  const book = input.words !== null;
+  const words = input.words !== null ? sortedCategories(input.words, input.locale) : categories.map(category => category.name);
+  const wordOfName = (name: string): string => words.find(word => fold(word) === fold(name)) ?? '';
+  const followsRecipe = (product: Pick<Product, 'id'>): boolean => book && recipeIdOfProduct(product.id) !== '';
+  return {
+    words,
+    fromRecipeBook: book,
+    followsRecipe,
+    wordOf(product) {
+      if (followsRecipe(product)) {
+        const recipe = recipes[recipeIdOfProduct(product.id)];
+        return recipe ? categoryOf(recipe, words) : '';
+      }
+      const doc = product.categoryId === null ? undefined : categories.find(category => category.id === product.categoryId);
+      return doc ? wordOfName(doc.name) : '';
+    },
+    docOf: word => categories.find(category => fold(category.name) === fold(word)) ?? null,
+  };
 }
 
 // The group every cake's card is drawn in, whatever category it may carry (his call, 21 Nov 2026: a cake has no category of its own,
@@ -88,17 +114,18 @@ export interface Group<T> {
 // The rows split into groups: the categories in order, then «Cakes» (every cake's card), then «No category» last. A group with no
 // rows is not drawn. The screen calls this only when the venue has a category (see `grouped`); with none the list is flat and has no
 // headers. `rows` keep their own order inside each group (the list's worst-first order).
-export function groupRows<T extends { product: Product }>(rows: readonly T[], categories: readonly Category[]): Group<T>[] {
+export function groupRows<T extends { product: Product }>(rows: readonly T[], categories: CardCategories): Group<T>[] {
   const byId = new Map<string | null, T[]>();
   for (const row of rows) {
-    const id = isCakeProductId(row.product.id) ? CAKES_GROUP_ID : categoryIdOf(row.product, categories);
+    const word = categories.wordOf(row.product);
+    const id = isCakeProductId(row.product.id) ? CAKES_GROUP_ID : word === '' ? null : categoryKey(word);
     const bucket = byId.get(id);
     if (bucket) bucket.push(row); else byId.set(id, [row]);
   }
   const groups: Group<T>[] = [];
-  for (const category of categories) {
-    const items = byId.get(category.id);
-    if (items) groups.push({ id: category.id, name: category.name, items });
+  for (const word of categories.words) {
+    const items = byId.get(categoryKey(word));
+    if (items) groups.push({ id: categoryKey(word), name: word, items });
   }
   const cakes = byId.get(CAKES_GROUP_ID);
   if (cakes) groups.push({ id: CAKES_GROUP_ID, name: null, items: cakes });
@@ -109,8 +136,8 @@ export function groupRows<T extends { product: Product }>(rows: readonly T[], ca
 
 // Whether the list is drawn in groups at all: only when the venue has at least one category. Without one the list stays flat (a
 // cake's row keeps its «Cake» tag); with one, the cakes sit together in their own «Cakes» group.
-export function grouped(categories: readonly Category[]): boolean {
-  return categories.length > 0;
+export function grouped(categories: CardCategories): boolean {
+  return categories.words.length > 0;
 }
 
 // Which groups are open. All start CLOSED (the owner's ask); a search shows the matching cards with their groups open; the group of

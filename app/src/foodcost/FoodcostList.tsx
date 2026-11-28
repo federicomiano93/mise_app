@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { useLocation, useNavigationType } from 'react-router';
-import { ChevronRight, Plus, Search, Tags } from 'lucide-react';
+import { Plus, Search } from 'lucide-react';
 import { isCakeProductId } from '@mise/shared/cake-model';
 import { nameMatches, productsUsingRecipe, semiCardCost, sortByMargin } from '@mise/shared/foodcost-model';
 import type { Product, ProductKind } from '@mise/shared/foodcost-model';
@@ -10,8 +10,9 @@ import { useT } from '../i18n/useT';
 import { useSession } from '../session/SessionContext';
 import { useMoney } from '../session/useMoney';
 import { Button } from '../ui/Button';
+import { CollapsibleGroup } from '../ui/CollapsibleGroup';
 import { FormBar } from '../ui/FormBar';
-import { CategoriesDialog } from './CategoriesDialog';
+import { useCardCategories } from './useCardCategories';
 import { CAKES_GROUP_ID, NO_CATEGORY_KEY, groupRows, grouped, isGroupOpen, kindOf } from './categoriesModel';
 import type { Group } from './categoriesModel';
 import { semiFigures } from './semiWords';
@@ -59,14 +60,15 @@ type Props = {
   onBackToRecipe: () => void;
 };
 
-// The left column: «New product» and «Categories» over the products, worst food cost first. Settings is the gear beside the page's
+// The left column: «New product» over the products, worst food cost first. Settings is the gear beside the page's
 // title (FoodcostSection), drawn only for whoever runs the place (`canManage`): it holds a wage figure.
 export function FoodcostList({ openProductId, onOpenProduct, onOpenNew, using, onShowAll, onBackToRecipe }: Props) {
   const { t } = useT();
   const { canManage } = useSession();
   const money = useMoney();
   const handBack = useHandBack();
-  const { products, productsLoaded, productsFromServer, recipes, recipesLoaded, recipesFromServer, ingredientsLoaded, tables, categories } = useFoodcost();
+  const { products, productsLoaded, productsFromServer, recipes, recipesLoaded, recipesFromServer, ingredientsLoaded, tables } = useFoodcost();
+  const categories = useCardCategories();
   const { state } = useLocation();
   const navigationType = useNavigationType();
   const title = useRef<HTMLHeadingElement>(null);
@@ -172,13 +174,6 @@ export function FoodcostList({ openProductId, onOpenProduct, onOpenNew, using, o
     const key = home.id ?? NO_CATEGORY_KEY;
     setOpenGroups(before => (before.has(key) ? before : new Set(before).add(key)));
   }, [openProductId, groups]);
-  const [categoriesOpen, setCategoriesOpen] = useState(false);
-  const categoriesRef = useRef<HTMLButtonElement>(null);
-  const closeCategories = () => {
-    setCategoriesOpen(false);
-    // The dialog gives the focus back to its button on its own; this keeps it there when the list changed meanwhile.
-    requestAnimationFrame(() => { categoriesRef.current?.focus(); });
-  };
 
   // One row of the list: a semi-finished card shows its cost per kilo, a finished product its food cost (as before).
   const rowOf = ({ product, result }: (typeof found)[number]) => (
@@ -194,7 +189,6 @@ export function FoodcostList({ openProductId, onOpenProduct, onOpenNew, using, o
       cake={isCakeProductId(product.id)}
     />
   );
-  const groupHeadId = useId();
   const tabsShown = ready && ranked.length > 0;
 
   // The entry's decision lands here by a replace: the narrowed list's title takes the focus (the page
@@ -255,10 +249,6 @@ export function FoodcostList({ openProductId, onOpenProduct, onOpenNew, using, o
           <Plus aria-hidden="true" />
           {t('fc.newProduct')}
         </Button>
-        <Button ref={categoriesRef} variant="secondary" className={styles.settings} onPress={() => { setCategoriesOpen(true); }}>
-          <Tags aria-hidden="true" />
-          {t('fc.cat.button')}
-        </Button>
       </div>
 
       {/* The two lists: finished products and semi-finished cards. Not drawn while there is nothing at all to split. */}
@@ -292,7 +282,6 @@ export function FoodcostList({ openProductId, onOpenProduct, onOpenNew, using, o
 
       {missing > 0 ? <FromBookBox count={missing} onOpen={openFromBook} buttonRef={fromBookRef} /> : null}
       {choosing ? <FromBookDialog onClose={closeFromBook} /> : null}
-      {categoriesOpen ? <CategoriesDialog onClose={closeCategories} /> : null}
 
       <div
         {...(tabsShown ? { role: 'tabpanel', id: PANEL_ID, 'aria-labelledby': tabId(kindTab) } : {})}
@@ -330,30 +319,17 @@ export function FoodcostList({ openProductId, onOpenProduct, onOpenNew, using, o
           <ul className={styles.rows}>{found.map(rowOf)}</ul>
         ) : (
           <div className={styles.groups}>
-            {groups.map((group: Group<(typeof found)[number]>) => {
-              const open = isGroupOpen(group.id, group, { userOpen: openGroups, searching, openProductId });
-              const key = group.id ?? NO_CATEGORY_KEY;
-              const bodyId = `${groupHeadId}-${key}`;
-              return (
-                <section key={key} className={styles.group}>
-                  {/* The header is a button (48px and more): the group opens and closes on a tap. */}
-                  <h2 className={styles.groupHeading}>
-                    <button
-                      type="button"
-                      className={styles.groupButton}
-                      aria-expanded={open}
-                      aria-controls={bodyId}
-                      onClick={() => { toggleGroup(group.id); }}
-                    >
-                      <ChevronRight aria-hidden="true" className={styles.chevron} data-open={open} />
-                      <span className={styles.groupName}>{group.id === CAKES_GROUP_ID ? t('fc.cat.cakes') : group.name ?? t('fc.cat.none')}</span>
-                      <span className={styles.groupCount}>{t('fc.cat.cards', { n: group.items.length })}</span>
-                    </button>
-                  </h2>
-                  <ul id={bodyId} className={styles.rows} hidden={!open}>{group.items.map(rowOf)}</ul>
-                </section>
-              );
-            })}
+            {groups.map((group: Group<(typeof found)[number]>) => (
+              <CollapsibleGroup
+                key={group.id ?? NO_CATEGORY_KEY}
+                name={group.id === CAKES_GROUP_ID ? t('fc.cat.cakes') : group.name ?? t('fc.cat.none')}
+                count={t('fc.cat.cards', { n: group.items.length })}
+                open={isGroupOpen(group.id, group, { userOpen: openGroups, searching, openProductId })}
+                onToggle={() => { toggleGroup(group.id); }}
+              >
+                <ul className={styles.rows}>{group.items.map(rowOf)}</ul>
+              </CollapsibleGroup>
+            ))}
           </div>
         )}
 

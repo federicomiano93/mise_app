@@ -16,7 +16,8 @@
 //   • config/labels.recipeCategories — the venue's list, a list of strings (≤ 100 entries), written
 //     ONE WORD AT A TIME (arrayUnion / arrayRemove, as in the current app): a phone holding an old copy cannot replace the venue's words.
 
-// The longest word the Settings box takes (the rules allow 100: room to spare for a word stored by a later version).
+// The longest word the Categories dialog takes (the rules allow 100: room to spare for a word stored by a later version). ⚠️ Food cost's
+// category documents stop at 60 (its rules), so every word fits one; the 40 and the 60 are left as they are on purpose.
 export const RECIPE_CATEGORY_MAX = 40;
 // The rules' cap on the list.
 export const RECIPE_CATEGORIES_MAX = 100;
@@ -145,4 +146,24 @@ export function addCategory(list: readonly string[], typed: unknown): { list: st
 export function removeCategory(list: readonly string[], word: string): string[] {
   const key = categoryKey(word);
   return list.filter(held => categoryKey(held) !== key);
+}
+
+// Renames a word on the list: the new spelling is checked like a new word (empty, too long, taken by ANOTHER word whatever the
+// case — the word being renamed may change its own case or spaces) and takes the old one's place. The screens sort the list.
+export function renameCategory(
+  list: readonly string[], oldWord: string, typed: unknown,
+): { list: string[]; word: string } | { refusal: CategoryRefusal } {
+  const checked = addCategory(removeCategory(list, oldWord), typed);
+  if ('refusal' in checked) return checked;
+  const word = checked.list[checked.list.length - 1] ?? '';
+  const key = categoryKey(oldWord);
+  return { list: list.map(held => (categoryKey(held) === key ? word : held)), word };
+}
+
+// The recipes whose stored category is this word (whatever the case), archived ones included and whether or not the word is
+// still on the list: every one of them is rewritten when the word is renamed.
+export function recipesHoldingWord<T>(recipes: readonly T[], word: string): T[] {
+  const key = categoryKey(word);
+  if (!key) return [];
+  return recipes.filter(recipe => categoryKey(storedCategoryOf(recipe)) === key);
 }

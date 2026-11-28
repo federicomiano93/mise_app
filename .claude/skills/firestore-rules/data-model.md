@@ -320,11 +320,16 @@ the only other one is `client-accounts` (managers, or the account itself — aud
   model-4 card; nothing lowers it back. Labour stays out of the food cost % (a card's labour is
   its own plus its semi cards', recursively); a loop or a chain deeper than 4 cards reads as «no
   cost», never 0.
+  ⚠️ Since 28 Nov 2026 the app GROUPS cards by the Ricettario's words (`config/labels.recipeCategories`): a card made from a recipe
+  (`recipe-<id>`) is in its RECIPE'S `category` and its own `categoryId` is IGNORED for grouping; any other card is in the
+  word that its category document's NAME matches (`categoryKey`: capitals and repeated spaces ignored, accents not).
 - `foodcost-categories/{id}` — `{ bakery, name (1–60), rank (number ≥ 0, the order of the list; the
   clock at creation) }`, nothing else. One document per category, so a rename is one write and a
   removal deletes the document only. Read, create and update: whoever may read and save the cards
   (`cardAccess(lid, 'foodcost', 'foodcost')`); delete: `canManage(lid, 'foodcost')` only, like
   deleting a card. Never `config/{doc}`.
+  Since 28 Nov 2026 Food cost no longer makes or removes one by hand: the Ricettario's rename renames the matching documents, and picking a
+  word in a card's editor creates the document when none carries that word.
 - `cakes/{id}` (20 Nov 2026, the cakes plan step 2) — a cake on the price list, composed in the
   Cakes section: `{ bakery, name (1–200), diameterCm (10–60), tiers (int 1–3; each tier 6 cm
   narrower, the smallest ≥ 10 cm, so `diameterCm − 6·(tiers−1) ≥ 10`), discs (int 1–5), slices
