@@ -274,7 +274,7 @@ describe('the photo screen: taking photographs', () => {
     stubCamera();
     const { user, region } = await openPhotoByAddress();
     await user.upload(takeInput(region), file());
-    const thumb = await region.findByRole('img', { name: 'The photo you took' });
+    const thumb = await region.findByRole('img', { name: 'The chosen photo' });
     expect(thumb.getAttribute('src')).toMatch(/^data:image\/jpeg;base64,/);
     expect(region.getByLabelText('Take another')).toBeInTheDocument();
     expect(region.getByRole('button', { name: 'Read the recipe' })).toBeEnabled();
@@ -287,6 +287,24 @@ describe('the photo screen: taking photographs', () => {
     await waitFor(() => { expect(region.getAllByRole('img')).toHaveLength(5); });
     expect(says(region)).toHaveTextContent(en['cat.photo.err.tooMany']);
     expect(takeInput(region, 'Take another')).toBeDisabled();
+  });
+
+  it('two picks that overlap share the room, and the second does not wipe «Up to 5 photos»', async () => {
+    stubCamera();
+    const { user, region } = await openPhotoByAddress();
+    await user.upload(takeInput(region), [file('a.jpg'), file('b.jpg'), file('c.jpg')]);
+    await user.upload(takeInput(region, 'From gallery'), [file('d.jpg'), file('e.jpg'), file('f.jpg')]);
+    await waitFor(() => { expect(region.getAllByRole('img')).toHaveLength(5); });
+    expect(says(region)).toHaveTextContent(en['cat.photo.err.tooMany']);
+  });
+
+  it('when the focused picker is disabled at five photos, the focus moves to «Read the recipe»', async () => {
+    stubCamera();
+    const { user, region } = await openPhotoByAddress();
+    await user.upload(takeInput(region, 'From gallery'), Array.from({ length: 5 }, (_, i) => file(`p${i}.jpg`)));
+    await waitFor(() => { expect(region.getAllByRole('img')).toHaveLength(5); });
+    await waitFor(() => { expect(region.getByRole('button', { name: 'Read the recipe' })).toHaveFocus(); });
+    expect(takeInput(region, 'From gallery').closest('label')).not.toHaveAttribute('data-focus-visible');
   });
 
   it('removes a photo, which gives the room back', async () => {
