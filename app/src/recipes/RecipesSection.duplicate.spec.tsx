@@ -147,12 +147,19 @@ describe('tapping it', () => {
   });
 
   it('⚠️ a second tap before the editor has opened pushes no second entry', async () => {
-    const { router } = await open();
+    const { user, router } = await open();
     const button = duplicateButton();
     button.click();
     button.click();
     await editorRegion();
-    await act(async () => { await router.navigate(-1); });
+    // ⚠️ The copy opens DIRTY, so its leave guard asks before any Back. The region can show before the form (and so the guard)
+    // has mounted: how soon depends on the machine (fast: not yet; slow CI: yes). So the test waits for the form, then flushes the
+    // effects, and only then goes Back: the question is the same everywhere. One pushed entry: one Back (after Discard) lands on
+    // the original. Two entries: the first Back stays on /recipes/new (same address, no question) and the question never comes.
+    await (await editorRegion()).findByRole('textbox', { name: 'Recipe name' });
+    await act(async () => {});
+    void router.navigate(-1);
+    await user.click(within(await screen.findByRole('alertdialog', { name: 'Discard changes?' })).getByRole('button', { name: 'Discard' }));
     await waitFor(() => { expect(router.state.location.pathname).toBe('/recipes/orig'); });
   });
 
