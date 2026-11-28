@@ -15,7 +15,7 @@ import { isPriceConfirmed, replacedPrice } from './priceConfirmed';
 import type { ImportFile } from './importRun';
 import type { IngredientDecision } from './ingredientAnswers';
 import type { IngredientAnswers, IngredientPlan } from './ingredientsRun';
-import { pricePerUnitText } from '../priceText';
+import { pricePerUnitRunText, pricePerUnitText } from '../priceText';
 import styles from './InvoiceImportScreen.module.css';
 
 type Props = {
@@ -119,11 +119,8 @@ function Rows({
     const replaced = plan ? replacedPrice(effective, plan.ctx.pricesById, unit) : null;
     if (replaced) {
       const sign = replaced.percent === 0 ? '=' : `${replaced.percent > 0 ? '+' : '-'}${Math.abs(replaced.percent)}%`;
-      return t('sup.imp.ing.priceChange', {
-        from: pricePerUnitText(replaced.stored, money, t),
-        to: pricePerUnitText({ pricePerUnit: replaced.next.pricePerUnit, priceUnit: unit }, money, t),
-        change: sign,
-      });
+      const [from = '', to = ''] = pricePerUnitRunText([replaced.stored, { pricePerUnit: replaced.next.pricePerUnit, priceUnit: unit }], money, t);
+      return t('sup.imp.ing.priceChange', { from, to, change: sign });
     }
     return now;
   };

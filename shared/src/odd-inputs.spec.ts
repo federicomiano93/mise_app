@@ -1913,12 +1913,8 @@ describe('price-model: odd inputs', () => {
   // the copy typed like the port.)
   agree('formatMoney', portedAfter((money, value) => m.formatMoney(value, money)), legacyAfter(value => legacyPriceModelJs.formatMoney(value)),
     withFewVenues(PRICE_VALUES));
-  agree('formatRate', portedAfter((money, value) => m.formatRate(value, money)), legacyAfter(value => legacyPriceModelJs.formatRate(value)),
-    withFewVenues(PRICE_VALUES));
-  // ⚠️ A rate of 1e21 or more: the original throws a TypeError (see the note at formatRate in price-model.ts).
-  agree('formatRate (huge rates)', portedAfter((money, value) => m.formatRate(value, money)),
-    legacyAfter(value => legacyPriceModelJs.formatRate(value)),
-    withFewVenues([1e21, 1.5e21, 1.2345678901e21, 1e22, 1e100, 1.5e300, -1e21, -1.5e21, 9.99e20, 999999999999999900000, Number.MAX_VALUE]));
+  // formatRate is not paired any more: Mise 2 shows two decimals since 28 Nov 2026, the frozen js/ copy pads to six
+  // (price-model.spec.ts pins the port on its own).
 });
 
 // ── order-cost ───────────────────────────────────────────────────────────────

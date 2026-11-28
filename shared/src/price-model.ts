@@ -8,6 +8,9 @@
 // case-price-form, price-basis ones) against BOTH files, and odd-inputs.spec.ts feeds both the same strange
 // values. The comments below are the ones the original paid for in bugs.
 //
+// ⚠️ ONE DELIBERATE DIFFERENCE FROM THE FROZEN js/ COPY (Federico, 28 Nov 2026): formatRate (written with rate-text.ts) shows two decimals where js/price-model.js pads up to six. Stored values,
+// comparisons and sums are untouched. parity.spec.ts and odd-inputs.spec.ts no longer pair formatRate; price-model.spec.ts pins it.
+//
 // ⚠️ AN ADAPTED PORT, SO parity.spec.ts DOES NOT PAIR IT (price-model.spec.ts compares the names, constants,
 // frozen-ness and function shapes itself):
 //   * formatMoney and formatRate take the venue's `Money` (currency.ts) as a second argument. The original
@@ -86,6 +89,7 @@
 // ⚠️ NOTHING HERE CONVERTS. Only the symbol changes; every stored number is used as
 // typed. See currency.ts.
 import { moneyText } from './currency';
+import { rateDecimals, rateDigits } from './rate-text';
 import type { Money } from './currency';
 // The weight box's reader — used when a 'pack' case is SAVED, to store the size of one
 // package; caseRate itself works from that stored size, never from the weight.
@@ -421,27 +425,16 @@ export function formatMoney(value: unknown, money: Money): string {
   return moneyText((Number.isFinite(n) ? n : 0).toFixed(MONEY_DECIMALS), money);
 }
 
-// A RATE (price per unit). Always at least the two decimals money is read in, and
-// up to six when the number needs them (a rate derived from a case can be that small) — so
-// £7.20 stays £7.20 while a gelatine leaf at 3.5p shows as £0.035 rather than being rounded up
-// to £0.04 (a 14% error on the only screen anybody checks) or down to £0.00, which reads as free.
-//
-// Written as "pad to six, then drop the zeros the number does not need" rather
-// than as a threshold: a threshold has to be chosen, and any choice is wrong just
-// past it.
-//
-// ⚠️ A QUIRK OF THE ORIGINAL, KEPT ON PURPOSE (found while porting it, 11 Oct 2026). A rate of
-// 1e21 or more is written by toFixed() in exponent form, which has no «.», so split('.')[1] is
-// undefined and the original throws a TypeError instead of answering. No price reaches that, and
-// this port throws the same, so the two apps cannot disagree; the fix belongs in BOTH files at
-// once (odd-inputs.spec.ts feeds both such a rate and fails until they agree).
+// A RATE (price per unit), for the EYE ONLY (Federico, 28 Nov 2026: «arrotondiamo tutti i prezzi a due decimali»):
+// exactly two decimals, «3,36 € / l». The stored rate keeps its full precision and every comparison and sum uses it.
+// The one exception: a non-zero rate that would read «0,00» shows just enough decimals to reach its first significant
+// digit («0,004 €», «0,0004 €»; six at most, the stored precision), so a real cost never reads as free. Never «NaN», never «-0,00».
+// DELIBERATELY DIFFERENT from js/price-model.js formatRate (the frozen rollback copy pads up to six decimals): the parity
+// specs no longer pair this function, price-model.spec.ts pins it on its own.
 export function formatRate(value: unknown, money: Money): string {
   const n = Number(value);
   if (!Number.isFinite(n)) return '';
-  const padded = n.toFixed(CASE_RATE_DECIMALS);
-  const trimmed = padded.replace(/0+$/, '');
-  const decimals = Math.max(MONEY_DECIMALS, (trimmed.split('.')[1] as string).length);
-  return moneyText(n.toFixed(decimals), money);
+  return moneyText(rateDigits(n, rateDecimals(n)), money);
 }
 
 // ── The three functions that look a word up (ADAPTED: the translator is handed in) ─────────────
