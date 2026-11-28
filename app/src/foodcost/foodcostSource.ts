@@ -26,6 +26,7 @@
 
 import { buildPath } from '@mise/shared/location-id';
 import { PRICE_LIST_DOC } from '@mise/shared/price-list';
+import { normalizeRecipeCategories } from '@mise/shared/recipe-shelf';
 import { withPrices } from '@mise/shared/price-model';
 import type { DocumentReference, Query } from 'firebase/firestore';
 import type { FirestoreKit } from '../session/firebaseBackend';
@@ -114,6 +115,10 @@ export interface FoodcostSource {
   // The categories the list groups cards by (Mise 2, model 4, 20 Nov 2026): `foodcost-categories/{id}` = { bakery, name, rank }. Live.
   // `meta.fromServer` is the products' word. Fails quietly in the store: a refusal reads as «no categories».
   watchCategories(onChange: (list: StoredDoc[], meta: ProductsMeta) => void, onError: (err: unknown) => void): () => void;
+  // The Ricettario's category words (`config/labels.recipeCategories`, 28 Nov 2026), live: the ONE list Food cost groups its cards by.
+  // READ ONLY here; the Ricettario writes it. Quiet in the store: a venue whose catalogue is off (or a role the rules refuse) gets
+  // the error, and Food cost then falls back to the names of its own category documents.
+  watchRecipeCategories(onChange: (words: string[]) => void, onError: (err: unknown) => void): () => void;
   // A new category id, made on the phone with no write.
   newCategoryId(): string;
   // One category, WHOLE (create and rename are the same write; the venue stamp is added here).
@@ -147,6 +152,9 @@ const INGREDIENTS = 'ingredients';
 const INGREDIENT_PRICES = 'ingredient-prices';
 const SUPPLIERS = 'suppliers';
 const CATEGORIES = 'foodcost-categories';
+// The Ricettario's label profile, where its category words live (read only from here).
+const CONFIG = 'config';
+const LABELS_DOC = 'labels';
 // A cake rides in the batch of its product (Cakes, 20 Nov 2026); the cakes section only READS this collection (cakes/cakesSource.ts).
 const CAKES = 'cakes';
 const SETTINGS = 'foodcost-settings';
@@ -193,6 +201,7 @@ export function createFirestoreFoodcostSource(
   const pricesPath = buildPath(locationId, INGREDIENT_PRICES);
   const suppliersPath = buildPath(locationId, SUPPLIERS);
   const categoriesPath = buildPath(locationId, CATEGORIES);
+  const configPath = buildPath(locationId, CONFIG);
   const cakesPath = buildPath(locationId, CAKES);
   const settingsPath = buildPath(locationId, SETTINGS);
   const priceListPath = buildPath(locationId, PRICE_LIST);
@@ -387,6 +396,21 @@ export function createFirestoreFoodcostSource(
       snap => onChange(docsOf(snap), { fromServer: !snap.metadata.fromCache }),
       err => {
         console.warn('watch(categories) failed:', err);
+        onError(err);
+      },
+    ), onError),
+
+    watchRecipeCategories: (onChange, onError) => listen(kit => kit.fs.onSnapshot(
+      kit.fs.doc(kit.db, configPath, LABELS_DOC),
+      { includeMetadataChanges: true },
+      snap => {
+        // ⚠️ «MISSING» FROM THIS PHONE'S OWN DATABASE IS NOT AN ANSWER (a phone that never read the document): only the server's
+        // word says the venue has no words. Until then the store keeps the fallback.
+        if (!snap.exists() && snap.metadata.fromCache) return;
+        onChange(snap.exists() ? normalizeRecipeCategories((snap.data() as Record<string, unknown>)['recipeCategories']) : []);
+      },
+      err => {
+        console.warn('watch(recipe categories) failed:', err);
         onError(err);
       },
     ), onError),

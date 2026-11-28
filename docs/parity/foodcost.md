@@ -1024,3 +1024,21 @@ A new section with no original in the current app: a cake is a Food cost price-l
   else the first semi-finished card.
 - **«New product»** carries the tab's kind in the navigation state (`newKind`); on the split, pressed from the other tab while an UNTOUCHED new card is open, the card
   takes the new kind; a card with typed edits keeps both its text and its kind.
+
+## Categories follow the Ricettario — as built (28 Nov 2026)
+
+- **Food cost makes no category any more.** The «Categories» button and its dialog are gone (the dialog moved to the Ricettario, parity/catalogue.md).
+  The store still holds `saveCategory`/`deleteCategory` (the card editor creates a document through the first; the second is now unused).
+- **The words** are read live from `config/labels.recipeCategories` (`source.watchRecipeCategories`, snapshot `recipeWords`); QUIET on failure, and a
+  document missing in the phone's own database is not an answer. `null` = unavailable.
+- **The grouping is `cardCategories` (`categoriesModel.ts`, hook `useCardCategories`)**, used by the list, the chooser's chips and sections, the read view
+  and the editor: groups = the words alphabetical (interface language), then «Cakes», then «No category».
+  A card made from a recipe (`recipe-<id>`) is in ITS RECIPE's category (`categoryOf`: a missing recipe, no category or a word off the list = none; its stored
+  `categoryId` is ignored, so moving the recipe moves the card with no write). Any other card: the NAME of its `foodcost-categories` document matched to a
+  word, capitals and accents ignored; no match = none. **Fallback** when the words are unavailable: the documents' names in their own rank order, for every card.
+- **Card editor «Category»:** a recipe's card shows «<word> · from the recipe book» (read-only; «No category · …» for none); any other card picks a word
+  or «No category». A word with no document yet creates one at the pick (`saveCategory`, the existing path, local-first) and the card stores its id.
+  ⚠️ That document is made when the word is picked, not at Save (a discarded edit leaves an unused document: harmless, nothing reads it).
+- **Group header** is `ui/CollapsibleGroup` (shared with the Ricettario's list); behaviour unchanged.
+- **No migration and no heal in the app**: the production move of categories was done separately. `snapshotWorthTaking`, the cost maths and the «Cakes» group are untouched.
+- **Not covered by specs:** the real read of `config/labels` under the rules for a Food cost-only role, and the editor's discard after a picked word.

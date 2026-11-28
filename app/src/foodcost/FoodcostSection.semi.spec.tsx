@@ -4,7 +4,6 @@ import userEvent from '@testing-library/user-event';
 import type { UserEvent } from '@testing-library/user-event';
 import { editorSource, intoForm } from '../testing/foodcostEditorFixtures';
 import { EMPLOYEE, LOAD, bareProduct, product, renderFoodcost, split } from '../testing/renderFoodcost';
-import categoriesCss from './CategoriesDialog.module.css?raw';
 
 // Categories and semi-finished cards (Mise 2, product model 4, 20 Nov 2026 — the cakes plan, step 1): the list in groups, the
 // categories dialog, the card type in the editor, the cost per kilo and «Used in», the chooser's semi-finished cards and what Save
@@ -120,94 +119,6 @@ describe('the list in groups', () => {
   });
 });
 
-describe('the categories dialog', () => {
-  const open = async (products = [GANACHE, CAKE], categories = CATEGORIES) => {
-    const view = await listed(products, categories);
-    await view.user.click(await screen.findByRole('button', { name: 'Categories' }, LOAD));
-    return { ...view, dialog: await chooser() };
-  };
-
-  it('lists the categories in order with their number of cards', async () => {
-    const { dialog } = await open();
-    const rows = within(dialog).getAllByRole('listitem').map(item => item.textContent);
-    expect(rows[0]).toContain('Semis');
-    expect(rows[0]).toContain('1 card');
-    expect(rows[1]).toContain('Cakes');
-    expect(within(dialog).getByText(/Removing a category deletes no card/)).toBeInTheDocument();
-  });
-
-  it('adds a category at the end of the list, written at once', async () => {
-    const { user, dialog, fake } = await open();
-    await user.click(within(dialog).getByRole('button', { name: '+ New category' }));
-    await user.type(within(dialog).getByRole('textbox', { name: 'Category name' }), '  Bread  {Enter}');
-    expect(fake.saved.filter(s => s.kind === 'category')).toHaveLength(1);
-    expect(fake.saved.at(-1)).toMatchObject({ kind: 'category', data: { name: 'Bread' } });
-    expect((fake.saved.at(-1)!.data as { rank: number }).rank).toBeGreaterThan(2);
-    expect(within(dialog).getAllByRole('listitem').map(item => item.textContent).at(-1)).toContain('Bread');
-  });
-
-  it('⚠️ refuses an empty name and a name another category has (capitals not counting), and says why', async () => {
-    const { user, dialog, fake } = await open();
-    await user.click(within(dialog).getByRole('button', { name: '+ New category' }));
-    await user.type(within(dialog).getByRole('textbox', { name: 'Category name' }), '   {Enter}');
-    expect(await within(dialog).findByText('Write a name for the category.')).toBeInTheDocument();
-    await user.clear(within(dialog).getByRole('textbox', { name: 'Category name' }));
-    await user.type(within(dialog).getByRole('textbox', { name: 'Category name' }), 'semis{Enter}');
-    expect(await within(dialog).findByText('There is already a category called “semis”.')).toBeInTheDocument();
-    expect(fake.saved.filter(s => s.kind === 'category')).toEqual([]);
-  });
-
-  it('renames a category with the pencil, keeping its place in the order', async () => {
-    const { user, dialog, fake } = await open();
-    await user.click(within(dialog).getByRole('button', { name: 'Rename Semis' }));
-    const box = within(dialog).getByRole('textbox', { name: 'Category name' });
-    await user.clear(box);
-    await user.type(box, 'Fillings{Enter}');
-    expect(fake.saved.at(-1)).toMatchObject({ kind: 'category', id: 'c1', data: { name: 'Fillings', rank: 1 } });
-    expect(within(dialog).getAllByRole('listitem')[0]).toHaveTextContent('Fillings');
-  });
-
-  it('a category may keep its own name when it is renamed to the same words', async () => {
-    const { user, dialog, fake } = await open();
-    await user.click(within(dialog).getByRole('button', { name: 'Rename Semis' }));
-    await user.type(within(dialog).getByRole('textbox', { name: 'Category name' }), '{Enter}');
-    expect(fake.saved.at(-1)).toMatchObject({ kind: 'category', id: 'c1', data: { name: 'Semis' } });
-  });
-
-  it('⚠️ removing asks first, naming the cards that move; Cancel keeps it; the cards themselves are never rewritten', async () => {
-    const { user, dialog, fake } = await open();
-    await user.click(within(dialog).getByRole('button', { name: 'Remove Semis' }));
-    const ask = await screen.findByRole('alertdialog');
-    expect(ask).toHaveTextContent('Remove the category “Semis”? Its 1 card moves to No category.');
-    await user.click(within(ask).getByRole('button', { name: 'Cancel' }));
-    expect(fake.saved.filter(s => s.kind === 'category-remove')).toEqual([]);
-    await user.click(within(dialog).getByRole('button', { name: 'Remove Semis' }));
-    await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Remove' }));
-    expect(fake.saved.filter(s => s.kind === 'category-remove').map(s => s.id)).toEqual(['c1']);
-    expect(fake.saved.filter(s => s.kind === 'product')).toEqual([]);
-    expect(fake.categories.has('c1')).toBe(false);
-  });
-
-  it('a refused write puts the category back and says so', async () => {
-    const { user, dialog, fake } = await open();
-    fake.refuse.category = true;
-    await user.click(within(dialog).getByRole('button', { name: '+ New category' }));
-    await user.type(within(dialog).getByRole('textbox', { name: 'Category name' }), 'Bread{Enter}');
-    expect(await screen.findByText(/Could not save the category “Bread”/, undefined, LOAD)).toBeInTheDocument();
-    expect(within(dialog).queryByText('Bread')).not.toBeInTheDocument();
-  });
-
-  it('is in Italian too', async () => {
-    const fake = sourceOf([GANACHE]);
-    const view = renderFoodcost('/food-cost', { source: fake, lang: 'it', session: { language: 'it' } });
-    await view.user.click(await screen.findByRole('button', { name: 'Categorie' }, LOAD));
-    const dialog = await chooser();
-    expect(within(dialog).getByRole('button', { name: '+ Nuova categoria' })).toBeInTheDocument();
-    expect(within(dialog).getByText(/Togliere una categoria non cancella le schede/)).toBeInTheDocument();
-    expect(within(dialog).getAllByRole('listitem')[0]).toHaveTextContent('1 scheda');
-  });
-});
-
 async function openForm(path: string, products: ReturnType<typeof product>[], categories = CATEGORIES) {
   const fake = sourceOf(products, categories);
   const view = renderFoodcost(path, { source: fake });
@@ -264,7 +175,7 @@ describe('the card type in the editor', () => {
   it('an existing card opens on its own kind and category, and a category that is gone reads as «No category»', async () => {
     await openForm('/food-cost/product/Ganache', [GANACHE]);
     expect(within(productRegion()).getByRole('radio', { name: 'Semi-finished' })).toBeChecked();
-    expect(within(productRegion()).getByRole('combobox', { name: 'Category' })).toHaveValue('c1');
+    expect(within(productRegion()).getByRole('combobox', { name: 'Category' })).toHaveValue('Semis');
     window.localStorage.clear();
   });
 
@@ -510,79 +421,6 @@ describe('the list: a card left by Back keeps its group open for the focus', () 
     await user.click(await screen.findByRole('button', { name: /^Back/ }, LOAD));
     await waitFor(() => { expect(screen.getByRole('button', { name: /^Cake(?!s)/ })).toHaveFocus(); });
     expect(group(/^Cakes/)).toHaveAttribute('aria-expanded', 'true');
-  });
-});
-
-describe('the categories dialog: leaving, focus and who may remove', () => {
-  const opened = async (products = [GANACHE, CAKE], options: Parameters<typeof renderFoodcost>[1] = {}) => {
-    const fake = sourceOf(products);
-    const view = renderFoodcost('/food-cost', { ...options, source: fake });
-    await screen.findByRole('button', { name: 'New product' }, LOAD);
-    await view.user.click(await screen.findByRole('button', { name: 'Categories' }, LOAD));
-    return { ...view, fake, dialog: await chooser() };
-  };
-
-  it('⚠️ «Done» while a name is being typed asks before dropping it; «Keep typing» stays on the box with the text', async () => {
-    const { user, dialog, fake } = await opened();
-    await user.click(within(dialog).getByRole('button', { name: '+ New category' }));
-    await user.type(within(dialog).getByRole('textbox', { name: 'Category name' }), 'Bread');
-    await user.click(within(dialog).getByRole('button', { name: 'Done' }));
-    const ask = await screen.findByRole('alertdialog');
-    expect(ask).toHaveTextContent('Discard the name you typed?');
-    expect(ask).toHaveTextContent('“Bread” has not been saved yet.');
-    await user.click(within(ask).getByRole('button', { name: 'Keep typing' }));
-    expect(within(dialog).getByRole('textbox', { name: 'Category name' })).toHaveValue('Bread');
-    expect(within(dialog).getByRole('textbox', { name: 'Category name' })).toHaveFocus();
-    await user.click(within(dialog).getByRole('button', { name: 'Done' }));
-    await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Discard' }));
-    await waitFor(() => { expect(screen.queryByRole('dialog', { name: 'Food cost categories' })).not.toBeInTheDocument(); });
-    expect(fake.saved.filter(s => s.kind === 'category')).toEqual([]);
-  });
-
-  it('«Done» with an empty box, or a rename left as it was, asks nothing', async () => {
-    const { user, dialog } = await opened();
-    await user.click(within(dialog).getByRole('button', { name: 'Rename Semis' }));
-    await user.click(within(dialog).getByRole('button', { name: 'Done' }));
-    await waitFor(() => { expect(screen.queryByRole('dialog', { name: 'Food cost categories' })).not.toBeInTheDocument(); });
-    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
-  });
-
-  it('⚠️ whoever is not a manager has no remove control (the rules refuse them), and can still rename and add', async () => {
-    const { dialog } = await opened([GANACHE, CAKE], { session: EMPLOYEE });
-    expect(within(dialog).queryByRole('button', { name: /^Remove / })).not.toBeInTheDocument();
-    expect(within(dialog).getByRole('button', { name: 'Rename Semis' })).toBeInTheDocument();
-    expect(within(dialog).getByRole('button', { name: '+ New category' })).toBeInTheDocument();
-  });
-
-  it('the focus goes back to the row\'s rename button after Save, and after Cancel', async () => {
-    const { user, dialog } = await opened();
-    await user.click(within(dialog).getByRole('button', { name: 'Rename Semis' }));
-    await user.type(within(dialog).getByRole('textbox', { name: 'Category name' }), 'x{Enter}');
-    await waitFor(() => { expect(within(dialog).getByRole('button', { name: 'Rename Semisx' })).toHaveFocus(); });
-    await user.click(within(dialog).getByRole('button', { name: 'Rename Cakes' }));
-    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
-    await waitFor(() => { expect(within(dialog).getByRole('button', { name: 'Rename Cakes' })).toHaveFocus(); });
-  });
-
-  it('after removing a category the focus goes to the next row, or to «+ New category» after the last', async () => {
-    const { user, dialog } = await opened();
-    await user.click(within(dialog).getByRole('button', { name: 'Remove Semis' }));
-    await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Remove' }));
-    await waitFor(() => { expect(within(dialog).getByRole('button', { name: 'Rename Cakes' })).toHaveFocus(); });
-    await user.click(within(dialog).getByRole('button', { name: 'Remove Cakes' }));
-    await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Remove' }));
-    await waitFor(() => { expect(within(dialog).getByRole('button', { name: '+ New category' })).toHaveFocus(); });
-  });
-
-  it('the error line is in the page BEFORE it has anything to say, so a screen reader announces it when it arrives', async () => {
-    const { user, dialog } = await opened();
-    await user.click(within(dialog).getByRole('button', { name: '+ New category' }));
-    const alert = within(dialog).getByRole('alert');
-    expect(alert).toBeEmptyDOMElement();
-    await user.type(within(dialog).getByRole('textbox', { name: 'Category name' }), '{Enter}');
-    expect(within(dialog).getByRole('alert')).toBe(alert);
-    expect(alert).toHaveTextContent('Write a name for the category.');
-    expect(categoriesCss).not.toMatch(/\.error:empty\s*\{[^}]*display:\s*none/);
   });
 });
 

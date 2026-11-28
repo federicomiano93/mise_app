@@ -2314,3 +2314,27 @@ Not driven: the emulator against the new rules (Phase A's run is reported separa
 host, the classes and the stylesheet's text are specified), the lab tablet (Chrome 101) at 648 px, and a phone's icon-only band at the
 real widths. The focus is not promised back to the incomplete row a person opened when they come back from its recipe (the Labels
 list does; here the book simply reopens), a small known gap.
+
+## Categories are made here only, and the groups fold — as built (28 Nov 2026)
+
+- **One place.** The Ricettario's list (`config/labels.recipeCategories`) is the only list of categories; Food cost follows it (parity/foodcost.md,
+  same date). The «Recipe categories» card is gone from the label Settings (and its CSS, its pinned bin spec and its keys).
+- **«Categories» button** in the list's top bar beside «New recipe», drawn for `canManage` only. It opens `RecipeCategoriesDialog` (the Food cost
+  `CategoriesDialog`, moved here): every word ALPHABETICAL (locale-aware, no reordering) with «{n} recipe(s)» (archived counted), a rename pencil, a
+  remove bin, «+ New category», «Done». Names go through `addCategory` / the new `renameCategory` (trimmed, 1–40, no duplicate ignoring case; the rename may
+  change its own case). A name half typed holds `markBusy`; «Done» asks before dropping it.
+- **Remove** asks first and says how many recipes move to «No category»; it deletes no recipe and rewrites none (the word leaves the list; it comes back
+  if restored) — `removeRecipeCategory` as before.
+- **Rename** (new): `recipesStore.renameRecipeCategory(old, new)`, local-first. The list swaps the word and EVERY recipe holding it (archived too, listed or
+  not: `recipesHoldingWord`) is filed under the new one at once. Writes, all handed over together and in this order: `arrayUnion(new)`, `category` ALONE
+  on each recipe (a merge each, never a batch: the rules' read budget), `arrayRemove(every old spelling)`. A refusal puts back what was refused and says
+  the existing short «Couldn't save the categories…» line.
+- **Food cost follows the rename** (`renameFoodcostCategory.ts`): for somebody who `mayOpenFoodCost`, the `foodcost-categories` document whose name folds to
+  the old word is renamed (rank kept), through the data services' Food cost source (no import from `foodcost/`: a declared exception of data only). Quiet:
+  Food cost failing never fails the rename.
+- **Groups fold** (`ui/CollapsibleGroup`, moved out of Food cost's list and shared): every group, «No category» included, starts CLOSED; the header is a
+  `<button aria-expanded>` with the name, «{n} recipes» and the chevron; a search opens the groups that match; the group of the open recipe opens by itself
+  and stays as the person's tap once the recipe is left (the list stays mounted, so Back and a save return to an open group). State in the component only.
+  A closed group's rows are `hidden`. «Archived» keeps its own `FoldedGroup`. With no category in use the list is flat, as before.
+- **Not covered by specs:** the real rules on a rename (a refused recipe write leaves the list with both words until the next snapshot), a very long
+  list of renamed recipes against Firestore's write rate, the dialog on a 296px phone (not measured).

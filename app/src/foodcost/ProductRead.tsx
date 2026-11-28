@@ -29,6 +29,7 @@ import { SuggestedPrice } from './SuggestedPrice';
 import { workingFrom } from './productEditorModel';
 import { ProductSummary } from './ProductSummary';
 import { ReadLabour, ReadMadeOf, ReadPackaging, ReadPrice, ReadProduct, ReadCooking } from './ReadSections';
+import { useCardCategories } from './useCardCategories';
 import { useProductExit } from './useProductExit';
 import shell from './ProductEditor.module.css';
 
@@ -74,6 +75,7 @@ export function ProductRead({ id, product: stored, gone, origin, titleRef, onEdi
   const { t } = useT();
   const store = useFoodcostStore();
   const snap = useFoodcost();
+  const cardCategories = useCardCategories();
   const { canManage, location } = useSession();
   const say = useStatusMessage();
   const navigate = useNavigate();
@@ -188,7 +190,7 @@ export function ProductRead({ id, product: stored, gone, origin, titleRef, onEdi
         {semiCard ? null : <ProductSummary product={product} tables={snap.tables} />}
         {cakeHref === null ? <LabEntry productId={id} held={waitNote} onHeld={() => say(waitNote)} onOpen={() => { setLabOpen(true); }} /> : null}
         <CardSection title={t('fc.section.product')} help={t('fc.help.prod')}>
-          <ReadProduct product={product} working={working} categories={snap.categories} />
+          <ReadProduct product={product} working={working} category={cardCategories.wordOf(product)} />
         </CardSection>
         <CardSection title={t('fc.madeOf')} help={t('fc.help.madeRead')}>
           <ReadMadeOf product={product} working={working} tables={snap.tables} loaded={loaded} />

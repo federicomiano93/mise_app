@@ -41,6 +41,7 @@ function fakeSource() {
     watchIngredients: vi.fn((onChange, onError) => { ingredients = { onChange, onError }; return () => stopped.push('ingredients'); }),
     watchSuppliers: vi.fn((onChange, onError) => { suppliers = { onChange, onError }; return () => stopped.push('suppliers'); }),
     watchCategories: vi.fn(() => () => stopped.push('categories')),
+    watchRecipeCategories: vi.fn(() => () => stopped.push('recipe-categories')),
     newCategoryId: () => `cat-${++ids}`,
     saveCategory: (id, data) => write('category', id, data),
     removeCategory: id => write('category-remove', id),
@@ -102,7 +103,7 @@ describe('the Food cost store', () => {
     store.start();
     expect(fake.source.watchProducts).toHaveBeenCalledTimes(1);
     store.stop();
-    expect(fake.stopped.sort()).toEqual(['categories', 'ingredients', 'products', 'recipes', 'settings', 'suppliers']);
+    expect(fake.stopped.sort()).toEqual(['categories', 'ingredients', 'products', 'recipe-categories', 'recipes', 'settings', 'suppliers']);
   });
 
   // POST-SWITCH (step 4 of the Food cost plan): the suppliers, for the names under an ingredient. Memory only, quiet, never waited for.
