@@ -7,6 +7,10 @@
   max-width: 40rem;
 }
 
+.tool {
+  margin-bottom: var(--s4);
+}
+
 .cards {
   display: grid;
   gap: var(--s4);

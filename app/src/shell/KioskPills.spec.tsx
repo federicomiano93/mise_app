@@ -1,5 +1,5 @@
-// «Standby» in the Home's top bar (staff slice 6, D8; moved from the Home's content on 19 Nov 2026): only on a kiosk device, only on the
-// Home, to every role; it asks the kiosk to cover the screen. «Exit» moved on 22 Nov 2026 into the menu under the account's letter, in the same
+// «Standby» in the top bar (staff slice 6, D8; moved from the Home's content on 19 Nov 2026; on EVERY section since 28 Nov 2026): only on a kiosk
+// device, to every role; it asks the kiosk to cover the screen. «Exit» moved on 22 Nov 2026 into the menu under the account's letter, in the same
 // bar: it closes the page or says how to.
 
 import { afterEach, describe, expect, test, vi } from 'vitest';
@@ -41,11 +41,34 @@ describe('the kiosk pills in the top bar', () => {
     expect(within(screen.getByRole('main')).queryByRole('group', { name: 'Kiosk mode' })).not.toBeInTheDocument();
   });
 
-  test('not on another section, even with kiosk mode on', async () => {
+  test.each(['/orders', '/recipes', '/settings', '/food-cost'])('on %s too: Standby is in the bar of every section while kiosk mode is on', async path => {
     localStorage.setItem(KIOSK_STORAGE_KEY, ON);
+    renderApp(path);
+    await screen.findByRole('heading', { level: 1 });
+    const found = await screen.findByRole('group', { name: 'Kiosk mode' });
+    expect(found.closest('header')).not.toBeNull();
+    expect(within(found).getByRole('button', { name: 'Standby' })).toBeInTheDocument();
+    // «Exit» is in the account menu on every section too, as Standby is.
+    expect(screen.getByRole('button', { name: 'Account' })).toBeInTheDocument();
+  });
+
+  test('absent from every section with kiosk mode off', async () => {
     renderApp('/orders');
     await screen.findByRole('heading', { level: 1 });
     expect(band()).not.toBeInTheDocument();
+  });
+
+  test('Standby on another section asks the kiosk to cover the screen', async () => {
+    localStorage.setItem(KIOSK_STORAGE_KEY, ON);
+    const asked = vi.fn();
+    const stop = onRestNow(asked);
+    try {
+      const { user } = renderApp('/orders');
+      await user.click(await screen.findByRole('button', { name: 'Standby' }));
+      expect(asked).toHaveBeenCalledTimes(1);
+    } finally {
+      stop();
+    }
   });
 
   test('follows the setting live (another tab switching it on)', async () => {
@@ -90,7 +113,14 @@ describe('the kiosk pills in the top bar', () => {
     expect(router.state.location.pathname).toBe('/settings');
   });
 
-  test('off the kiosk Home the letter is a plain link to Settings, with no menu', async () => {
+  test('on another section the letter opens the same menu, with Exit', async () => {
+    localStorage.setItem(KIOSK_STORAGE_KEY, ON);
+    const { user } = renderApp('/orders');
+    await user.click(await screen.findByRole('button', { name: 'Account' }));
+    expect(within(await screen.findByRole('menu', { name: 'Account' })).getByRole('menuitem', { name: 'Exit' })).toBeInTheDocument();
+  });
+
+  test('with kiosk mode off the letter is a plain link to Settings, with no menu', async () => {
     renderApp('/home');
     expect(await screen.findByRole('link', { name: 'Account' })).toHaveAttribute('href', '/settings');
     expect(screen.queryByRole('button', { name: 'Account' })).not.toBeInTheDocument();

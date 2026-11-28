@@ -1,0 +1,33 @@
+/* «Nota per Claude»: the field and the lines under it, inside the kit's dialog (ui/Dialog). */
+
+.field {
+  display: flex;
+  flex-direction: column;
+}
+
+/* 16px type on purpose: a smaller size makes iOS zoom the page in when the field is focused. */
+.area {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 7.5rem;
+  padding: var(--s3);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: var(--fs-md)/1.4 var(--font);
+  resize: vertical;
+}
+
+.from {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  overflow-wrap: anywhere;
+}
+
+.error {
+  margin: 0;
+  color: var(--danger-ink);
+  font-size: var(--fs-sm);
+}

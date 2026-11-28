@@ -3425,6 +3425,32 @@ export const it: Messages = {
   'kiosk.home.cannotClose': 'Questo tablet non permette all’app di chiudersi da sola. Per chiuderla tocca il tasto delle app recenti e scorri via Mise.',
   'kiosk.home.aria': 'Modalità chiosco',
 
+  // «Nota per Claude» (feedback/): il pulsante nella barra in alto e la riga di «Altro» sul telefono.
+  'feedback.title': 'Nota per Claude',
+  'feedback.placeholder': 'Cosa cambiare?',
+  'feedback.from': 'Da: {where}',
+  'feedback.send': 'Invia',
+  'feedback.sent': 'Nota inviata.',
+  'feedback.refused': 'Invio non riuscito. Riprova.',
+  'feedback.late': 'Nota non inviata.',
+  'feedback.discardTitle': 'Scartare la nota?',
+  'feedback.keep': 'Continua a scrivere',
+
+  // La calcolatrice della Home (home/PocketCalculator.tsx).
+  'pocket.title': 'Calcolatrice',
+  'pocket.close': 'Chiudi',
+  'pocket.error': 'Errore',
+  'pocket.key.clear': 'Azzera',
+  'pocket.key.back': 'Cancella',
+  'pocket.key.percent': 'Percentuale',
+  'pocket.key.divide': 'Diviso',
+  'pocket.key.times': 'Per',
+  'pocket.key.minus': 'Meno',
+  'pocket.key.plus': 'Più',
+  'pocket.key.equals': 'Uguale',
+  'pocket.key.comma': 'Virgola',
+  'pocket.key.point': 'Punto',
+
   // Customer bookings («Prenotazioni», 18 Nov 2026): bookings/, the Home's card.
   'section.bookings': 'Prenotazioni',
   'bookings.new': 'Nuova prenotazione',

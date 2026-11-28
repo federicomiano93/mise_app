@@ -448,3 +448,20 @@ Piece B (item 7) of the Orders redesign agreed on the lab tablet (`docs/mockups/
 - **Layout.** From 1000px, and only while the card is drawn, «Da fare» and «Ordini da fare» are two columns (`.cards[data-two]`, the Home's
   column widened to 72rem); without the card «Da fare» keeps its one readable column, and below 1000px one stands under the other. The card's
   data is read in its own part (`OrdersDuePart`), which tells the Home only whether the card is drawn. Each card is its own `PartBoundary`.
+
+## Lab tools as built (28 Nov 2026) — «Nota per Claude», «Standby» on every section, the pocket calculator; NEW IN MISE 2
+
+- **«Nota per Claude»** (`app/src/feedback/`): an icon button in the ONE top bar (before the connection), drawn only where the venue document says
+  `feedbackToClaude === true` (`feedbackOn`, a literal true). On a phone, where the bar is hidden, the same action is a row at the foot of «More»
+  (hidden from 700px); its «where» is then the screen before «More». The dialog is the kit's `Dialog`: a textarea (max 2000, Send off while empty),
+  «From: Section > item», Cancel (asks «Discard the note?» only with typing) and Send. A screen names its open item with `usePlaceName()` (today only
+  the recipe page). Send is `FeedbackSource.send` (`addDoc` under `locations/{lid}/feedback`: `bakery, uid, text, screen, appVersion, createdAt`,
+  the rules' own shape, pinned in `feedbackSource.spec.ts`); `screen` is the address without its slash cut to 40, `appVersion` is `MISE2_VERSION`.
+  Offline the dialog closes at once (the write is queued); online it watches 1.5 s for a refusal and keeps the text if one comes. Typing holds
+  `markBusy()`. «Note sent.» is said by a `StatusMessageProvider` of the shell. No rules change; the scripts that read notes already print `screen`.
+  Not covered by specs: the look at real widths, and a refusal arriving later than 1.5 s (the text is then already gone).
+- **«Standby» on every section**: `AppShell` passes `standby={kioskOn}` to the bar, so the pill is on every section from 700px; `kiosk` (the Home
+  only) still decides the phone's bar and the account menu with «Exit». The rest cover is drawn on `<body>` and never unmounts or reloads a screen;
+  it holds `markBusy()`; the automatic rest never starts while an editor is busy (`nextKioskState`). `kiosk/Kiosk.editors.spec.tsx` pins both.
+- **Calculator on the Home** (`home/CalculatorCard.tsx`, `PocketCalculator.tsx`; maths in `shared/src/pocket-calc.ts`, no eval): the decimal mark
+  follows the venue's number format (`useMoney().layout.decimal`).
