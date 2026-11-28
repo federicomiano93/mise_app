@@ -14,6 +14,11 @@ import {
   BEVERAGE_RE, COSTS_RE, DISCOUNT_RE, FOOD_RE, NOISE_RE, NONFOOD_RE, PACKAGING_RE, READY_RE,
 } from './keywords';
 
+// MISE 2 ONLY (not exported, so the exports stay the original's): the NONFOOD_RE words that name a tool or a cleaning good, looked at
+// BEFORE PACKAGING_RE. Built from words already in NONFOOD_RE, so the keyword lists stay equal across the three files.
+const TOOLS_FIRST_RE = new RegExp(
+  `${B_START}padel${B_END}|pentol|palett|caraffa|detersiv|sgrassa|igienizz|candeggin|anticalcare`, 'iu');
+
 // ── product key ───────────────────────────────────────────────────────────────
 
 // NFD, accents stripped, lower case, `{lot/expiry}` removed, leading `*` removed, punctuation -> space,
@@ -56,6 +61,9 @@ export function classify(description: unknown, quantity: number | null | undefin
   if (COSTS_RE.test(low)) return ['excluded', EXCLUDED.COSTS];
   if (READY_RE.test(low)) return ['rivendita', ''];
   if (FOOD_RE.test(low)) return ['ingrediente', ''];
+  // MISE 2 (28 Nov 2026): tools and cleaning words win over the packaging words «alluminio» and «vasch»
+  // («PADEL ALLUMINIO ANTIAD 24CM» is a pan, «DETERSIVO VASCHE» a detergent). All of them are words of NONFOOD_RE.
+  if (TOOLS_FIRST_RE.test(low)) return ['altro', ''];
   if (PACKAGING_RE.test(low)) return ['packaging', ''];
   // MISE 2: the tools, clothing and cleaning words were the tail of the packaging list (keywords.ts says why they moved).
   if (NONFOOD_RE.test(low)) return ['altro', ''];

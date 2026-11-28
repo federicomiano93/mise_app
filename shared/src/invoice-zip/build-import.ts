@@ -53,8 +53,9 @@ const KIND_OF_TYPE: Readonly<Record<LineType, IngredientKind>> = Object.freeze({
 const WEIGHTLESS_TYPES: ReadonlySet<LineType> = new Set<LineType>(['packaging', 'rivendita', 'altro']);
 export { NO_SDI_REASON };
 
-// The invoice units that count single pieces (FatturaPA `UnitaMisura`, spaces and dots ignored, case ignored).
-const PIECE_UNITS: ReadonlySet<string> = new Set(['PZ', 'NR', 'N', 'PEZZI', 'PEZZO']);
+// The invoice units that count single pieces (FatturaPA `UnitaMisura`, spaces and dots ignored, case ignored). A BLANK unit counts
+// as pieces for packaging too (28 Nov 2026: «SCATOLA MILLERIGHE … 500 GR», 60 boxes, no unit, is not 30 kg of anything).
+const PIECE_UNITS: ReadonlySet<string> = new Set(['', 'PZ', 'NR', 'N', 'PEZZI', 'PEZZO']);
 const isPieceUnit = (rawUnit: string): boolean => PIECE_UNITS.has(String(rawUnit || '').replace(/[\s.]+/g, '').toUpperCase());
 
 const NEEDS_CHECK = 'da verificare';

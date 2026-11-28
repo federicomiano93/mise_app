@@ -35,7 +35,7 @@ const DISCOUNT_RE = new RegExp(`^[^\\p{L}\\p{N}_]*(sconto|abbuono|ribasso)${B_EN
 // Checked BEFORE packaging: "ZUCCHERO SACCHI DA KG 25" is sugar in sacks, not a sack.
 const FOOD_RE = new RegExp(
   `${B_START}(zucchero|farina|sfarinat${WORD}*|semola|sale|lievito|burro|margarina|strutto|olio|uova|uovo|latte|panna`
-  + `|cacao|cioccolato|miele|mandorl${WORD}*|nocciol${WORD}*|pistacch${WORD}*|noci|uvetta|canditi|marmellata`
+  + `|cacao|cioccolato|miele|mandorl${WORD}*|nocciol${WORD}*|pistacch${WORD}*|fragol${WORD}*|lampon${WORD}*|mirtill${WORD}*|gelat${WORD}*|noci|uvetta|canditi|marmellata`
   + `|confettura|crema|ricotta|mascarpone|formaggio|mozzarella`
   // Ready-made food: «patate padellate» is not a pan, «cornetto fantasia» is not a Fanta.
   + `|patate|cornett[oi]|panzerott${WORD}*|pasticciott${WORD}*|treccia|trecce)${B_END}`, 'iu');

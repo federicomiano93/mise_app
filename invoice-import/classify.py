@@ -45,7 +45,7 @@ DISCOUNT_RE = re.compile(r"^\W*(sconto|abbuono|ribasso)\b", re.I)
 # Checked BEFORE packaging: "ZUCCHERO SACCHI DA KG 25" is sugar in sacks, not a sack.
 FOOD_RE = re.compile(
     r"\b(zucchero|farina|sfarinat\w*|semola|sale|lievito|burro|margarina|strutto|olio|uova|uovo|latte|panna"
-    r"|cacao|cioccolato|miele|mandorl\w*|nocciol\w*|pistacch\w*|noci|uvetta|canditi|marmellata"
+    r"|cacao|cioccolato|miele|mandorl\w*|nocciol\w*|pistacch\w*|fragol\w*|lampon\w*|mirtill\w*|gelat\w*|noci|uvetta|canditi|marmellata"
     r"|confettura|crema|ricotta|mascarpone|formaggio|mozzarella"
     # Ready-made food: «patate padellate» is not a pan, «cornetto fantasia» is not a Fanta.
     r"|patate|cornett[oi]|panzerott\w*|pasticciott\w*|treccia|trecce)\b",
