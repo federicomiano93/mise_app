@@ -35,10 +35,10 @@ const portPattern = (name: (typeof NAMES)[number]): RegExp => (name === 'PACKAGI
 // still fails.
 const MISE2_SOFT_DRINKS = '`${B_START}limonata${B_END}`, `${B_START}tonica${B_END}`, `${B_START}gassosa${B_END}`, `${B_START}spuma${B_END}`, '
   + '`${B_START}cedrata${B_END}`, `${B_START}ginger\\\\s+(?:ale|beer)${B_END}`, `${B_START}gingerino${B_END}`, ';
-const MISE2_SPLIT = "', 'iu'); const NONFOOD_RE = new RegExp( `alluminio";
+const MISE2_SPLIT = "|alluminio|coprivassoi', 'iu'); const NONFOOD_RE = new RegExp( `grembiul";
 function withoutMise2Changes(block: string): string {
   if (!block.includes(MISE2_SOFT_DRINKS) || !block.includes(MISE2_SPLIT)) throw new Error('the Mise 2 differences are not where this check looks for them');
-  return block.replace(MISE2_SOFT_DRINKS, '').replace(MISE2_SPLIT, "' + `|alluminio");
+  return block.replace(MISE2_SOFT_DRINKS, '').replace(MISE2_SPLIT, "' + `|alluminio|coprivassoi|grembiul");
 }
 
 // The pattern of `NAME = re.compile(` in the Python file: the raw string pieces r"…" in order, comment lines

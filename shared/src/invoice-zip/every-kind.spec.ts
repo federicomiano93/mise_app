@@ -13,7 +13,7 @@ import { makeCase } from './testing/invoice-builders';
 import type { LineSpec } from './testing/invoice-builders';
 import type { ImportResult } from './build-import';
 import { changesFromPoints } from '../price-changes-model';
-import { planPriceChanges, replanRow } from '../invoice-import-plan';
+import { planPriceChanges, priceChange, replanRow } from '../invoice-import-plan';
 
 const SUPPLIER = 'IT00000000001';
 const FLOUR: LineSpec = { desc: 'FARINA TIPO 00 SACCO KG 25', code: 'F00', qty: 25, unit: 'KG', total: 14.25 };
@@ -326,5 +326,99 @@ describe('drinks counted in single bottles', () => {
     const result = built([COLA_ML, { ...COLA_ML, qty: 1, total: 12, unit: 'CF' }]);
     const point = result.products.find(row => row.supplierCode === 'CB');
     expect(point?.reliability).toBe('da verificare');
+  });
+});
+
+// 28 Nov 2026, real case: «467K VASO COTTURA 850ML», 48 pieces at 2.8566. The 850 ml is the jar's capacity, not what is paid for.
+describe('packaging counted in pieces with a size in the description is priced per piece', () => {
+  const SUPPLIER_ID = 's-cerere';
+  const JAR: LineSpec = { desc: '467K VASO COTTURA 850ML', code: 'VC', qty: 48, unit: 'Pezzi', total: 137.1168 };
+  const ctx = (ingredients: readonly Record<string, unknown>[], pricesById: Record<string, Record<string, unknown>> = {}) => ({
+    supplierIdByKey: { [SUPPLIER]: SUPPLIER_ID }, ingredients, pricesById, invoicePointIds: {}, everyKind: true,
+  });
+
+  test('a NEW packaging item: no weight, per piece, no case fields', () => {
+    const jar = built([JAR]).importFile.ingredients[0];
+    expect(jar).toMatchObject({ kind: 'packaging', priceUnit: 'pcs', unitWeightKg: null, weight: '', packCount: null });
+    expect(jar?.prices.map(p => p.pricePerUnit)).toStrictEqual([2.8566]);
+    expect(jar?.invoiceName).toContain('850ML');
+    const file = fileOf(built([JAR]));
+    const ops = ingredientWrites(planIngredients(file, ctx([]))[0], file[0], '2026-11-28T10:00:00.000Z', { language: 'it' }).flat();
+    expect(ops.find(op => op.type === 'set-current-price')?.data).toMatchObject({ priceUnit: 'pcs', pricePerUnit: 2.8566, unitWeightKg: null });
+  });
+
+  test('an existing packaging item matched by code is updated per piece, and a per-piece price compares as equal', () => {
+    const file = fileOf(built([JAR]));
+    const jar = { id: 'j1', supplierId: SUPPLIER_ID, name: 'Vaso cottura', supplierCode: 'VC', kind: 'packaging' };
+    const stored = { priceUnit: 'pcs', pricePerUnit: 2.8566, unitWeightKg: null, priceUpdatedAt: '2020-01-01T12:00:00.000Z' };
+    const row = planIngredients(file, ctx([jar], { j1: { ...stored, pricePerUnit: 2.5 } }))[0];
+    expect(row).toMatchObject({ ingredientId: 'j1', status: 'update-price', updateCurrent: true });
+    const ops = ingredientWrites(row, file[0], '2026-11-28T10:00:00.000Z', { language: 'it' }).flat();
+    expect(ops.find(op => op.type === 'set-current-price')?.data).toMatchObject({ priceUnit: 'pcs', pricePerUnit: 2.8566, unitWeightKg: null });
+    // «Equal price», asserted POSITIVELY: the row is a price update and the comparison reads 0 % (the «(=)» and «Price confirmed»).
+    const same = planIngredients(file, ctx([jar], { j1: stored }))[0];
+    expect(same).toMatchObject({ ingredientId: 'j1', status: 'update-price' });
+    const next = same?.newPoints[same.newPoints.length - 1];
+    expect(priceChange(stored, next?.pricePerUnit as number, 'pcs')).toStrictEqual({ percent: 0 });
+  });
+
+  test('⚠️ an existing packaging item stored per kilo meeting a per-piece line: history only, «unit-differs», never overwritten', () => {
+    const file = fileOf(built([JAR]));
+    const jar = { id: 'j1', supplierId: SUPPLIER_ID, name: 'Vaso cottura', supplierCode: 'VC', kind: 'packaging' };
+    const row = planIngredients(file, ctx([jar], { j1: { priceUnit: 'kg', pricePerUnit: 5, unitWeightKg: null, priceUpdatedAt: '2020-01-01T12:00:00.000Z' } }))[0];
+    expect(row).toMatchObject({ ingredientId: 'j1', status: 'history-only', reason: 'unit-differs', updateCurrent: false });
+    const ops = ingredientWrites(row, file[0], '2026-11-28T10:00:00.000Z', { language: 'it' }).flat();
+    expect(ops.some(op => op.type === 'set-current-price')).toBe(false);
+  });
+
+  test('⚠️ an existing FOOD item matched by a packaging line gets no per-piece write', () => {
+    const file = fileOf(built([JAR]));
+    const food = { id: 'f1', supplierId: SUPPLIER_ID, name: 'Vaso', supplierCode: 'VC', kind: 'ingredient' };
+    const row = planIngredients(file, ctx([food]))[0];
+    expect(row).toMatchObject({ status: 'error', reason: 'unit-weight-missing' });
+    expect(ingredientWrites(row, file[0], '2026-11-28T10:00:00.000Z', { language: 'it' }).flat()).toStrictEqual([]);
+  });
+
+  test('a blank invoice unit counts as pieces for packaging: the real box lines are priced per piece, with no weight', () => {
+    for (const desc of ['SCATOLA MILLERIGHE + FINESTRA PVC SICILIA 25X16X5 500 GR', 'SCATOLA MILLERIGHE + FINESTRA PVC SICILIA 32X22X5 1 KG']) {
+      const box = built([{ desc, code: 'SC', qty: 60, unit: '', total: 90 }]).importFile.ingredients[0];
+      expect(box, desc).toMatchObject({ kind: 'packaging', priceUnit: 'pcs', unitWeightKg: null, weight: '', packCount: null });
+      expect(box?.prices.map(p => p.pricePerUnit), desc).toStrictEqual([1.5]);
+    }
+  });
+
+  test('packaging in cartons or packs (CT, CF) with a size keeps the reading it had, not the per-piece rule', () => {
+    for (const unit of ['CT', 'CF']) {
+      const jar = built([{ desc: '467K VASO COTTURA 850ML', code: 'VC', qty: 2, unit, total: 20 }]).importFile.ingredients[0];
+      expect(jar, unit).toMatchObject({ kind: 'packaging', priceUnit: 'l', weight: '850 ml' });
+    }
+  });
+
+  test('a quantity of zero and a credit note give no price and no NaN, only a reason', () => {
+    for (const spec of [{ qty: 0, total: 10 }, { qty: -48, total: -137.12 }, { qty: 48, total: -137.12 }]) {
+      const result = built([{ ...JAR, ...spec }]);
+      const prices = result.importFile.ingredients.flatMap(i => i.prices.map(p => p.pricePerUnit));
+      expect(prices.every(Number.isFinite), JSON.stringify(spec)).toBe(true);
+      expect(prices, JSON.stringify(spec)).toStrictEqual([]);
+      expect(JSON.stringify(result.products)).not.toContain('NaN');
+    }
+  });
+
+  // The count of a «X 50» is not multiplied in for packaging billed in PZ: the invoice counts what it sells, so the price is total ÷
+  // quantity (the same reading the drinks rule gives single bottles). Pinned so a change of it is deliberate.
+  test('a «X 50» count on a packaging line billed in PZ: the price is total ÷ quantity', () => {
+    const bags = built([{ desc: 'BUSTE CARTA 250G X50', code: 'BC', qty: 4, unit: 'PZ', total: 40 }]).importFile.ingredients[0];
+    expect(bags).toMatchObject({ kind: 'packaging', priceUnit: 'pcs', unitWeightKg: null, packCount: null });
+    expect(bags?.prices.map(p => p.pricePerUnit)).toStrictEqual([10]);
+  });
+
+  test('food with «ML» and PZ keeps today\'s reading (a 500 ml bottle of milk sold by the piece)', () => {
+    const milk = built([{ desc: 'LATTE UHT 500ML', code: 'LT', qty: 12, unit: 'PZ', total: 12 }]).importFile.ingredients[0];
+    expect(milk).toMatchObject({ kind: 'ingredient', priceUnit: 'l', weight: '500 ml' });
+  });
+
+  test('packaging bought by weight keeps its price per kilo', () => {
+    const film = built([FILM]).importFile.ingredients[0];
+    expect(film).toMatchObject({ kind: 'packaging', priceUnit: 'kg' });
   });
 });
