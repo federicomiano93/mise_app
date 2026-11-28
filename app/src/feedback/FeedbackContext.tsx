@@ -77,7 +77,7 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
   );
 }
 
-// Where the dialog is drawn: INSIDE the shell's status region (`main`), so «Note sent.» and a late «Note not sent.» are said by the page's one
+// Where the dialog is declared: under the shell's status provider (a sibling of `main`, see AppShell), so «Note sent.» and a late «Note not sent.» are said by the page's one
 // region and outlive the dialog. In a part of its own: a render error in the note must not take the app down.
 export function FeedbackHost() {
   const { asked, close } = useFeedback();

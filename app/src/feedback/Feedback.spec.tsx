@@ -145,7 +145,9 @@ describe('the dialog', () => {
     await user.type(within(dialog).getByPlaceholderText('What should change?'), 'x');
     await user.click(within(dialog).getByRole('button', { name: 'Send' }));
     const said = await screen.findByText('Note sent.');
-    expect(said.closest('[role="status"]')?.closest('main')).not.toBeNull();
+    expect(said.closest('[role="status"]')).not.toBeNull();
+    // A sibling of `main`, never inside it: a region inside kept the scrolling `main` visible under a modal (axe scrollable-region-focusable).
+    expect(said.closest('main')).toBeNull();
   });
 
   test('Cancel with nothing typed closes without a question', async () => {

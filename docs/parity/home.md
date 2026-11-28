@@ -458,7 +458,7 @@ Piece B (item 7) of the Orders redesign agreed on the lab tablet (`docs/mockups/
   the recipe page). Send is `FeedbackSource.send` (`addDoc` under `locations/{lid}/feedback`: `bakery, uid, text, screen, appVersion, createdAt`,
   the rules' own shape, pinned in `feedbackSource.spec.ts`); `screen` is the address without its slash cut to 40, `appVersion` is `MISE2_VERSION`.
   Offline the dialog closes at once (the write is queued); online it watches 1.5 s for a refusal and keeps the text if one comes. Typing holds
-  `markBusy()`. «Note sent.» is said by a `StatusMessageProvider` of the shell. No rules change; the scripts that read notes already print `screen`.
+  `markBusy()`. «Note sent.» is said by the shell's `StatusMessageProvider` (one region, a sibling of `main`). No rules change; the scripts that read notes already print `screen`.
   Not covered by specs: the look at real widths, and a refusal arriving later than 1.5 s (the text is then already gone).
 - **«Standby» on every section**: `AppShell` passes `standby={kioskOn}` to the bar, so the pill is on every section from 700px; `kiosk` (the Home
   only) still decides the phone's bar and the account menu with «Exit». The rest cover is drawn on `<body>` and never unmounts or reloads a screen;

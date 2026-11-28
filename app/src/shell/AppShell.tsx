@@ -112,6 +112,10 @@ function ShellFrame() {
         <Rail />
         <div className={styles.main}>
           <TitleSlotContext.Provider value={titleSlot}>
+            {/* ⚠️ THE PAGE'S ONE STATUS REGION IS A SIBLING OF `main`, NOT INSIDE IT: a modal hides everything but its own layer and the top-layer
+                region, and a region inside `main` kept `main` visible while its content was hidden — axe's `scrollable-region-focusable` (SERIOUS)
+                on a note opened from «More» at 296px. A section's provider hands its messages up to this one (ui/StatusMessage.tsx). */}
+            <StatusMessageProvider>
             <TopBar standby={kioskOn} onHome={onHome} titleSlot={setTitleSlot} />
             <main id="main" ref={contentRef} tabIndex={-1} className={styles.content}>
               {/* ⚠️ The holiday reminder and refusal live HERE, not straight under the shell: each boundary is a <div>, and
@@ -119,9 +123,7 @@ function ShellFrame() {
                   data landed (drive of 9 Nov 2026). Both only open dialogs, drawn over the page from <body>, so here they are
                   0px tall; a part that fails to draw shows its notice at the top of the content, covering nothing. Outside the
                   section's boundary, so moving section does not ask again. */}
-              <StatusMessageProvider>
-              {/* «Nota per Claude» (feedback/): the dialog is drawn here, so its «Note sent.» is said by the page's ONE status region, which
-                  sits inside the landmark and outlives the dialog (a section's own provider hands its messages up to it). */}
+              {/* «Nota per Claude» (feedback/): rendered under the page's ONE status provider, so its «Note sent.» outlives the dialog. */}
               <FeedbackHost />
               <PartBoundary>
                 <AwayReminder />
@@ -138,8 +140,8 @@ function ShellFrame() {
                   <Outlet />
                 </ScrollAreaContext.Provider>
               </PartBoundary>
-              </StatusMessageProvider>
             </main>
+            </StatusMessageProvider>
           </TitleSlotContext.Provider>
         </div>
         <TabBar pathname={pathname} />
