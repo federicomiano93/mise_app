@@ -171,6 +171,8 @@ describe('⚠️ a rename that is only partly accepted', () => {
     expect(source.recipeWrites).toEqual([]);
     expect(source.categoryWrites).toEqual([]);
     expect(rows(dialog)).toEqual(['Christmas3 recipes', 'Easter1 recipe', 'Spring0 recipes']);
+    expect(within(dialog).getByRole('button', { name: 'Rename Easter' })).toBeEnabled();
+    expect(within(dialog).getByRole('button', { name: '+ New category' })).toBeEnabled();
   });
 
   it('one recipe refused out of several: BOTH words stay, the others carry the new word, the line says it was not finished', async () => {
@@ -181,6 +183,7 @@ describe('⚠️ a rename that is only partly accepted', () => {
     // The old word is never taken off the list: the refused recipe would otherwise land in «No category».
     expect(source.categoryWrites).toEqual([{ add: 'Festive' }]);
     expect(source.recipeWrites.map(write => write.id).sort()).toEqual(['a', 'p']);
+    expect(within(dialog).getByRole('button', { name: 'Rename Easter' })).toBeEnabled();
     await waitFor(() => { expect(rows(dialog).map(text => text?.replace(/\d.*/, ''))).toEqual(['Christmas', 'Easter', 'Festive', 'Spring']); });
     expect(rows(dialog)).toContain('Christmas1 recipe');
     expect(rows(dialog)).toContain('Festive2 recipes');
@@ -246,6 +249,25 @@ describe('⚠️ a rename that is only partly accepted', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Retry' }));
     await waitFor(() => { expect(foodcost.saved).toEqual([{ kind: 'category', id: 'fc1', data: { name: 'Festive', rank: 1 } }]); });
     expect(within(dialog).queryByText('Food cost not updated.')).not.toBeInTheDocument();
+  });
+});
+
+describe('⚠️ the dialog closed mid-rename', () => {
+  it('Food cost failing afterwards is still said, in the page', async () => {
+    const foodcost = fakeFoodcostSource({ categories: [{ id: 'fc1', name: 'Christmas', rank: 1 }] });
+    foodcost.watchCategories = (_onChange, onError) => { queueMicrotask(() => { onError(new Error('offline')); }); return () => undefined; };
+    const { user, dialog, source } = await openDialog(undefined, { data: { foodcost: () => foodcost } });
+    const release = source.holdLabelSaves();
+    await user.click(within(dialog).getByRole('button', { name: 'Rename Christmas' }));
+    const box = within(dialog).getByRole('textbox', { name: 'Category name' });
+    await user.clear(box);
+    await user.type(box, 'Festive{Enter}');
+    await within(dialog).findByText('Saving…');
+    await user.click(within(dialog).getByRole('button', { name: 'Done' }));
+    await waitFor(() => { expect(screen.queryByRole('dialog')).not.toBeInTheDocument(); });
+    act(() => { release(); });
+    expect(await screen.findByText('Food cost not updated.')).toBeInTheDocument();
+    expect(source.categoryWrites).toEqual([{ add: 'Festive' }, { remove: ['Christmas'] }]);
   });
 });
 

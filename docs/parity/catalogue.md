@@ -2336,7 +2336,11 @@ list does; here the book simply reopens), a small known gap.
   typed name). From its start until everything has settled, Food cost's half included, the dialog holds `markBusy()` (steps 2 and 3 live in page memory, so
   an update reload must not drop them). While it is in the air the store's `renaming` flag is set: the dialog shows the words as the rename will leave them (new
   word, not both), one «Saving…» line, every row action disabled, and no snapshot is adopted that brings the old word (or the recipes under it) back
-  (`overlayRenameLabel` / `overlayRename`). «Rename not finished.» is also said in the page's status line (seen after «Done»).
+  (`overlayRenameLabel` / `overlayRename`; the HACCP choice only when it was the renamed word at the start). The store keeps the last RAW snapshots and,
+  when the rename ends however it ends, re-derives the recipes and the label profile from them, so the phone shows what the server holds. A write that
+  never answers is not waited for: after 20 s (`RENAME_SOFT_MS`) the controls are free again and the page says «Rename not confirmed.»; the late steps touch
+  nothing on the phone. `stop()` abandons a rename in the air (nothing is written to storage afterwards). Food cost failing is said in the dialog (Retry)
+  AND in the page's status line, for a dialog closed meanwhile. «Rename not finished.» is also said in the page's status line (seen after «Done»).
 - **Food cost follows the rename** (`renameFoodcostCategory.ts`), after the recipes' rename is whole: for somebody who `mayOpenFoodCost`, EVERY
   `foodcost-categories` document whose name folds to the old word (`categoryKey`) is renamed (rank kept), through the data services' Food cost source (no
   import from `foodcost/`: a declared exception of data only). It accepts only the SERVER's answer (a cache-only answer, a failed read or no answer in 10 s skips

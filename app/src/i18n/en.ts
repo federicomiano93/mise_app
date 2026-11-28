@@ -568,6 +568,7 @@ export const en = {
   'cat.dlg.renameNotFinished': 'Rename not finished.',
   'cat.dlg.foodCostNotUpdated': 'Food cost not updated.',
   'cat.dlg.needsConnection': 'Needs a connection.',
+  'cat.dlg.renameNotConfirmed': 'Rename not confirmed.',
   'cat.dlg.saving': 'Saving…',
   'cat.dlg.retry': 'Retry',
   'fc.cat.couldNotSave': 'Could not save the category “{name}”. It is back as it was.',

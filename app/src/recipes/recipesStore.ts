@@ -39,6 +39,29 @@ import { recipeDataOf } from './recipeDocument';
 import { newRecipeId, withoutPrice } from './recipesSource';
 import type { RecipesMeta, RecipesSource, StoredDoc } from './recipesSource';
 
+// A rename waits this long for the database before the screen stops waiting (a write that never answers: a stalled connection).
+export const RENAME_SOFT_MS = 20_000;
+
+// The rename that is in the air. `haccpMoves`: the HACCP list's choice was the old word when it began (the overlay on snapshots touches
+// the HACCP choice only then). `late`: the soft timeout passed. `stopped`: the store was stopped. Either way the steps still running
+// change nothing on the phone any more.
+type RenameInAir = {
+  readonly oldWord: string;
+  readonly word: string;
+  readonly ids: ReadonlySet<string>;
+  readonly haccpMoves: boolean;
+  late: boolean;
+  stopped: boolean;
+};
+
+// A rename whose writes did not answer in time: the screen stops waiting and says so; the writes may still land.
+export class RenameNotConfirmed extends Error {
+  constructor() {
+    super('The category rename was not confirmed.');
+    this.name = 'RenameNotConfirmed';
+  }
+}
+
 // A rename that was only partly accepted: the new word is on the list, some recipes hold it, and the old word is still there too.
 export class RenameNotFinished extends Error {
   constructor() {
@@ -442,7 +465,11 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
   let categoriesOf: Record<string, unknown> | null | undefined;
   let categories: readonly string[] = [];
   // The rename in the air, if any: the old word (to be swapped out of every snapshot), the new one and the recipes it moves.
-  let renaming: { readonly oldWord: string; readonly word: string; readonly ids: ReadonlySet<string> } | null = null;
+  let renaming: RenameInAir | null = null;
+  // The last snapshots of the database as they came, WITHOUT the rename laid over them: what the state is re-derived from when the rename
+  // ends. undefined / null: none yet.
+  let rawRecipes: typeof recipes | null = null;
+  let rawLabel: Record<string, unknown> | null | undefined;
 
   let snapshot: RecipesSnapshot = build();
 
@@ -515,7 +542,7 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
   //   3. only when every one of those was accepted, `arrayRemove(old spellings)`.
   // Some of step 2 refused → the old word is left on the list beside the new one, only the refused recipes (or the HACCP choice)
   // go back to the old word, and the promise rejects with RenameNotFinished. The local state moves at once (local-first).
-  async function renameCategoryNow(oldWord: string, newWord: string): Promise<void> {
+  async function renameCategoryNow(oldWord: string, newWord: string, ctx: RenameInAir): Promise<void> {
     const key = categoryKey(oldWord);
     const stored = Array.isArray(labelConfig?.recipeCategories) ? labelConfig.recipeCategories as unknown[] : [];
     const oldSpellings = stored.filter((held): held is string => typeof held === 'string' && categoryKey(held) === key && held !== newWord);
@@ -523,7 +550,10 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
     const before = new Map(held.map(recipe => [recipe.id, storedCategoryOf(recipe)] as const));
     const listBefore = [...categories];
     const haccpBefore = labelConfig?.haccpCategory;
-    const haccpMoves = typeof haccpBefore === 'string' && categoryKey(haccpBefore) === key;
+    const haccpMoves = ctx.haccpMoves;
+    // The failure paths below put things back on the phone only while somebody is still waiting: after the soft timeout or a stop the
+    // state is re-derived from the database (finishRename), or the store is gone.
+    const live = (): boolean => !ctx.stopped && !ctx.late;
     const send = (write: () => Promise<void>): Promise<void> => {
       try { return write(); } catch (err) { return Promise.reject(err); }
     };
@@ -547,9 +577,9 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
       await send(() => source.addRecipeCategoryWord(newWord));
     } catch (err) {
       deps.warn('Recipe category rename did not sync to Firestore:', err);
-      setLocalCategories(listBefore);
-      for (const recipe of held) fileBack(recipe.id);
-      if (haccpMoves) setLocalHaccp(haccpBefore);
+      if (live()) setLocalCategories(listBefore);
+      if (live()) for (const recipe of held) fileBack(recipe.id);
+      if (haccpMoves && live()) setLocalHaccp(haccpBefore);
       throw err;
     }
 
@@ -560,10 +590,10 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
     const results = await Promise.allSettled(writes);
     const refused = results.some(result => result.status === 'rejected');
     if (refused) deps.warn('Recipe category rename did not sync to Firestore:', results.find(result => result.status === 'rejected'));
-    held.forEach((recipe, at) => { if (results[at]?.status === 'rejected') fileBack(recipe.id); });
-    if (haccpMoves && results[held.length]?.status === 'rejected') setLocalHaccp(haccpBefore);
+    held.forEach((recipe, at) => { if (live() && results[at]?.status === 'rejected') fileBack(recipe.id); });
+    if (haccpMoves && live() && results[held.length]?.status === 'rejected') setLocalHaccp(haccpBefore);
     if (refused) {
-      setLocalCategories(withOld(categories));
+      if (live()) setLocalCategories(withOld(categories));
       throw new RenameNotFinished();
     }
 
@@ -571,9 +601,24 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
       await send(() => source.removeRecipeCategoryWords(oldSpellings.length > 0 ? oldSpellings : [oldWord]));
     } catch (err) {
       deps.warn('Recipe category rename did not sync to Firestore:', err);
-      setLocalCategories(withOld(categories));
+      if (live()) setLocalCategories(withOld(categories));
       throw new RenameNotFinished();
     }
+  }
+
+  // The rename is over (done, refused, or no longer waited for): the recipes and the label profile are what the database last said,
+  // with nothing laid over them, so the phone shows what the server holds. Nothing yet heard (no snapshot since the store started) keeps
+  // what is held.
+  function rederiveFromDatabase(): void {
+    if (rawRecipes !== null) {
+      recipes = rawRecipes;
+      writeJson(RECIPES_KEY, recipes);
+    }
+    if (rawLabel !== undefined) {
+      labelConfig = rawLabel;
+      writeJson(LABEL_CONFIG_KEY, labelConfig);
+    }
+    changed();
   }
 
   // ⚠️ WHILE A RENAME IS IN THE AIR (its first write has not been answered, so the later ones are not even sent) a snapshot of the
@@ -584,7 +629,7 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
     if (renaming === null) return config;
     const out: Record<string, unknown> = { ...(config ?? {}) };
     out.recipeCategories = [...removeCategory(normalizeRecipeCategories(out.recipeCategories), renaming.oldWord), renaming.word];
-    if (typeof out.haccpCategory === 'string' && categoryKey(out.haccpCategory) === categoryKey(renaming.oldWord)) out.haccpCategory = renaming.word;
+    if (renaming.haccpMoves && typeof out.haccpCategory === 'string' && categoryKey(out.haccpCategory) === categoryKey(renaming.oldWord)) out.haccpCategory = renaming.word;
     return out;
   }
   function overlayRename<T extends { readonly id: string }>(list: readonly T[]): T[] {
@@ -662,7 +707,8 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
         (remote, meta) => {
           if (meta.fromServer) recipesFromServer = true;
           if (!believable(remote, meta)) return;
-          recipes = overlayRename(normalizeStoredRecipes(remote));
+          rawRecipes = normalizeStoredRecipes(remote);
+          recipes = overlayRename(rawRecipes);
           recipesLoaded = true;
           writeJson(RECIPES_KEY, recipes);
           if (meta.fromServer) prune();
@@ -703,7 +749,8 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
         (remote, meta) => {
           if (meta.fromServer) labelConfigFromServer = true;
           if (!believableLabel(remote, meta)) return;
-          labelConfig = overlayRenameLabel(asLabelConfig(remote));
+          rawLabel = asLabelConfig(remote);
+          labelConfig = overlayRenameLabel(rawLabel);
           labelConfigKnown = true;
           writeJson(LABEL_CONFIG_KEY, labelConfig);
           changed();
@@ -750,6 +797,8 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
 
     stop() {
       started = false;
+      // ⚠️ A rename in the air is ABANDONED: its failure paths write nothing to the phone any more (the section is gone).
+      if (renaming !== null) renaming.stopped = true;
       for (const stop of stops) stop();
       stops = [];
     },
@@ -1116,13 +1165,30 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
     async renameRecipeCategory(oldWord, newWord) {
       if (renaming !== null) throw new Error('A category rename is already in the air.');
       const ids = new Set(recipesHoldingWord(recipes, oldWord).map(recipe => recipe.id));
-      renaming = { oldWord, word: newWord, ids };
+      const stored = labelConfig?.haccpCategory;
+      const current: RenameInAir = {
+        oldWord, word: newWord, ids, late: false, stopped: false,
+        haccpMoves: typeof stored === 'string' && categoryKey(stored) === categoryKey(oldWord),
+      };
+      renaming = current;
       changed();
+      // ⚠️ A WRITE THAT NEVER ANSWERS must not hold the dialog for ever: after RENAME_SOFT_MS the screen stops waiting (the promise
+      // rejects with RenameNotConfirmed), and what it shows is re-derived from the database. The steps still running keep their own
+      // outcome handling and touch nothing on the phone.
+      const work = renameCategoryNow(oldWord, newWord, current);
+      work.catch(() => undefined);
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const tooLong = new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => { current.late = true; reject(new RenameNotConfirmed()); }, RENAME_SOFT_MS);
+      });
       try {
-        await renameCategoryNow(oldWord, newWord);
+        await Promise.race([work, tooLong]);
       } finally {
-        renaming = null;
-        changed();
+        clearTimeout(timer);
+        if (renaming === current) {
+          renaming = null;
+          if (!current.stopped) rederiveFromDatabase();
+        }
       }
     },
 

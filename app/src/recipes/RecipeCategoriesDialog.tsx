@@ -16,7 +16,7 @@ import { Dialog } from '../ui/Dialog';
 import { useStatusMessage } from '../ui/StatusMessage';
 import { useConfirm } from '../ui/useConfirm';
 import { useRecipes, useRecipesStore } from './RecipesContext';
-import { RenameNotFinished } from './recipesStore';
+import { RenameNotConfirmed, RenameNotFinished } from './recipesStore';
 import { renameFoodcostCategory } from './renameFoodcostCategory';
 import styles from './RecipeCategoriesDialog.module.css';
 
@@ -103,6 +103,8 @@ export function RecipeCategoriesDialog({ onClose }: Props) {
     if (!mayWriteFoodCost || locationId === null) return;
     const outcome = await renameFoodcostCategory(services.foodcost(locationId), from, to);
     setFoodCostRetry(outcome === 'failed' ? { from, to } : null);
+    // ⚠️ ALSO IN THE PAGE: the dialog may have been closed (Done) while the rename was in the air, and its own line is gone with it.
+    if (outcome === 'failed') say(t('cat.dlg.foodCostNotUpdated'));
   };
 
   // ⚠️ THE APP DOES NOT RELOAD BY ITSELF while a rename is in the air, Food cost's half included: its later steps live in this page's
@@ -114,6 +116,8 @@ export function RecipeCategoriesDialog({ onClose }: Props) {
     const written = store.renameRecipeCategory(from, to);
     written.catch((err: unknown) => {
       if (err instanceof RenameNotFinished) say(t('cat.dlg.renameNotFinished'));
+      // No answer in time: the controls are free again and the page says it was not confirmed (the writes may still land).
+      if (err instanceof RenameNotConfirmed) { say(t('cat.dlg.renameNotConfirmed')); return; }
       setFailed(err instanceof RenameNotFinished ? 'unfinished' : 'put-back');
     });
     void written.then(() => runFoodCost(from, to)).catch(() => undefined).finally(release);

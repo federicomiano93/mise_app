@@ -525,6 +525,7 @@ export const it: Messages = {
   'cat.dlg.renameNotFinished': 'Rinomina non completata.',
   'cat.dlg.foodCostNotUpdated': 'Food cost non aggiornato.',
   'cat.dlg.needsConnection': 'Serve la connessione.',
+  'cat.dlg.renameNotConfirmed': 'Rinomina non confermata.',
   'cat.dlg.saving': 'Salvataggio…',
   'cat.dlg.retry': 'Riprova',
   'fc.cat.couldNotSave': 'Non sono riuscito a salvare la categoria «{name}». È tornata com’era.',
