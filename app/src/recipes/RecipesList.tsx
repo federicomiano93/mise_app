@@ -66,7 +66,7 @@ export function RecipesList({ openRecipeId, split, onOpenRecipe, sheetOpen, onOp
   const ingredientsDoor = useCallback((node: HTMLButtonElement | null) => { handBack.register(INGREDIENTS_OPENER, node); }, [handBack]);
   const newDoor = useCallback((node: HTMLButtonElement | null) => { handBack.register(NEW_OPENER, node); }, [handBack]);
   const searchOpener = useCallback((node: HTMLInputElement | null) => { handBack.register(SEARCH_OPENER, node); }, [handBack]);
-  const { recipes, recipesLoaded, usage, categories } = useRecipes();
+  const { recipes, recipesLoaded, usage, categories, labelConfigKnown } = useRecipes();
 
   const [text, setText] = useState('');
   const [query, setQuery] = useState('');
@@ -174,7 +174,7 @@ export function RecipesList({ openRecipeId, split, onOpenRecipe, sheetOpen, onOp
           </Button>
           {/* The one place the categories are made, renamed and removed (28 Nov 2026): for whoever runs the catalogue. */}
           {canManage ? (
-            <Button ref={categoriesButton} variant="secondary" className={styles.newRecipe} onPress={() => { setCategoriesOpen(true); }}>
+            <Button ref={categoriesButton} variant="secondary" className={styles.newRecipe} isDisabled={!labelConfigKnown} onPress={() => { setCategoriesOpen(true); }}>
               <Tags aria-hidden="true" />
               <span>{t('cat.dlg.title')}</span>
             </Button>

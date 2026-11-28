@@ -154,6 +154,20 @@ describe('the groups open and close on a tap', () => {
     expect(expanded('Easter')).toBe('false');
   });
 
+  it('⚠️ Back from a recipe hands the focus to its row even when its group was closed meanwhile, opening the group first', async () => {
+    const { user } = await loaded();
+    await waitFor(() => { expect(headings()).toHaveLength(3); });
+    await user.click(headerOf('Easter'));
+    await user.click(rowOf('Colomba'));
+    const back = await screen.findByRole('button', { name: 'Back' }, LOAD);
+    // The list is hidden behind the recipe on a phone, still mounted: the group is shut by hand while the recipe is open.
+    await user.click(headerOf('Easter'));
+    expect(expanded('Easter')).toBe('false');
+    await user.click(back);
+    await waitFor(() => { expect(rowOf('Colomba')).toHaveFocus(); });
+    expect(expanded('Easter')).toBe('true');
+  });
+
   it('nothing of the open state is stored', async () => {
     const { user } = await loaded();
     await waitFor(() => { expect(headings()).toHaveLength(3); });

@@ -12,8 +12,10 @@ import { markBusy } from '../session/busy';
 import { useSession } from '../session/SessionContext';
 import { Button } from '../ui/Button';
 import { Dialog } from '../ui/Dialog';
+import { useStatusMessage } from '../ui/StatusMessage';
 import { useConfirm } from '../ui/useConfirm';
 import { useRecipes, useRecipesStore } from './RecipesContext';
+import { RenameNotFinished } from './recipesStore';
 import { renameFoodcostCategory } from './renameFoodcostCategory';
 import styles from './RecipeCategoriesDialog.module.css';
 
@@ -45,7 +47,8 @@ export function RecipeCategoriesDialog({ onClose }: Props) {
   const [confirm, confirmDialog] = useConfirm();
   const [editing, setEditing] = useState<Editing | null>(null);
   const [problem, setProblem] = useState<{ kind: CategoryRefusal; name: string } | null>(null);
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState<'put-back' | 'unfinished' | null>(null);
+  const say = useStatusMessage();
   const inputId = useId();
   const errorId = useId();
   const input = useRef<HTMLInputElement>(null);
@@ -79,10 +82,10 @@ export function RecipeCategoriesDialog({ onClose }: Props) {
     return t('cat.shelf.refusal.empty');
   };
 
-  // A refused write puts the list back (the store does) and says so in one line.
+  // A refused write puts the list back (the store does) and says so in one line; a rename only partly accepted says so instead.
   const said = (write: Promise<void>): void => {
-    setFailed(false);
-    write.catch(() => { setFailed(true); });
+    setFailed(null);
+    write.catch((err: unknown) => { setFailed(err instanceof RenameNotFinished ? 'unfinished' : 'put-back'); });
   };
 
   const submit = (event: FormEvent) => {
@@ -104,9 +107,14 @@ export function RecipeCategoriesDialog({ onClose }: Props) {
       const renamed = renameCategory(categories, editing.word, editing.text);
       if ('refusal' in renamed) { refuse(renamed.refusal); return; }
       if (renamed.word !== editing.word) {
-        said(store.renameRecipeCategory(editing.word, renamed.word));
+        const from = editing.word;
+        const written = store.renameRecipeCategory(from, renamed.word);
+        said(written);
+        // Food cost's own documents follow only once the recipes' rename is whole; a refusal or no answer is said in one line.
         if (mayWriteFoodCost && locationId !== null) {
-          void renameFoodcostCategory(services.foodcost(locationId), editing.word, renamed.word);
+          void written.then(() => renameFoodcostCategory(services.foodcost(locationId), from, renamed.word)).then(outcome => {
+            if (outcome === 'failed') say(t('cat.dlg.foodCostNotUpdated'));
+          }, () => undefined);
         }
       }
       setFocusTarget(renamed.word);
@@ -226,7 +234,7 @@ export function RecipeCategoriesDialog({ onClose }: Props) {
             {t('cat.dlg.new')}
           </Button>
         ) : null}
-        <p className={styles.error} role="alert">{failed ? t('cat.shelf.categoriesNotSaved') : ''}</p>
+        <p className={styles.error} role="alert">{failed === null ? '' : t(failed === 'unfinished' ? 'cat.dlg.renameNotFinished' : 'cat.shelf.categoriesNotSaved')}</p>
       </Dialog>
       {confirmDialog}
     </>

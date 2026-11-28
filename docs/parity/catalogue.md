@@ -2327,11 +2327,15 @@ list does; here the book simply reopens), a small known gap.
   if restored) — `removeRecipeCategory` as before.
 - **Rename** (new): `recipesStore.renameRecipeCategory(old, new)`, local-first. The list swaps the word and EVERY recipe holding it (archived too, listed or
   not: `recipesHoldingWord`) is filed under the new one at once. Writes, all handed over together and in this order: `arrayUnion(new)`, `category` ALONE
-  on each recipe (a merge each, never a batch: the rules' read budget), `arrayRemove(every old spelling)`. A refusal puts back what was refused and says
-  the existing short «Couldn't save the categories…» line.
-- **Food cost follows the rename** (`renameFoodcostCategory.ts`): for somebody who `mayOpenFoodCost`, the `foodcost-categories` document whose name folds to
-  the old word is renamed (rank kept), through the data services' Food cost source (no import from `foodcost/`: a declared exception of data only). Quiet:
-  Food cost failing never fails the rename.
+  on each recipe (a merge each, never a batch: the rules' read budget) — and `haccpCategory` when the HACCP list's choice was that word — and `arrayRemove(every
+  old spelling)`. ⚠️ THREE STEPS, EACH WAITING FOR THE ONE BEFORE: (1) `arrayUnion(new)`; refused → nothing was written, all is put back, «Couldn't save the
+  categories…» (true). (2) every recipe write (and the HACCP one), all settled. (3) only if every one was accepted, `arrayRemove(old)`. If some of step 2 were
+  refused, BOTH words stay on the list (no recipe lands in «No category»), only the refused recipes go back to the old word, and the dialog says «Rename not
+  finished.» (`RenameNotFinished`).
+- **Food cost follows the rename** (`renameFoodcostCategory.ts`), after the recipes' rename is whole: for somebody who `mayOpenFoodCost`, EVERY
+  `foodcost-categories` document whose name folds to the old word (`categoryKey`) is renamed (rank kept), through the data services' Food cost source (no
+  import from `foodcost/`: a declared exception of data only). It accepts only the SERVER's answer (a cache-only answer, a failed read or no answer in 10 s skips
+  it) and then says «Food cost not updated.» in the status message; it never fails the rename itself.
 - **Groups fold** (`ui/CollapsibleGroup`, moved out of Food cost's list and shared): every group, «No category» included, starts CLOSED; the header is a
   `<button aria-expanded>` with the name, «{n} recipes» and the chevron; a search opens the groups that match; the group of the open recipe opens by itself
   and stays as the person's tap once the recipe is left (the list stays mounted, so Back and a save return to an open group). State in the component only.

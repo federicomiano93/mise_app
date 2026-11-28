@@ -55,6 +55,10 @@ const NOTHING: HandBack = {
 function reveal(node: HTMLElement): HTMLElement {
   const group = node.closest('details');
   if (group && !group.open) group.open = true;
+  // ⚠️ THE SAME FOR A CLOSED CATEGORY GROUP (ui/CollapsibleGroup): its rows are `hidden`, so its header is tapped first and the list's
+  // own state opens it (React runs a click's update before the call returns).
+  const closed = node.closest('[data-collapsible-body][hidden]');
+  if (closed) closed.parentElement?.querySelector<HTMLElement>('button[aria-expanded="false"]')?.click();
   return node;
 }
 

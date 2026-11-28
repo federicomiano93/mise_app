@@ -16,7 +16,8 @@
 //   • config/labels.recipeCategories — the venue's list, a list of strings (≤ 100 entries), written
 //     ONE WORD AT A TIME (arrayUnion / arrayRemove, as in the current app): a phone holding an old copy cannot replace the venue's words.
 
-// The longest word the Settings box takes (the rules allow 100: room to spare for a word stored by a later version).
+// The longest word the Categories dialog takes (the rules allow 100: room to spare for a word stored by a later version). ⚠️ Food cost's
+// category documents stop at 60 (its rules), so every word fits one; the 40 and the 60 are left as they are on purpose.
 export const RECIPE_CATEGORY_MAX = 40;
 // The rules' cap on the list.
 export const RECIPE_CATEGORIES_MAX = 100;

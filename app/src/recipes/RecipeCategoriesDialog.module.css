@@ -1,5 +1,5 @@
-/* The categories dialog (CategoriesDialog.tsx): one row per category inside the app's dialog; the list scrolls on its own so
-   «Done» is never pushed out of reach. Targets are 48px. */
+/* The Ricettario's categories dialog (RecipeCategoriesDialog.tsx; it was Food cost's until 28 Nov 2026): one row per word inside the app's dialog; the
+   list scrolls on its own so «Done» is never pushed out of reach. Targets are 48px. */
 
 .rows {
   display: flex;

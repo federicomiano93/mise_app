@@ -565,6 +565,8 @@ export const en = {
   'cat.dlg.discardQ': '“{name}” has not been saved yet.',
   'cat.dlg.discardOk': 'Discard',
   'cat.dlg.keepEditing': 'Keep typing',
+  'cat.dlg.renameNotFinished': 'Rename not finished.',
+  'cat.dlg.foodCostNotUpdated': 'Food cost not updated.',
   'fc.cat.couldNotSave': 'Could not save the category “{name}”. It is back as it was.',
   'fc.cat.couldNotRemove': 'Could not remove the category “{name}”. It is back.',
   'cakes.liveSyncInterrupted': 'Live sync interrupted — cakes may be out of date.',

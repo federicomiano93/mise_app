@@ -75,11 +75,15 @@ describe('a card made from a recipe follows its recipe', () => {
 describe('any other card follows the name of its category document', () => {
   const list = rows(card('1', 'b'), card('2', 'a'), card('3', null), card('4', 'gone'), card('5', 'a'));
 
-  test('matched to a word capitals and accents aside; a stale id and a name that is no word read as none; an empty group is not drawn', () => {
+  test('matched to a word capitals and repeated spaces aside; a stale id and a name that is no word read as none; an empty group is not drawn', () => {
     // «Bread» matches the word «bread»; «Cakes» matches «Cakes».
     expect(ids(groupRows(list, book))).toEqual([['bread', ['1']], ['Cakes', ['2', '5']], [null, ['3', '4']]]);
-    const accents = cardCategories({ words: ['Più'], categories: [{ id: 'p', name: 'PIU', rank: 1 }], recipes: {}, locale: 'it' });
-    expect(accents.wordOf(card('1', 'p'))).toBe('Più');
+    // ⚠️ The Ricettario's own fold: accents DO count («Più» and «Piu» are two words there), repeated spaces and capitals do not.
+    const accents = cardCategories({ words: ['Più', 'Pane rustico'], categories: [{ id: 'p', name: 'PIU', rank: 1 }, { id: 'q', name: 'Pane  rustico', rank: 2 }], recipes: {}, locale: 'it' });
+    expect(accents.wordOf(card('1', 'p'))).toBe('');
+    expect(accents.wordOf(card('1', 'q'))).toBe('Pane rustico');
+    expect(accents.docOf('pane   RUSTICO')?.id).toBe('q');
+    expect(accents.docOf('Pane')).toBeNull();
     const unknown = cardCategories({ words: ['Pane'], categories: docs, recipes: {}, locale: 'en' });
     expect(ids(groupRows(list, unknown))).toEqual([[null, ['1', '2', '3', '4', '5']]]);
   });

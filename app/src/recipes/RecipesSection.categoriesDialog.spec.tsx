@@ -1,5 +1,5 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { screen, waitFor, within } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import { fakeFoodcostSource } from '../testing/fakeFoodcostSource';
 import { fakeRecipesSource } from '../testing/fakeRecipesSource';
 import { LOAD, recipe, renderRecipes } from '../testing/renderRecipes';
@@ -151,6 +151,78 @@ describe('renaming', () => {
     await user.clear(box);
     await user.type(box, 'Pasqua{Enter}');
     await waitFor(() => { expect(source.categoryWrites).toEqual([{ add: 'Pasqua' }, { remove: ['Easter'] }]); });
+  });
+});
+
+describe('⚠️ a rename that is only partly accepted', () => {
+  async function renameChristmas(user: Awaited<ReturnType<typeof openDialog>>['user'], dialog: HTMLElement) {
+    await user.click(within(dialog).getByRole('button', { name: 'Rename Christmas' }));
+    const box = within(dialog).getByRole('textbox', { name: 'Category name' });
+    await user.clear(box);
+    await user.type(box, 'Festive{Enter}');
+  }
+
+  it('the new word refused: nothing else is sent, everything is put back, and the line says so', async () => {
+    const { user, dialog, source } = await openDialog();
+    source.refuse.labelSave = true;
+    await renameChristmas(user, dialog);
+    expect(await within(dialog).findByText('Couldn’t save the categories — the change has been put back.')).toBeInTheDocument();
+    expect(source.recipeWrites).toEqual([]);
+    expect(source.categoryWrites).toEqual([]);
+    expect(rows(dialog)).toEqual(['Christmas3 recipes', 'Easter1 recipe', 'Spring0 recipes']);
+  });
+
+  it('one recipe refused out of several: BOTH words stay, the others carry the new word, the line says it was not finished', async () => {
+    const { user, dialog, source } = await openDialog();
+    source.refuseRecipeIds = ['b'];
+    await renameChristmas(user, dialog);
+    expect(await within(dialog).findByText('Rename not finished.')).toBeInTheDocument();
+    // The old word is never taken off the list: the refused recipe would otherwise land in «No category».
+    expect(source.categoryWrites).toEqual([{ add: 'Festive' }]);
+    expect(source.recipeWrites.map(write => write.id).sort()).toEqual(['a', 'p']);
+    await waitFor(() => { expect(rows(dialog).map(text => text?.replace(/\d.*/, ''))).toEqual(['Christmas', 'Easter', 'Festive', 'Spring']); });
+    expect(rows(dialog)).toContain('Christmas1 recipe');
+    expect(rows(dialog)).toContain('Festive2 recipes');
+  });
+
+  it('the HACCP list\'s choice follows the word when it was that word', async () => {
+    const source = fakeRecipesSource({ recipes: RECIPES, labelConfig: { recipeCategories: ['Easter', 'Christmas'], haccpCategory: 'christmas' } });
+    const view = renderRecipes('/recipes', { source, session: { location: GB } });
+    await view.user.click(await screen.findByRole('button', { name: 'Categories' }, LOAD));
+    await renameChristmas(view.user, await screen.findByRole('dialog', undefined, LOAD));
+    await waitFor(() => { expect(source.labelSaves).toEqual([{ haccpCategory: 'Festive' }]); });
+    expect(source.categoryWrites).toEqual([{ add: 'Festive' }, { remove: ['Christmas'] }]);
+  });
+
+  it('the HACCP choice is left alone when it is another word', async () => {
+    const source = fakeRecipesSource({ recipes: RECIPES, labelConfig: { recipeCategories: ['Easter', 'Christmas'], haccpCategory: 'Easter' } });
+    const view = renderRecipes('/recipes', { source, session: { location: GB } });
+    await view.user.click(await screen.findByRole('button', { name: 'Categories' }, LOAD));
+    await renameChristmas(view.user, await screen.findByRole('dialog', undefined, LOAD));
+    await waitFor(() => { expect(source.categoryWrites).toHaveLength(2); });
+    expect(source.labelSaves).toEqual([]);
+  });
+
+  it('Food cost not reached is said in one line, and the rename itself stands', async () => {
+    const foodcost = fakeFoodcostSource({ categories: [{ id: 'fc1', name: 'Christmas', rank: 1 }] });
+    foodcost.watchCategories = (_onChange, onError) => { queueMicrotask(() => { onError(new Error('offline')); }); return () => undefined; };
+    const { user, dialog, source } = await openDialog(undefined, { data: { foodcost: () => foodcost } });
+    await renameChristmas(user, dialog);
+    expect(await screen.findByText('Food cost not updated.')).toBeInTheDocument();
+    expect(source.categoryWrites).toEqual([{ add: 'Festive' }, { remove: ['Christmas'] }]);
+    expect(foodcost.saved).toEqual([]);
+  });
+});
+
+describe('the door waits for the label profile', () => {
+  it('is disabled until the list of words has arrived, then works', async () => {
+    const source = fakeRecipesSource({ recipes: RECIPES, labelConfig: { recipeCategories: ['Easter'] } });
+    source.holdLabelConfig();
+    renderRecipes('/recipes', { source, session: { location: GB } });
+    const door = await screen.findByRole('button', { name: 'Categories' }, LOAD);
+    expect(door).toBeDisabled();
+    act(() => { source.releaseLabelConfig(); });
+    await waitFor(() => { expect(door).toBeEnabled(); });
   });
 });
 

@@ -39,6 +39,14 @@ import { recipeDataOf } from './recipeDocument';
 import { newRecipeId, withoutPrice } from './recipesSource';
 import type { RecipesMeta, RecipesSource, StoredDoc } from './recipesSource';
 
+// A rename that was only partly accepted: the new word is on the list, some recipes hold it, and the old word is still there too.
+export class RenameNotFinished extends Error {
+  constructor() {
+    super('The category rename was not finished.');
+    this.name = 'RenameNotFinished';
+  }
+}
+
 // ⚠️ THE CURRENT APP'S KEYS, WITH THEIR MEANING (both apps share one origin): either app paints from
 // the other's copy, so the recipes are stored NORMALISED, by the ported normaliser, as the current
 // app stores them. Not under KEEP_PREFIXES, so a venue switch wipes them (the venue is not in the key).
@@ -272,10 +280,12 @@ export interface RecipesStore {
   addRecipeCategory(word: string): Promise<void>;
   removeRecipeCategory(word: string): Promise<void>;
   // Renames a word (the Ricettario's «Categories» dialog), LOCAL-FIRST: the new spelling takes the old one's place on the list and
-  // EVERY recipe holding the old word (archived ones too) is filed under the new one at once, then the source writes the new word
-  // (arrayUnion), every recipe's `category` ALONE (a merge each, never the recipe) and last takes the old spellings off the list —
-  // in that order, so no failure leaves a recipe under a word the list has not got. A refusal puts back what was refused and the
-  // promise REJECTS. The caller has already checked the name (renameCategory).
+  // EVERY recipe holding the old word (archived ones too, and the HACCP list's choice when it is that word) is filed under the new
+  // one at once. Then, each step waiting for the one before: the source writes the new word (arrayUnion; refused → everything is
+  // put back and the promise rejects), then every recipe's `category` ALONE (a merge each, never the recipe) and `haccpCategory`,
+  // and only when all of those were accepted takes the old spellings off the list. Some refused → BOTH words stay on the list (no
+  // recipe lands in «No category»), only the refused recipes go back, and the promise rejects with RenameNotFinished. The caller
+  // has already checked the name (renameCategory).
   renameRecipeCategory(oldWord: string, newWord: string): Promise<void>;
   // Saves a recipe's mixing procedure (steps + closing message), LOCAL-FIRST like saveRecipe, as a MERGE of those two
   // fields only — plus the ingredient rows when some row had no id yet (see the method). An empty procedure is saved
@@ -1009,40 +1019,72 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
       });
     },
 
-    // ⚠️ EVERY WRITE IS HANDED OVER AT ONCE, in the order that never leaves a recipe under a word the list has not got: the new word,
-    // then each recipe's category alone, then the old spellings off the list. Firestore sends one phone's writes in the order they
-    // were made, so offline they wait together and a closed app loses none of them.
-    renameRecipeCategory(oldWord, newWord) {
+    // ⚠️ THREE STEPS, IN THIS ORDER, EACH WAITING FOR THE ONE BEFORE, so no failure leaves a recipe under a word the list has not got:
+    //   1. `arrayUnion(new)`; refused → nothing was written, everything done here is taken back and the promise REJECTS (the
+    //      message «put back» is true);
+    //   2. every recipe's `category` ALONE (a merge each), and `haccpCategory` when it was the old word, all settled;
+    //   3. only when every one of those was accepted, `arrayRemove(old spellings)`.
+    // Some of step 2 refused → the old word is left on the list beside the new one, only the refused recipes (or the HACCP choice)
+    // go back to the old word, and the promise rejects with RenameNotFinished. The local state moves at once (local-first).
+    async renameRecipeCategory(oldWord, newWord) {
       const key = categoryKey(oldWord);
       const stored = Array.isArray(labelConfig?.recipeCategories) ? labelConfig.recipeCategories as unknown[] : [];
       const oldSpellings = stored.filter((held): held is string => typeof held === 'string' && categoryKey(held) === key && held !== newWord);
       const held = recipesHoldingWord(recipes, oldWord);
       const before = new Map(held.map(recipe => [recipe.id, storedCategoryOf(recipe)] as const));
-      setLocalCategories([...removeCategory(categories, oldWord), newWord]);
-      for (const recipe of held) upsertLocal({ ...(recipe as unknown as Record<string, unknown>), category: newWord });
+      const listBefore = [...categories];
+      const haccpBefore = labelConfig?.haccpCategory;
+      const haccpMoves = typeof haccpBefore === 'string' && categoryKey(haccpBefore) === key;
       const send = (write: () => Promise<void>): Promise<void> => {
         try { return write(); } catch (err) { return Promise.reject(err); }
       };
-      const writes: Array<Promise<void>> = [
-        send(() => source.addRecipeCategoryWord(newWord)),
+      const setLocalHaccp = (value: unknown): void => {
+        labelConfig = { ...(labelConfig ?? {}), haccpCategory: value };
+        writeJson(LABEL_CONFIG_KEY, labelConfig);
+        changed();
+      };
+      const fileBack = (recipeId: string): void => {
+        const now = recipes.find(candidate => candidate.id === recipeId);
+        if (!now || categoryKey(storedCategoryOf(now)) !== categoryKey(newWord)) return;
+        upsertLocal({ ...(now as unknown as Record<string, unknown>), category: before.get(recipeId) ?? '' });
+      };
+      const withOld = (list: readonly string[]): string[] => (list.some(word => categoryKey(word) === key) ? [...list] : [...list, oldWord]);
+
+      setLocalCategories([...removeCategory(categories, oldWord), newWord]);
+      for (const recipe of held) upsertLocal({ ...(recipe as unknown as Record<string, unknown>), category: newWord });
+      if (haccpMoves) setLocalHaccp(newWord);
+
+      try {
+        await send(() => source.addRecipeCategoryWord(newWord));
+      } catch (err) {
+        deps.warn('Recipe category rename did not sync to Firestore:', err);
+        setLocalCategories(listBefore);
+        for (const recipe of held) fileBack(recipe.id);
+        if (haccpMoves) setLocalHaccp(haccpBefore);
+        throw err;
+      }
+
+      const writes = [
         ...held.map(recipe => send(() => source.saveRecipeDoc(recipe.id, { category: newWord }))),
-        send(() => source.removeRecipeCategoryWords(oldSpellings.length > 0 ? oldSpellings : [oldWord])),
+        ...(haccpMoves ? [send(() => source.saveLabelConfig({ haccpCategory: newWord }))] : []),
       ];
-      return Promise.allSettled(writes).then(results => {
-        const failed = results.filter(result => result.status === 'rejected');
-        if (failed.length === 0) return;
-        deps.warn('Recipe category rename did not sync to Firestore:', failed[0]);
-        const withOld = (list: readonly string[]): string[] => (list.some(word => categoryKey(word) === key) ? [...list] : [...list, oldWord]);
-        if (results[0]?.status === 'rejected') setLocalCategories(withOld(removeCategory(categories, newWord)));
-        else if (results[results.length - 1]?.status === 'rejected') setLocalCategories(withOld(categories));
-        held.forEach((recipe, at) => {
-          if (results[at + 1]?.status !== 'rejected') return;
-          const now = recipes.find(candidate => candidate.id === recipe.id);
-          if (!now || categoryKey(storedCategoryOf(now)) !== categoryKey(newWord)) return;
-          upsertLocal({ ...(now as unknown as Record<string, unknown>), category: before.get(recipe.id) ?? '' });
-        });
-        throw new Error('The category rename was refused.');
-      });
+      const results = await Promise.allSettled(writes);
+      const refused = results.some(result => result.status === 'rejected');
+      if (refused) deps.warn('Recipe category rename did not sync to Firestore:', results.find(result => result.status === 'rejected'));
+      held.forEach((recipe, at) => { if (results[at]?.status === 'rejected') fileBack(recipe.id); });
+      if (haccpMoves && results[held.length]?.status === 'rejected') setLocalHaccp(haccpBefore);
+      if (refused) {
+        setLocalCategories(withOld(categories));
+        throw new RenameNotFinished();
+      }
+
+      try {
+        await send(() => source.removeRecipeCategoryWords(oldSpellings.length > 0 ? oldSpellings : [oldWord]));
+      } catch (err) {
+        deps.warn('Recipe category rename did not sync to Firestore:', err);
+        setLocalCategories(withOld(categories));
+        throw new RenameNotFinished();
+      }
     },
 
     calculatorImportOf(id) {

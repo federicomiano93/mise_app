@@ -1035,7 +1035,7 @@ A new section with no original in the current app: a cake is a Food cost price-l
   and the editor: groups = the words alphabetical (interface language), then «Cakes», then «No category».
   A card made from a recipe (`recipe-<id>`) is in ITS RECIPE's category (`categoryOf`: a missing recipe, no category or a word off the list = none; its stored
   `categoryId` is ignored, so moving the recipe moves the card with no write). Any other card: the NAME of its `foodcost-categories` document matched to a
-  word, capitals and accents ignored; no match = none. **Fallback** when the words are unavailable: the documents' names in their own rank order, for every card.
+  word, with the Ricettario's own fold (`categoryKey`: capitals and repeated spaces ignored, accents NOT: a looser fold would match words the Ricettario keeps apart); no match = none. **Fallback** when the words are unavailable: the documents' names in their own rank order, for every card.
 - **Card editor «Category»:** a recipe's card shows «<word> · from the recipe book» (read-only; «No category · …» for none); any other card picks a word
   or «No category». A word with no document yet creates one at the pick (`saveCategory`, the existing path, local-first) and the card stores its id.
   ⚠️ That document is made when the word is picked, not at Save (a discarded edit leaves an unused document: harmless, nothing reads it).

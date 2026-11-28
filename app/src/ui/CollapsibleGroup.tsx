@@ -27,7 +27,8 @@ export function CollapsibleGroup({ name, count, open, onToggle, children }: {
           <span className={styles.count}>{count}</span>
         </button>
       </h2>
-      <div id={bodyId} className={styles.body} hidden={!open}>{children}</div>
+      {/* data-collapsible-body: a list's handBack opens a closed group before it focuses one of its rows (recipes/handBack.ts). */}
+      <div id={bodyId} className={styles.body} data-collapsible-body="" hidden={!open}>{children}</div>
     </section>
   );
 }

@@ -5,7 +5,6 @@
 // they were made, Date.now() at creation). Everything here is plain data in, plain data out: the store holds the state and the
 // screens draw it.
 
-import { normalizeSearchText } from '@mise/shared/catalogue-model';
 import { isCakeProductId } from '@mise/shared/cake-model';
 import { recipeIdOfProduct } from '@mise/shared/from-recipes';
 import type { Product, ProductKind } from '@mise/shared/foodcost-model';
@@ -14,6 +13,8 @@ import type { StoredDoc } from './foodcostSource';
 
 // The rules' bound on a category name (firestore.rules, foodcost-categories).
 export const MAX_CATEGORY_NAME = 60;
+// (The Ricettario's words stop at 40 characters, the rules allow 100 and a Food cost name 60: a word always fits a document's name. The
+// limits are left as they are on purpose.)
 
 // ⚠️ A CAKE'S CARD IS A FINISHED PRODUCT whatever its `kind` says: Cakes make them, and they sit in Food cost's own «Cakes» group.
 export const kindOf = (product: Product): ProductKind => (isCakeProductId(product.id) ? 'finished' : product.kind);
@@ -54,8 +55,10 @@ export function nextRank(categories: readonly Category[], nowMs: number): number
 // ⚠️ When the words cannot be read (`words` null: the catalogue is off for this role, or they have not arrived) Food cost falls back to
 // the names of its own category documents, in their own order, for every card: nothing breaks.
 
-// The only word-folding both sides agree on: capitals and accents do not count.
-const fold = normalizeSearchText;
+// ⚠️ THE RICETTARIO'S OWN FOLD, NOT A LOOSER ONE: capitals and repeated spaces do not count, ACCENTS DO (`categoryKey`). A looser fold in Food cost
+// would match a document to a word the Ricettario treats as another one («Più» and «Piu» are two words there), and making
+// `categoryKey` ignore accents would merge such words on the venues that hold both.
+const fold = categoryKey;
 
 export interface CardCategories {
   // The group names in the order they are drawn: the Ricettario's words alphabetically, or (fallback) the documents' names.
