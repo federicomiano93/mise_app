@@ -32,7 +32,7 @@ describe('the Home’s calculator', () => {
     const { dialog } = await open();
     expect(result(dialog)).toHaveTextContent('0');
     expect(result(dialog)).toHaveAttribute('aria-live', 'polite');
-    for (const name of ['Clear', 'Delete', 'Percent', 'Divided by', 'Times', 'Minus', 'Plus', 'Equals', 'Decimal point', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9']) {
+    for (const name of ['Clear', 'Delete', 'Percent', 'Divided by', 'Times', 'Minus', 'Plus', 'Equals', 'Point', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9']) {
       expect(key(dialog, name)).toBeInTheDocument();
     }
     expect(within(dialog).getByRole('button', { name: 'Close' })).toBeInTheDocument();
@@ -47,9 +47,9 @@ describe('the Home’s calculator', () => {
 
   test('uses the point on a British venue and the comma on an Italian one', async () => {
     const uk = await open({ session: UK });
-    for (const name of ['1', 'Decimal point', '5', 'Plus', '2', 'Equals']) await uk.user.click(key(uk.dialog, name));
+    for (const name of ['1', 'Point', '5', 'Plus', '2', 'Equals']) await uk.user.click(key(uk.dialog, name));
     expect(result(uk.dialog)).toHaveTextContent('3.5');
-    expect(key(uk.dialog, 'Decimal point')).toHaveTextContent('.');
+    expect(key(uk.dialog, 'Point')).toHaveTextContent('.');
   });
 
   test('in Italian: the comma, the words and «Errore» after a division by zero until Azzera', async () => {
@@ -103,14 +103,22 @@ describe('the Home’s calculator', () => {
     expect(result(dialog)).toHaveTextContent('50');
   });
 
-  test('Enter on a key presses «=» once, not the key', async () => {
+  test('Enter on a focused key presses THAT key; «=» only when no key has the focus', async () => {
     const { dialog, user } = await open();
     await user.click(key(dialog, '7'));
     key(dialog, '7').focus();
-    await user.keyboard('+');
-    await user.keyboard('3');
     await user.keyboard('{Enter}');
-    expect(result(dialog)).toHaveTextContent('10');
+    expect(result(dialog)).toHaveTextContent('77');
+    (document.activeElement as HTMLElement).blur();
+    fireEvent.keyDown(document.body, { key: '+' });
+    fireEvent.keyDown(document.body, { key: '3' });
+    fireEvent.keyDown(document.body, { key: 'Enter' });
+    expect(result(dialog)).toHaveTextContent('80');
+  });
+
+  test('the decimal key is named for the mark it shows, whatever the interface language («Punto» for a point, in Italian)', async () => {
+    const it = await open({ lang: 'it', session: UK });
+    expect(key(it.dialog, 'Punto')).toBeInTheDocument();
   });
 
   test('Enter on «Close» closes it and does not solve anything', async () => {

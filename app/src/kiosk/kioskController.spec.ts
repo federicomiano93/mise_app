@@ -293,6 +293,23 @@ describe('#406: no reload under the rest screen', () => {
     expect(env.reload).not.toHaveBeenCalled();
   });
 
+  test('«Standby» tapped over a typed field: the button took the focus, but the typing still holds the night reload back', async () => {
+    const { env, controller: kiosk } = start(ON);
+    const input = document.createElement('input');
+    const standby = document.createElement('button');
+    const cover = document.createElement('div');
+    cover.tabIndex = 0;
+    document.body.append(input, standby, cover);
+    input.focus();
+    standby.focus();
+    kiosk.restNow();
+    expect(state()).toBe('rest');
+    cover.focus();
+    await vi.advanceTimersByTimeAsync(HOUR + MIN);
+    expect(state()).toBe('night');
+    expect(env.reload).not.toHaveBeenCalled();
+  });
+
   test('a waiting update is let in at the night step through the shell: the hold is let go, the resume written, the kiosk reloads nothing itself', async () => {
     const { env, local, session } = start(ON, { updateWaiting: vi.fn(async () => true) });
     await vi.advanceTimersByTimeAsync(5 * MIN + HOUR - TICK_MS);

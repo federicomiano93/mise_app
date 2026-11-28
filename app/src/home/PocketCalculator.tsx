@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { CALC_START, calcDisplay, calcKeyFor, calcPress } from '@mise/shared/pocket-calc';
 import type { CalcKey } from '@mise/shared/pocket-calc';
 import { Delete } from 'lucide-react';
@@ -30,7 +30,7 @@ const KEYS: readonly KeySpec[] = [
   { key: '1', kind: 'digit' }, { key: '2', kind: 'digit' }, { key: '3', kind: 'digit' },
   { key: '+', name: 'pocket.key.plus', kind: 'operator' },
   { key: '0', kind: 'digit', wide: true },
-  { key: 'decimal', name: 'pocket.key.decimal', kind: 'digit' },
+  { key: 'decimal', kind: 'digit' },
   { key: '=', name: 'pocket.key.equals', kind: 'equals' },
 ];
 
@@ -44,7 +44,6 @@ export function PocketCalculator({ onClose }: { onClose: () => void }) {
   const { t } = useT();
   const mark = useMoney().layout.decimal;
   const [state, setState] = useState(CALC_START);
-  const keysRef = useRef<HTMLDivElement>(null);
   const shown = calcDisplay(state, mark, t('pocket.error'));
 
   useEffect(() => {
@@ -52,9 +51,10 @@ export function PocketCalculator({ onClose }: { onClose: () => void }) {
       if (event.ctrlKey || event.metaKey || event.altKey) return;
       const key = calcKeyFor(event.key);
       if (key === null) return;
-      // Enter on «Close» presses «Close», not «=».
+      // ⚠️ ENTER ON A FOCUSED BUTTON PRESSES THAT BUTTON (a key, or «Close»), as a keyboard user expects (P18): «=» is for Enter with no
+      // button focused.
       const target = event.target instanceof Element ? event.target.closest('button') : null;
-      if (event.key === 'Enter' && target !== null && !keysRef.current?.contains(target)) return;
+      if (event.key === 'Enter' && target !== null) return;
       event.preventDefault();
       event.stopPropagation();
       setState(current => calcPress(current, key));
@@ -63,7 +63,8 @@ export function PocketCalculator({ onClose }: { onClose: () => void }) {
     return () => { document.removeEventListener('keydown', onKey, true); };
   }, []);
 
-  const label = (spec: KeySpec): string => (spec.name === undefined ? spec.key : t(spec.name));
+  // The decimal key is named for the mark it SHOWS, in either interface language.
+  const label = (spec: KeySpec): string => (spec.key === 'decimal' ? t(mark === ',' ? 'pocket.key.comma' : 'pocket.key.point') : spec.name === undefined ? spec.key : t(spec.name));
   const face = (spec: KeySpec): ReactNode => {
     if (spec.key === 'back') return <Delete aria-hidden="true" />;
     if (spec.key === 'decimal') return mark;
@@ -82,7 +83,7 @@ export function PocketCalculator({ onClose }: { onClose: () => void }) {
         {/* Present from the start, only its text changes: a screen reader hears the result as it moves. */}
         <p className={styles.result} aria-live="polite" aria-atomic="true" data-error={shown.error ? 'true' : undefined}>{shown.main}</p>
       </div>
-      <div className={styles.keys} ref={keysRef}>
+      <div className={styles.keys}>
         {KEYS.map(spec => (
           <Button
             key={spec.key}

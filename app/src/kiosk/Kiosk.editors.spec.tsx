@@ -1,4 +1,4 @@
-// «Standby» is in the top bar of EVERY section (24 Nov 2026), so it can be pressed over an editor with unsaved typing (P20): the rest cover must
+// «Standby» is in the top bar of EVERY section (28 Nov 2026), so it can be pressed over an editor with unsaved typing (P20): the rest cover must
 // only LAY OVER the app — never unmount a screen, reload the page, or let go of the busy marker. Pinned for both ways in: the pill's «rest now»
 // and the kiosk's own rest after the idle minutes.
 

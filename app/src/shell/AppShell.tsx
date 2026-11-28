@@ -23,7 +23,7 @@ import { useKioskSettings } from '../kiosk/kioskSettings';
 import { AccountMenu } from './AccountMenu';
 import { KioskPills } from './KioskPills';
 import { TitleSlotContext } from './titleSlot';
-import { FeedbackProvider } from '../feedback/FeedbackContext';
+import { FeedbackHost, FeedbackProvider } from '../feedback/FeedbackContext';
 import { FeedbackButton } from '../feedback/FeedbackButton';
 import { StatusMessageProvider } from '../ui/StatusMessage';
 import styles from './AppShell.module.css';
@@ -45,12 +45,9 @@ const sectionOf = (pathname: string): string => pathname.split('/')[1] ?? '';
 export function AppShell() {
   return (
     <AwayProvider>
-      {/* «Nota per Claude» (feedback/): its «Note sent.» is said here, above every section, so it outlives the dialog. */}
-      <StatusMessageProvider>
-        <FeedbackProvider>
-          <ShellFrame />
-        </FeedbackProvider>
-      </StatusMessageProvider>
+      <FeedbackProvider>
+        <ShellFrame />
+      </FeedbackProvider>
     </AwayProvider>
   );
 }
@@ -75,7 +72,7 @@ function ShellFrame() {
   // bar says it. On a phone the bar stays hidden, except on a kiosk device's Home (below).
   const onHome = sectionOf(pathname) === 'home';
   // On a kiosk device the Home's bar also carries «Standby» and the account menu (with «Exit»), so on a phone (where the bar is otherwise hidden) it
-  // shows too. Only the Home: the kiosk controls never appear on the other sections, and a kiosk phone shows no bar there.
+  // shows too. Only the Home gives a phone the bar (`data-kiosk`): «Standby» and the account menu are in the bar of every section from 700px.
   const kioskOn = useKioskSettings().enabled;
   const kioskBar = onHome && kioskOn;
   // «Standby» itself is in the bar on EVERY section while kiosk mode is on (from 700px; the bar is hidden on a phone's other sections, so a
@@ -115,13 +112,17 @@ function ShellFrame() {
         <Rail />
         <div className={styles.main}>
           <TitleSlotContext.Provider value={titleSlot}>
-            <TopBar kiosk={kioskBar} standby={kioskOn} onHome={onHome} titleSlot={setTitleSlot} />
+            <TopBar standby={kioskOn} onHome={onHome} titleSlot={setTitleSlot} />
             <main id="main" ref={contentRef} tabIndex={-1} className={styles.content}>
               {/* ⚠️ The holiday reminder and refusal live HERE, not straight under the shell: each boundary is a <div>, and
                   a <div> under the shell's grid takes a cell — the rail and the screen sat low and jumped when the holiday
                   data landed (drive of 9 Nov 2026). Both only open dialogs, drawn over the page from <body>, so here they are
                   0px tall; a part that fails to draw shows its notice at the top of the content, covering nothing. Outside the
                   section's boundary, so moving section does not ask again. */}
+              <StatusMessageProvider>
+              {/* «Nota per Claude» (feedback/): the dialog is drawn here, so its «Note sent.» is said by the page's ONE status region, which
+                  sits inside the landmark and outlives the dialog (a section's own provider hands its messages up to it). */}
+              <FeedbackHost />
               <PartBoundary>
                 <AwayReminder />
               </PartBoundary>
@@ -137,6 +138,7 @@ function ShellFrame() {
                   <Outlet />
                 </ScrollAreaContext.Provider>
               </PartBoundary>
+              </StatusMessageProvider>
             </main>
           </TitleSlotContext.Provider>
         </div>
@@ -214,7 +216,7 @@ function RailLink({ section, spill }: { section: Section; spill: boolean }) {
 // The ONE bar, left to right: [the section's title and gear (a Page draws them into the slot, from 700px)] · [venue and date, centred] ·
 // [«Standby» on a kiosk device] [«Nota per Claude» where the venue has it] [connection] [the account's letter]. A grid with a `1fr` cell at each side, so the middle is truly centred when
 // there is room and shifts, never overlaps, when a long title needs more (AppShell.module.css).
-function TopBar({ kiosk, standby, onHome, titleSlot }: { kiosk: boolean; standby: boolean; onHome: boolean; titleSlot: (node: HTMLElement | null) => void }) {
+function TopBar({ standby, onHome, titleSlot }: { standby: boolean; onHome: boolean; titleSlot: (node: HTMLElement | null) => void }) {
   const { t, locale } = useT();
   const today = useToday(locale);
   const online = useOnline();
@@ -236,7 +238,7 @@ function TopBar({ kiosk, standby, onHome, titleSlot }: { kiosk: boolean; standby
           <span className={styles.dot} data-online={online} aria-hidden="true" />
           <span className={styles.syncText}>{online ? t('status.online') : t('status.offline')}</span>
         </p>
-        <PartBoundary><AccountMenu kiosk={kiosk} /></PartBoundary>
+        <PartBoundary><AccountMenu kiosk={standby} /></PartBoundary>
       </div>
     </header>
   );

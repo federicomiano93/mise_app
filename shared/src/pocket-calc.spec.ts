@@ -18,12 +18,17 @@ describe('the sum', () => {
 
   test('no float noise: 0.1 + 0.2 is 0.3', () => {
     expect(answer('0,1+0,2')).toBe('0.3');
-    expect(answer('1÷3')).toBe('0.3333333333');
+    expect(answer('1÷3')).toBe('0.333333333333');
   });
 
-  test('a result keeps at most 10 significant digits, a whole number stays exact', () => {
-    expect(answer('2÷3')).toBe('0.6666666667');
-    expect(answer('123456789012+1')).toBe('123456789013');
+  test('a result keeps at most 12 significant digits, a whole number stays exact', () => {
+    expect(answer('2÷3')).toBe('0.666666666667');
+    expect(calcEvaluate(['123456789012', '+', '1'])).toBe('123456789013');
+  });
+
+  test('never a rounded-looking wrong answer: 12345678901.5 stays whole, and a result that cannot show its whole part is an error', () => {
+    expect(calcEvaluate(['12345678901.5', '+', '0'])).toBe('12345678901.5');
+    expect(calcEvaluate(['1234567890123', '+', '0.5'])).toBeNull();
   });
 
   test('a result of 16 digits is an error', () => {
@@ -56,6 +61,13 @@ describe('percent, the phone-calculator way', () => {
 
   test('a lone x% is x/100', () => {
     expect(answer('50%')).toBe('0.5');
+  });
+
+  test('a percent after + or − becomes a·b/100, after × or ÷ b/100, and then the usual precedence applies', () => {
+    expect(answer('200+10%×2')).toBe('240');
+    expect(answer('200−10%×2')).toBe('160');
+    expect(answer('2×10%+5')).toBe('5.2');
+    expect(answer('3+200×10%')).toBe('23');
   });
 
   test('% needs a number in front of it', () => {
@@ -97,8 +109,9 @@ describe('the keys', () => {
     expect(tap(['4', '+', 'decimal', '5']).tokens).toEqual(['4', '+', '0.5']);
   });
 
-  test('a number holds at most 12 digits', () => {
-    expect(tap(sum('12345678901234')).tokens).toEqual(['123456789012']);
+  test('a number holds at most 10 digits, so 12345678901.5 cannot even be typed', () => {
+    expect(tap(sum('12345678901234')).tokens).toEqual(['1234567890']);
+    expect(tap(sum('12345678901,5')).tokens).toEqual(['1234567890.']);
   });
 
   test('backspace takes the last character, then the last operator', () => {
@@ -139,9 +152,15 @@ describe('the display', () => {
     expect(calcDisplay(tap(['1', 'decimal', '5']), '.', 'Error').main).toBe('1.5');
   });
 
-  test('shows zero with nothing typed and the running total while an operator waits', () => {
+  test('shows zero with nothing typed', () => {
     expect(calcDisplay(CALC_START, ',', 'Errore')).toEqual({ expression: '', main: '0', error: false });
-    expect(calcDisplay(tap(['2', '+', '3', '×']), ',', 'Errore').main).toBe('5');
+  });
+
+  test('while an operator waits: after + or − the total so far, after × or ÷ the number about to be multiplied (2 + 3 × shows 3, never 5)', () => {
+    expect(calcDisplay(tap(['2', '+', '3', '×']), ',', 'Errore').main).toBe('3');
+    expect(calcDisplay(tap(['2', '+', '3', '+']), ',', 'Errore').main).toBe('5');
+    expect(calcDisplay(tap(['2', '×', '3', '+', '4', '÷']), ',', 'Errore').main).toBe('4');
+    expect(calcDisplay(tap(['2', '×', '3', '+']), ',', 'Errore').main).toBe('6');
   });
 });
 

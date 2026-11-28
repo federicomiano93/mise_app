@@ -3682,6 +3682,7 @@ export const en = {
   'feedback.send': 'Send',
   'feedback.sent': 'Note sent.',
   'feedback.refused': 'Couldn’t send. Try again.',
+  'feedback.late': 'Note not sent.',
   'feedback.discardTitle': 'Discard the note?',
   'feedback.keep': 'Keep writing',
 
@@ -3697,7 +3698,8 @@ export const en = {
   'pocket.key.minus': 'Minus',
   'pocket.key.plus': 'Plus',
   'pocket.key.equals': 'Equals',
-  'pocket.key.decimal': 'Decimal point',
+  'pocket.key.comma': 'Comma',
+  'pocket.key.point': 'Point',
 
   // Customer bookings («Prenotazioni», 18 Nov 2026): bookings/, the Home's card.
   'section.bookings': 'Bookings',

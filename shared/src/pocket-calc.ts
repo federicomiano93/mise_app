@@ -10,7 +10,10 @@
 //   • A key typed after an operator replaces it. «=» typed again, or on nothing, does nothing.
 //   • Dividing by zero, or a result past 15 digits, is an error: only C clears it.
 //   • ⚠️ A RESULT IS TIDIED so no float noise shows (0.1 + 0.2 is 0.3): a whole number up to 15 digits is kept exactly, any other result
-//     is cut to 10 significant digits.
+//     is cut to 12 significant digits — and one that cannot show its whole part inside them (1e12 and up, with decimals) is an error, never
+//     a rounded-looking wrong answer.
+//   • «%» AFTER + OR − IS A PERCENT OF THE RUNNING TOTAL (a·b/100), AFTER × OR ÷ IT IS b/100; then the usual precedence applies, so
+//     200 + 10% × 2 is 200 + (20 × 2) = 240.
 
 export type CalcKey =
   | '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9'
@@ -26,7 +29,8 @@ export type CalcState = {
 
 export const CALC_START: CalcState = Object.freeze({ tokens: Object.freeze([]), solved: null, error: false });
 
-const MAX_DIGITS = 12;
+// A typed number holds at most 10 digits; a result shows up to 12 significant ones (see `tidy`).
+const MAX_DIGITS = 10;
 const OPERATORS: readonly string[] = ['+', '−', '×', '÷'];
 const isOperator = (token: string | undefined): boolean => token !== undefined && OPERATORS.includes(token);
 const isNumber = (token: string | undefined): boolean => token !== undefined && token !== '%' && !isOperator(token);
@@ -146,22 +150,17 @@ export function calcEvaluate(tokens: readonly string[]): string | null {
   for (const part of terms) {
     const first = part.factors[0];
     if (first === undefined) return null;
-    let value: number;
-    if (part.factors.length === 1 && first.percent) {
-      // A lone percentage: of the running total after a + or −, itself over a hundred when it stands first.
-      value = part.add === null ? first.value / 100 : total * first.value / 100;
-    } else {
-      value = first.percent ? first.value / 100 : first.value;
-      for (let i = 1; i < part.factors.length; i += 1) {
-        const factor = part.factors[i];
-        if (factor === undefined) return null;
-        const operand = factor.percent ? factor.value / 100 : factor.value;
-        if (part.ops[i - 1] === '÷') {
-          if (operand === 0) return null;
-          value /= operand;
-        } else {
-          value *= operand;
-        }
+    // A percentage that opens a term follows a + or − (a percent of the running total) or nothing (itself over a hundred).
+    let value = first.percent ? (part.add === null ? first.value / 100 : total * first.value / 100) : first.value;
+    for (let i = 1; i < part.factors.length; i += 1) {
+      const factor = part.factors[i];
+      if (factor === undefined) return null;
+      const operand = factor.percent ? factor.value / 100 : factor.value;
+      if (part.ops[i - 1] === '÷') {
+        if (operand === 0) return null;
+        value /= operand;
+      } else {
+        value *= operand;
       }
     }
     total = part.add === '−' ? total - value : total + value;
@@ -169,10 +168,12 @@ export function calcEvaluate(tokens: readonly string[]): string | null {
   return tidy(total);
 }
 
-// No float noise, no exponent: a whole number is kept as it is, anything else is cut to 10 significant digits.
+// No float noise, no exponent: a whole number is kept as it is, anything else is cut to 12 significant digits.
 function tidy(value: number): string | null {
   if (!Number.isFinite(value) || Math.abs(value) >= 1e15) return null;
-  const rounded = Number.isInteger(value) ? value : Number(value.toPrecision(10));
+  // Decimals with a whole part of 13 digits or more cannot be written in 12 significant digits without a wrong-looking answer.
+  if (!Number.isInteger(value) && Math.abs(value) >= 1e12) return null;
+  const rounded = Number.isInteger(value) ? value : Number(value.toPrecision(12));
   if (rounded === 0) return '0';
   const text = String(rounded);
   if (!text.includes('e')) return text;
@@ -193,6 +194,19 @@ export function calcDisplay(state: CalcState, decimal: string, errorWord: string
   const tokens = state.tokens;
   const last = tokens[tokens.length - 1];
   if (last === undefined) return { expression: '', main: '0', error: false };
-  const main = isNumber(last) ? last : calcEvaluate(tokens) ?? '0';
-  return { expression: line(tokens), main: write(main), error: false };
+  return { expression: line(tokens), main: write(runningFigure(tokens)), error: false };
+}
+
+// The big line while the sum is not solved. A number being typed shows itself. After a + or − everything before is settled, so the total so
+// far; after × or ÷ the sum is not settled, so the number about to be multiplied (2 + 3 × shows 3, never 5), as on a phone.
+function runningFigure(tokens: readonly string[]): string {
+  const last = tokens[tokens.length - 1];
+  if (last === undefined) return '0';
+  if (isNumber(last)) return last;
+  const before = tokens.slice(0, -1);
+  if (last === '×' || last === '÷') {
+    const operand = before[before.length - 1];
+    if (isNumber(operand)) return operand ?? '0';
+  }
+  return calcEvaluate(tokens) ?? '0';
 }

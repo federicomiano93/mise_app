@@ -66,10 +66,14 @@ export function FeedbackDialog({ place, onClose }: { place: Place; onClose: () =
     // already in Firestore's queue. Online, a refusal (the venue's switch turned off meanwhile) comes back at once and keeps the text.
     const written = services.feedback(locationId).send(user.uid, note);
     const refusal = written.then(() => false, () => true);
+    // ⚠️ A REFUSAL AFTER THE DIALOG HAS GONE (the switch turned off, a slow server) is not lost: the page's region says so.
+    let late = false;
     const online = typeof navigator === 'undefined' || navigator.onLine !== false;
     const wasRefused = online
       ? await Promise.race([refusal, new Promise<boolean>(resolve => { setTimeout(() => { resolve(false); }, REFUSAL_WAIT_MS); })])
       : false;
+    if (!wasRefused) late = true;
+    if (late) void refusal.then(refused => { if (refused) say(t('feedback.late')); });
     if (!alive.current) return;
     if (wasRefused) {
       setSending(false);

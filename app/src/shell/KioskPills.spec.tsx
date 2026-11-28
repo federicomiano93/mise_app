@@ -48,8 +48,8 @@ describe('the kiosk pills in the top bar', () => {
     const found = await screen.findByRole('group', { name: 'Kiosk mode' });
     expect(found.closest('header')).not.toBeNull();
     expect(within(found).getByRole('button', { name: 'Standby' })).toBeInTheDocument();
-    // The account menu with Exit stays the Home's: elsewhere the letter is the plain link to Settings.
-    expect(screen.getByRole('link', { name: 'Account' })).toBeInTheDocument();
+    // «Exit» is in the account menu on every section too, as Standby is.
+    expect(screen.getByRole('button', { name: 'Account' })).toBeInTheDocument();
   });
 
   test('absent from every section with kiosk mode off', async () => {
@@ -113,7 +113,14 @@ describe('the kiosk pills in the top bar', () => {
     expect(router.state.location.pathname).toBe('/settings');
   });
 
-  test('off the kiosk Home the letter is a plain link to Settings, with no menu', async () => {
+  test('on another section the letter opens the same menu, with Exit', async () => {
+    localStorage.setItem(KIOSK_STORAGE_KEY, ON);
+    const { user } = renderApp('/orders');
+    await user.click(await screen.findByRole('button', { name: 'Account' }));
+    expect(within(await screen.findByRole('menu', { name: 'Account' })).getByRole('menuitem', { name: 'Exit' })).toBeInTheDocument();
+  });
+
+  test('with kiosk mode off the letter is a plain link to Settings, with no menu', async () => {
     renderApp('/home');
     expect(await screen.findByRole('link', { name: 'Account' })).toHaveAttribute('href', '/settings');
     expect(screen.queryByRole('button', { name: 'Account' })).not.toBeInTheDocument();

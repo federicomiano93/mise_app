@@ -3437,6 +3437,7 @@ export const it: Messages = {
   'feedback.send': 'Invia',
   'feedback.sent': 'Nota inviata.',
   'feedback.refused': 'Invio non riuscito. Riprova.',
+  'feedback.late': 'Nota non inviata.',
   'feedback.discardTitle': 'Scartare la nota?',
   'feedback.keep': 'Continua a scrivere',
 
@@ -3452,7 +3453,8 @@ export const it: Messages = {
   'pocket.key.minus': 'Meno',
   'pocket.key.plus': 'Più',
   'pocket.key.equals': 'Uguale',
-  'pocket.key.decimal': 'Virgola',
+  'pocket.key.comma': 'Virgola',
+  'pocket.key.point': 'Punto',
 
   // Customer bookings («Prenotazioni», 18 Nov 2026): bookings/, the Home's card.
   'section.bookings': 'Prenotazioni',

@@ -55,6 +55,12 @@ describe('the note model', () => {
     expect(feedbackNote({ text: 'x'.repeat(FEEDBACK_MAX + 50), pathname: '/home', appVersion: null })?.text).toHaveLength(FEEDBACK_MAX);
   });
 
+  test('the text is cut by code points: an emoji at the cut is never split', () => {
+    const note = feedbackNote({ text: 'a'.repeat(FEEDBACK_MAX - 1) + '😀😀', pathname: '/home', appVersion: null });
+    expect(Array.from(note?.text ?? '')).toHaveLength(FEEDBACK_MAX);
+    expect(note?.text.endsWith('😀')).toBe(true);
+  });
+
   test('the screen is the address without its slash, at most 40 characters', () => {
     expect(screenFor('/recipes/AbCdEfGhIjKlMnOpQrSt/edit')).toBe('recipes/AbCdEfGhIjKlMnOpQrSt/edit');
     expect(screenFor('/' + 'a'.repeat(100))).toHaveLength(SCREEN_MAX);

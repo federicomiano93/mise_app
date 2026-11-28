@@ -27,7 +27,8 @@
 // booking's editor holds it while it differs from the booking it opened (or holds a refused save brought back), until it is saved
 // or discarded (bookings/BookingEditor.tsx). The receipt printer's screen holds it while the address or the plain-letters choice
 // differs from the one saved on this device (bookings/PrinterScreen.tsx), and the bookings settings while they differ from the ones
-// they opened on (bookings/BookingSettingsScreen.tsx).
+// they opened on (bookings/BookingSettingsScreen.tsx). The note to Claude holds it while text is typed and not yet sent or discarded
+// (feedback/FeedbackDialog.tsx).
 // ⚠️ DELIBERATELY NOT A HOLDER: an unsaved cake set aside for the Recipes (cakes/cakeParking.ts). It sits in memory with nobody on its
 // screen, possibly for ever; a hold for it would keep the device off every update and every rollback, and the person who left it may
 // never come back. Losing it to a reload the app starts by itself is still the price, but a forced close no longer loses it: while a cake form

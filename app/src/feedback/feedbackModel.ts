@@ -23,7 +23,8 @@ export function screenFor(pathname: string): string {
 
 // The note, or null when there is nothing to send.
 export function feedbackNote(input: { text: string; pathname: string; appVersion: string | null }): FeedbackNote | null {
-  const text = input.text.trim().slice(0, FEEDBACK_MAX).trim();
+  // By code points: cutting at 2000 UTF-16 units could split an emoji in half.
+  const text = Array.from(input.text.trim()).slice(0, FEEDBACK_MAX).join('').trim();
   if (text === '') return null;
   const version = input.appVersion;
   return {

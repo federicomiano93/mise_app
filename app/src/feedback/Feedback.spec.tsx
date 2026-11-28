@@ -124,6 +124,30 @@ describe('the dialog', () => {
     expect(screen.queryByText('Note sent.')).not.toBeInTheDocument();
   });
 
+  test('a refusal that comes after the dialog has gone is said by the page: «Note not sent.»', async () => {
+    const { dialog, user, source } = await openNote();
+    let refuse: (error: Error) => void = () => undefined;
+    source.send = (uid, note) => { source.sent.push({ uid, note }); return new Promise<void>((_resolve, reject) => { refuse = reject; }); };
+    await user.type(within(dialog).getByPlaceholderText('What should change?'), 'Slow then refused');
+    await user.click(within(dialog).getByRole('button', { name: 'Send' }));
+    await waitFor(
+      () => { expect(screen.queryByRole('dialog', { name: 'Note to Claude' })).not.toBeInTheDocument(); },
+      { timeout: REFUSAL_WAIT_MS + 3000 },
+    );
+    expect(await screen.findByText('Note sent.')).toBeInTheDocument();
+    refuse(new Error('permission-denied'));
+    expect(await screen.findByText('Note not sent.')).toBeInTheDocument();
+    expect(screen.queryByText('Note sent.')).not.toBeInTheDocument();
+  }, REFUSAL_WAIT_MS + 8000);
+
+  test('the page has one status region for the note and every section message', async () => {
+    const { dialog, user } = await openNote();
+    await user.type(within(dialog).getByPlaceholderText('What should change?'), 'x');
+    await user.click(within(dialog).getByRole('button', { name: 'Send' }));
+    const said = await screen.findByText('Note sent.');
+    expect(said.closest('[role="status"]')?.closest('main')).not.toBeNull();
+  });
+
   test('Cancel with nothing typed closes without a question', async () => {
     const { dialog, user } = await openNote();
     await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));

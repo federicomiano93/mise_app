@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { ReactNode } from 'react';
 import { feedbackOn } from '@mise/shared/venue-features';
 import { useLocation } from 'react-router';
+import { PartBoundary } from '../errors/PartBoundary';
 import { useSession } from '../session/SessionContext';
 import { FeedbackDialog } from './FeedbackDialog';
 import type { Place } from './FeedbackDialog';
@@ -16,11 +17,14 @@ import type { Place } from './FeedbackDialog';
 
 type Feedback = {
   readonly available: boolean;
+  // The place a note is being written for, or null: read by `FeedbackHost`.
+  readonly asked: Place | null;
+  readonly close: () => void;
   // Opens the dialog for the place the person is on (or, from «More», the one they came from).
   readonly open: () => void;
 };
 
-const FeedbackContext = createContext<Feedback>({ available: false, open: () => undefined });
+const FeedbackContext = createContext<Feedback>({ available: false, asked: null, close: () => undefined, open: () => undefined });
 
 // What a screen says about the item it has open («Pane di Miano»), so a note carries it. Null when there is none.
 const SetPlaceName = createContext<(name: string | null) => void>(() => undefined);
@@ -58,14 +62,29 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
     setAsked(isMore(pathname) ? before.current : { pathname, name });
   }, [pathname, name]);
 
-  const value = useMemo<Feedback>(() => ({ available, open }), [available, open]);
+  const close = useCallback(() => { setAsked(null); }, []);
+  // ⚠️ THE SWITCH TURNING OFF WHILE THE DIALOG IS OPEN closes it for good: kept, `asked` would open it again unasked when the switch came back.
+  useEffect(() => { if (!available) setAsked(null); }, [available]);
+
+  const value = useMemo<Feedback>(() => ({ available, asked: available ? asked : null, close, open }), [available, asked, close, open]);
 
   return (
     <SetPlaceName.Provider value={setName}>
       <FeedbackContext.Provider value={value}>
         {children}
-        {available && asked !== null ? <FeedbackDialog place={asked} onClose={() => { setAsked(null); }} /> : null}
       </FeedbackContext.Provider>
     </SetPlaceName.Provider>
+  );
+}
+
+// Where the dialog is drawn: INSIDE the shell's status region (`main`), so «Note sent.» and a late «Note not sent.» are said by the page's one
+// region and outlive the dialog. In a part of its own: a render error in the note must not take the app down.
+export function FeedbackHost() {
+  const { asked, close } = useFeedback();
+  if (asked === null) return null;
+  return (
+    <PartBoundary>
+      <FeedbackDialog place={asked} onClose={close} />
+    </PartBoundary>
   );
 }

@@ -132,6 +132,8 @@ export function createKioskController(env: KioskEnv): KioskController {
   let idleTimer: unknown = null;
   let stallTimer: unknown = null;
   let focusBeforeRest: Element | null = null;
+  // The text field that last had the focus: «Standby» is a button, so tapping it moves the focus off the field before the cover remembers it.
+  let lastField: Element | null = null;
   // A release is waiting to take over (asked on every tick while the cover is up): the waking tap then lets it in under the cover.
   let updateKnown = false;
   let wakeGuardUntil = 0;
@@ -198,7 +200,15 @@ export function createKioskController(env: KioskEnv): KioskController {
 
   function rememberFocus(): void {
     const active = doc.activeElement;
-    focusBeforeRest = active !== null && active !== doc.body ? active : null;
+    // ⚠️ «Standby» (a button on every section) takes the focus when tapped: the typing the person left behind must still hold back the
+    // night reload, so a field that had the focus just before counts when the focus now sits on a button.
+    const fieldBefore = lastField !== null && lastField.isConnected && isField(lastField) ? lastField : null;
+    if (active !== null && active !== doc.body && !isField(active) && fieldBefore !== null) focusBeforeRest = fieldBefore;
+    else focusBeforeRest = active !== null && active !== doc.body ? active : null;
+  }
+
+  function onFocusIn(event: Event): void {
+    if (event.target instanceof Element && isField(event.target)) lastField = event.target;
   }
 
   function enter(next: KioskState): void {
@@ -362,6 +372,7 @@ export function createKioskController(env: KioskEnv): KioskController {
     started = true;
     INPUT_EVENTS.forEach(type => { doc.addEventListener(type, onInput, { capture: true, passive: true }); });
     doc.addEventListener('visibilitychange', onVisible);
+    doc.addEventListener('focusin', onFocusIn, true);
     tickTimer = env.setInterval(tick, TICK_MS);
     if (resume === 'rest' || resume === 'night') {
       // Resuming 'rest' only serves pages reloaded by an older release of the current app: nothing here reloads under the cover.
@@ -379,6 +390,8 @@ export function createKioskController(env: KioskEnv): KioskController {
     started = false;
     INPUT_EVENTS.forEach(type => { doc.removeEventListener(type, onInput, true); });
     doc.removeEventListener('visibilitychange', onVisible);
+    doc.removeEventListener('focusin', onFocusIn, true);
+    lastField = null;
     if (tickTimer !== null) { env.clearInterval(tickTimer); tickTimer = null; }
     if (idleTimer !== null) { env.clearTimeout(idleTimer); idleTimer = null; }
     if (stallTimer !== null) { env.clearTimeout(stallTimer); stallTimer = null; }
