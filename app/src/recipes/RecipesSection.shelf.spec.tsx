@@ -30,11 +30,12 @@ const RECIPES = [
 const main = () => within(screen.getByRole('main'));
 const search = () => screen.getByRole('searchbox', { name: 'Search a recipe by name' });
 const rowOf = (name: string) => main().getByRole('button', { name });
-const headings = () => main().queryAllByRole('heading', { level: 2 }).map(heading => heading.textContent);
-const groupNames = (heading: string) => {
-  const list = main().getByRole('heading', { level: 2, name: heading }).parentElement?.querySelector('ul');
-  return within(list as HTMLElement).getAllByRole('listitem').map(item => item.textContent);
-};
+// A group's header is a button inside the h2: its name is the first span, its count the second.
+const headings = () => main().queryAllByRole('heading', { level: 2 }).map(heading => heading.querySelector('span')?.textContent);
+const groupOf = (name: string) => main().getAllByRole('heading', { level: 2 }).find(found => found.querySelector('span')?.textContent === name)?.closest('section') as HTMLElement;
+const headerOf = (name: string) => within(groupOf(name)).getByRole('button', { name: new RegExp(`^${name}`) });
+// The rows of a group, shown or not: the groups start closed, and a closed group's rows are `hidden`.
+const groupNames = (heading: string) => within(groupOf(heading).querySelector('ul') as HTMLElement).getAllByRole('listitem', { hidden: true }).map(item => item.textContent);
 const fold = (n: number) => main().getByText(`Archived (${n})`).closest('details') as HTMLDetailsElement;
 
 type Options = { recipes?: ReturnType<typeof recipe>[]; categories?: string[]; path?: string; session?: Record<string, unknown>; lang?: 'en' | 'it' };
@@ -42,7 +43,7 @@ type Options = { recipes?: ReturnType<typeof recipe>[]; categories?: string[]; p
 async function loaded({ recipes = RECIPES, categories = ['Easter', 'Christmas'], path = '/recipes', session, lang }: Options = {}) {
   const source = fakeRecipesSource({ recipes, labelConfig: categories.length > 0 ? { recipeCategories: categories } : null });
   const view = renderRecipes(path, { source, session, lang });
-  await screen.findAllByRole('listitem', undefined, LOAD);
+  await screen.findAllByRole('listitem', { hidden: true }, LOAD);
   return { ...view, source };
 }
 
@@ -103,6 +104,61 @@ describe('the list under the category headings', () => {
   it('keeps «No recipes yet» for a venue with no recipe', async () => {
     renderRecipes('/recipes', { source: fakeRecipesSource({ labelConfig: { recipeCategories: ['Easter'] } }) });
     expect(await screen.findByText('No recipes yet', undefined, LOAD)).toBeInTheDocument();
+  });
+});
+
+describe('the groups open and close on a tap', () => {
+  const expanded = (name: string) => headerOf(name).getAttribute('aria-expanded');
+
+  it('starts with EVERY group closed, «No category» too, each header a button with the name and the number of recipes', async () => {
+    await loaded();
+    await waitFor(() => { expect(headings()).toEqual(['Christmas', 'Easter', 'No category']); });
+    expect(['Christmas', 'Easter', 'No category'].map(expanded)).toEqual(['false', 'false', 'false']);
+    expect(headerOf('Christmas')).toHaveTextContent('2 recipes');
+    expect(headerOf('Easter')).toHaveTextContent('1 recipe');
+    expect(screen.queryByRole('button', { name: 'Panettone' })).not.toBeInTheDocument();
+  });
+
+  it('a tap opens a group and a second tap closes it, the others untouched', async () => {
+    const { user } = await loaded();
+    await waitFor(() => { expect(headings()).toHaveLength(3); });
+    await user.click(headerOf('Christmas'));
+    expect(expanded('Christmas')).toBe('true');
+    expect(rowOf('Panettone')).toBeVisible();
+    expect(expanded('Easter')).toBe('false');
+    await user.click(headerOf('Christmas'));
+    expect(expanded('Christmas')).toBe('false');
+    expect(screen.queryByRole('button', { name: 'Panettone' })).not.toBeInTheDocument();
+  });
+
+  it('a search opens the groups that match, and clearing it returns to the closed groups', async () => {
+    const { user } = await loaded();
+    await waitFor(() => { expect(headings()).toHaveLength(3); });
+    await user.type(search(), 'colo');
+    await waitFor(() => { expect(headings()).toEqual(['Easter']); });
+    expect(expanded('Easter')).toBe('true');
+    expect(rowOf('Colomba')).toBeVisible();
+    await user.clear(search());
+    await waitFor(() => { expect(headings()).toHaveLength(3); });
+    expect(expanded('Easter')).toBe('false');
+  });
+
+  it('⚠️ the group of the recipe that is open is open, and stays open after Back', async () => {
+    const { user, router } = await loaded({ path: '/recipes/c' });
+    await waitFor(() => { expect(expanded('Easter')).toBe('true'); });
+    expect(expanded('Christmas')).toBe('false');
+    await router.navigate('/recipes');
+    expect(expanded('Easter')).toBe('true');
+    expect(rowOf('Colomba')).toBeVisible();
+    await user.click(headerOf('Easter'));
+    expect(expanded('Easter')).toBe('false');
+  });
+
+  it('nothing of the open state is stored', async () => {
+    const { user } = await loaded();
+    await waitFor(() => { expect(headings()).toHaveLength(3); });
+    await user.click(headerOf('Christmas'));
+    expect(Object.keys(window.localStorage).filter(key => key !== 'catalogue-usage' && !key.startsWith('catalogue-') && !key.startsWith('foodcost-'))).toEqual([]);
   });
 });
 

@@ -135,12 +135,3 @@
   padding: var(--s3);
   color: var(--ink-2);
 }
-
-.hint {
-  margin: var(--s3) 0 0;
-  padding: var(--s3);
-  border-radius: var(--r-md);
-  background: var(--sunken);
-  color: var(--ink-2);
-  font-size: var(--fs-sm);
-}

@@ -78,7 +78,7 @@ describe('the list of recipes', () => {
     expect(screen.getByText('Add your first recipe: its ingredients and their amounts.')).toBeInTheDocument();
     // The buttons: the one that makes a recipe, then the three doors — the Allergen sheet, the HACCP labels and the ingredient book (14 Nov
     // 2026) — and, first, the Settings gear on the title row (the default session runs the place).
-    expect(main().getAllByRole('button').map(button => button.textContent)).toEqual(['', 'New recipe', 'Allergen sheet', 'HACCP labels', 'Ingredients in recipes']); // the gear on the title is icon-only, so its text is empty
+    expect(main().getAllByRole('button').map(button => button.textContent)).toEqual(['', 'New recipe', 'Categories', 'Allergen sheet', 'HACCP labels', 'Ingredients in recipes']); // the gear on the title is icon-only, so its text is empty
   });
 
   it('says it in Italian', async () => {

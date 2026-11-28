@@ -32,7 +32,7 @@ import {
 } from '@mise/shared/catalogue-model';
 import type { CalculatorImportKind, CatalogueRecipe, ImportAction } from '@mise/shared/catalogue-model';
 import { normalizeEndNote, normalizeSteps, ridOf, withRowIds } from '@mise/shared/guided-model';
-import { categoryKey, isArchivedRecipe, normalizeRecipeCategories, removeCategory } from '@mise/shared/recipe-shelf';
+import { categoryKey, isArchivedRecipe, normalizeRecipeCategories, recipesHoldingWord, removeCategory, storedCategoryOf } from '@mise/shared/recipe-shelf';
 import type { KeyValueStorage } from '../session/backend';
 import { isInBook, LABEL_TEXT_FIELDS, normalizeStoredRecipe, normalizeStoredRecipes } from './labelTexts';
 import { recipeDataOf } from './recipeDocument';
@@ -271,6 +271,12 @@ export interface RecipesStore {
   // patch never undoes a word and a refused word never undoes a label setting.
   addRecipeCategory(word: string): Promise<void>;
   removeRecipeCategory(word: string): Promise<void>;
+  // Renames a word (the Ricettario's «Categories» dialog), LOCAL-FIRST: the new spelling takes the old one's place on the list and
+  // EVERY recipe holding the old word (archived ones too) is filed under the new one at once, then the source writes the new word
+  // (arrayUnion), every recipe's `category` ALONE (a merge each, never the recipe) and last takes the old spellings off the list —
+  // in that order, so no failure leaves a recipe under a word the list has not got. A refusal puts back what was refused and the
+  // promise REJECTS. The caller has already checked the name (renameCategory).
+  renameRecipeCategory(oldWord: string, newWord: string): Promise<void>;
   // Saves a recipe's mixing procedure (steps + closing message), LOCAL-FIRST like saveRecipe, as a MERGE of those two
   // fields only — plus the ingredient rows when some row had no id yet (see the method). An empty procedure is saved
   // as empty, which deletes it. A refusal puts the version before it back and says `recipe-not-saved`. Returns false,
@@ -1000,6 +1006,42 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
         deps.warn('Recipe category did not sync to Firestore:', err);
         if (!categories.some(held => categoryKey(held) === categoryKey(word))) setLocalCategories([...categories, word]);
         throw err;
+      });
+    },
+
+    // ⚠️ EVERY WRITE IS HANDED OVER AT ONCE, in the order that never leaves a recipe under a word the list has not got: the new word,
+    // then each recipe's category alone, then the old spellings off the list. Firestore sends one phone's writes in the order they
+    // were made, so offline they wait together and a closed app loses none of them.
+    renameRecipeCategory(oldWord, newWord) {
+      const key = categoryKey(oldWord);
+      const stored = Array.isArray(labelConfig?.recipeCategories) ? labelConfig.recipeCategories as unknown[] : [];
+      const oldSpellings = stored.filter((held): held is string => typeof held === 'string' && categoryKey(held) === key && held !== newWord);
+      const held = recipesHoldingWord(recipes, oldWord);
+      const before = new Map(held.map(recipe => [recipe.id, storedCategoryOf(recipe)] as const));
+      setLocalCategories([...removeCategory(categories, oldWord), newWord]);
+      for (const recipe of held) upsertLocal({ ...(recipe as unknown as Record<string, unknown>), category: newWord });
+      const send = (write: () => Promise<void>): Promise<void> => {
+        try { return write(); } catch (err) { return Promise.reject(err); }
+      };
+      const writes: Array<Promise<void>> = [
+        send(() => source.addRecipeCategoryWord(newWord)),
+        ...held.map(recipe => send(() => source.saveRecipeDoc(recipe.id, { category: newWord }))),
+        send(() => source.removeRecipeCategoryWords(oldSpellings.length > 0 ? oldSpellings : [oldWord])),
+      ];
+      return Promise.allSettled(writes).then(results => {
+        const failed = results.filter(result => result.status === 'rejected');
+        if (failed.length === 0) return;
+        deps.warn('Recipe category rename did not sync to Firestore:', failed[0]);
+        const withOld = (list: readonly string[]): string[] => (list.some(word => categoryKey(word) === key) ? [...list] : [...list, oldWord]);
+        if (results[0]?.status === 'rejected') setLocalCategories(withOld(removeCategory(categories, newWord)));
+        else if (results[results.length - 1]?.status === 'rejected') setLocalCategories(withOld(categories));
+        held.forEach((recipe, at) => {
+          if (results[at + 1]?.status !== 'rejected') return;
+          const now = recipes.find(candidate => candidate.id === recipe.id);
+          if (!now || categoryKey(storedCategoryOf(now)) !== categoryKey(newWord)) return;
+          upsertLocal({ ...(now as unknown as Record<string, unknown>), category: before.get(recipe.id) ?? '' });
+        });
+        throw new Error('The category rename was refused.');
       });
     },
 

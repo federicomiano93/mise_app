@@ -146,3 +146,23 @@ export function removeCategory(list: readonly string[], word: string): string[] 
   const key = categoryKey(word);
   return list.filter(held => categoryKey(held) !== key);
 }
+
+// Renames a word on the list: the new spelling is checked like a new word (empty, too long, taken by ANOTHER word whatever the
+// case — the word being renamed may change its own case or spaces) and takes the old one's place. The screens sort the list.
+export function renameCategory(
+  list: readonly string[], oldWord: string, typed: unknown,
+): { list: string[]; word: string } | { refusal: CategoryRefusal } {
+  const checked = addCategory(removeCategory(list, oldWord), typed);
+  if ('refusal' in checked) return checked;
+  const word = checked.list[checked.list.length - 1] ?? '';
+  const key = categoryKey(oldWord);
+  return { list: list.map(held => (categoryKey(held) === key ? word : held)), word };
+}
+
+// The recipes whose stored category is this word (whatever the case), archived ones included and whether or not the word is
+// still on the list: every one of them is rewritten when the word is renamed.
+export function recipesHoldingWord<T>(recipes: readonly T[], word: string): T[] {
+  const key = categoryKey(word);
+  if (!key) return [];
+  return recipes.filter(recipe => categoryKey(storedCategoryOf(recipe)) === key);
+}
