@@ -20,6 +20,8 @@ import { createFirestoreKioskOrdersSource } from '../kiosk/kioskOrdersSource';
 import type { KioskOrdersSource } from '../kiosk/kioskOrdersSource';
 import { createFirestoreKioskTodosSource } from '../kiosk/kioskTodosSource';
 import type { KioskTodosSource } from '../kiosk/kioskTodosSource';
+import { createFirestoreFeedbackSource } from '../feedback/feedbackSource';
+import type { FeedbackSource } from '../feedback/feedbackSource';
 import { createFirestoreTodosSource } from '../home/todosSource';
 import type { TodosSource } from '../home/todosSource';
 import { createFirestorePastriesSource } from '../pastries/pastriesSource';
@@ -83,6 +85,8 @@ export interface DataServices {
   settings(locationId: string): SettingsSource;
   // Customer bookings at the counter (18 Nov 2026): the bookings, and the recipe names the editor suggests.
   bookings(locationId: string): BookingsSource;
+  // «Nota per Claude» (the top bar's note button): one create-only write, never read back.
+  feedback(locationId: string): FeedbackSource;
 }
 
 // What the data layers need from the backend besides Firestore: the account behind a client's ordering link is
@@ -129,6 +133,7 @@ export function createDataServices(
     settings: locationId => createFirestoreSettingsSource(firestore,
       (name, data, timeoutMs) => auth.callFunction(name, data, timeoutMs), locationId),
     bookings: locationId => createFirestoreBookingsSource(firestore, locationId),
+    feedback: locationId => createFirestoreFeedbackSource(firestore, locationId),
   };
 }
 

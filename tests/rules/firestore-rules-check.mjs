@@ -4266,6 +4266,7 @@ async function feedbackNotes() {
     }));
   await expectDenied('a hand-picked id the owner\'s script could not list or delete',
     () => create(note, asAccount(SAM), { id: 'my_note-1' }));
+  await expectAllowed('a screen name of exactly 40 (a Mise 2 address)', () => create({ ...note, screen: 'recipes/' + 'a'.repeat(32), appVersion: 'm2-abc1234' }, asAccount(SAM)));
   await expectDenied('a runaway screen name', () => create({ ...note, screen: 's'.repeat(41) }, asAccount(SAM)));
   await expectDenied('a version that is not text', () => create({ ...note, appVersion: 644 }, asAccount(SAM)));
 

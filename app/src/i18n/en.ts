@@ -3675,6 +3675,30 @@ export const en = {
   'kiosk.home.cannotClose': 'This tablet doesn’t let the app close itself. To close it, open the recent-apps view and swipe Mise away.',
   'kiosk.home.aria': 'Kiosk mode',
 
+  // «Nota per Claude» (feedback/): the top bar's note button, and the phone's row in «More».
+  'feedback.title': 'Note to Claude',
+  'feedback.placeholder': 'What should change?',
+  'feedback.from': 'From: {where}',
+  'feedback.send': 'Send',
+  'feedback.sent': 'Note sent.',
+  'feedback.refused': 'Couldn’t send. Try again.',
+  'feedback.discardTitle': 'Discard the note?',
+  'feedback.keep': 'Keep writing',
+
+  // The Home's pocket calculator (home/PocketCalculator.tsx).
+  'pocket.title': 'Calculator',
+  'pocket.close': 'Close',
+  'pocket.error': 'Error',
+  'pocket.key.clear': 'Clear',
+  'pocket.key.back': 'Delete',
+  'pocket.key.percent': 'Percent',
+  'pocket.key.divide': 'Divided by',
+  'pocket.key.times': 'Times',
+  'pocket.key.minus': 'Minus',
+  'pocket.key.plus': 'Plus',
+  'pocket.key.equals': 'Equals',
+  'pocket.key.decimal': 'Decimal point',
+
   // Customer bookings («Prenotazioni», 18 Nov 2026): bookings/, the Home's card.
   'section.bookings': 'Bookings',
   'bookings.new': 'New booking',

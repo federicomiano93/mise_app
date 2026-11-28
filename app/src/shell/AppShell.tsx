@@ -23,6 +23,9 @@ import { useKioskSettings } from '../kiosk/kioskSettings';
 import { AccountMenu } from './AccountMenu';
 import { KioskPills } from './KioskPills';
 import { TitleSlotContext } from './titleSlot';
+import { FeedbackProvider } from '../feedback/FeedbackContext';
+import { FeedbackButton } from '../feedback/FeedbackButton';
+import { StatusMessageProvider } from '../ui/StatusMessage';
 import styles from './AppShell.module.css';
 
 // The section an address belongs to: its first segment («stocktake» for /stocktake/2026-10).
@@ -42,7 +45,12 @@ const sectionOf = (pathname: string): string => pathname.split('/')[1] ?? '';
 export function AppShell() {
   return (
     <AwayProvider>
-      <ShellFrame />
+      {/* «Nota per Claude» (feedback/): its «Note sent.» is said here, above every section, so it outlives the dialog. */}
+      <StatusMessageProvider>
+        <FeedbackProvider>
+          <ShellFrame />
+        </FeedbackProvider>
+      </StatusMessageProvider>
     </AwayProvider>
   );
 }
@@ -70,6 +78,8 @@ function ShellFrame() {
   // shows too. Only the Home: the kiosk controls never appear on the other sections, and a kiosk phone shows no bar there.
   const kioskOn = useKioskSettings().enabled;
   const kioskBar = onHome && kioskOn;
+  // «Standby» itself is in the bar on EVERY section while kiosk mode is on (from 700px; the bar is hidden on a phone's other sections, so a
+  // kiosk phone keeps today's behaviour there). The rest only covers the screen, so an open editor and its typing survive it (kiosk/).
   // The cell at the left of the bar where a Page draws its title (titleSlot.ts). A state, not a ref object: a Page that mounts in the same render as
   // the bar has to hear when the cell arrives.
   const [titleSlot, setTitleSlot] = useState<HTMLElement | null>(null);
@@ -105,7 +115,7 @@ function ShellFrame() {
         <Rail />
         <div className={styles.main}>
           <TitleSlotContext.Provider value={titleSlot}>
-            <TopBar kiosk={kioskBar} onHome={onHome} titleSlot={setTitleSlot} />
+            <TopBar kiosk={kioskBar} standby={kioskOn} onHome={onHome} titleSlot={setTitleSlot} />
             <main id="main" ref={contentRef} tabIndex={-1} className={styles.content}>
               {/* ⚠️ The holiday reminder and refusal live HERE, not straight under the shell: each boundary is a <div>, and
                   a <div> under the shell's grid takes a cell — the rail and the screen sat low and jumped when the holiday
@@ -202,9 +212,9 @@ function RailLink({ section, spill }: { section: Section; spill: boolean }) {
 }
 
 // The ONE bar, left to right: [the section's title and gear (a Page draws them into the slot, from 700px)] · [venue and date, centred] ·
-// [«Standby» on a kiosk Home] [connection] [the account's letter]. A grid with a `1fr` cell at each side, so the middle is truly centred when
+// [«Standby» on a kiosk device] [«Nota per Claude» where the venue has it] [connection] [the account's letter]. A grid with a `1fr` cell at each side, so the middle is truly centred when
 // there is room and shifts, never overlaps, when a long title needs more (AppShell.module.css).
-function TopBar({ kiosk, onHome, titleSlot }: { kiosk: boolean; onHome: boolean; titleSlot: (node: HTMLElement | null) => void }) {
+function TopBar({ kiosk, standby, onHome, titleSlot }: { kiosk: boolean; standby: boolean; onHome: boolean; titleSlot: (node: HTMLElement | null) => void }) {
   const { t, locale } = useT();
   const today = useToday(locale);
   const online = useOnline();
@@ -217,8 +227,10 @@ function TopBar({ kiosk, onHome, titleSlot }: { kiosk: boolean; onHome: boolean;
         <p className={styles.date}>{today}</p>
       </div>
       <div className={styles.barRight}>
-        {/* The Home's kiosk pill only; in its own part, so a failure there cannot break the bar. */}
-        {kiosk ? <PartBoundary><KioskPills /></PartBoundary> : null}
+        {/* «Standby» on every section while kiosk mode is on; in its own part, so a failure there cannot break the bar. */}
+        {standby ? <PartBoundary><KioskPills /></PartBoundary> : null}
+        {/* «Nota per Claude», only in a venue that has it on. */}
+        <PartBoundary><FeedbackButton /></PartBoundary>
         <p className={styles.sync} role="status">
           {/* The dot is decoration: the words carry the meaning, so colour is never the only signal. */}
           <span className={styles.dot} data-online={online} aria-hidden="true" />
