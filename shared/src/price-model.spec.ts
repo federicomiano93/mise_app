@@ -75,7 +75,9 @@ const flour = { casePrice: 20, caseCount: 4, caseItemSize: 2.5, caseItemUnit: 'k
 describe.each([
   ['shared/ (TypeScript)', ported, portedVenue],
   ['js/ (current app)', legacy, legacyVenue],
-] as const)('%s', (_name, m, venue) => {
+] as const)('%s', (name, m, venue) => {
+  // formatRate is DELIBERATELY different since 28 Nov 2026: Mise 2 shows two decimals, the frozen js/ copy pads to six.
+  const isPort = name.startsWith('shared/');
   // ── The typed rate becomes a stored rate ───────────────────────────────────
 
   test('the rate is taken as typed — £7.20 a kilo is £7.20 a kilo', () => {
@@ -194,13 +196,13 @@ describe.each([
   test('⚠️ the currency is read when money is FORMATTED, not when the module loads', () => {
     const euros = venue('€');
     expect(euros.formatMoney(6.5), 'formatMoney must follow the venue').toBe('€6.50');
-    expect(euros.formatRate(0.0035), 'so must a rate, decimals and all').toBe('€0.0035');
+    expect(euros.formatRate(0.0035), 'so must a rate, decimals and all').toBe(isPort ? '€0.004' : '€0.0035');
     // An Italian venue also WRITES the amount the Italian way (4 Oct 2026), read when
     // formatting like the symbol.
     const italy = venue('€', IT);
     expect(italy.formatMoney(1234.5)).toBe(`1.234,50${NB}€`);
     expect(italy.formatMoney(6.5)).toBe(`6,50${NB}€`);
-    expect(italy.formatRate(0.0035)).toBe(`0,0035${NB}€`);
+    expect(italy.formatRate(0.0035)).toBe(isPort ? `0,004${NB}€` : `0,0035${NB}€`);
     // And back, in the same process: nothing may have been captured on first import.
     expect(venue('£').formatMoney(6.5), 'it must change back — nothing is frozen').toBe('£6.50');
   });
@@ -227,17 +229,32 @@ describe.each([
     expect(fallback.formatRate(600)).toBe('£600.00');
     expect(fallback.formatRate(0.3)).toBe('£0.30');
     // The two that matter: rounded to the penny these read as 4p and as free.
-    expect(fallback.formatRate(0.035)).toBe('£0.035');
-    expect(fallback.formatRate(0.0035)).toBe('£0.0035');
+    expect(fallback.formatRate(0.035)).toBe(isPort ? '£0.04' : '£0.035');
+    expect(fallback.formatRate(0.0035)).toBe(isPort ? '£0.004' : '£0.0035');
     expect(fallback.formatRate('nonsense')).toBe('');
   });
 
   test('formatRate shows such small rates in full, never as 0.00', () => {
     const fallback = venue();
-    expect(fallback.formatRate(0.001745)).toMatch(/0\.001745$/);
-    expect(fallback.formatRate(0.000049)).toMatch(/0\.000049$/);
+    expect(fallback.formatRate(0.001745)).toMatch(isPort ? /0\.002$/ : /0\.001745$/);
+    expect(fallback.formatRate(0.000049)).toMatch(isPort ? /0\.00005$/ : /0\.000049$/);
     expect(fallback.formatRate(7.2)).toMatch(/7\.20$/);
-    expect(fallback.formatRate(0.035)).toMatch(/0\.035$/);
+    expect(fallback.formatRate(0.035)).toMatch(isPort ? /0\.04$/ : /0\.035$/);
+  });
+
+  test.runIf(isPort)('prices are shown with two decimals (28 Nov 2026), a tiny real cost keeps its first digit', () => {
+    const gb = venue('£');
+    expect(gb.formatRate(3.3608)).toBe('£3.36');
+    expect(gb.formatRate(2.8566)).toBe('£2.86');
+    expect(gb.formatRate(10)).toBe('£10.00');
+    expect(gb.formatRate(0.004)).toBe('£0.004');
+    expect(gb.formatRate(0.0004)).toBe('£0.0004');
+    expect(gb.formatRate(0)).toBe('£0.00');
+    const it = venue('€', IT);
+    expect(it.formatRate(3.3608)).toBe(`3,36${NB}€`);
+    expect(it.formatRate(2.8566)).toBe(`2,86${NB}€`);
+    expect(it.formatRate(0.004)).toBe(`0,004${NB}€`);
+    expect(it.formatRate(10)).toBe(`10,00${NB}€`);
   });
 
   // ── Small guards ───────────────────────────────────────────────────────────

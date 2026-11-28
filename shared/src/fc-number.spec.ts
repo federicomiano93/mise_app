@@ -170,12 +170,12 @@ test('weighingParams: the percentages of a weighing sentence in two decimals, no
   }
 });
 
-test('price-model is untouched: formatRate keeps its six decimals for the Suppliers and the Stocktake', () => {
+test('price-model formatRate: the port shows two decimals (28 Nov 2026), the frozen js/ copy keeps six', () => {
   setCurrency('£', BRITAIN_PLAIN);
   const money = moneyOf('£', BRITAIN_PLAIN);
   const legacyRate = (legacyPrice as unknown as { formatRate: (v: number) => string }).formatRate;
-  for (const [value, text] of [[0.035, '£0.035'], [0.001745, '£0.001745'], [7.2, '£7.20']] as const) {
-    expect(legacyRate(value), `js/ ${value}`).toBe(text);
+  for (const [value, legacyText, text] of [[0.035, '£0.035', '£0.04'], [0.001745, '£0.001745', '£0.002'], [7.2, '£7.20', '£7.20']] as const) {
+    expect(legacyRate(value), `js/ ${value}`).toBe(legacyText);
     expect(portedPrice.formatRate(value, money), `shared/ ${value}`).toBe(text);
   }
 });

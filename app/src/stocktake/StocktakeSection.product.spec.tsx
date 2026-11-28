@@ -504,7 +504,7 @@ describe('one product: the pack note', () => {
   // ⚠️ One straw out of 2000 is 0.17 pence: «£0.00» would read as free.
   it('never shows a tiny rate as 0.00', async () => {
     await open('straw', 'Cannuccia');
-    expect(note('Cannuccia').getByText('Priced by the case: £0.001745 per pz')).toBeInTheDocument();
+    expect(note('Cannuccia').getByText('Priced by the case: £0.002 per pz')).toBeInTheDocument();
     expect(note('Cannuccia').queryByText(/£0\.00 /)).not.toBeInTheDocument();
   });
 

@@ -118,7 +118,7 @@ describe('the pack note: by the case', () => {
   it('never shows a tiny rate as 0.00', () => {
     const straw = { id: 's', unit: 'pz', casePrice: 3.49, caseCount: 2000, caseItemUnit: 'pcs', priceUnit: 'pcs', pricePerUnit: 0.001745 };
     const text = note(straw);
-    expect(text).toBe('Priced by the case: £0.001745 per pz');
+    expect(text).toBe('Priced by the case: £0.002 per pz');
     expect(text).not.toContain('0.00 ');
   });
 

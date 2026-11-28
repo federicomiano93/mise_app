@@ -421,27 +421,21 @@ export function formatMoney(value: unknown, money: Money): string {
   return moneyText((Number.isFinite(n) ? n : 0).toFixed(MONEY_DECIMALS), money);
 }
 
-// A RATE (price per unit). Always at least the two decimals money is read in, and
-// up to six when the number needs them (a rate derived from a case can be that small) — so
-// £7.20 stays £7.20 while a gelatine leaf at 3.5p shows as £0.035 rather than being rounded up
-// to £0.04 (a 14% error on the only screen anybody checks) or down to £0.00, which reads as free.
-//
-// Written as "pad to six, then drop the zeros the number does not need" rather
-// than as a threshold: a threshold has to be chosen, and any choice is wrong just
-// past it.
-//
-// ⚠️ A QUIRK OF THE ORIGINAL, KEPT ON PURPOSE (found while porting it, 11 Oct 2026). A rate of
-// 1e21 or more is written by toFixed() in exponent form, which has no «.», so split('.')[1] is
-// undefined and the original throws a TypeError instead of answering. No price reaches that, and
-// this port throws the same, so the two apps cannot disagree; the fix belongs in BOTH files at
-// once (odd-inputs.spec.ts feeds both such a rate and fails until they agree).
+// A RATE (price per unit), for the EYE ONLY (Federico, 28 Nov 2026: «arrotondiamo tutti i prezzi a due decimali»):
+// exactly two decimals, «3,36 € / l». The stored rate keeps its full precision and every comparison and sum uses it.
+// The one exception: a non-zero rate that would read «0,00» shows just enough decimals to reach its first significant
+// digit («0,004 €», «0,0004 €»; six at most), so a real cost never reads as free.
+// DELIBERATELY DIFFERENT from js/price-model.js formatRate (the frozen rollback copy pads up to six decimals): the parity
+// specs no longer pair this function, price-model.spec.ts pins it on its own.
 export function formatRate(value: unknown, money: Money): string {
   const n = Number(value);
   if (!Number.isFinite(n)) return '';
-  const padded = n.toFixed(CASE_RATE_DECIMALS);
-  const trimmed = padded.replace(/0+$/, '');
-  const decimals = Math.max(MONEY_DECIMALS, (trimmed.split('.')[1] as string).length);
-  return moneyText(n.toFixed(decimals), money);
+  let decimals = MONEY_DECIMALS;
+  const abs = Math.abs(n);
+  // A real, non-zero cost never reads as 0,00: reach its first significant digit, at most four decimals.
+  if (abs > 0 && abs.toFixed(MONEY_DECIMALS) === '0.00') decimals = Math.min(CASE_RATE_DECIMALS, Math.ceil(-Math.log10(abs)));
+  const text = n.toFixed(decimals);
+  return moneyText(/^-0(\.0+)?$/.test(text) ? text.slice(1) : text, money);
 }
 
 // ── The three functions that look a word up (ADAPTED: the translator is handed in) ─────────────

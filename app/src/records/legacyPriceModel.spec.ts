@@ -209,7 +209,7 @@ describe('an untouched card', () => {
     expect(saved(card).patch?.pricePerUnit, 'not 0.0017').toBe(0.001745);
     expect(saved(card).write?.history, 'the money did not move: no history').toBeNull();
     const fine = openCard(FINE_RATE);
-    expect(fine.view().summary.main, 'the line reads as Save will').toMatch(/1\.666667 \/ kg/);
+    expect(fine.view().summary.main, 'the line reads as Save will (shown to two decimals)').toMatch(/1\.67 \/ kg/);
   });
 
   test('a VAT-only change writes only the VAT: no money, no date, no history', () => {
@@ -321,7 +321,7 @@ describe('«bag of 2.5 kg» — one package of the weight', () => {
     const card = openCard({ ...PACK_BY_OTHER_WORD, weight: '3kg' });
     expect(card.edited(), 'nothing was touched').toBe(false);
     expect(card.view().packChangedNote).toBe('The package weight has changed: the price updates when you save');
-    expect(card.view().summary.main).toMatch(/1\.666667 \/ kg/);
+    expect(card.view().summary.main).toMatch(/1\.67 \/ kg/);
     const { write } = saved(card);
     expect(write?.doc.caseItemSize, 'the case now says what the screen said').toBe(3);
     expect(write?.doc.pricePerUnit).toBe(1.666667);
