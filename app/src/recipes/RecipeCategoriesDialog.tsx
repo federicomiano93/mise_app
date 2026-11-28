@@ -240,6 +240,9 @@ export function RecipeCategoriesDialog({ onClose }: Props) {
                 {editing !== null && editing.word === word ? editor : (
                   <>
                     <span className={styles.name}>{word}</span>
+                    {/* Count, rename and remove move as ONE group: on a narrow phone they go under the name together, never
+                        one icon alone on a line of its own (driven at 360px, 28 Nov 2026). */}
+                    <span className={styles.tools}>
                     <span className={styles.count}>{t('cat.dlg.recipes', { n: countInCategory(recipes, word, categories) })}</span>
                     <Button
                       ref={node => { if (node) renameButtons.current.set(word, node); else renameButtons.current.delete(word); }}
@@ -258,6 +261,7 @@ export function RecipeCategoriesDialog({ onClose }: Props) {
                     >
                       <Trash2 aria-hidden="true" />
                     </Button>
+                    </span>
                   </>
                 )}
               </li>

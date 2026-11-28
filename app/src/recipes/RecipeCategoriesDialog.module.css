@@ -29,10 +29,19 @@
    than the column breaks). Its basis is wide enough that on a 296px phone the count and the two buttons drop to a line of their own rather
    than squeeze the name to a few letters a line. */
 .name {
-  flex: 1 1 calc(var(--hit) * 2.5);
+  flex: 1 1 calc(var(--hit) * 1.75);
   min-width: 0;
   font-weight: 600;
   overflow-wrap: break-word;
+}
+
+/* The count and the two buttons never split: when the row wraps, the whole group goes under the name, to the right. */
+.tools {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--s2);
+  margin-left: auto;
 }
 
 .count {
