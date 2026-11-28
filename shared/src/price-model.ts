@@ -8,6 +8,9 @@
 // case-price-form, price-basis ones) against BOTH files, and odd-inputs.spec.ts feeds both the same strange
 // values. The comments below are the ones the original paid for in bugs.
 //
+// ⚠️ ONE DELIBERATE DIFFERENCE FROM THE FROZEN js/ COPY (Federico, 28 Nov 2026): formatRate (written with rate-text.ts) shows two decimals where js/price-model.js pads up to six. Stored values,
+// comparisons and sums are untouched. parity.spec.ts and odd-inputs.spec.ts no longer pair formatRate; price-model.spec.ts pins it.
+//
 // ⚠️ AN ADAPTED PORT, SO parity.spec.ts DOES NOT PAIR IT (price-model.spec.ts compares the names, constants,
 // frozen-ness and function shapes itself):
 //   * formatMoney and formatRate take the venue's `Money` (currency.ts) as a second argument. The original
@@ -86,6 +89,7 @@
 // ⚠️ NOTHING HERE CONVERTS. Only the symbol changes; every stored number is used as
 // typed. See currency.ts.
 import { moneyText } from './currency';
+import { rateDecimals, rateDigits } from './rate-text';
 import type { Money } from './currency';
 // The weight box's reader — used when a 'pack' case is SAVED, to store the size of one
 // package; caseRate itself works from that stored size, never from the weight.
@@ -424,18 +428,13 @@ export function formatMoney(value: unknown, money: Money): string {
 // A RATE (price per unit), for the EYE ONLY (Federico, 28 Nov 2026: «arrotondiamo tutti i prezzi a due decimali»):
 // exactly two decimals, «3,36 € / l». The stored rate keeps its full precision and every comparison and sum uses it.
 // The one exception: a non-zero rate that would read «0,00» shows just enough decimals to reach its first significant
-// digit («0,004 €», «0,0004 €»; six at most), so a real cost never reads as free.
+// digit («0,004 €», «0,0004 €»; six at most, the stored precision), so a real cost never reads as free. Never «NaN», never «-0,00».
 // DELIBERATELY DIFFERENT from js/price-model.js formatRate (the frozen rollback copy pads up to six decimals): the parity
 // specs no longer pair this function, price-model.spec.ts pins it on its own.
 export function formatRate(value: unknown, money: Money): string {
   const n = Number(value);
   if (!Number.isFinite(n)) return '';
-  let decimals = MONEY_DECIMALS;
-  const abs = Math.abs(n);
-  // A real, non-zero cost never reads as 0,00: reach its first significant digit, at most four decimals.
-  if (abs > 0 && abs.toFixed(MONEY_DECIMALS) === '0.00') decimals = Math.min(CASE_RATE_DECIMALS, Math.ceil(-Math.log10(abs)));
-  const text = n.toFixed(decimals);
-  return moneyText(/^-0(\.0+)?$/.test(text) ? text.slice(1) : text, money);
+  return moneyText(rateDigits(n, rateDecimals(n)), money);
 }
 
 // ── The three functions that look a word up (ADAPTED: the translator is handed in) ─────────────

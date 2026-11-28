@@ -15,7 +15,7 @@ import { useMoney } from '../../session/useMoney';
 import { Button } from '../../ui/Button';
 import { FormBar } from '../../ui/FormBar';
 import { PRICE_CHANGES_OPENER, useHandBack } from '../handBack';
-import { pricePerUnitText } from '../priceText';
+import { pricePerUnitRunText } from '../priceText';
 import { useSuppliers } from '../SuppliersContext';
 import { cameFromList, useLeave } from '../suppliersNav';
 import { SUPPLIERS_PATH } from '../suppliersPath';
@@ -259,10 +259,11 @@ function Row({ change }: { change: StoredDoc }) {
   const supplier = suppliers.find(candidate => candidate.id === change.supplierId);
   const date = dayText(text(change.date), localeOf(lang));
   const meta = supplier ? t('sup.pc.meta', { supplier: supplierLabel(supplier), date }) : t('sup.pc.metaNoSupplier', { date });
-  const priceLine = t('sup.pc.priceLine', {
-    old: pricePerUnitText({ priceUnit: change.priceUnit, pricePerUnit: change.oldPrice }, money, t),
-    new: pricePerUnitText({ priceUnit: change.priceUnit, pricePerUnit: change.newPrice }, money, t),
-  });
+  const [oldText = '', newText = ''] = pricePerUnitRunText([
+    { priceUnit: change.priceUnit, pricePerUnit: change.oldPrice },
+    { priceUnit: change.priceUnit, pricePerUnit: change.newPrice },
+  ], money, t);
+  const priceLine = t('sup.pc.priceLine', { old: oldText, new: newText });
   const pct = Number(change.pct);
   const oldPack = text(change.oldPack);
   const newPack = text(change.newPack);

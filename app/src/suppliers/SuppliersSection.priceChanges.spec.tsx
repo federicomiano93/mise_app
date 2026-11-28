@@ -319,6 +319,13 @@ describe('the list', () => {
     expect(within(row).queryByText(/Different pack/)).not.toBeInTheDocument();
   });
 
+  it('two prices that would both read «0,71» are told apart with more decimals (display only)', async () => {
+    open([change('c-close', { oldPrice: 0.71, newPrice: 0.714 })]);
+    const inScreen = await report();
+    const row = (await inScreen.findByText('Flour 00')).closest('li') as HTMLElement;
+    expect(within(row).getByText(/0,710.*kg → .*0,714.*kg/)).toBeInTheDocument();
+  });
+
   it('a change with no supplier says only the invoice date', async () => {
     open([change('c-one', { supplierId: undefined })]);
     const inScreen = await report();

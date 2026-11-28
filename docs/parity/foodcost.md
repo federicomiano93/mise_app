@@ -182,7 +182,7 @@ reason.
 ## Money and numbers
 
 47. **Money follows the venue's COUNTRY** (symbol and layout), whatever the interface language;
-    nothing is converted. A cost per unit keeps more decimals (`formatRate`), a total two
+    nothing is converted. Since 28 Nov 2026 a cost per unit also shows two decimals (`formatRate`; a tiny non-zero rate keeps its first significant digit, and two neighbouring prices that would print alike get more, `formatRateRun`), like a total
     (`formatMoney`). **spec** (currency, market)
 48. **Dates and numbers follow the interface language.**
 
