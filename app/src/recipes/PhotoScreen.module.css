@@ -155,3 +155,33 @@
   color: var(--ink-3);
   cursor: default;
 }
+
+/* The full words on a tablet, the short ones on a phone (the same breakpoint as the rest of the app); the input's own
+   aria-label always carries the full name. */
+.short {
+  display: none;
+}
+
+/* Phone: camera and gallery side by side, half each; «Read the recipe» full width below. */
+@media (max-width: 699.98px) {
+  .actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .take {
+    padding: 0 var(--s3);
+  }
+
+  .read {
+    grid-column: 1 / -1;
+  }
+
+  .full {
+    display: none;
+  }
+
+  .short {
+    display: inline;
+  }
+}
