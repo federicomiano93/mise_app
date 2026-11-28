@@ -163,8 +163,19 @@ describe('the groups open and close on a tap', () => {
     // The list is hidden behind the recipe on a phone, still mounted: the group is shut by hand while the recipe is open.
     await user.click(headerOf('Easter'));
     expect(expanded('Easter')).toBe('false');
+    // jsdom does not refuse focus() on a `display: none` row as Chrome does, so the moment of each call is checked here: the row must
+    // already be out of every [hidden] when focus() is called on it.
+    const inHidden: boolean[] = [];
+    const real = HTMLElement.prototype.focus;
+    const spy = vi.spyOn(HTMLElement.prototype, 'focus').mockImplementation(function focus(this: HTMLElement, ...args: Parameters<typeof real>) {
+      if (this.textContent === 'Colomba') inHidden.push(this.closest('[hidden]') !== null);
+      real.apply(this, args);
+    });
     await user.click(back);
     await waitFor(() => { expect(rowOf('Colomba')).toHaveFocus(); });
+    spy.mockRestore();
+    expect(inHidden.length).toBeGreaterThan(0);
+    expect(inHidden).not.toContain(true);
     expect(expanded('Easter')).toBe('true');
   });
 

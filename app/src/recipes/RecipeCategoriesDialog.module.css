@@ -135,3 +135,20 @@
   padding: var(--s3);
   color: var(--ink-2);
 }
+
+/* «Saving…» while a rename is in the air: the line is in the page before it speaks. */
+.status {
+  margin: var(--s2) 0 0;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+/* «Food cost not updated.» and its «Retry». */
+.retry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  margin-top: var(--s2);
+  color: var(--danger-ink);
+}

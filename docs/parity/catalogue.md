@@ -2332,10 +2332,16 @@ list does; here the book simply reopens), a small known gap.
   categories…» (true). (2) every recipe write (and the HACCP one), all settled. (3) only if every one was accepted, `arrayRemove(old)`. If some of step 2 were
   refused, BOTH words stay on the list (no recipe lands in «No category»), only the refused recipes go back to the old word, and the dialog says «Rename not
   finished.» (`RenameNotFinished`).
+- **A rename needs the server and holds the app.** Offline (`useOnline`) it is refused with «Needs a connection.» and nothing is sent (the box keeps the
+  typed name). From its start until everything has settled, Food cost's half included, the dialog holds `markBusy()` (steps 2 and 3 live in page memory, so
+  an update reload must not drop them). While it is in the air the store's `renaming` flag is set: the dialog shows the words as the rename will leave them (new
+  word, not both), one «Saving…» line, every row action disabled, and no snapshot is adopted that brings the old word (or the recipes under it) back
+  (`overlayRenameLabel` / `overlayRename`). «Rename not finished.» is also said in the page's status line (seen after «Done»).
 - **Food cost follows the rename** (`renameFoodcostCategory.ts`), after the recipes' rename is whole: for somebody who `mayOpenFoodCost`, EVERY
   `foodcost-categories` document whose name folds to the old word (`categoryKey`) is renamed (rank kept), through the data services' Food cost source (no
   import from `foodcost/`: a declared exception of data only). It accepts only the SERVER's answer (a cache-only answer, a failed read or no answer in 10 s skips
-  it) and then says «Food cost not updated.» in the status message; it never fails the rename itself.
+  it) and then says «Food cost not updated.» IN THE DIALOG with a «Retry» button that asks again for the same old→new pair; it never fails the rename itself.
+  `handBack.ts` gives a row in a closed group the focus only after the group has rendered (a frame at a time, a few at most), never while it is `hidden`.
 - **Groups fold** (`ui/CollapsibleGroup`, moved out of Food cost's list and shared): every group, «No category» included, starts CLOSED; the header is a
   `<button aria-expanded>` with the name, «{n} recipes» and the chevron; a search opens the groups that match; the group of the open recipe opens by itself
   and stays as the person's tap once the recipe is left (the list stays mounted, so Back and a save return to an open group). State in the component only.

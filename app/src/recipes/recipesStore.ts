@@ -192,6 +192,9 @@ export interface RecipesSnapshot {
   // The venue's recipe categories (config/labels.recipeCategories, normalised by @mise/shared/recipe-shelf), in the order
   // stored — the screens sort them for reading. [] when there are none, and until the label profile is known.
   readonly categories: readonly string[];
+  // A rename of a category is in the air (renameRecipeCategory): the words and recipes show as the rename will leave them, and no
+  // snapshot that still holds the old word is adopted meanwhile.
+  readonly renaming: boolean;
   // The shop computers that report in (print-agents), as the last answer left them; [] until one comes, and
   // after a failure. ⚠️ NEVER WRITTEN TO STORAGE BY THE APP, NOR READ FROM IT: a heartbeat is a statement about
   // RIGHT NOW. Firestore's own offline cache can still replay the last print-agents document to a phone that
@@ -438,6 +441,8 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
   // the same list (a screen that depends on it is not redrawn for nothing).
   let categoriesOf: Record<string, unknown> | null | undefined;
   let categories: readonly string[] = [];
+  // The rename in the air, if any: the old word (to be swapped out of every snapshot), the new one and the recipes it moves.
+  let renaming: { readonly oldWord: string; readonly word: string; readonly ids: ReadonlySet<string> } | null = null;
 
   let snapshot: RecipesSnapshot = build();
 
@@ -447,7 +452,7 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
       categories = normalizeRecipeCategories(labelConfig?.recipeCategories);
     }
     return { recipes, recipesLoaded, recipesFromServer, streamBroken, ingredients, ingredientsLoaded, ingredientsUnreadable, usage,
-      scaled, labelConfig, labelConfigKnown, labelConfigFromServer, categories, printAgents, suppliers };
+      scaled, labelConfig, labelConfigKnown, labelConfigFromServer, categories, renaming: renaming !== null, printAgents, suppliers };
   }
 
   // The venue's list changed on this phone, ahead of the database: into the label profile object and the phone's copy, and
@@ -501,6 +506,93 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
     if (meta.fromServer || labelConfigFromServer) return true;
     if (data !== null) return true;
     return labelConfigKnown && labelConfig === null;
+  }
+
+  // ⚠️ THREE STEPS, IN THIS ORDER, EACH WAITING FOR THE ONE BEFORE, so no failure leaves a recipe under a word the list has not got:
+  //   1. `arrayUnion(new)`; refused → nothing was written, everything done here is taken back and the promise REJECTS (the
+  //      message «put back» is true);
+  //   2. every recipe's `category` ALONE (a merge each), and `haccpCategory` when it was the old word, all settled;
+  //   3. only when every one of those was accepted, `arrayRemove(old spellings)`.
+  // Some of step 2 refused → the old word is left on the list beside the new one, only the refused recipes (or the HACCP choice)
+  // go back to the old word, and the promise rejects with RenameNotFinished. The local state moves at once (local-first).
+  async function renameCategoryNow(oldWord: string, newWord: string): Promise<void> {
+    const key = categoryKey(oldWord);
+    const stored = Array.isArray(labelConfig?.recipeCategories) ? labelConfig.recipeCategories as unknown[] : [];
+    const oldSpellings = stored.filter((held): held is string => typeof held === 'string' && categoryKey(held) === key && held !== newWord);
+    const held = recipesHoldingWord(recipes, oldWord);
+    const before = new Map(held.map(recipe => [recipe.id, storedCategoryOf(recipe)] as const));
+    const listBefore = [...categories];
+    const haccpBefore = labelConfig?.haccpCategory;
+    const haccpMoves = typeof haccpBefore === 'string' && categoryKey(haccpBefore) === key;
+    const send = (write: () => Promise<void>): Promise<void> => {
+      try { return write(); } catch (err) { return Promise.reject(err); }
+    };
+    const setLocalHaccp = (value: unknown): void => {
+      labelConfig = { ...(labelConfig ?? {}), haccpCategory: value };
+      writeJson(LABEL_CONFIG_KEY, labelConfig);
+      changed();
+    };
+    const fileBack = (recipeId: string): void => {
+      const now = recipes.find(candidate => candidate.id === recipeId);
+      if (!now || categoryKey(storedCategoryOf(now)) !== categoryKey(newWord)) return;
+      upsertLocal({ ...(now as unknown as Record<string, unknown>), category: before.get(recipeId) ?? '' });
+    };
+    const withOld = (list: readonly string[]): string[] => (list.some(word => categoryKey(word) === key) ? [...list] : [...list, oldWord]);
+
+    setLocalCategories([...removeCategory(categories, oldWord), newWord]);
+    for (const recipe of held) upsertLocal({ ...(recipe as unknown as Record<string, unknown>), category: newWord });
+    if (haccpMoves) setLocalHaccp(newWord);
+
+    try {
+      await send(() => source.addRecipeCategoryWord(newWord));
+    } catch (err) {
+      deps.warn('Recipe category rename did not sync to Firestore:', err);
+      setLocalCategories(listBefore);
+      for (const recipe of held) fileBack(recipe.id);
+      if (haccpMoves) setLocalHaccp(haccpBefore);
+      throw err;
+    }
+
+    const writes = [
+      ...held.map(recipe => send(() => source.saveRecipeDoc(recipe.id, { category: newWord }))),
+      ...(haccpMoves ? [send(() => source.saveLabelConfig({ haccpCategory: newWord }))] : []),
+    ];
+    const results = await Promise.allSettled(writes);
+    const refused = results.some(result => result.status === 'rejected');
+    if (refused) deps.warn('Recipe category rename did not sync to Firestore:', results.find(result => result.status === 'rejected'));
+    held.forEach((recipe, at) => { if (results[at]?.status === 'rejected') fileBack(recipe.id); });
+    if (haccpMoves && results[held.length]?.status === 'rejected') setLocalHaccp(haccpBefore);
+    if (refused) {
+      setLocalCategories(withOld(categories));
+      throw new RenameNotFinished();
+    }
+
+    try {
+      await send(() => source.removeRecipeCategoryWords(oldSpellings.length > 0 ? oldSpellings : [oldWord]));
+    } catch (err) {
+      deps.warn('Recipe category rename did not sync to Firestore:', err);
+      setLocalCategories(withOld(categories));
+      throw new RenameNotFinished();
+    }
+  }
+
+  // ⚠️ WHILE A RENAME IS IN THE AIR (its first write has not been answered, so the later ones are not even sent) a snapshot of the
+  // database still holds the OLD word: adopting it would bring the old word back on the list and the recipes back under it, a half
+  // rename on screen. So a snapshot is laid over with the rename as it will leave things: the old word swapped for the new on the list
+  // and in the HACCP choice, and the recipes it moves under the new word.
+  function overlayRenameLabel(config: Record<string, unknown> | null): Record<string, unknown> | null {
+    if (renaming === null) return config;
+    const out: Record<string, unknown> = { ...(config ?? {}) };
+    out.recipeCategories = [...removeCategory(normalizeRecipeCategories(out.recipeCategories), renaming.oldWord), renaming.word];
+    if (typeof out.haccpCategory === 'string' && categoryKey(out.haccpCategory) === categoryKey(renaming.oldWord)) out.haccpCategory = renaming.word;
+    return out;
+  }
+  function overlayRename<T extends { readonly id: string }>(list: readonly T[]): T[] {
+    if (renaming === null) return [...list];
+    const { oldWord, word, ids } = renaming;
+    return list.map(recipe => (
+      ids.has(recipe.id) && categoryKey(storedCategoryOf(recipe)) === categoryKey(oldWord) ? { ...recipe, category: word } : recipe
+    ));
   }
 
   // Puts a recipe into the list (replacing the one with its id), normalised as the current app stores it, and into the
@@ -570,7 +662,7 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
         (remote, meta) => {
           if (meta.fromServer) recipesFromServer = true;
           if (!believable(remote, meta)) return;
-          recipes = normalizeStoredRecipes(remote);
+          recipes = overlayRename(normalizeStoredRecipes(remote));
           recipesLoaded = true;
           writeJson(RECIPES_KEY, recipes);
           if (meta.fromServer) prune();
@@ -611,7 +703,7 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
         (remote, meta) => {
           if (meta.fromServer) labelConfigFromServer = true;
           if (!believableLabel(remote, meta)) return;
-          labelConfig = asLabelConfig(remote);
+          labelConfig = overlayRenameLabel(asLabelConfig(remote));
           labelConfigKnown = true;
           writeJson(LABEL_CONFIG_KEY, labelConfig);
           changed();
@@ -1019,71 +1111,18 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
       });
     },
 
-    // ⚠️ THREE STEPS, IN THIS ORDER, EACH WAITING FOR THE ONE BEFORE, so no failure leaves a recipe under a word the list has not got:
-    //   1. `arrayUnion(new)`; refused → nothing was written, everything done here is taken back and the promise REJECTS (the
-    //      message «put back» is true);
-    //   2. every recipe's `category` ALONE (a merge each), and `haccpCategory` when it was the old word, all settled;
-    //   3. only when every one of those was accepted, `arrayRemove(old spellings)`.
-    // Some of step 2 refused → the old word is left on the list beside the new one, only the refused recipes (or the HACCP choice)
-    // go back to the old word, and the promise rejects with RenameNotFinished. The local state moves at once (local-first).
+    // The three steps are renameCategoryNow's; this holds the «in the air» mark around them (see overlayRename). A second rename
+    // while one is in the air is refused (the dialog disables its actions anyway).
     async renameRecipeCategory(oldWord, newWord) {
-      const key = categoryKey(oldWord);
-      const stored = Array.isArray(labelConfig?.recipeCategories) ? labelConfig.recipeCategories as unknown[] : [];
-      const oldSpellings = stored.filter((held): held is string => typeof held === 'string' && categoryKey(held) === key && held !== newWord);
-      const held = recipesHoldingWord(recipes, oldWord);
-      const before = new Map(held.map(recipe => [recipe.id, storedCategoryOf(recipe)] as const));
-      const listBefore = [...categories];
-      const haccpBefore = labelConfig?.haccpCategory;
-      const haccpMoves = typeof haccpBefore === 'string' && categoryKey(haccpBefore) === key;
-      const send = (write: () => Promise<void>): Promise<void> => {
-        try { return write(); } catch (err) { return Promise.reject(err); }
-      };
-      const setLocalHaccp = (value: unknown): void => {
-        labelConfig = { ...(labelConfig ?? {}), haccpCategory: value };
-        writeJson(LABEL_CONFIG_KEY, labelConfig);
+      if (renaming !== null) throw new Error('A category rename is already in the air.');
+      const ids = new Set(recipesHoldingWord(recipes, oldWord).map(recipe => recipe.id));
+      renaming = { oldWord, word: newWord, ids };
+      changed();
+      try {
+        await renameCategoryNow(oldWord, newWord);
+      } finally {
+        renaming = null;
         changed();
-      };
-      const fileBack = (recipeId: string): void => {
-        const now = recipes.find(candidate => candidate.id === recipeId);
-        if (!now || categoryKey(storedCategoryOf(now)) !== categoryKey(newWord)) return;
-        upsertLocal({ ...(now as unknown as Record<string, unknown>), category: before.get(recipeId) ?? '' });
-      };
-      const withOld = (list: readonly string[]): string[] => (list.some(word => categoryKey(word) === key) ? [...list] : [...list, oldWord]);
-
-      setLocalCategories([...removeCategory(categories, oldWord), newWord]);
-      for (const recipe of held) upsertLocal({ ...(recipe as unknown as Record<string, unknown>), category: newWord });
-      if (haccpMoves) setLocalHaccp(newWord);
-
-      try {
-        await send(() => source.addRecipeCategoryWord(newWord));
-      } catch (err) {
-        deps.warn('Recipe category rename did not sync to Firestore:', err);
-        setLocalCategories(listBefore);
-        for (const recipe of held) fileBack(recipe.id);
-        if (haccpMoves) setLocalHaccp(haccpBefore);
-        throw err;
-      }
-
-      const writes = [
-        ...held.map(recipe => send(() => source.saveRecipeDoc(recipe.id, { category: newWord }))),
-        ...(haccpMoves ? [send(() => source.saveLabelConfig({ haccpCategory: newWord }))] : []),
-      ];
-      const results = await Promise.allSettled(writes);
-      const refused = results.some(result => result.status === 'rejected');
-      if (refused) deps.warn('Recipe category rename did not sync to Firestore:', results.find(result => result.status === 'rejected'));
-      held.forEach((recipe, at) => { if (results[at]?.status === 'rejected') fileBack(recipe.id); });
-      if (haccpMoves && results[held.length]?.status === 'rejected') setLocalHaccp(haccpBefore);
-      if (refused) {
-        setLocalCategories(withOld(categories));
-        throw new RenameNotFinished();
-      }
-
-      try {
-        await send(() => source.removeRecipeCategoryWords(oldSpellings.length > 0 ? oldSpellings : [oldWord]));
-      } catch (err) {
-        deps.warn('Recipe category rename did not sync to Firestore:', err);
-        setLocalCategories(withOld(categories));
-        throw new RenameNotFinished();
       }
     },
 

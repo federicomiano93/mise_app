@@ -9,6 +9,7 @@ import { mayOpenFoodCost } from '@mise/shared/recipe-link';
 import { useDataServices } from '../data/DataContext';
 import { useT } from '../i18n/useT';
 import { markBusy } from '../session/busy';
+import { useOnline } from '../shell/useOnline';
 import { useSession } from '../session/SessionContext';
 import { Button } from '../ui/Button';
 import { Dialog } from '../ui/Dialog';
@@ -23,6 +24,13 @@ type Props = {
   // Closed by «Done» or Escape.
   onClose: () => void;
 };
+
+// The one line under the list when a write did not go through.
+const FAILED_TEXT = {
+  'put-back': 'cat.shelf.categoriesNotSaved',
+  unfinished: 'cat.dlg.renameNotFinished',
+  offline: 'cat.dlg.needsConnection',
+} as const;
 
 // What the row being typed in is: a new word (`word` null), or an existing one renamed.
 type Editing = { word: string | null; text: string };
@@ -43,12 +51,14 @@ export function RecipeCategoriesDialog({ onClose }: Props) {
   const store = useRecipesStore();
   const services = useDataServices();
   const { locationId, location, canManage, role } = useSession();
-  const { categories, recipes } = useRecipes();
+  const { categories, recipes, renaming: saving } = useRecipes();
   const [confirm, confirmDialog] = useConfirm();
   const [editing, setEditing] = useState<Editing | null>(null);
   const [problem, setProblem] = useState<{ kind: CategoryRefusal; name: string } | null>(null);
-  const [failed, setFailed] = useState<'put-back' | 'unfinished' | null>(null);
+  const [failed, setFailed] = useState<'put-back' | 'unfinished' | 'offline' | null>(null);
+  const [foodCostRetry, setFoodCostRetry] = useState<{ from: string; to: string } | null>(null);
   const say = useStatusMessage();
+  const online = useOnline();
   const inputId = useId();
   const errorId = useId();
   const input = useRef<HTMLInputElement>(null);
@@ -88,6 +98,33 @@ export function RecipeCategoriesDialog({ onClose }: Props) {
     write.catch((err: unknown) => { setFailed(err instanceof RenameNotFinished ? 'unfinished' : 'put-back'); });
   };
 
+  // Food cost's own documents follow the recipes' rename. A failure stays in the dialog with «Retry», which asks again for this pair.
+  const runFoodCost = async (from: string, to: string): Promise<void> => {
+    if (!mayWriteFoodCost || locationId === null) return;
+    const outcome = await renameFoodcostCategory(services.foodcost(locationId), from, to);
+    setFoodCostRetry(outcome === 'failed' ? { from, to } : null);
+  };
+
+  // ⚠️ THE APP DOES NOT RELOAD BY ITSELF while a rename is in the air, Food cost's half included: its later steps live in this page's
+  // memory. The mark is held here, not in an effect, so closing the dialog does not let it go.
+  const startRename = (from: string, to: string): void => {
+    setFailed(null);
+    setFoodCostRetry(null);
+    const release = markBusy();
+    const written = store.renameRecipeCategory(from, to);
+    written.catch((err: unknown) => {
+      if (err instanceof RenameNotFinished) say(t('cat.dlg.renameNotFinished'));
+      setFailed(err instanceof RenameNotFinished ? 'unfinished' : 'put-back');
+    });
+    void written.then(() => runFoodCost(from, to)).catch(() => undefined).finally(release);
+  };
+
+  const retryFoodCost = (pair: { from: string; to: string }): void => {
+    setFoodCostRetry(null);
+    const release = markBusy();
+    void runFoodCost(pair.from, pair.to).catch(() => undefined).finally(release);
+  };
+
   const submit = (event: FormEvent) => {
     event.preventDefault();
     if (editing === null) return;
@@ -107,15 +144,10 @@ export function RecipeCategoriesDialog({ onClose }: Props) {
       const renamed = renameCategory(categories, editing.word, editing.text);
       if ('refusal' in renamed) { refuse(renamed.refusal); return; }
       if (renamed.word !== editing.word) {
-        const from = editing.word;
-        const written = store.renameRecipeCategory(from, renamed.word);
-        said(written);
-        // Food cost's own documents follow only once the recipes' rename is whole; a refusal or no answer is said in one line.
-        if (mayWriteFoodCost && locationId !== null) {
-          void written.then(() => renameFoodcostCategory(services.foodcost(locationId), from, renamed.word)).then(outcome => {
-            if (outcome === 'failed') say(t('cat.dlg.foodCostNotUpdated'));
-          }, () => undefined);
-        }
+        // ⚠️ A RENAME NEEDS THE SERVER: its steps wait for each other and live in this page's memory, so offline nothing is sent and
+        // the box keeps what was typed.
+        if (!online) { setFailed('offline'); input.current?.focus(); return; }
+        startRename(editing.word, renamed.word);
       }
       setFocusTarget(renamed.word);
     }
@@ -209,7 +241,7 @@ export function RecipeCategoriesDialog({ onClose }: Props) {
                       ref={node => { if (node) renameButtons.current.set(word, node); else renameButtons.current.delete(word); }}
                       className={styles.icon}
                       aria-label={t('cat.dlg.rename', { name: word })}
-                      onPress={() => { setEditing({ word, text: word }); setProblem(null); }}
+                      isDisabled={saving} onPress={() => { setEditing({ word, text: word }); setProblem(null); }}
                     >
                       <Pencil aria-hidden="true" />
                     </Button>
@@ -218,7 +250,7 @@ export function RecipeCategoriesDialog({ onClose }: Props) {
                       variant="bare"
                       className={styles.remove}
                       aria-label={t('cat.dlg.remove', { name: word })}
-                      onPress={() => { void remove(word); }}
+                      isDisabled={saving} onPress={() => { void remove(word); }}
                     >
                       <Trash2 aria-hidden="true" />
                     </Button>
@@ -230,11 +262,18 @@ export function RecipeCategoriesDialog({ onClose }: Props) {
           </ul>
         )}
         {editing === null ? (
-          <Button ref={addButton} className={styles.add} onPress={() => { setEditing({ word: null, text: '' }); setProblem(null); }}>
+          <Button ref={addButton} className={styles.add} isDisabled={saving} onPress={() => { setEditing({ word: null, text: '' }); setProblem(null); }}>
             {t('cat.dlg.new')}
           </Button>
         ) : null}
-        <p className={styles.error} role="alert">{failed === null ? '' : t(failed === 'unfinished' ? 'cat.dlg.renameNotFinished' : 'cat.shelf.categoriesNotSaved')}</p>
+        <p className={styles.status} role="status">{saving ? t('cat.dlg.saving') : ''}</p>
+        <p className={styles.error} role="alert">{failed === null ? '' : t(FAILED_TEXT[failed])}</p>
+        {foodCostRetry === null ? null : (
+          <div className={styles.retry}>
+            <span role="alert">{t('cat.dlg.foodCostNotUpdated')}</span>
+            <Button onPress={() => { retryFoodCost(foodCostRetry); }}>{t('cat.dlg.retry')}</Button>
+          </div>
+        )}
       </Dialog>
       {confirmDialog}
     </>
