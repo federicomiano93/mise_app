@@ -129,6 +129,15 @@ describe.each([
     expect(kind('SACCHI N.U. AMBRATI')[0]).toBe('packaging');
   });
 
+  // 28 Nov 2026, real import: trays, jars and foil lines the reader filed as ingredients or «altro».
+  test('classify: millerighe, vaschette, vaso cottura, alluminio and coprivassoi are packaging; a jar of honey is not', () => {
+    for (const text of ['MILLERIGHE + FINESTRA PVC SICILIA 25X16X5', 'VASCH.CUORE NERO I DESS', 'VASO COTTURA',
+      'ALLUMINIO ROT.RICAMBIO OTT', '500 COPRIVASSOI 21X31']) {
+      expect(kind(text)[0], text).toBe('packaging');
+    }
+    expect(kind('MIELE VASO 500G')[0]).toBe('ingrediente');
+  });
+
   test('classify: real packaging still is packaging', () => {
     expect(kind('SACCHETTI CARTA PANE')[0]).toBe('packaging');
     expect(kind('BUSTE PLASTICA')[0]).toBe('packaging');
@@ -215,11 +224,15 @@ describe.each([
       'CAPS BAR DECAFF 7GX80', "CAFFE'CIALDEX15 ESEMPIO"]) {
       expect(kind(text)[0], text).toBe('rivendita');
     }
-    for (const text of ['ROT. ALLUMINIO KG 1 CM. 33', 'SET GREMBIULE PASTICCERIA', 'PALETTE BAMBOO 50X200',
-      '500 COPRIVASSOI 18X24', '100 CARTE PIZZO D35', 'SHOPPER BIO 35X10X65',
+    // 28 Nov 2026: aluminium and tray covers are packaging in the port too.
+    for (const text of ['ROT. ALLUMINIO KG 1 CM. 33', '500 COPRIVASSOI 18X24', 'PADEL ALLUMINIO 24CM']) {
+      expect(kind(text)[0], text).toBe('packaging');
+    }
+    for (const text of ['SET GREMBIULE PASTICCERIA', 'PALETTE BAMBOO 50X200',
+      '100 CARTE PIZZO D35', 'SHOPPER BIO 35X10X65',
       'BORSA SPESA 45X37', 'ECO BAGS ROSSO SMALL', 'CARAFFA GRADUATA 2 LT',
       'COPPETTA CONICA CM 20', 'L2 ANTICALCARE ESEMPIO', 'DETERSIVO PAVIMENTI 5 L',
-      'PENNELLO 60MM', 'ASCIUGAMANI RIPIEGATI', 'PADEL ALLUMINIO 24CM', 'GUANTI NITRILE M']) {
+      'PENNELLO 60MM', 'ASCIUGAMANI RIPIEGATI', 'GUANTI NITRILE M']) {
       expect(kind(text)[0], text).toBe(NON_FOOD);
     }
     // Food words still win, and a word inside another word is not the keyword.

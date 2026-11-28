@@ -61,8 +61,8 @@ READY_RE = re.compile(
     re.I,
 )
 PACKAGING_RE = re.compile(
-    r"sh\. ml|b\.sch|grattugia|flacone|posate|asciugamano|vasch\.caldo|rotolo|buste|carta |carta$"
-    r"|sacch|cont\. plastica|fogli pol|pellicola|stagnola|vaschette|box +pizza|velina|bicch|tappo"
+    r"sh\. ml|b\.sch|grattugia|flacone|posate|asciugamano|vasch|rotolo|buste|carta |carta$"
+    r"|sacch|cont\. plastica|fogli pol|pellicola|stagnola|millerigh|vaso cottura|box +pizza|velina|bicch|tappo"
     r"|bobina|laccetti|black nitro|carta forno|staccante"
     # Not food at all — tools, clothing, cleaning, shop bags (5 Oct 2026, from the first real
     # import). Never imported, like packaging. Food words are checked first, so «olio … ml10»
@@ -70,7 +70,7 @@ PACKAGING_RE = re.compile(
     # Mise 2 (14 Nov 2026) splits this part, down to the end of the pattern, from packaging: there it is
     # the line type «altro» (shared/src/invoice-zip/keywords.ts NONFOOD_RE), imported as an item of kind
     # 'other'. Here it stays packaging; keywords.spec.ts reads the two halves together against this list.
-    r"|alluminio|grembiul|palett|coprivassoi|carte pizzo|shopper|\bborsa\b|\bbags\b|caraffa"
+    r"|alluminio|coprivassoi|grembiul|palett|carte pizzo|shopper|\bborsa\b|\bbags\b|caraffa"
     r"|coppetta|anticalcare|detersiv|sgrassa|igienizz|candeggin|pennello|asciugaman|organza"
     r"|spolett|pentol|padell|\bpadel\b|guanti"
     # A potato peeler (the word «patate» no longer catches it as resale).

@@ -32,16 +32,16 @@ export const FOOD_RE = new RegExp(
 export const READY_RE = new RegExp(
   `${B_START}yog\\.|yogurt|kefir|dolcificante|capsul|${B_START}caps${B_END}|caff\\S*\\s*cialde`, 'iu');
 export const PACKAGING_RE = new RegExp(
-  'sh\\. ml|b\\.sch|grattugia|flacone|posate|asciugamano|vasch\\.caldo|rotolo|buste|carta |carta$'
-  + '|sacch|cont\\. plastica|fogli pol|pellicola|stagnola|vaschette|box +pizza|velina|bicch|tappo'
-  + '|bobina|laccetti|black nitro|carta forno|staccante', 'iu');
+  'sh\\. ml|b\\.sch|grattugia|flacone|posate|asciugamano|vasch|rotolo|buste|carta |carta$'
+  + '|sacch|cont\\. plastica|fogli pol|pellicola|stagnola|millerigh|vaso cottura|box +pizza|velina|bicch|tappo'
+  + '|bobina|laccetti|black nitro|carta forno|staccante|alluminio|coprivassoi', 'iu');
 // ⚠️ MISE 2 ONLY (14 Nov 2026): what is not food at all — tools, clothing, cleaning, shop bags — is no longer packaging but a
 // line type of its own, «altro», imported as an item of kind 'other'. In invoice-import/classify.py (and the frozen current
 // app) these words are still the tail of PACKAGING_RE: keywords.spec.ts compares PACKAGING_RE + «|» + NONFOOD_RE with it.
 // Not food at all — tools, clothing, cleaning, shop bags (5 Oct 2026, from the first real
 // import). Food words are checked first, so «olio … ml10» or «zucchero … bustina» never land here.
 export const NONFOOD_RE = new RegExp(
-  `alluminio|grembiul|palett|coprivassoi|carte pizzo|shopper|${B_START}borsa${B_END}|${B_START}bags${B_END}|caraffa`
+  `grembiul|palett|carte pizzo|shopper|${B_START}borsa${B_END}|${B_START}bags${B_END}|caraffa`
   + `|coppetta|anticalcare|detersiv|sgrassa|igienizz|candeggin|pennello|asciugaman|organza`
   + `|spolett|pentol|padell|${B_START}padel${B_END}|guanti`
   // A potato peeler (the word «patate» no longer catches it as resale).

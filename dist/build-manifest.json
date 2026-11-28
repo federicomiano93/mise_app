@@ -1045,8 +1045,8 @@
       }
     },
     "dist/suppliers.js": {
-      "sha": "90e029137a953aba",
-      "mapSha": "cc3a84a3f0f69e83",
+      "sha": "cb9e49eb0a835d24",
+      "mapSha": "07e1b3fa5252aef7",
       "inputs": {
         "js/allergen-match.js": "db54e694c42039c0",
         "js/allergen-model.js": "50434c6cea85b7de",
@@ -1111,7 +1111,7 @@
         "js/orders/invoice-import-plan.js": "7dcfdd2b03d1161c",
         "js/orders/invoice-import-screen.js": "c86593a34a44a087",
         "js/orders/invoice-zip/build-import.js": "006455be27b96aa4",
-        "js/orders/invoice-zip/classify.js": "84137ace140a617e",
+        "js/orders/invoice-zip/classify.js": "44c9ff0949b1bf4e",
         "js/orders/invoice-zip/fatturapa.js": "8b0a407b2302b957",
         "js/orders/invoice-zip/pricing.js": "aea9497fc16b76f2",
         "js/orders/invoice-zip/products.js": "1598150c15a8c05c",
