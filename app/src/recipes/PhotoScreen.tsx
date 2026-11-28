@@ -60,6 +60,11 @@ export function PhotoScreen() {
   const [status, setStatus] = useState<Status>(null);
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
+  // Slots taken by photos shown OR being prepared, so two picks that overlap share the same room.
+  const countRef = useRef(0);
+  const pending = useRef(0);
+  const pickerFocused = useRef(false);
+  const readButton = useRef<HTMLButtonElement>(null);
   const [ring, setRing] = useState<'camera' | 'gallery' | null>(null);
 
   const mounted = useRef(true);
@@ -80,6 +85,16 @@ export function PhotoScreen() {
   const full = photos.length >= MAX_PHOTOS;
   const cannotAdd = busy || full;
 
+  // The focused picker is disabled at the cap: the focus goes on to «Read the recipe» instead of falling to the page.
+  useEffect(() => {
+    if (!full) return;
+    if (pickerFocused.current) {
+      pickerFocused.current = false;
+      setRing(null);
+      if (!busy) readButton.current?.focus();
+    }
+  }, [full, busy]);
+
   async function onChoose(event: ChangeEvent<HTMLInputElement>) {
     const input = event.currentTarget;
     const chosen = Array.from(input.files ?? []);
@@ -87,20 +102,32 @@ export function PhotoScreen() {
     input.value = '';
     if (chosen.length === 0 || busyRef.current) return;
 
-    const room = MAX_PHOTOS - photos.length;
-    setStatus(chosen.length > room ? { key: 'cat.photo.err.tooMany', kind: 'bad' } : null);
+    // ⚠️ The room is counted from what is held or being prepared RIGHT NOW (a ref), never from the render this handler was
+    // made in: a second pick while the first is still shrinking would otherwise see the old count and go past the cap.
+    const room = Math.max(0, MAX_PHOTOS - countRef.current);
+    const quiet = pending.current === 0;
+    if (chosen.length > room) setStatus({ key: 'cat.photo.err.tooMany', kind: 'bad' });
+    else if (quiet) setStatus(null);
 
-    for (const file of chosen.slice(0, Math.max(0, room))) {
-      try {
-        const dataUrl = await shrinkPhoto(file);
-        // A late answer must not refill a closed screen, nor go past the cap when two choices overlap.
-        if (!mounted.current) return;
-        setPhotos(held => (held.length >= MAX_PHOTOS ? held : [...held, { id: ++nextPhotoId, dataUrl }]));
-      } catch (error) {
-        if (!mounted.current) return;
-        const code = error instanceof PhotoImageError ? error.code : 'bad-image';
-        setStatus({ key: asKey(photoErrorKey({ details: { key: code } })), kind: 'bad' });
+    const taken = chosen.slice(0, room);
+    countRef.current += taken.length;
+    pending.current += 1;
+    try {
+      for (const file of taken) {
+        try {
+          const dataUrl = await shrinkPhoto(file);
+          // A late answer must not refill a closed screen.
+          if (!mounted.current) return;
+          setPhotos(held => [...held, { id: ++nextPhotoId, dataUrl }]);
+        } catch (error) {
+          countRef.current -= 1;
+          if (!mounted.current) return;
+          const code = error instanceof PhotoImageError ? error.code : 'bad-image';
+          setStatus({ key: asKey(photoErrorKey({ details: { key: code } })), kind: 'bad' });
+        }
       }
+    } finally {
+      pending.current -= 1;
     }
   }
 
@@ -186,7 +213,7 @@ export function PhotoScreen() {
                   className={styles.remove}
                   aria-label={t('cat.photo.remove')}
                   isDisabled={busy}
-                  onPress={() => { setPhotos(held => held.filter(candidate => candidate.id !== photo.id)); }}
+                  onPress={() => { countRef.current -= 1; setPhotos(held => held.filter(candidate => candidate.id !== photo.id)); }}
                 >
                   <Trash2 aria-hidden="true" />
                 </Button>
@@ -220,8 +247,8 @@ export function PhotoScreen() {
               aria-label={t(photos.length > 0 ? 'cat.photo.addAnother' : 'cat.photo.take')}
               className="visually-hidden"
               onChange={event => { void onChoose(event); }}
-              onFocus={event => { setRing(isFocusVisible(event.currentTarget) ? 'camera' : null); }}
-              onBlur={() => { setRing(null); }}
+              onFocus={event => { pickerFocused.current = true; setRing(isFocusVisible(event.currentTarget) ? 'camera' : null); }}
+              onBlur={() => { pickerFocused.current = false; setRing(null); }}
             />
           </label>
           <label className={styles.take} data-focus-visible={ring === 'gallery' ? 'true' : undefined} data-disabled={cannotAdd ? 'true' : undefined}>
@@ -236,11 +263,11 @@ export function PhotoScreen() {
               aria-label={t('cat.photo.gallery')}
               className="visually-hidden"
               onChange={event => { void onChoose(event); }}
-              onFocus={event => { setRing(isFocusVisible(event.currentTarget) ? 'gallery' : null); }}
-              onBlur={() => { setRing(null); }}
+              onFocus={event => { pickerFocused.current = true; setRing(isFocusVisible(event.currentTarget) ? 'gallery' : null); }}
+              onBlur={() => { pickerFocused.current = false; setRing(null); }}
             />
           </label>
-          <Button variant="primary" className={styles.read} isDisabled={busy || photos.length === 0} onPress={() => { void read(); }}>
+          <Button variant="primary" ref={readButton} className={styles.read} isDisabled={busy || photos.length === 0} onPress={() => { void read(); }}>
             {t(busy ? 'cat.photo.reading' : 'cat.photo.read')}
           </Button>
         </div>

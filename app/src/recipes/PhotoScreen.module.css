@@ -166,11 +166,13 @@
 @media (max-width: 699.98px) {
   .actions {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .take {
-    padding: 0 var(--s3);
+    min-width: 0;
+    padding: 0 var(--s2);
+    white-space: nowrap;
   }
 
   .read {
