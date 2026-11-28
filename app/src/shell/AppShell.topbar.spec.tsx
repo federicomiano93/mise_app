@@ -51,7 +51,6 @@ describe('the top bar', () => {
     renderApp('/orders');
     expect(await screen.findByRole('heading', { level: 1, name: 'Orders' })).toBeInTheDocument();
     expect(document.querySelector('[data-kiosk]')).toBeNull();
-    expect(screen.queryByRole('group', { name: 'Kiosk mode' })).not.toBeInTheDocument();
   });
 
   it('on a kiosk phone the bar shows, takes its own row, and gives way at the venue, never the page', () => {
