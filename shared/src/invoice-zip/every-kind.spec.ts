@@ -328,3 +328,45 @@ describe('drinks counted in single bottles', () => {
     expect(point?.reliability).toBe('da verificare');
   });
 });
+
+// 28 Nov 2026, real case: «467K VASO COTTURA 850ML», 48 pieces at 2.8566. The 850 ml is the jar's capacity, not what is paid for.
+describe('packaging counted in pieces with a size in the description is priced per piece', () => {
+  const SUPPLIER_ID = 's-cerere';
+  const JAR: LineSpec = { desc: '467K VASO COTTURA 850ML', code: 'VC', qty: 48, unit: 'Pezzi', total: 137.1168 };
+  const ctx = (ingredients: readonly Record<string, unknown>[], pricesById: Record<string, Record<string, unknown>> = {}) => ({
+    supplierIdByKey: { [SUPPLIER]: SUPPLIER_ID }, ingredients, pricesById, invoicePointIds: {}, everyKind: true,
+  });
+
+  test('a NEW packaging item: no weight, per piece, no case fields', () => {
+    const jar = built([JAR]).importFile.ingredients[0];
+    expect(jar).toMatchObject({ kind: 'packaging', priceUnit: 'pcs', unitWeightKg: null, weight: '', packCount: null });
+    expect(jar?.prices.map(p => p.pricePerUnit)).toStrictEqual([2.8566]);
+    expect(jar?.invoiceName).toContain('850ML');
+    const file = fileOf(built([JAR]));
+    const ops = ingredientWrites(planIngredients(file, ctx([]))[0], file[0], '2026-11-28T10:00:00.000Z', { language: 'it' }).flat();
+    expect(ops.find(op => op.type === 'set-current-price')?.data).toMatchObject({ priceUnit: 'pcs', pricePerUnit: 2.8566, unitWeightKg: null });
+  });
+
+  test('an existing packaging item matched by code is updated per piece, and a per-piece price compares as equal', () => {
+    const file = fileOf(built([JAR]));
+    const jar = { id: 'j1', supplierId: SUPPLIER_ID, name: 'Vaso cottura', supplierCode: 'VC', kind: 'packaging' };
+    const stored = { priceUnit: 'pcs', pricePerUnit: 2.8566, unitWeightKg: null, priceUpdatedAt: '2020-01-01T12:00:00.000Z' };
+    const row = planIngredients(file, ctx([jar], { j1: { ...stored, pricePerUnit: 2.5 } }))[0];
+    expect(row).toMatchObject({ ingredientId: 'j1', status: 'update-price', updateCurrent: true });
+    const ops = ingredientWrites(row, file[0], '2026-11-28T10:00:00.000Z', { language: 'it' }).flat();
+    expect(ops.find(op => op.type === 'set-current-price')?.data).toMatchObject({ priceUnit: 'pcs', pricePerUnit: 2.8566, unitWeightKg: null });
+    const same = planIngredients(file, ctx([jar], { j1: stored }))[0];
+    expect(same).not.toHaveProperty('reason', 'unit-differs');
+    expect(same).not.toHaveProperty('reason', 'piece-differs');
+  });
+
+  test('food with «ML» and PZ keeps today\'s reading (a 500 ml bottle of milk sold by the piece)', () => {
+    const milk = built([{ desc: 'LATTE UHT 500ML', code: 'LT', qty: 12, unit: 'PZ', total: 12 }]).importFile.ingredients[0];
+    expect(milk).toMatchObject({ kind: 'ingredient', priceUnit: 'l', weight: '500 ml' });
+  });
+
+  test('packaging bought by weight keeps its price per kilo', () => {
+    const film = built([FILM]).importFile.ingredients[0];
+    expect(film).toMatchObject({ kind: 'packaging', priceUnit: 'kg' });
+  });
+});

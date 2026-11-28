@@ -53,6 +53,10 @@ const KIND_OF_TYPE: Readonly<Record<LineType, IngredientKind>> = Object.freeze({
 const WEIGHTLESS_TYPES: ReadonlySet<LineType> = new Set<LineType>(['packaging', 'rivendita', 'altro']);
 export { NO_SDI_REASON };
 
+// The invoice units that count single pieces (FatturaPA `UnitaMisura`, spaces and dots ignored, case ignored).
+const PIECE_UNITS: ReadonlySet<string> = new Set(['PZ', 'NR', 'N', 'PEZZI', 'PEZZO']);
+const isPieceUnit = (rawUnit: string): boolean => PIECE_UNITS.has(String(rawUnit || '').replace(/[\s.]+/g, '').toUpperCase());
+
 const NEEDS_CHECK = 'da verificare';
 const cmp = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 
@@ -210,10 +214,16 @@ function describeProduct(catalogue: Catalogue, product: Product, everyKind = fal
   const weightless = everyKind && WEIGHTLESS_TYPES.has(type) && problems.length === 0 && !params.egg
     && unitClass(latestLine.unit)[0] === PIECES
     && (params.priceUnit === null || ((params.priceUnit === 'kg' || params.priceUnit === 'l') && params.pack === null));
+  // MISE 2 (28 Nov 2026): a packaging line counted in single pieces is priced per piece even when the description gives a size
+  // («VASO COTTURA 850ML» x 48 PZ): 850 ml is the jar's capacity, not what is paid for. No weight, no case fields. Packaging
+  // bought by weight or in cartons keeps its reading.
+  const packagingByPiece = everyKind && type === 'packaging' && problems.length === 0 && !params.egg
+    && params.pack !== null && isPieceUnit(latestLine.unit);
   if (weightless) ({ params, problems } = paramsFromCells('pz', '', cells.count, proposal));
+  else if (packagingByPiece) ({ params, problems } = paramsFromCells('pz', '', '', proposal));
   // MISE 2 (`everyKind`): a drinks supplier counts bottles, so a resale product's carton count is not multiplied into its price (pricing.ts).
   const evaluation = evaluate(product, params, catalogue, problems, {
-    ...(weightless ? { weightlessPieces: true } : {}),
+    ...(weightless || packagingByPiece ? { weightlessPieces: true } : {}),
     ...(everyKind && type === 'rivendita' ? { singleBottles: true } : {}),
   });
   const { points } = evaluation;
