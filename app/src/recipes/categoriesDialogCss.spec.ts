@@ -41,6 +41,13 @@ describe('the list', () => {
     expect(declaration(rule(dialogCss, '.row'), 'flex-wrap')).toBe('wrap');
   });
 
+  it('keeps the count, the pencil and the bin together, so no icon is ever alone on a line', () => {
+    const tools = rule(dialogCss, '.tools');
+    expect(declaration(tools, 'display')).toBe('flex');
+    expect(declaration(tools, 'flex')).toBe('none');
+    expect(declaration(tools, 'margin-left')).toBe('auto');
+  });
+
   it('invents no colour and no custom property', () => {
     const css = withoutComments(dialogCss);
     expect(css).not.toMatch(/#[0-9a-f]{3,8}\b|rgb\(|hsl\(|oklch\(/i);
